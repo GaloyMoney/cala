@@ -1,0 +1,21 @@
+{
+  "name": "@galoymoney/cala-ledger-linux-x64-musl",
+  "version": "0.1.0",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "main": "cala-ledger.linux-x64-musl.node",
+  "files": [
+    "cala-ledger.linux-x64-musl.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  },
+  "libc": [
+    "musl"
+  ]
+}

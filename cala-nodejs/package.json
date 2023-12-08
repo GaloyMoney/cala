@@ -1,0 +1,58 @@
+{
+  "name": "@galoymoney/cala-ledger",
+  "version": "0.1.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "cala-ledger",
+    "triples": {
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-linux-android",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "aarch64-pc-windows-msvc",
+        "armv7-unknown-linux-gnueabihf",
+        "x86_64-unknown-linux-musl",
+        "x86_64-unknown-freebsd",
+        "i686-pc-windows-msvc",
+        "armv7-linux-androideabi"
+      ]
+    }
+  },
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@napi-rs/cli": "^2.12.0",
+    "ava": "^4.3.3"
+  },
+  "ava": {
+    "timeout": "3m"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "ava",
+    "version": "napi version"
+  },
+  "packageManager": "yarn@4.0.2",
+  "optionalDependencies": {
+    "@galoymoney/cala-ledger-win32-x64-msvc": "0.1.0",
+    "@galoymoney/cala-ledger-darwin-x64": "0.1.0",
+    "@galoymoney/cala-ledger-linux-x64-gnu": "0.1.0",
+    "@galoymoney/cala-ledger-darwin-arm64": "0.1.0",
+    "@galoymoney/cala-ledger-android-arm64": "0.1.0",
+    "@galoymoney/cala-ledger-linux-arm64-gnu": "0.1.0",
+    "@galoymoney/cala-ledger-linux-arm64-musl": "0.1.0",
+    "@galoymoney/cala-ledger-win32-arm64-msvc": "0.1.0",
+    "@galoymoney/cala-ledger-linux-arm-gnueabihf": "0.1.0",
+    "@galoymoney/cala-ledger-linux-x64-musl": "0.1.0",
+    "@galoymoney/cala-ledger-freebsd-x64": "0.1.0",
+    "@galoymoney/cala-ledger-win32-ia32-msvc": "0.1.0",
+    "@galoymoney/cala-ledger-android-arm-eabi": "0.1.0"
+  }
+}

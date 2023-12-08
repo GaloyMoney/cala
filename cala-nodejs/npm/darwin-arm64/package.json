@@ -1,0 +1,18 @@
+{
+  "name": "@galoymoney/cala-ledger-darwin-arm64",
+  "version": "0.1.0",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "cala-ledger.darwin-arm64.node",
+  "files": [
+    "cala-ledger.darwin-arm64.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@galoymoney/cala-ledger-android-arm64",
+  "version": "0.1.0",
+  "os": [
+    "android"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "main": "cala-ledger.android-arm64.node",
+  "files": [
+    "cala-ledger.android-arm64.node"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">= 10"
+  }
+}

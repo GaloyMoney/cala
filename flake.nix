@@ -20,7 +20,13 @@
   }:
     flake-utils.lib.eachDefaultSystem
     (system: let
-      overlays = [(import rust-overlay)];
+      overlays = [
+        (self: super: {
+          nodejs = super.nodejs_20;
+          pnpm = super.nodePackages.pnpm;
+        })
+        (import rust-overlay)
+      ];
       pkgs = import nixpkgs {
         inherit system overlays;
       };
@@ -40,6 +46,9 @@
           docker-compose
           bats
           jq
+          napi-rs-cli
+          yarn
+          nodejs
         ]
         ++ lib.optionals pkgs.stdenv.isDarwin [
           darwin.apple_sdk.frameworks.SystemConfiguration
