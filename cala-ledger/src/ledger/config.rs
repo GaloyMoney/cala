@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 
-#[derive(Builder)]
+#[derive(Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct CalaLedgerConfig {
     #[builder(setter(into, strip_option), default)]

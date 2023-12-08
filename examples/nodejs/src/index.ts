@@ -1,5 +1,11 @@
-import { sum } from "@galoymoney/cala-ledger";
+import { init } from "@galoymoney/cala-ledger";
 
-console.log(sum(1, 2));
+const main = async () => {
+  const pgHost = process.env.PG_HOST || "localhost";
+  const pgCon = `postgres://user:password@${pgHost}:5432/pg`;
 
-console.log("Hello World!");
+  init({pgCon})
+  console.log("Hello World!");
+}
+
+main()
