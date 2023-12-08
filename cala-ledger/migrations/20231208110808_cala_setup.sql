@@ -1,6 +1,7 @@
 CREATE TYPE DebitOrCredit AS ENUM ('debit', 'credit');
 CREATE TYPE Status AS ENUM ('active', 'locked');
 CREATE TYPE Layer AS ENUM ('settled', 'pending', 'encumbered');
+
 CREATE TABLE cala_accounts (
   connection_id UUID NOT NULL,
   id UUID PRIMARY KEY,

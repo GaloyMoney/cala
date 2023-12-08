@@ -11,3 +11,6 @@ setup-db:
 	cd cala-ledger && cargo sqlx migrate run
 
 reset-deps: clean-deps start-deps setup-db
+
+rust-example:
+	cargo run --bin cala-ledger-example-rust

@@ -1,5 +1,5 @@
 [package]
-name = "sqlx-ledger"
+name = "cala-ledger"
 description = "An embeddable double sided accounting ledger built on PG/SQLx"
 repository = "https://github.com/GaloyMoney/cala"
 documentation = "https://docs.rs/cala-ledger"
@@ -14,5 +14,6 @@ categories = ["accounting", "ledger"]
 fail-on-warnings = []
 
 [dependencies]
+derive_builder = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }

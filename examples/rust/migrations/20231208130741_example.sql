@@ -1,0 +1,3 @@
+CREATE TABLE example (
+  id UUID PRIMARY KEY
+);
