@@ -1,8 +1,18 @@
 [package]
-name = "cala-ledger"
-version = "0.1.0"
+name = "sqlx-ledger"
+description = "An embeddable double sided accounting ledger built on PG/SQLx"
+repository = "https://github.com/GaloyMoney/cala"
+documentation = "https://docs.rs/cala-ledger"
+readme = "../README.md"
+version = "0.1.0-dev"
 edition = "2021"
+license = "Apache"
+categories = ["accounting", "ledger"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+
+fail-on-warnings = []
 
 [dependencies]
+sqlx = { workspace = true }
+thiserror = { workspace = true }

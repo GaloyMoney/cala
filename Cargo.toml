@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+  "cala-ledger",
+]
+
+[workspace.dependencies]
+sqlx = { version = "0.7.2", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
+thiserror = "1.0.50"
