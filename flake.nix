@@ -49,6 +49,7 @@
           napi-rs-cli
           yarn
           nodejs
+          typescript
         ]
         ++ lib.optionals pkgs.stdenv.isDarwin [
           darwin.apple_sdk.frameworks.SystemConfiguration

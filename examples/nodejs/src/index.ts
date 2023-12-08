@@ -1,4 +1,4 @@
-import { sum } from "@galoymoney/cala-nodejs";
+import { sum } from "@galoymoney/cala-ledger";
 
 console.log(sum(1, 2));
 
