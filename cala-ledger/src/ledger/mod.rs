@@ -6,8 +6,11 @@ pub mod error;
 pub use config::*;
 use error::*;
 
+use crate::account::Accounts;
+
 pub struct CalaLedger {
     _pool: PgPool,
+    accounts: Accounts,
 }
 
 impl CalaLedger {
@@ -31,6 +34,17 @@ impl CalaLedger {
             sqlx::migrate!().run(&pool).await?;
         }
 
-        Ok(Self { _pool: pool })
+        Ok(Self::new(pool))
+    }
+
+    fn new(pool: PgPool) -> Self {
+        Self {
+            accounts: Accounts::new(&pool),
+            _pool: pool,
+        }
+    }
+
+    pub fn accounts(&self) -> &Accounts {
+        &self.accounts
     }
 }
