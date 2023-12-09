@@ -17,10 +17,12 @@ CREATE TABLE cala_accounts (
 );
 
 CREATE TABLE cala_account_events (
-  id UUID REFERENCES cala_accounts(id) NOT NULL,
+  connection_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(id, sequence)
+  UNIQUE(id, sequence),
+  FOREIGN KEY (connection_id, id) REFERENCES cala_accounts(connection_id, id)
 )

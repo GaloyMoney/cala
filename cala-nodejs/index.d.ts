@@ -10,6 +10,7 @@ export interface NewAccount {
   externalId?: string
   description?: string
   tags?: Array<string>
+  metadata?: any
 }
 export interface CalaLedgerConfig {
   pgCon: string

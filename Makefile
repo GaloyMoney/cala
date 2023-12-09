@@ -16,5 +16,5 @@ rust-example:
 	cargo run --bin cala-ledger-example-rust
 
 update-nodejs-example:
-	cd cala-nodejs && yarn build
+	cd cala-nodejs && SQLX_OFFLINE=true yarn build
 	cd examples/nodejs && rm -rf ./node_modules && yarn install

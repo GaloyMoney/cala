@@ -9,7 +9,11 @@ const main = async () => {
 
   const account_id = await cala.accounts().create({
     name: "USERS_ONE",
-    code: "USERS_ONE"
+    code: "USERS_ONE",
+    metadata: {
+      "something": "users",
+      "more": true
+    }
   })
   console.log("Account created", account_id);
 }

@@ -9,10 +9,11 @@ crate-type = ["cdylib"]
 [dependencies]
 cala-ledger = { path = "../cala-ledger" }
 
+uuid = { workspace = true }
 serde_json = { workspace = true }
 
 # Default enable napi4 feature, see https://nodejs.org/api/n-api.html#node-api-version-matrix
-napi = { version = "2.10.0", default-features = false, features = ["tokio_rt"] }
+napi = { version = "2.10.0", default-features = false, features = ["tokio_rt", "serde-json"] }
 napi-derive = "2.9.1"
 
 [build-dependencies]
