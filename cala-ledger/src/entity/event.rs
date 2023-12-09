@@ -9,7 +9,7 @@ pub trait EntityEvent {
 }
 
 pub struct EntityUpdate<T: EntityEvent> {
-    id: <T as EntityEvent>::EntityId,
+    pub id: <T as EntityEvent>::EntityId,
     new_events: Vec<T>,
 }
 

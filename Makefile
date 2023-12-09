@@ -14,3 +14,7 @@ reset-deps: clean-deps start-deps setup-db
 
 rust-example:
 	cargo run --bin cala-ledger-example-rust
+
+update-nodejs-example:
+	cd cala-nodejs && yarn build
+	cd examples/nodejs && rm -rf ./node_modules && yarn install

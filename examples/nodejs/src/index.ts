@@ -6,6 +6,12 @@ const main = async () => {
 
   const cala = await CalaLedger.connect({pgCon})
   console.log("CalaLedger connected");
+
+  const account_id = await cala.accounts().create({
+    name: "USERS_ONE",
+    code: "USERS_ONE"
+  })
+  console.log("Account created", account_id);
 }
 
 main()
