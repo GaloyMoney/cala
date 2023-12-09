@@ -281,6 +281,6 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { init } = nativeBinding
+const { CalaLedger } = nativeBinding
 
-module.exports.init = init
+module.exports.CalaLedger = CalaLedger

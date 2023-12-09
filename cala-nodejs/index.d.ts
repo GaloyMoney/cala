@@ -7,4 +7,6 @@ export interface CalaLedgerConfig {
   pgCon: string
   maxConnections?: number
 }
-export function init(config: CalaLedgerConfig): void
+export class CalaLedger {
+  static connect(config: CalaLedgerConfig): Promise<CalaLedger>
+}
