@@ -8,9 +8,9 @@ pub trait EntityEvent {
         Self: Sized;
 }
 
-pub struct EntityUpdate<T: EntityEvent> {
+pub(crate) struct EntityUpdate<T: EntityEvent> {
     pub id: <T as EntityEvent>::EntityId,
-    new_events: Vec<T>,
+    pub new_events: Vec<T>,
 }
 
 pub struct EntityEvents<T: DeserializeOwned + Serialize + EntityEvent> {

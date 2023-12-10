@@ -1,6 +1,8 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
+use crate::primitives::*;
+
 crate::entity_id! { OutboxEventId }
 
 pub type WithoutAugmentation = ();
@@ -37,7 +39,9 @@ impl Clone for OutboxEvent<WithoutAugmentation> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum OutboxEventPayload {}
+pub enum OutboxEventPayload {
+    AccountCreated { account: AccountValues },
+}
 
 #[derive(
     sqlx::Type, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Copy, Clone, Serialize, Deserialize,

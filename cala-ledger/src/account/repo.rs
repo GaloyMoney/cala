@@ -1,33 +1,22 @@
 use sqlx::{PgPool, Postgres, Transaction};
-use tracing::instrument;
 
 use super::{entity::*, error::*};
 use crate::{entity::*, primitives::*};
 
-/// Repository for working with `Account` entities.
 #[derive(Debug, Clone)]
-pub struct Accounts {
-    pool: PgPool,
+pub(super) struct AccountRepo {
+    _pool: PgPool,
 }
-impl Accounts {
+impl AccountRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+        Self {
+            _pool: pool.clone(),
+        }
     }
 
-    pub async fn create(
+    pub async fn create_in_tx(
         &self,
-        new_account: NewAccount,
-    ) -> Result<EntityUpdate<AccountEvent>, AccountError> {
-        let mut tx = self.pool.begin().await?;
-        let res = self.create_in_tx(&mut tx, new_account).await?;
-        tx.commit().await?;
-        Ok(res)
-    }
-
-    #[instrument(name = "cala_ledger.accounts.create", skip(self, tx))]
-    pub async fn create_in_tx<'a>(
-        &self,
-        tx: &mut Transaction<'a, Postgres>,
+        tx: &mut Transaction<'_, Postgres>,
         new_account: NewAccount,
     ) -> Result<EntityUpdate<AccountEvent>, AccountError> {
         let id = new_account.id;

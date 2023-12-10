@@ -6,7 +6,7 @@ pub(super) struct OutboxRepo {
 }
 
 impl OutboxRepo {
-    pub(super) fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub(super) fn new(pool: &PgPool) -> Self {
+        Self { pool: pool.clone() }
     }
 }

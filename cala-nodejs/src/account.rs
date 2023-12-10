@@ -50,12 +50,12 @@ impl CalaAccounts {
       new.metadata(metadata).map_err(crate::generic_napi_error)?;
     }
 
-    let update = self
+    let id = self
       .inner
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
 
-    Ok(update.id.to_string())
+    Ok(id.to_string())
   }
 }

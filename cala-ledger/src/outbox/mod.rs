@@ -2,29 +2,33 @@ pub mod error;
 mod event;
 mod repo;
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
-use event::*;
+use error::*;
+pub use event::*;
 use repo::*;
 
 #[derive(Clone)]
 pub struct Outbox {
-    _pool: PgPool,
     repo: OutboxRepo,
+    _pool: PgPool,
 }
 
 impl Outbox {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: &PgPool) -> Self {
         Self {
-            _pool: pool.clone(),
             repo: OutboxRepo::new(pool),
+            _pool: pool.clone(),
         }
     }
 
-    pub(crate) fn persist_events(
+    pub(crate) async fn persist_events(
         &self,
+        tx: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
-    ) {
+    ) -> Result<(), OutboxError> {
         //
+        tx.commit().await?;
+        Ok(())
     }
 }
