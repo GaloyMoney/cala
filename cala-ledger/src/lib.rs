@@ -5,6 +5,7 @@ pub mod account;
 mod entity;
 mod ledger;
 pub mod migrate;
+mod outbox;
 mod primitives;
 
 pub use ledger::*;
