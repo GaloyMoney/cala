@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+import "google/protobuf/struct.proto";
+
+package services.outbox.v1;
+
+service OutboxService {
+  rpc Subscribe (SubscribeRequest) returns (stream CalaLedgerEvent) {}
+}
+
+message SubscribeRequest {
+  optional uint64 after_sequence = 1;
+}
+
+message CalaLedgerEvent {
+  uint64 sequence = 1;
+  uint32 recorded_at = 2;
+  oneof payload {
+    AccountCreated account_created = 3;
+  }
+}
+
+enum DebitOrCredit {
+  DEBIT = 0;
+  CREDIT = 1;
+}
+
+enum Status {
+  ACTIVE = 0;
+  LOCKED = 1;
+}
+
+message AccountCreated {
+  Account account = 1;
+}
+
+message Account {
+  string id = 1;
+  string code = 2;
+  string name = 3;
+  string external_id = 4;
+  DebitOrCredit normal_balance_type = 5;
+  Status status = 6;
+  string description = 7;
+  repeated string tags = 8;
+  optional google.protobuf.Struct metadata = 9;
+}

@@ -1,11 +1,14 @@
 pub mod error;
 mod event;
+mod listener;
 mod repo;
+mod server;
 
 use sqlx::{PgPool, Postgres, Transaction};
 
 use error::*;
 pub use event::*;
+use listener::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -32,5 +35,24 @@ impl Outbox {
             .await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    pub async fn register_listener(
+        &self,
+        start_after: Option<EventSequence>,
+    ) -> Result<OutboxListener, OutboxError> {
+        unimplemented!()
+        // let sub = self.event_receiver.resubscribe();
+        // let latest_known = self.sequences_for(account_id).await?.read().await.0;
+        // let start = start_after.unwrap_or(latest_known);
+        // Ok(OutboxListener::new(
+        //     self.repo.clone(),
+        //     augment.then(|| self.augmenter.clone()),
+        //     sub,
+        //     account_id,
+        //     start,
+        //     latest_known,
+        //     self.buffer_size,
+        // ))
     }
 }
