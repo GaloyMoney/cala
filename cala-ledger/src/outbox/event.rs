@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 use crate::primitives::*;
@@ -7,22 +6,14 @@ crate::entity_id! { OutboxEventId }
 
 pub type WithoutAugmentation = ();
 
-#[derive(Builder, Debug, Serialize, Deserialize)]
-#[builder(pattern = "owned")]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OutboxEvent<T> {
     pub id: OutboxEventId,
     pub sequence: EventSequence,
     pub payload: OutboxEventPayload,
     pub recorded_at: chrono::DateTime<chrono::Utc>,
-    #[builder(default)]
     #[serde(skip)]
     pub augmentation: Option<T>,
-}
-
-impl<T> OutboxEvent<T> {
-    pub fn builder() -> OutboxEventBuilder<T> {
-        OutboxEventBuilder::default().id(OutboxEventId::new())
-    }
 }
 
 impl Clone for OutboxEvent<WithoutAugmentation> {

@@ -24,10 +24,12 @@ impl Outbox {
 
     pub(crate) async fn persist_events(
         &self,
-        tx: Transaction<'_, Postgres>,
+        mut tx: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) -> Result<(), OutboxError> {
-        //
+        self.repo
+            .persist_events::<WithoutAugmentation>(&mut tx, events)
+            .await?;
         tx.commit().await?;
         Ok(())
     }
