@@ -28,7 +28,7 @@ impl Outbox {
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) -> Result<(), OutboxError> {
         self.repo
-            .persist_events::<WithoutAugmentation>(&mut tx, events)
+            .persist_events(&mut tx, events.into_iter().map(Into::into))
             .await?;
         tx.commit().await?;
         Ok(())

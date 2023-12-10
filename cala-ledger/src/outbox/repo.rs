@@ -4,28 +4,35 @@ use super::{error::*, event::*};
 
 #[derive(Clone)]
 pub(super) struct OutboxRepo {
-    pool: PgPool,
+    _pool: PgPool,
 }
 
 impl OutboxRepo {
     pub(super) fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+        Self {
+            _pool: pool.clone(),
+        }
     }
 
-    pub async fn persist_events<T>(
+    pub async fn persist_events(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
-    ) -> Result<Vec<OutboxEvent<T>>, OutboxError> {
-        let mut query_builder: QueryBuilder<Postgres> =
-            QueryBuilder::new("INSERT INTO cala_outbox_events (payload)");
+        events: impl Iterator<Item = OutboxEventPayload>,
+    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+            r#"WITH new_events AS (
+               INSERT INTO cala_outbox_events (payload)"#,
+        );
         let mut payloads = Vec::new();
-        query_builder.push_values(events.into_iter(), |mut builder, event| {
-            let payload: OutboxEventPayload = event.into();
+        query_builder.push_values(events, |mut builder, payload| {
             builder.push_bind(serde_json::to_value(&payload).expect("Could not serialize payload"));
             payloads.push(payload);
         });
-        query_builder.push(r#"RETURNING id, sequence, recorded_at"#);
+        query_builder.push(
+            r#"RETURNING id, sequence, recorded_at )
+               SELECT * FROM new_events
+               ORDER BY sequence"#,
+        );
         let query = query_builder.build();
         let rows = query.fetch_all(&mut **tx).await?;
         let events = rows
@@ -36,7 +43,6 @@ impl OutboxRepo {
                 sequence: row.get("sequence"),
                 recorded_at: row.get("recorded_at"),
                 payload,
-                augmentation: None,
             })
             .collect::<Vec<_>>();
         Ok(events)

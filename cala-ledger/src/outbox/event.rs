@@ -4,26 +4,21 @@ use crate::primitives::*;
 
 crate::entity_id! { OutboxEventId }
 
-pub type WithoutAugmentation = ();
-
 #[derive(Debug, Serialize, Deserialize)]
-pub struct OutboxEvent<T> {
+pub struct OutboxEvent {
     pub id: OutboxEventId,
     pub sequence: EventSequence,
     pub payload: OutboxEventPayload,
     pub recorded_at: chrono::DateTime<chrono::Utc>,
-    #[serde(skip)]
-    pub augmentation: Option<T>,
 }
 
-impl Clone for OutboxEvent<WithoutAugmentation> {
+impl Clone for OutboxEvent {
     fn clone(&self) -> Self {
         Self {
             id: self.id,
             sequence: self.sequence,
             payload: self.payload.clone(),
             recorded_at: self.recorded_at,
-            augmentation: None,
         }
     }
 }

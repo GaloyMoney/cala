@@ -30,6 +30,6 @@ impl CalaLedger {
 
   #[napi]
   pub fn accounts(&self) -> napi::Result<CalaAccounts> {
-    Ok(CalaAccounts::new(&self.inner.accounts()))
+    Ok(CalaAccounts::new(self.inner.accounts()))
   }
 }
