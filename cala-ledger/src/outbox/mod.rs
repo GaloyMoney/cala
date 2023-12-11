@@ -1,8 +1,12 @@
 pub mod error;
-mod event;
 mod listener;
 mod repo;
 mod server;
+
+mod event {
+    pub use cala_types::outbox::*;
+    pub use cala_types::primitives::OutboxEventId;
+}
 
 use sqlx::{PgPool, Postgres, Transaction};
 

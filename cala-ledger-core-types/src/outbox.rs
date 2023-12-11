@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::primitives::*;
-
-crate::entity_id! { OutboxEventId }
+use crate::{account::*, primitives::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutboxEvent {

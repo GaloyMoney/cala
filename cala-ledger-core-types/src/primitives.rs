@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]

@@ -4,4 +4,5 @@
 mod id;
 
 pub mod account;
+pub mod outbox;
 pub mod primitives;
