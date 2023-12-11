@@ -1,8 +1,11 @@
 use crate::primitives::*;
 
-use crate::outbox::{
-    error::OutboxError,
-    event::{OutboxEvent, OutboxEventPayload},
+use crate::{
+    account::AccountValues,
+    outbox::{
+        error::OutboxError,
+        event::{OutboxEvent, OutboxEventPayload},
+    },
 };
 
 use super::proto;

@@ -10,7 +10,7 @@ mod outbox;
 pub use ledger::*;
 
 mod primitives {
-    pub use cala_types::{account::*, primitives::*};
+    pub use cala_types::primitives::*;
 }
 
 pub use primitives::*;

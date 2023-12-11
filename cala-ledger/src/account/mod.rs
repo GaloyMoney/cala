@@ -6,7 +6,7 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{outbox::*, primitives::*};
+use crate::outbox::*;
 
 pub use entity::*;
 use error::*;

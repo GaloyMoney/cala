@@ -1,8 +1,8 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use crate::entity::*;
-use cala_types::{account::*, primitives::*};
+use crate::{entity::*, primitives::*};
+pub use cala_types::{account::*, primitives::AccountId};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

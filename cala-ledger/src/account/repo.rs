@@ -1,7 +1,7 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{entity::*, error::*};
-use crate::{entity::*, primitives::*};
+use crate::entity::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountRepo {
