@@ -1,6 +1,6 @@
 mod config;
 mod convert;
-mod error;
+pub mod error;
 
 #[allow(clippy::all)]
 pub mod proto {

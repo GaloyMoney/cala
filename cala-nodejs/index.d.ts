@@ -12,9 +12,14 @@ export interface NewAccount {
   tags?: Array<string>
   metadata?: any
 }
+export interface OutboxServerConfig {
+  enabled: boolean
+  listenPort?: number
+}
 export interface CalaLedgerConfig {
   pgCon: string
   maxConnections?: number
+  outbox?: OutboxServerConfig
 }
 export class CalaAccounts {
   create(newAccount: NewAccount): Promise<string>
@@ -22,4 +27,5 @@ export class CalaAccounts {
 export class CalaLedger {
   static connect(config: CalaLedgerConfig): Promise<CalaLedger>
   accounts(): CalaAccounts
+  awaitOutboxServer(): Promise<void>
 }

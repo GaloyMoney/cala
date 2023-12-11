@@ -1,5 +1,7 @@
 use thiserror::Error;
 
+use crate::outbox::{error::OutboxError, server::error::OutboxServerError};
+
 #[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("LedgerError - Sqlx: {0}")]
@@ -8,4 +10,8 @@ pub enum LedgerError {
     SqlxMigrate(#[from] sqlx::migrate::MigrateError),
     #[error("LedgerError - Config: {0}")]
     ConfigError(String),
+    #[error("LedgerError - Outbox: {0}")]
+    Outbox(#[from] OutboxError),
+    #[error("LedgerError - OutboxServer: {0}")]
+    OutboxServer(#[from] OutboxServerError),
 }

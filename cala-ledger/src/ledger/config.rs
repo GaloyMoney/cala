@@ -1,6 +1,6 @@
 use derive_builder::Builder;
 
-use crate::outbox::server::OutboxServerConfig;
+pub use crate::outbox::server::OutboxServerConfig;
 
 #[derive(Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]

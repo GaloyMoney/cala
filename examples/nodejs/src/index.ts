@@ -4,7 +4,7 @@ const main = async () => {
   const pgHost = process.env.PG_HOST || "localhost";
   const pgCon = `postgres://user:password@${pgHost}:5432/pg`;
 
-  const cala = await CalaLedger.connect({pgCon})
+  const cala = await CalaLedger.connect({pgCon, outbox: { enabled: true }})
   console.log("CalaLedger connected");
 
   const account_id = await cala.accounts().create({
@@ -16,6 +16,8 @@ const main = async () => {
     }
   })
   console.log("Account created", account_id);
+  console.log("Awaiting server");
+  await cala.awaitOutboxServer();
 }
 
 main()

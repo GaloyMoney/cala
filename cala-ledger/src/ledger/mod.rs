@@ -1,7 +1,8 @@
-use sqlx::PgPool;
-
 pub mod config;
 pub mod error;
+
+use sqlx::PgPool;
+use std::sync::Mutex;
 
 pub use config::*;
 use error::*;
@@ -14,7 +15,7 @@ use crate::{
 pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
-    outbox_handle: Option<tokio::task::JoinHandle<()>>,
+    outbox_handle: Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>,
 }
 
 impl CalaLedger {
@@ -47,7 +48,7 @@ impl CalaLedger {
         let accounts = Accounts::new(&pool, outbox);
         Ok(Self {
             accounts,
-            outbox_handle,
+            outbox_handle: Mutex::new(outbox_handle),
             _pool: pool,
         })
     }
@@ -56,8 +57,16 @@ impl CalaLedger {
         &self.accounts
     }
 
+    pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
+        let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
+        if let Some(handle) = handle {
+            return handle.await.expect("Couldn't await outbox handle");
+        }
+        Ok(())
+    }
+
     pub fn shutdown_outbox(&mut self) -> Result<(), LedgerError> {
-        if let Some(handle) = self.outbox_handle.take() {
+        if let Some(handle) = self.outbox_handle.lock().expect("poisened mutex").take() {
             handle.abort();
         }
         Ok(())
@@ -66,9 +75,10 @@ impl CalaLedger {
     fn start_outbox_server(
         config: server::OutboxServerConfig,
         outbox: Outbox,
-    ) -> tokio::task::JoinHandle<()> {
+    ) -> tokio::task::JoinHandle<Result<(), LedgerError>> {
         tokio::spawn(async move {
-            let _ = server::start(config, outbox).await;
+            server::start(config, outbox).await?;
+            Ok(())
         })
     }
 }
