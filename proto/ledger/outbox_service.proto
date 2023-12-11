@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
 
 package services.outbox.v1;
 
@@ -13,10 +14,11 @@ message SubscribeRequest {
 }
 
 message CalaLedgerEvent {
-  uint64 sequence = 1;
-  uint32 recorded_at = 2;
+  string id = 1;
+  uint64 sequence = 2;
+  google.protobuf.Timestamp recorded_at = 3;
   oneof payload {
-    AccountCreated account_created = 3;
+    AccountCreated account_created = 4;
   }
 }
 

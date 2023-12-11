@@ -13,10 +13,10 @@ use super::proto;
 impl From<OutboxEvent> for proto::CalaLedgerEvent {
     fn from(
         OutboxEvent {
+            id,
             sequence,
             payload,
             recorded_at,
-            ..
         }: OutboxEvent,
     ) -> Self {
         let payload = match payload {
@@ -27,8 +27,9 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             }
         };
         proto::CalaLedgerEvent {
+            id: id.to_string(),
             sequence: u64::from(sequence),
-            recorded_at: recorded_at.timestamp() as u32,
+            recorded_at: Some(recorded_at.into()),
             payload: Some(payload),
         }
     }
