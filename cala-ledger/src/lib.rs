@@ -6,7 +6,11 @@ mod entity;
 mod ledger;
 pub mod migrate;
 mod outbox;
-mod primitives;
 
 pub use ledger::*;
+
+mod primitives {
+    pub use cala_types::{account::*, primitives::*};
+}
+
 pub use primitives::*;

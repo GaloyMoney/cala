@@ -2,6 +2,8 @@
 resolver = "2"
 members = [
   "cala-ledger",
+  "cala-ledger-outbox-client",
+  "cala-ledger-core-types",
   "cala-nodejs",
   "examples/rust",
 ]

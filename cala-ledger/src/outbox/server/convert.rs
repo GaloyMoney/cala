@@ -1,9 +1,8 @@
-use crate::{
-    outbox::{
-        error::OutboxError,
-        event::{OutboxEvent, OutboxEventPayload},
-    },
-    primitives::{AccountValues, DebitOrCredit, Status},
+use crate::primitives::*;
+
+use crate::outbox::{
+    error::OutboxError,
+    event::{OutboxEvent, OutboxEventPayload},
 };
 
 use super::proto;
