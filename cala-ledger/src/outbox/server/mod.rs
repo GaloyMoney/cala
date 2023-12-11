@@ -18,7 +18,7 @@ use tracing::instrument;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{EventSequence, Outbox};
-use config::*;
+pub use config::*;
 use error::*;
 
 pub struct OutboxServer {

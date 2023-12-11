@@ -6,11 +6,15 @@ pub mod error;
 pub use config::*;
 use error::*;
 
-use crate::account::Accounts;
+use crate::{
+    account::Accounts,
+    outbox::{server, Outbox},
+};
 
 pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
+    outbox_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl CalaLedger {
@@ -34,17 +38,37 @@ impl CalaLedger {
             sqlx::migrate!().run(&pool).await?;
         }
 
-        Ok(Self::new(pool))
-    }
-
-    fn new(pool: PgPool) -> Self {
-        Self {
-            accounts: Accounts::new(&pool),
-            _pool: pool,
+        let outbox = Outbox::new(&pool);
+        let mut outbox_handle = None;
+        if let Some(outbox_config) = config.outbox {
+            outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
         }
+
+        let accounts = Accounts::new(&pool, outbox);
+        Ok(Self {
+            accounts,
+            outbox_handle,
+            _pool: pool,
+        })
     }
 
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
+    }
+
+    pub fn shutdown_outbox(&mut self) -> Result<(), LedgerError> {
+        if let Some(handle) = self.outbox_handle.take() {
+            handle.abort();
+        }
+        Ok(())
+    }
+
+    fn start_outbox_server(
+        config: server::OutboxServerConfig,
+        outbox: Outbox,
+    ) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let _ = server::start(config, outbox).await;
+        })
     }
 }

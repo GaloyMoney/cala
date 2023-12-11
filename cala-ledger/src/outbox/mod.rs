@@ -1,7 +1,7 @@
 pub mod error;
 mod listener;
 mod repo;
-mod server;
+pub mod server;
 
 mod event {
     pub use cala_types::outbox::*;

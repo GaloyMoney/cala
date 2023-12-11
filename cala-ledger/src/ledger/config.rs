@@ -1,5 +1,7 @@
 use derive_builder::Builder;
 
+use crate::outbox::server::OutboxServerConfig;
+
 #[derive(Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct CalaLedgerConfig {
@@ -11,6 +13,8 @@ pub struct CalaLedgerConfig {
     pub(super) exec_migrations: bool,
     #[builder(setter(into, strip_option), default)]
     pub(super) pool: Option<sqlx::PgPool>,
+    #[builder(setter(strip_option), default)]
+    pub(super) outbox: Option<OutboxServerConfig>,
 }
 
 impl CalaLedgerConfig {
