@@ -8,14 +8,9 @@ pub mod proto {
 }
 
 use futures::StreamExt;
-use opentelemetry::{
-    propagation::{Extractor, TextMapPropagator},
-    sdk::propagation::TraceContextPropagator,
-};
 use proto::{outbox_service_server::OutboxService, *};
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::instrument;
-use tracing_opentelemetry::OpenTelemetrySpanExt;
 
 use super::{EventSequence, Outbox};
 pub use config::*;
@@ -36,7 +31,7 @@ impl OutboxService for OutboxServer {
         &self,
         request: Request<SubscribeRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
-        extract_tracing(&request);
+        cala_tracing::extract_grpc_tracing(&request);
 
         let SubscribeRequest { after_sequence } = request.into_inner();
 
@@ -64,32 +59,4 @@ pub(crate) async fn start(
         .serve(([0, 0, 0, 0], server_config.listen_port).into())
         .await?;
     Ok(())
-}
-
-pub fn extract_tracing<T>(request: &Request<T>) {
-    let propagator = TraceContextPropagator::new();
-    let parent_cx = propagator.extract(&RequestContextExtractor(request));
-    tracing::Span::current().set_parent(parent_cx)
-}
-
-struct RequestContextExtractor<'a, T>(&'a Request<T>);
-
-impl<'a, T> Extractor for RequestContextExtractor<'a, T> {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.metadata().get(key).and_then(|s| s.to_str().ok())
-    }
-
-    fn keys(&self) -> Vec<&str> {
-        self.0
-            .metadata()
-            .keys()
-            .filter_map(|k| {
-                if let tonic::metadata::KeyRef::Ascii(key) = k {
-                    Some(key.as_str())
-                } else {
-                    None
-                }
-            })
-            .collect()
-    }
 }

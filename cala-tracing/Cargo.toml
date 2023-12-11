@@ -3,7 +3,11 @@ name = "cala-tracing"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+
+fail-on-warnings = []
+http = ["dep:opentelemetry-http", "dep:http"]
+grpc = ["dep:tonic"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -14,5 +18,7 @@ tracing-opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
-opentelemetry-http = { workspace = true }
-http = { workspace = true }
+
+tonic = { workspace = true, optional = true }
+opentelemetry-http = { workspace = true, optional = true }
+http = { workspace = true, optional = true }

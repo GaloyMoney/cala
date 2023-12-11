@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
+#![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
+
 use opentelemetry::{
     global,
     sdk::{
@@ -23,7 +26,7 @@ pub struct TracingConfig {
 impl Default for TracingConfig {
     fn default() -> Self {
         Self {
-            service_name: "cala".to_string(),
+            service_name: "dev".to_string(),
         }
     }
 }
@@ -65,11 +68,47 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
     ]))
 }
 
-pub fn extract_tracing(headers: &http::HeaderMap) {
+#[cfg(feature = "http")]
+pub fn extract_http_tracing(headers: &http::HeaderMap) {
     use opentelemetry_http::HeaderExtractor;
     use tracing_opentelemetry::OpenTelemetrySpanExt;
     let extractor = HeaderExtractor(headers);
     let ctx =
         opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&extractor));
     tracing::Span::current().set_parent(ctx)
+}
+
+#[cfg(feature = "grpc")]
+pub fn extract_grpc_tracing<T>(request: &tonic::Request<T>) {
+    use opentelemetry::propagation::TextMapPropagator;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let propagator = TraceContextPropagator::new();
+    let parent_cx = propagator.extract(&grpc::RequestContextExtractor(request));
+    tracing::Span::current().set_parent(parent_cx)
+}
+
+#[cfg(feature = "grpc")]
+mod grpc {
+    pub(super) struct RequestContextExtractor<'a, T>(pub(super) &'a tonic::Request<T>);
+
+    impl<'a, T> opentelemetry::propagation::Extractor for RequestContextExtractor<'a, T> {
+        fn get(&self, key: &str) -> Option<&str> {
+            self.0.metadata().get(key).and_then(|s| s.to_str().ok())
+        }
+
+        fn keys(&self) -> Vec<&str> {
+            self.0
+                .metadata()
+                .keys()
+                .filter_map(|k| {
+                    if let tonic::metadata::KeyRef::Ascii(key) = k {
+                        Some(key.as_str())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        }
+    }
 }
