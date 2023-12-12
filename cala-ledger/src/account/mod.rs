@@ -38,11 +38,8 @@ impl Accounts {
         Ok(res.id)
     }
 
-    #[instrument(name = "cala_ledger.accounts.list_paginated", skip(self))]
-    pub async fn list_paginated(
-        &self,
-        query: PaginatedQueryArgs<AccountId>,
-    ) -> Result<(), AccountError> {
+    #[instrument(name = "cala_ledger.accounts.list", skip(self))]
+    pub async fn list(&self, query: PaginatedQueryArgs<AccountId>) -> Result<(), AccountError> {
         unimplemented!()
         // let res = self
         //     .repo

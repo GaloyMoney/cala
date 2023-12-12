@@ -5,6 +5,7 @@ use super::primitives::*;
 #[derive(SimpleObject)]
 pub(super) struct Account {
     pub id: ID,
+    pub account_id: UUID,
     pub code: String,
     pub name: String,
     pub external_id: String,

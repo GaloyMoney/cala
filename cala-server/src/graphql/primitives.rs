@@ -16,5 +16,11 @@ pub(super) enum Status {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct JSON(serde_json::Value);
 scalar!(JSON);
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct UUID(uuid::Uuid);
+scalar!(UUID);

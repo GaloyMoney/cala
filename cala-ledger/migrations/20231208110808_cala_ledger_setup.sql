@@ -4,17 +4,19 @@ CREATE TYPE Layer AS ENUM ('settled', 'pending', 'encumbered');
 
 CREATE TABLE cala_accounts (
   connection_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID PRIMARY KEY,
+  id UUID NOT NULL,
   code VARCHAR NOT NULL,
   name VARCHAR NOT NULL,
-  tags VARCHAR[],
-  external_id VARCHAR NOT NULL,
+  tags VARCHAR[] NOT NULL,
+  external_id VARCHAR,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(connection_id, id),
-  UNIQUE(connection_id, code),
-  UNIQUE(connection_id, name),
-  UNIQUE(connection_id, external_id)
+  UNIQUE(connection_id, code)
 );
+CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
+CREATE UNIQUE INDEX idx_cala_accounts_connection_id_external_id ON cala_accounts (connection_id, external_id) WHERE external_id IS NOT NULL;
+CREATE INDEX idx_cala_accounts_tags ON cala_accounts USING GIN (tags);
+
 
 CREATE TABLE cala_account_events (
   connection_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',

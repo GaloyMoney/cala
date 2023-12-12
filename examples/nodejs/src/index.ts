@@ -7,15 +7,24 @@ const main = async () => {
   const cala = await CalaLedger.connect({pgCon, outbox: { enabled: true }})
   console.log("CalaLedger connected");
 
-  const account_id = await cala.accounts().create({
-    name: "USERS_ONE",
+  const accountId = await cala.accounts().create({
+    name: "MY NAME",
     code: "USERS_ONE",
     metadata: {
       "something": "users",
       "more": true
     }
   })
-  console.log("Account created", account_id);
+  console.log("Account created", accountId);
+  const accountId2 = await cala.accounts().create({
+    name: "MY NAME",
+    code: "USERS_TWO",
+    metadata: {
+      "something": "users",
+      "more": true
+    }
+  })
+  console.log("Account created", accountId2);
   console.log("Awaiting server");
   await cala.awaitOutboxServer();
 }

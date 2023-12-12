@@ -21,15 +21,13 @@ impl AccountRepo {
     ) -> Result<EntityUpdate<AccountEvent>, AccountError> {
         let id = new_account.id;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_accounts (id, code, name, external_id, tags)
+            VALUES ($1, $2, $3, $4, $5)"#,
             id as AccountId,
             new_account.code,
             new_account.name,
-            new_account
-                .external_id
-                .clone()
-                .unwrap_or_else(|| id.to_string()),
+            new_account.external_id,
+            &new_account.tags
         )
         .execute(&mut **tx)
         .await?;

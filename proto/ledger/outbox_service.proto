@@ -40,10 +40,10 @@ message Account {
   string id = 1;
   string code = 2;
   string name = 3;
-  string external_id = 4;
-  DebitOrCredit normal_balance_type = 5;
-  Status status = 6;
-  string description = 7;
-  repeated string tags = 8;
+  DebitOrCredit normal_balance_type = 4;
+  Status status = 5;
+  optional string external_id = 6;
+  repeated string tags = 7;
+  optional string description = 8;
   optional google.protobuf.Struct metadata = 9;
 }
