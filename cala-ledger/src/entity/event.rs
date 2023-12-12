@@ -43,7 +43,7 @@ where
             "INSERT INTO {} (id, sequence, event_type, event)",
             <T as EntityEvent>::event_table_name(),
         ));
-        let sequence = 0;
+        let sequence = 1;
         query_builder.push_values(events.iter().enumerate(), |mut builder, (offset, event)| {
             let event_json = serde_json::to_value(event).expect("Could not serialize event");
             let event_type = event_json

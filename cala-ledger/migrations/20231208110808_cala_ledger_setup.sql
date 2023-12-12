@@ -25,7 +25,7 @@ CREATE TABLE cala_account_events (
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(id, sequence),
+  UNIQUE(connection_id, id, sequence),
   FOREIGN KEY (connection_id, id) REFERENCES cala_accounts(connection_id, id)
 );
 
