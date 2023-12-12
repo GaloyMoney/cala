@@ -2,7 +2,7 @@ pub mod config;
 pub mod error;
 
 use sqlx::PgPool;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 pub use config::*;
 use error::*;
@@ -12,10 +12,11 @@ use crate::{
     outbox::{server, Outbox},
 };
 
+#[derive(Clone)]
 pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
-    outbox_handle: Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>,
+    outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
 
 impl CalaLedger {
@@ -48,7 +49,7 @@ impl CalaLedger {
         let accounts = Accounts::new(&pool, outbox);
         Ok(Self {
             accounts,
-            outbox_handle: Mutex::new(outbox_handle),
+            outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
     }

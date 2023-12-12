@@ -14,7 +14,7 @@ categories = ["accounting", "ledger"]
 fail-on-warnings = []
 
 [dependencies]
-cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
 cala-tracing = { path = "../cala-tracing", features = ["grpc"] }
 
 chrono = { workspace = true }

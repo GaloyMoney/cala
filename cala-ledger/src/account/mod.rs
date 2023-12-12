@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use cala_types::query::PaginatedQueryArgs;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -35,6 +36,19 @@ impl Accounts {
         let res = self.repo.create_in_tx(&mut tx, new_account).await?;
         self.outbox.persist_events(tx, res.new_events).await?;
         Ok(res.id)
+    }
+
+    #[instrument(name = "cala_ledger.accounts.list_paginated", skip(self))]
+    pub async fn list_paginated(
+        &self,
+        query: PaginatedQueryArgs<AccountId>,
+    ) -> Result<(), AccountError> {
+        unimplemented!()
+        // let res = self
+        //     .repo
+        //     .list_via_curser(&mut tx, after, before, first, last)
+        //     .await?;
+        // Ok(res.connection)
     }
 }
 

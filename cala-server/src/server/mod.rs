@@ -26,9 +26,11 @@ pub async fn run(config: ServerConfig, app: CalaApp) -> anyhow::Result<()> {
 }
 
 pub async fn graphql_handler(
+    headers: HeaderMap,
     schema: Extension<Schema<graphql::Query, graphql::Mutation, EmptySubscription>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
+    cala_tracing::extract_http_tracing(&headers);
     let req = req.into_inner();
     schema.execute(req).await.into()
 }

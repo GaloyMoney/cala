@@ -32,9 +32,12 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 async fn run_cmd(config: Config) -> anyhow::Result<()> {
+    use cala_ledger::{CalaLedger, CalaLedgerConfig};
     cala_tracing::init_tracer(config.tracing)?;
     let pool = db::init_pool(&config.db).await?;
-    let app = crate::app::CalaApp::new(pool);
+    let ledger_config = CalaLedgerConfig::builder().pool(pool.clone()).build()?;
+    let ledger = CalaLedger::init(ledger_config).await?;
+    let app = crate::app::CalaApp::new(pool, ledger);
     crate::server::run(config.server, app).await?;
     Ok(())
 }

@@ -6,7 +6,8 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cala-tracing = { path = "../cala-tracing" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
+cala-tracing = { path = "../cala-tracing", features = ["http"] }
 cala-ledger = { path = "../cala-ledger" }
 
 anyhow = { workspace = true }
@@ -19,3 +20,4 @@ clap = { workspace = true }
 sqlx = { workspace = true }
 serde = { workspace = true }
 serde_yaml = { workspace = true }
+serde_json = { workspace = true }
