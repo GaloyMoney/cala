@@ -10,6 +10,10 @@ cala-tracing = { path = "../cala-tracing" }
 cala-ledger = { path = "../cala-ledger" }
 
 anyhow = { workspace = true }
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
 thiserror = { workspace = true }
 clap = { workspace = true }
 sqlx = { workspace = true }

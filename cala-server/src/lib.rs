@@ -3,3 +3,5 @@
 
 pub mod app;
 pub mod cli;
+pub mod graphql;
+pub mod server;

@@ -33,8 +33,8 @@ pub async fn run() -> anyhow::Result<()> {
 
 async fn run_cmd(config: Config) -> anyhow::Result<()> {
     cala_tracing::init_tracer(config.tracing)?;
-    let _pool = db::init_pool(&config.db).await?;
-    // let app = crate::app::ApiKeysApp::new(pool, config.app);
-    // crate::server::run_server(config.server, app).await
+    let pool = db::init_pool(&config.db).await?;
+    let app = crate::app::CalaApp::new(pool);
+    crate::server::run(config.server, app).await?;
     Ok(())
 }

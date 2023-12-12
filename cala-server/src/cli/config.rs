@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use super::db::*;
-// use crate::{app::AppConfig, server::ServerConfig};
+use crate::server::ServerConfig;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     #[serde(default)]
     pub db: DbConfig,
-    // #[serde(default)]
-    // pub server: ServerConfig,
+    #[serde(default)]
+    pub server: ServerConfig,
     // #[serde(default)]
     // pub app: AppConfig,
     #[serde(default = "default_tracing_config")]
