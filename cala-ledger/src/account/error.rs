@@ -8,4 +8,6 @@ pub enum AccountError {
     Sqlx(#[from] sqlx::Error),
     #[error("{0}")]
     OutboxError(#[from] OutboxError),
+    #[error("AccountError - EntityError: {0}")]
+    EntityError(#[from] crate::entity::EntityError),
 }

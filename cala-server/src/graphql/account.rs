@@ -8,10 +8,10 @@ pub(super) struct Account {
     pub account_id: UUID,
     pub code: String,
     pub name: String,
-    pub external_id: String,
     pub normal_balance_type: DebitOrCredit,
     pub status: Status,
-    pub description: String,
-    pub tags: Vec<String>,
+    pub external_id: Option<String>,
+    pub description: Option<String>,
+    pub tags: Vec<TAG>,
     pub metadata: Option<JSON>,
 }

@@ -10,12 +10,10 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn numbers(
+    async fn accounts(
         &self,
+        first: i32,
         after: Option<String>,
-        before: Option<String>,
-        first: Option<i32>,
-        last: Option<i32>,
     ) -> Result<Connection<ID, Account, EmptyFields, EmptyFields>> {
         unimplemented!();
         // query(

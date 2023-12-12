@@ -1,11 +1,24 @@
 use serde::{de::DeserializeOwned, Serialize};
 
-pub trait EntityEvent {
-    type EntityId: Into<uuid::Uuid> + Copy;
+use super::error::EntityError;
+
+#[derive(sqlx::Type)]
+pub struct GenericEvent {
+    pub id: uuid::Uuid,
+    pub sequence: i32,
+    pub event: serde_json::Value,
+}
+
+pub trait EntityEvent: DeserializeOwned + Serialize {
+    type EntityId: Into<uuid::Uuid> + From<uuid::Uuid> + Copy;
 
     fn event_table_name() -> &'static str
     where
         Self: Sized;
+}
+
+pub trait Entity: TryFrom<EntityEvents<<Self as Entity>::Event>, Error = EntityError> {
+    type Event: EntityEvent;
 }
 
 pub(crate) struct EntityUpdate<T: EntityEvent> {
@@ -13,8 +26,9 @@ pub(crate) struct EntityUpdate<T: EntityEvent> {
     pub new_events: Vec<T>,
 }
 
-pub struct EntityEvents<T: DeserializeOwned + Serialize + EntityEvent> {
+pub struct EntityEvents<T: EntityEvent> {
     entity_id: <T as EntityEvent>::EntityId,
+    persisted_events: Vec<T>,
     new_events: Vec<T>,
 }
 
@@ -28,6 +42,7 @@ where
     ) -> Self {
         Self {
             entity_id: id,
+            persisted_events: Vec::new(),
             new_events: initial_events.into_iter().collect(),
         }
     }
@@ -64,5 +79,44 @@ where
             id: self.entity_id,
             new_events: events,
         })
+    }
+
+    pub fn load_n<E: Entity<Event = T>>(
+        events: impl IntoIterator<Item = GenericEvent>,
+        n: usize,
+    ) -> Result<(Vec<E>, bool), EntityError> {
+        let mut ret: Vec<E> = Vec::new();
+        let mut current_id = None;
+        let mut current = None;
+        for e in events {
+            if current_id != Some(e.id) {
+                if let Some(current) = current.take() {
+                    ret.push(E::try_from(current)?);
+                    if ret.len() == n {
+                        return Ok((ret, true));
+                    }
+                }
+
+                current_id = Some(e.id);
+                current = Some(Self {
+                    entity_id: e.id.into(),
+                    persisted_events: Vec::new(),
+                    new_events: Vec::new(),
+                });
+            }
+            current
+                .as_mut()
+                .expect("Could not get current")
+                .persisted_events
+                .push(serde_json::from_value(e.event).expect("Could not deserialize event"));
+        }
+        if let Some(current) = current.take() {
+            ret.push(E::try_from(current)?);
+        }
+        Ok((ret, false))
+    }
+
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
+        self.persisted_events.iter().chain(self.new_events.iter())
     }
 }

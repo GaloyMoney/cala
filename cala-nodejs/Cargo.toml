@@ -7,9 +7,11 @@ version = "0.1.0"
 crate-type = ["cdylib"]
 
 [dependencies]
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
 cala-ledger = { path = "../cala-ledger" }
 
 uuid = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 napi = { version = "2.10.0", default-features = false, features = ["tokio_rt", "serde-json"] }
 napi-derive = "2.9.1"

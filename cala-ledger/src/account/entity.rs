@@ -17,6 +17,31 @@ impl EntityEvent for AccountEvent {
     }
 }
 
+#[derive(Builder)]
+#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+pub struct Account {
+    pub values: AccountValues,
+    events: EntityEvents<AccountEvent>,
+}
+impl Entity for Account {
+    type Event = AccountEvent;
+}
+impl TryFrom<EntityEvents<AccountEvent>> for Account {
+    type Error = EntityError;
+
+    fn try_from(events: EntityEvents<AccountEvent>) -> Result<Self, Self::Error> {
+        let mut builder = AccountBuilder::default();
+        for event in events.iter() {
+            match event {
+                AccountEvent::Initialized { values } => {
+                    builder = builder.values(values.clone());
+                }
+            }
+        }
+        builder.events(events).build()
+    }
+}
+
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
 #[derive(Builder, Debug)]
 pub struct NewAccount {

@@ -3,7 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use cala_types::query::PaginatedQueryArgs;
+use cala_types::query::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -39,13 +39,11 @@ impl Accounts {
     }
 
     #[instrument(name = "cala_ledger.accounts.list", skip(self))]
-    pub async fn list(&self, query: PaginatedQueryArgs<AccountId>) -> Result<(), AccountError> {
-        unimplemented!()
-        // let res = self
-        //     .repo
-        //     .list_via_curser(&mut tx, after, before, first, last)
-        //     .await?;
-        // Ok(res.connection)
+    pub async fn list(
+        &self,
+        query: PaginatedQueryArgs<AccountByNameCursor>,
+    ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
+        Ok(self.repo.list(query).await?)
     }
 }
 

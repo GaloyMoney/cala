@@ -12,6 +12,20 @@ export interface NewAccount {
   tags?: Array<string>
   metadata?: any
 }
+export interface AccountValues {
+  id: string
+  code: string
+  name: string
+  tags: Array<string>
+  externalId?: string
+  description?: string
+  metadata?: any
+}
+export interface PaginatedAccounts {
+  accounts: Array<AccountValues>
+  hasNextPage: boolean
+  endCursor?: CursorToken
+}
 export interface OutboxServerConfig {
   enabled: boolean
   listenPort?: number
@@ -21,8 +35,16 @@ export interface CalaLedgerConfig {
   maxConnections?: number
   outbox?: OutboxServerConfig
 }
+export interface CursorToken {
+  token: string
+}
+export interface PaginatedQueryArgs {
+  after?: CursorToken
+  first: number
+}
 export class CalaAccounts {
   create(newAccount: NewAccount): Promise<string>
+  list(query: PaginatedQueryArgs): Promise<PaginatedAccounts>
 }
 export class CalaLedger {
   static connect(config: CalaLedgerConfig): Promise<CalaLedger>

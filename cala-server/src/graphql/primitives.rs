@@ -24,3 +24,8 @@ scalar!(JSON);
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
 scalar!(UUID);
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct TAG(String);
+scalar!(TAG);

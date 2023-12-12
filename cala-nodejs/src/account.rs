@@ -1,3 +1,5 @@
+use super::queries::*;
+
 #[napi(object)]
 pub struct NewAccount {
   pub id: Option<String>,
@@ -7,6 +9,39 @@ pub struct NewAccount {
   pub description: Option<String>,
   pub tags: Option<Vec<String>>,
   pub metadata: Option<serde_json::Value>,
+}
+
+#[napi(object)]
+pub struct AccountValues {
+  pub id: String,
+  pub code: String,
+  pub name: String,
+  pub tags: Vec<String>,
+  pub external_id: Option<String>,
+  pub description: Option<String>,
+  pub metadata: Option<serde_json::Value>,
+}
+
+impl From<cala_ledger::account::Account> for AccountValues {
+  fn from(account: cala_ledger::account::Account) -> Self {
+    let values = account.values;
+    Self {
+      id: values.id.to_string(),
+      code: values.code,
+      name: values.name,
+      tags: values.tags,
+      external_id: values.external_id,
+      description: values.description,
+      metadata: values.metadata,
+    }
+  }
+}
+
+#[napi(object)]
+pub struct PaginatedAccounts {
+  pub accounts: Vec<AccountValues>,
+  pub has_next_page: bool,
+  pub end_cursor: Option<CursorToken>,
 }
 
 #[napi]
@@ -57,5 +92,23 @@ impl CalaAccounts {
       .map_err(crate::generic_napi_error)?;
 
     Ok(id.to_string())
+  }
+
+  #[napi]
+  pub async fn list(&self, query: PaginatedQueryArgs) -> napi::Result<PaginatedAccounts> {
+    let query = cala_types::query::PaginatedQueryArgs {
+      after: query.after.map(|c| c.try_into()).transpose()?,
+      first: usize::try_from(query.first).map_err(crate::generic_napi_error)?,
+    };
+    let ret = self
+      .inner
+      .list(query)
+      .await
+      .map_err(crate::generic_napi_error)?;
+    Ok(PaginatedAccounts {
+      accounts: ret.nodes.into_iter().map(AccountValues::from).collect(),
+      has_next_page: ret.has_next_page,
+      end_cursor: ret.end_cursor.map(|c| c.into()),
+    })
   }
 }

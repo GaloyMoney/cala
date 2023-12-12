@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, e.sequence, e.event\n            FROM cala_accounts a\n            JOIN cala_account_events e ON a.id = e.id\n            WHERE (a.name, a.id) > (COALESCE($2, ''), COALESCE($1, '00000000-0000-0000-0000-000000000000'::uuid))\n            ORDER BY a.name, a.id, e.sequence\n            LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3d0a01bf106dcb152caa7ba7ec1e4cad7804ab6c5c14574f25ce2f78b1ba6da0"
+}
