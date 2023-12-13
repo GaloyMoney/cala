@@ -19,13 +19,29 @@ pub(super) enum Status {
 #[serde(transparent)]
 pub struct JSON(serde_json::Value);
 scalar!(JSON);
+impl From<serde_json::Value> for JSON {
+    fn from(value: serde_json::Value) -> Self {
+        Self(value)
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
 scalar!(UUID);
+impl<T: Into<uuid::Uuid>> From<T> for UUID {
+    fn from(id: T) -> Self {
+        let uuid = id.into();
+        Self(uuid)
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct TAG(String);
 scalar!(TAG);
+impl From<String> for TAG {
+    fn from(tag: String) -> Self {
+        Self(tag)
+    }
+}

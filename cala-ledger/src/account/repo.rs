@@ -53,16 +53,16 @@ impl AccountRepo {
         )
         .fetch_all(&self.pool)
         .await?;
-        let (nodes, has_next_page) = EntityEvents::load_n::<Account>(rows, query.first)?;
+        let (entities, has_next_page) = EntityEvents::load_n::<Account>(rows, query.first)?;
         let mut end_cursor = None;
-        if let Some(last) = nodes.last() {
+        if let Some(last) = entities.last() {
             end_cursor = Some(AccountByNameCursor {
                 id: last.values.id,
                 name: last.values.name.clone(),
             });
         }
         Ok(PaginatedQueryRet {
-            nodes,
+            entities,
             has_next_page,
             end_cursor,
         })

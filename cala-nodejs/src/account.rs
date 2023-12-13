@@ -106,7 +106,7 @@ impl CalaAccounts {
       .await
       .map_err(crate::generic_napi_error)?;
     Ok(PaginatedAccounts {
-      accounts: ret.nodes.into_iter().map(AccountValues::from).collect(),
+      accounts: ret.entities.into_iter().map(AccountValues::from).collect(),
       has_next_page: ret.has_next_page,
       end_cursor: ret.end_cursor.map(|c| c.into()),
     })

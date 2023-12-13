@@ -1,6 +1,7 @@
 use async_graphql::{types::connection::*, *};
 
 use super::account::*;
+use crate::app::CalaApp;
 
 // use timestamp::*;
 
@@ -12,38 +13,43 @@ pub struct Query;
 impl Query {
     async fn accounts(
         &self,
+        ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
     ) -> Result<Connection<AccountByNameCursor, Account, EmptyFields, EmptyFields>> {
-        unimplemented!();
-        // query(
-        //     after,
-        //     before,
-        //     first,
-        //     last,
-        //     |after, before, first, last| async move {
-        //         // let mut start = after.map(|after| after + 1).unwrap_or(0);
-        //         // let mut end = before.unwrap_or(10000);
-        //         // if let Some(first) = first {
-        //         //     end = (start + first).min(end);
-        //         // }
-        //         // if let Some(last) = last {
-        //         //     start = if last > end - start { end } else { end - last };
-        //         // }
-        //         // let mut connection = Connection::new(start > 0, end < 10000);
-        //         // connection.edges.extend(
-        //         //     (start..end)
-        //         //         .into_iter()
-        //         //         .map(|n| Edge::with_additional_fields(n, n as i32, EmptyFields)),
-        //         // );
-        //         Ok::<_, async_graphql::Error>(connection)
-        //     },
-        // )
-        // .await
+        let app = ctx.data_unchecked::<CalaApp>();
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let result = app
+                    .ledger()
+                    .accounts()
+                    .list(cala_types::query::PaginatedQueryArgs {
+                        first: usize::try_from(first)?,
+                        after: after.map(cala_types::query::AccountByNameCursor::from),
+                    })
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let values = entity.values;
+                        let cursor = AccountByNameCursor::from(&values);
+                        Edge::new(cursor, Account::from(values))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
     }
 }
 
 pub struct Mutation;
+
 #[Object]
 impl Mutation {
     async fn hello(&self) -> String {

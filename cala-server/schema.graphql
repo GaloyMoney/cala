@@ -1,0 +1,99 @@
+type Account {
+	id: ID!
+	accountId: UUID!
+	code: String!
+	name: String!
+	normalBalanceType: DebitOrCredit!
+	status: Status!
+	externalId: String
+	description: String
+	tags: [TAG!]!
+	metadata: JSON
+}
+
+type AccountConnection @shareable {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AccountEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Account!]!
+}
+
+"""
+An edge in a connection.
+"""
+type AccountEdge @shareable {
+	"""
+	The item at the end of the edge
+	"""
+	node: Account!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+
+enum DebitOrCredit {
+	DEBIT
+	CREDIT
+}
+
+
+
+
+scalar JSON
+
+type Mutation {
+	hello: String!
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo @shareable {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+type Query {
+	accounts(first: Int!, after: String): AccountConnection!
+}
+
+enum Status {
+	ACTIVE
+	LOCKED
+}
+
+
+scalar TAG
+
+scalar UUID
+
+extend schema @link(
+	url: "https://specs.apollo.dev/federation/v2.3",
+	import: ["@key", "@tag", "@shareable", "@inaccessible", "@override", "@external", "@provides", "@requires", "@composeDirective", "@interfaceObject"]
+)
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

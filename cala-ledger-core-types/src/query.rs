@@ -9,7 +9,7 @@ pub struct PaginatedQueryArgs<T: std::fmt::Debug> {
 }
 
 pub struct PaginatedQueryRet<T, C> {
-    pub nodes: Vec<T>,
+    pub entities: Vec<T>,
     pub has_next_page: bool,
     pub end_cursor: Option<C>,
 }
