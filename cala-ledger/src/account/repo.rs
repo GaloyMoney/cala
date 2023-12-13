@@ -44,7 +44,7 @@ impl AccountRepo {
             r#"SELECT a.id, e.sequence, e.event
             FROM cala_accounts a
             JOIN cala_account_events e ON a.id = e.id
-            WHERE (a.name, a.id) > (COALESCE($2, ''), COALESCE($1, '00000000-0000-0000-0000-000000000000'::uuid))
+            WHERE ((a.name, a.id) > ($2, $1)) OR ($1 IS NULL AND $2 IS NULL)
             ORDER BY a.name, a.id, e.sequence
             LIMIT $3"#,
             query.after.as_ref().map(|c| c.id) as Option<AccountId>,

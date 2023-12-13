@@ -15,6 +15,7 @@ anyhow = "1.0.75"
 async-graphql = { version = "6.0.9", default-features = false, features = ["tracing", "chrono", "playground"] }
 async-graphql-axum = "6.0.9"
 axum = { version = "0.6.20", features = ["headers", "macros"] }
+base64 = { version = "0.21.5" }
 chrono = { version = "0.4.31", features = ["clock", "serde"], default-features = false }
 clap = { version = "4.4", features = ["derive", "env"] }
 derive_builder = "0.12.0"

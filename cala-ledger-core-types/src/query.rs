@@ -4,8 +4,8 @@ use super::primitives::AccountId;
 
 #[derive(Debug)]
 pub struct PaginatedQueryArgs<T: std::fmt::Debug> {
-    pub after: Option<T>,
     pub first: usize,
+    pub after: Option<T>,
 }
 
 pub struct PaginatedQueryRet<T, C> {

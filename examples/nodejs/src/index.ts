@@ -24,11 +24,14 @@ const main = async () => {
       "more": true
     }
   })
+
   console.log("Account created", accountId2);
-  const accounts = await cala.accounts().list({first: 10});
-  console.log("Accounts: ", accounts)
-  console.log("Awaiting server");
-  await cala.awaitOutboxServer();
+
+  let result = await cala.accounts().list({first: 1});
+
+  console.log("Accounts: ", result);
+  result = await cala.accounts().list({first: 1, after: result.endCursor});
+  console.log("Accounts: ", result);
 }
 
 main()

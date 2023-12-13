@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
 cala-ledger = { path = "../cala-ledger" }
 
+base64 = { workspace = true }
 uuid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
