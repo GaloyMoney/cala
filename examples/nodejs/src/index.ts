@@ -28,10 +28,10 @@ const main = async () => {
   console.log("Account created", accountId2);
 
   let result = await cala.accounts().list({first: 1});
+  console.log("First accounts: ", result);
 
-  console.log("Accounts: ", result);
   result = await cala.accounts().list({first: 1, after: result.endCursor});
-  console.log("Accounts: ", result);
+  console.log("Next accounts: ", result);
 }
 
 main()

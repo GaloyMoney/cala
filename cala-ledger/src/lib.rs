@@ -13,4 +13,8 @@ mod primitives {
     pub use cala_types::primitives::*;
 }
 
+pub mod query {
+    pub use cala_types::query::*;
+}
+
 pub use primitives::*;

@@ -1,4 +1,4 @@
-use cala_ledger::{migrate::IncludeMigrations, *};
+use cala_ledger::{account::*, migrate::IncludeMigrations, query::*, *};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -16,6 +16,19 @@ async fn main() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let new_account = NewAccount::builder()
+        .name("MY NAME")
+        .code("USERS.abc")
+        .description("description")
+        .build()?;
+    let account_id = cala.accounts().create(new_account).await?;
+    println!("account_id: {}", account_id);
+
+    let result = cala.accounts().list(PaginatedQueryArgs::default()).await?;
+
+    println!("No of accounts: {}", result.entities.len());
+
     Ok(())
 }
