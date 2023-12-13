@@ -11,7 +11,7 @@ type Account {
 	metadata: JSON
 }
 
-type AccountConnection @shareable {
+type AccountConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -29,7 +29,7 @@ type AccountConnection @shareable {
 """
 An edge in a connection.
 """
-type AccountEdge @shareable {
+type AccountEdge {
 	"""
 	The item at the end of the edge
 	"""
@@ -58,7 +58,7 @@ type Mutation {
 """
 Information about pagination in a connection
 """
-type PageInfo @shareable {
+type PageInfo {
 	"""
 	When paginating backwards, are there more items?
 	"""
@@ -91,9 +91,7 @@ scalar TAG
 
 scalar UUID
 
-extend schema @link(
-	url: "https://specs.apollo.dev/federation/v2.3",
-	import: ["@key", "@tag", "@shareable", "@inaccessible", "@override", "@external", "@provides", "@requires", "@composeDirective", "@interfaceObject"]
-)
-directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
-directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: Mutation
+}
