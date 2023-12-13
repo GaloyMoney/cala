@@ -3,6 +3,7 @@
 
 pub mod account;
 mod entity;
+pub mod journal;
 mod ledger;
 pub mod migrate;
 mod outbox;

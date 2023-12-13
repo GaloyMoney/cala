@@ -29,6 +29,28 @@ CREATE TABLE cala_account_events (
   FOREIGN KEY (connection_id, id) REFERENCES cala_accounts(connection_id, id)
 );
 
+CREATE TABLE cala_journals (
+  connection_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000', 
+  id UUID PRIMARY KEY,
+  name VARCHAR NOT NULL, 
+  external_id VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(connection_id, id),
+  UNIQUE(connection_id, name)
+);
+
+CREATE TABLE cala_journal_events (
+  connection_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(id, sequence),
+  FOREIGN KEY (connection_id, id) REFERENCES cala_journals(connection_id, id)
+);
+
+
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,

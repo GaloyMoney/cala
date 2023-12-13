@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 
 crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
+crate::entity_id! { JournalId }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]
