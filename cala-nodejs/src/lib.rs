@@ -6,6 +6,6 @@ extern crate napi_derive;
 mod account;
 mod generic_error;
 mod ledger;
-mod queries;
+mod query;
 
 pub(crate) use generic_error::generic_napi_error;

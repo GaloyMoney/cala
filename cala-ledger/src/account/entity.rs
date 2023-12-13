@@ -23,9 +23,11 @@ pub struct Account {
     pub values: AccountValues,
     events: EntityEvents<AccountEvent>,
 }
+
 impl Entity for Account {
     type Event = AccountEvent;
 }
+
 impl TryFrom<EntityEvents<AccountEvent>> for Account {
     type Error = EntityError;
 

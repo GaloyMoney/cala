@@ -1,4 +1,4 @@
-use super::queries::*;
+use super::query::*;
 
 #[napi(object)]
 pub struct NewAccount {
