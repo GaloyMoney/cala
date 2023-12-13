@@ -2,6 +2,7 @@ use crate::primitives::*;
 
 use crate::{
     account::AccountValues,
+    journal::JournalValues,
     outbox::{
         error::OutboxError,
         event::{OutboxEvent, OutboxEventPayload},
@@ -23,6 +24,12 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             OutboxEventPayload::AccountCreated { account } => {
                 proto::cala_ledger_event::Payload::AccountCreated(proto::AccountCreated {
                     account: Some(proto::Account::from(account)),
+                })
+            }
+
+            OutboxEventPayload::JournalCreated { journal } => {
+                proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
+                    journal: Some(proto::Journal::from(journal)),
                 })
             }
         };
@@ -64,6 +71,28 @@ impl From<AccountValues> for proto::Account {
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),
+        }
+    }
+}
+
+impl From<JournalValues> for proto::Journal {
+    fn from(
+        JournalValues {
+            id,
+            name,
+            status,
+            external_id,
+            description,
+            ..
+        }: JournalValues,
+    ) -> Self {
+        let status: proto::Status = status.into();
+        proto::Journal {
+            id: id.to_string(),
+            name,
+            status: status as i32,
+            external_id,
+            description,
         }
     }
 }

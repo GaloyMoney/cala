@@ -1,4 +1,4 @@
-use cala_types::{account::*, outbox::*, primitives::*};
+use cala_types::{account::*, journal::*, outbox::*, primitives::*};
 
 use crate::{client::proto, error::*};
 
@@ -36,6 +36,13 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     account.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
+                journal,
+            }) => JournalCreated {
+                journal: JournalValues::try_from(
+                    journal.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
         };
         Ok(res)
     }
@@ -59,6 +66,22 @@ impl TryFrom<proto::Account> for AccountValues {
             description: account.description,
             tags: account.tags,
             metadata,
+        };
+        Ok(res)
+    }
+}
+
+impl TryFrom<proto::Journal> for JournalValues {
+    type Error = CalaLedgerOutboxClientError;
+
+    fn try_from(journal: proto::Journal) -> Result<Self, Self::Error> {
+        let status = proto::Status::try_from(journal.status).map(Status::from)?;
+        let res = Self {
+            id: journal.id.parse()?,
+            name: journal.name,
+            status,
+            external_id: journal.external_id,
+            description: journal.description,
         };
         Ok(res)
     }

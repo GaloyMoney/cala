@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{account::*, primitives::*};
+use crate::{account::*, journal::*, primitives::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutboxEvent {
@@ -25,6 +25,7 @@ impl Clone for OutboxEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutboxEventPayload {
     AccountCreated { account: AccountValues },
+    JournalCreated { journal: JournalValues },
 }
 
 #[derive(

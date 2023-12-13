@@ -7,6 +7,7 @@ use crate::entity::*;
 pub(super) struct JournalRepo {
     pool: PgPool,
 }
+
 impl JournalRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }

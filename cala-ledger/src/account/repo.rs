@@ -9,6 +9,7 @@ use crate::entity::*;
 pub(super) struct AccountRepo {
     pool: PgPool,
 }
+
 impl AccountRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
