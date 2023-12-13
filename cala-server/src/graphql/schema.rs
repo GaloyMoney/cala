@@ -14,7 +14,7 @@ impl Query {
         &self,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<ID, Account, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountByNameCursor, Account, EmptyFields, EmptyFields>> {
         unimplemented!();
         // query(
         //     after,
