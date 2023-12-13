@@ -19,6 +19,7 @@ message CalaLedgerEvent {
   google.protobuf.Timestamp recorded_at = 3;
   oneof payload {
     AccountCreated account_created = 4;
+    JournalCreated journal_created = 5;
   }
 }
 
@@ -47,3 +48,16 @@ message Account {
   optional string description = 8;
   optional google.protobuf.Struct metadata = 9;
 }
+
+message JournalCreated {
+    Journal journal = 1;
+}
+
+message Journal {
+    string id = 1;
+    string name = 2;
+    Status status = 3;
+    optional string external_id = 4;
+    optional string description = 5;
+}
+
