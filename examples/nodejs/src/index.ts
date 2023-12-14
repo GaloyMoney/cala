@@ -4,7 +4,7 @@ const main = async () => {
   const pgHost = process.env.PG_HOST || "localhost";
   const pgCon = `postgres://user:password@${pgHost}:5432/pg`;
 
-  const cala = await CalaLedger.connect({pgCon, outbox: { enabled: true }})
+  const cala = await CalaLedger.connect({ pgCon, outbox: { enabled: true } })
   console.log("CalaLedger connected");
 
   const accountId = await cala.accounts().create({
@@ -27,11 +27,18 @@ const main = async () => {
 
   console.log("Account created", accountId2);
 
-  let result = await cala.accounts().list({first: 1});
+  let result = await cala.accounts().list({ first: 1 });
   console.log("First accounts: ", result);
 
-  result = await cala.accounts().list({first: 1, after: result.endCursor});
+  result = await cala.accounts().list({ first: 1, after: result.endCursor });
   console.log("Next accounts: ", result);
+
+  const journalId = await cala.journals().create({
+    name: "MY JOURNAL",
+    description: "MY DESCRIPTION",
+  })
+
+  console.log("Journal Created", journalId);
 }
 
 main()

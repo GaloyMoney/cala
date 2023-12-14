@@ -2,7 +2,7 @@ mod config;
 
 pub use config::*;
 
-use super::account::*;
+use super::{account::*, journal::*};
 
 #[napi]
 pub struct CalaLedger {
@@ -38,6 +38,11 @@ impl CalaLedger {
   #[napi]
   pub fn accounts(&self) -> napi::Result<CalaAccounts> {
     Ok(CalaAccounts::new(self.inner.accounts()))
+  }
+
+  #[napi]
+  pub fn journals(&self) -> napi::Result<CalaJournals> {
+    Ok(CalaJournals::new(self.inner.journals()))
   }
 
   #[napi]

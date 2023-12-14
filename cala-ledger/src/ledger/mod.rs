@@ -9,6 +9,7 @@ use error::*;
 
 use crate::{
     account::Accounts,
+    journal::Journals,
     outbox::{server, Outbox},
 };
 
@@ -16,6 +17,7 @@ use crate::{
 pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
+    journals: Journals,
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
 
@@ -46,9 +48,11 @@ impl CalaLedger {
             outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
         }
 
-        let accounts = Accounts::new(&pool, outbox);
+        let accounts = Accounts::new(&pool, outbox.clone());
+        let journals = Journals::new(&pool, outbox);
         Ok(Self {
             accounts,
+            journals,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
@@ -56,6 +60,10 @@ impl CalaLedger {
 
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
+    }
+
+    pub fn journals(&self) -> &Journals {
+        &self.journals
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
