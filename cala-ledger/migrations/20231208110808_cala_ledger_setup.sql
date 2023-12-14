@@ -35,7 +35,7 @@ CREATE TABLE cala_journals (
   name VARCHAR NOT NULL, 
   external_id VARCHAR,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(connection_id, id),
+  UNIQUE(connection_id, id)
 );
 CREATE INDEX idx_cala_journals_name ON cala_journals (name);
 CREATE UNIQUE INDEX idx_cala_journals_connection_id_external_id ON cala_journals (connection_id, external_id) WHERE external_id IS NOT NULL;
@@ -50,7 +50,6 @@ CREATE TABLE cala_journal_events (
   UNIQUE(connection_id, id, sequence),
   FOREIGN KEY (connection_id, id) REFERENCES cala_journals(connection_id, id)
 );
-
 
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
