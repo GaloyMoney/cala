@@ -1,5 +1,6 @@
 mod account;
 mod convert;
+mod journal;
 mod primitives;
 mod schema;
 mod timestamp;

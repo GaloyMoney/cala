@@ -26,6 +26,7 @@ impl CalaJournals {
       inner: inner.clone(),
     }
   }
+  
   #[napi]
   pub async fn create(&self, new_journal: NewJournal) -> napi::Result<String> {
     let id = if let Some(id) = new_journal.id {

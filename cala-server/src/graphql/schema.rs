@@ -1,6 +1,6 @@
 use async_graphql::{types::connection::*, *};
 
-use super::account::*;
+use super::{account::*, journal::*};
 use crate::app::CalaApp;
 
 // use timestamp::*;
@@ -52,7 +52,22 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    async fn hello(&self) -> String {
-        "Hello, world!".to_string()
+    async fn create_journal(&self, ctx: &Context<'_>, input: JournalInput) -> Result<String> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.parse::<cala_ledger::JournalId>()?
+        } else {
+            cala_ledger::JournalId::new()
+        };
+        let mut new = cala_ledger::journal::NewJournal::builder();
+        new.id(id).name(input.name);
+        if let Some(external_id) = input.external_id {
+            new.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            new.description(description);
+        }
+        let id = app.ledger().journals().create(new.build()?).await?;
+        Ok(id.to_string())
     }
 }
