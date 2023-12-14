@@ -26,6 +26,18 @@ export interface PaginatedAccounts {
   hasNextPage: boolean
   endCursor?: CursorToken
 }
+export interface NewJournal {
+  id?: string
+  name: string
+  externalId?: string
+  description?: string
+}
+export interface JournalValues {
+  id: string
+  name: string
+  externalId?: string
+  description?: string
+}
 export interface OutboxServerConfig {
   enabled: boolean
   listenPort?: number
@@ -46,8 +58,12 @@ export class CalaAccounts {
   create(newAccount: NewAccount): Promise<string>
   list(query: PaginatedQueryArgs): Promise<PaginatedAccounts>
 }
+export class CalaJournals {
+  create(newJournal: NewJournal): Promise<string>
+}
 export class CalaLedger {
   static connect(config: CalaLedgerConfig): Promise<CalaLedger>
   accounts(): CalaAccounts
+  journals(): CalaJournals
   awaitOutboxServer(): Promise<void>
 }

@@ -5,6 +5,7 @@ extern crate napi_derive;
 
 mod account;
 mod generic_error;
+mod journal;
 mod ledger;
 mod query;
 

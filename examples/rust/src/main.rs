@@ -1,4 +1,4 @@
-use cala_ledger::{account::*, migrate::IncludeMigrations, query::*, *};
+use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, query::*, *};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,9 +17,9 @@ async fn main() -> anyhow::Result<()> {
         .exec_migrations(false)
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
-
     let new_account = NewAccount::builder()
-        .name("MY NAME")
+        .id(AccountId::new())
+        .name("MY ACCOUNT")
         .code("USERS.abc")
         .description("description")
         .build()?;
@@ -27,8 +27,15 @@ async fn main() -> anyhow::Result<()> {
     println!("account_id: {}", account_id);
 
     let result = cala.accounts().list(PaginatedQueryArgs::default()).await?;
-
     println!("No of accounts: {}", result.entities.len());
+
+    let new_journal = NewJournal::builder()
+        .id(JournalId::new())
+        .name("MY JOURNAL")
+        .description("description")
+        .build()?;
+    let journal_id = cala.journals().create(new_journal).await?;
+    println!("journal_id: {}", journal_id);
 
     Ok(())
 }
