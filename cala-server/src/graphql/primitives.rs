@@ -25,6 +25,12 @@ impl From<serde_json::Value> for JSON {
     }
 }
 
+impl Default for Status {
+    fn default() -> Self {
+        Self::Active
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
