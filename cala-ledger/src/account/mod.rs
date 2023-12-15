@@ -7,7 +7,7 @@ use cala_types::query::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::outbox::*;
+use crate::{entity::*, outbox::*};
 
 pub use entity::*;
 use error::*;
@@ -31,11 +31,16 @@ impl Accounts {
     }
 
     #[instrument(name = "cala_ledger.accounts.create", skip(self))]
-    pub async fn create(&self, new_account: NewAccount) -> Result<AccountId, AccountError> {
+    pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
         let mut tx = self.pool.begin().await?;
-        let res = self.repo.create_in_tx(&mut tx, new_account).await?;
-        self.outbox.persist_events(tx, res.new_events).await?;
-        Ok(res.id)
+        let EntityUpdate {
+            entity: account,
+            n_new_events,
+        } = self.repo.create_in_tx(&mut tx, new_account).await?;
+        self.outbox
+            .persist_events(tx, account.events.last_persisted(n_new_events))
+            .await?;
+        Ok(account)
     }
 
     #[instrument(name = "cala_ledger.accounts.list", skip(self))]
@@ -47,12 +52,12 @@ impl Accounts {
     }
 }
 
-impl From<AccountEvent> for OutboxEventPayload {
-    fn from(event: AccountEvent) -> Self {
+impl From<&AccountEvent> for OutboxEventPayload {
+    fn from(event: &AccountEvent) -> Self {
         match event {
-            AccountEvent::Initialized { values: account } => {
-                OutboxEventPayload::AccountCreated { account }
-            }
+            AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
+                account: account.clone(),
+            },
         }
     }
 }

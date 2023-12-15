@@ -23,8 +23,8 @@ async fn main() -> anyhow::Result<()> {
         .code("USERS.abc")
         .description("description")
         .build()?;
-    let account_id = cala.accounts().create(new_account).await?;
-    println!("account_id: {}", account_id);
+    let account = cala.accounts().create(new_account).await?;
+    println!("account_id: {}", account.id());
 
     let result = cala.accounts().list(PaginatedQueryArgs::default()).await?;
     println!("No of accounts: {}", result.entities.len());
@@ -34,8 +34,8 @@ async fn main() -> anyhow::Result<()> {
         .name("MY JOURNAL")
         .description("description")
         .build()?;
-    let journal_id = cala.journals().create(new_journal).await?;
-    println!("journal_id: {}", journal_id);
+    let journal = cala.journals().create(new_journal).await?;
+    println!("journal_id: {}", journal.id());
 
     Ok(())
 }

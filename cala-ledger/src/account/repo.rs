@@ -19,7 +19,7 @@ impl AccountRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         new_account: NewAccount,
-    ) -> Result<EntityUpdate<AccountEvent>, AccountError> {
+    ) -> Result<EntityUpdate<Account>, AccountError> {
         let id = new_account.id;
         sqlx::query!(
             r#"INSERT INTO cala_accounts (id, code, name, external_id, tags)
@@ -33,7 +33,12 @@ impl AccountRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_account.initial_events();
-        Ok(events.persist(tx).await?)
+        let n_new_events = events.persist(tx).await?;
+        let account = Account::try_from(events)?;
+        Ok(EntityUpdate {
+            entity: account,
+            n_new_events,
+        })
     }
 
     pub async fn list(
@@ -58,8 +63,8 @@ impl AccountRepo {
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
             end_cursor = Some(AccountByNameCursor {
-                id: last.values.id,
-                name: last.values.name.clone(),
+                id: last.values().id,
+                name: last.values().name.clone(),
             });
         }
         Ok(PaginatedQueryRet {

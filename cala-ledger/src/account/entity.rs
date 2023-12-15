@@ -20,12 +20,26 @@ impl EntityEvent for AccountEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct Account {
-    pub values: AccountValues,
-    events: EntityEvents<AccountEvent>,
+    values: AccountValues,
+    pub(super) events: EntityEvents<AccountEvent>,
 }
 
 impl Entity for Account {
     type Event = AccountEvent;
+}
+
+impl Account {
+    pub fn id(&self) -> AccountId {
+        self.values.id
+    }
+
+    pub fn values(&self) -> &AccountValues {
+        &self.values
+    }
+
+    pub fn into_values(self) -> AccountValues {
+        self.values
+    }
 }
 
 impl TryFrom<EntityEvents<AccountEvent>> for Account {

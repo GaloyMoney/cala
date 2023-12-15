@@ -1,4 +1,4 @@
-use super::{account::*, primitives::*};
+use super::{account::*, journal::*, primitives::*};
 
 trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
@@ -24,6 +24,17 @@ impl ToGlobalId for cala_types::primitives::AccountId {
     }
 }
 
+impl ToGlobalId for cala_types::primitives::JournalId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        use base64::{engine::general_purpose, Engine as _};
+        let id = format!(
+            "journal:{}",
+            general_purpose::STANDARD_NO_PAD.encode(self.to_string())
+        );
+        async_graphql::types::ID::from(id)
+    }
+}
+
 impl From<cala_types::account::AccountValues> for Account {
     fn from(values: cala_types::account::AccountValues) -> Self {
         Self {
@@ -37,6 +48,19 @@ impl From<cala_types::account::AccountValues> for Account {
             description: values.description,
             tags: values.tags.into_iter().map(TAG::from).collect(),
             metadata: values.metadata.map(JSON::from),
+        }
+    }
+}
+
+impl From<cala_types::journal::JournalValues> for Journal {
+    fn from(value: cala_types::journal::JournalValues) -> Self {
+        Self {
+            id: value.id.to_global_id(),
+            journal_id: UUID::from(value.id),
+            name: value.name,
+            external_id: value.external_id,
+            status: Status::from(value.status),
+            description: value.description,
         }
     }
 }

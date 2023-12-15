@@ -1,3 +1,7 @@
+mod values;
+
+use values::*;
+
 use super::query::*;
 
 #[napi(object)]
@@ -9,32 +13,6 @@ pub struct NewAccount {
   pub description: Option<String>,
   pub tags: Option<Vec<String>>,
   pub metadata: Option<serde_json::Value>,
-}
-
-#[napi(object)]
-pub struct AccountValues {
-  pub id: String,
-  pub code: String,
-  pub name: String,
-  pub tags: Vec<String>,
-  pub external_id: Option<String>,
-  pub description: Option<String>,
-  pub metadata: Option<serde_json::Value>,
-}
-
-impl From<cala_ledger::account::Account> for AccountValues {
-  fn from(account: cala_ledger::account::Account) -> Self {
-    let values = account.values;
-    Self {
-      id: values.id.to_string(),
-      code: values.code,
-      name: values.name,
-      tags: values.tags,
-      external_id: values.external_id,
-      description: values.description,
-      metadata: values.metadata,
-    }
-  }
 }
 
 #[napi(object)]
@@ -50,6 +28,24 @@ pub struct CalaAccounts {
 }
 
 #[napi]
+pub struct CalaAccount {
+  inner: cala_ledger::account::Account,
+}
+
+#[napi]
+impl CalaAccount {
+  #[napi]
+  pub fn id(&self) -> String {
+    self.inner.id().to_string()
+  }
+
+  #[napi]
+  pub fn values(&self) -> AccountValues {
+    AccountValues::from(&self.inner)
+  }
+}
+
+#[napi]
 impl CalaAccounts {
   pub fn new(inner: &cala_ledger::account::Accounts) -> Self {
     Self {
@@ -58,7 +54,7 @@ impl CalaAccounts {
   }
 
   #[napi]
-  pub async fn create(&self, new_account: NewAccount) -> napi::Result<String> {
+  pub async fn create(&self, new_account: NewAccount) -> napi::Result<CalaAccount> {
     let id = if let Some(id) = new_account.id {
       id.parse::<cala_ledger::AccountId>()
         .map_err(crate::generic_napi_error)?
@@ -85,13 +81,13 @@ impl CalaAccounts {
       new.metadata(metadata).map_err(crate::generic_napi_error)?;
     }
 
-    let id = self
+    let account = self
       .inner
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
 
-    Ok(id.to_string())
+    Ok(CalaAccount { inner: account })
   }
 
   #[napi]

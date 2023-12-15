@@ -1,6 +1,6 @@
 use async_graphql::{types::connection::*, *};
 
-use super::account::*;
+use super::{account::*, journal::*};
 use crate::app::CalaApp;
 
 // use timestamp::*;
@@ -37,9 +37,8 @@ impl Query {
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let values = entity.values;
-                        let cursor = AccountByNameCursor::from(&values);
-                        Edge::new(cursor, Account::from(values))
+                        let cursor = AccountByNameCursor::from(entity.values());
+                        Edge::new(cursor, Account::from(entity.into_values()))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },
@@ -52,7 +51,22 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    async fn hello(&self) -> String {
-        "Hello, world!".to_string()
+    async fn create_journal(&self, ctx: &Context<'_>, input: JournalInput) -> Result<Journal> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.into()
+        } else {
+            cala_ledger::JournalId::new()
+        };
+        let mut new = cala_ledger::journal::NewJournal::builder();
+        new.id(id).name(input.name);
+        if let Some(external_id) = input.external_id {
+            new.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            new.description(description);
+        }
+        let journal = app.ledger().journals().create(new.build()?).await?;
+        Ok(journal.into_values().into())
     }
 }

@@ -25,6 +25,12 @@ impl From<serde_json::Value> for JSON {
     }
 }
 
+impl Default for Status {
+    fn default() -> Self {
+        Self::Active
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
@@ -43,5 +49,11 @@ scalar!(TAG);
 impl From<String> for TAG {
     fn from(tag: String) -> Self {
         Self(tag)
+    }
+}
+
+impl From<UUID> for cala_ledger::JournalId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::JournalId::from(uuid.0)
     }
 }

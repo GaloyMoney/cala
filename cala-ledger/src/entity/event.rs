@@ -21,11 +21,6 @@ pub trait Entity: TryFrom<EntityEvents<<Self as Entity>::Event>, Error = EntityE
     type Event: EntityEvent;
 }
 
-pub(crate) struct EntityUpdate<T: EntityEvent> {
-    pub id: <T as EntityEvent>::EntityId,
-    pub new_events: Vec<T>,
-}
-
 pub struct EntityEvents<T: EntityEvent> {
     entity_id: <T as EntityEvent>::EntityId,
     persisted_events: Vec<T>,
@@ -50,15 +45,19 @@ where
     pub async fn persist(
         &mut self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<EntityUpdate<T>, sqlx::Error> {
+    ) -> Result<usize, sqlx::Error> {
         let uuid: uuid::Uuid = self.entity_id.into();
         let mut events = Vec::new();
         std::mem::swap(&mut events, &mut self.new_events);
+
         let mut query_builder = sqlx::QueryBuilder::new(format!(
             "INSERT INTO {} (id, sequence, event_type, event)",
             <T as EntityEvent>::event_table_name(),
         ));
-        let sequence = 1;
+
+        let sequence = self.persisted_events.len() + 1;
+        let n_persisted = self.new_events.len();
+
         query_builder.push_values(events.iter().enumerate(), |mut builder, (offset, event)| {
             let event_json = serde_json::to_value(event).expect("Could not serialize event");
             let event_type = event_json
@@ -67,18 +66,15 @@ where
                 .expect("Could not get type")
                 .to_owned();
             builder.push_bind(uuid);
-            builder.push_bind(sequence + offset as i32);
+            builder.push_bind((sequence + offset) as i32);
             builder.push_bind(event_type);
             builder.push_bind(event_json);
         });
-
         let query = query_builder.build();
         query.execute(&mut **tx).await?;
 
-        Ok(EntityUpdate {
-            id: self.entity_id,
-            new_events: events,
-        })
+        self.persisted_events.extend(events);
+        Ok(n_persisted)
     }
 
     pub fn load_n<E: Entity<Event = T>>(
@@ -118,5 +114,10 @@ where
 
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
         self.persisted_events.iter().chain(self.new_events.iter())
+    }
+
+    pub fn last_persisted(&self, n: usize) -> impl Iterator<Item = &T> {
+        let start = self.persisted_events.len() - n - 1;
+        self.persisted_events[start..].iter()
     }
 }
