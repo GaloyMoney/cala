@@ -37,9 +37,8 @@ impl Query {
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let values = entity.values;
-                        let cursor = AccountByNameCursor::from(&values);
-                        Edge::new(cursor, Account::from(values))
+                        let cursor = AccountByNameCursor::from(entity.values());
+                        Edge::new(cursor, Account::from(entity.into_values()))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },
@@ -68,6 +67,6 @@ impl Mutation {
             new.description(description);
         }
         let journal = app.ledger().journals().create(new.build()?).await?;
-        Ok(journal.values.into())
+        Ok(journal.into_values().into())
     }
 }

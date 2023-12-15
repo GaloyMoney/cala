@@ -20,11 +20,26 @@ impl EntityEvent for JournalEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct Journal {
-    pub values: JournalValues,
+    values: JournalValues,
+    pub(super) events: EntityEvents<JournalEvent>,
 }
 
 impl Entity for Journal {
     type Event = JournalEvent;
+}
+
+impl Journal {
+    pub fn id(&self) -> JournalId {
+        self.values.id
+    }
+
+    pub fn values(&self) -> &JournalValues {
+        &self.values
+    }
+
+    pub fn into_values(self) -> JournalValues {
+        self.values
+    }
 }
 
 impl TryFrom<EntityEvents<JournalEvent>> for Journal {
@@ -39,7 +54,7 @@ impl TryFrom<EntityEvents<JournalEvent>> for Journal {
                 }
             }
         }
-        builder.build()
+        builder.events(events).build()
     }
 }
 

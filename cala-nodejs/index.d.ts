@@ -55,11 +55,17 @@ export interface PaginatedQueryArgs {
   first: number
 }
 export class CalaAccounts {
-  create(newAccount: NewAccount): Promise<string>
+  create(newAccount: NewAccount): Promise<CalaAccount>
   list(query: PaginatedQueryArgs): Promise<PaginatedAccounts>
 }
+export class CalaAccount {
+  id(): string
+}
 export class CalaJournals {
-  create(newJournal: NewJournal): Promise<string>
+  create(newJournal: NewJournal): Promise<CalaJournal>
+}
+export class CalaJournal {
+  id(): string
 }
 export class CalaLedger {
   static connect(config: CalaLedgerConfig): Promise<CalaLedger>

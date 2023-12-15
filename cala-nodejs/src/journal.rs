@@ -20,6 +20,19 @@ pub struct CalaJournals {
 }
 
 #[napi]
+pub struct CalaJournal {
+  inner: cala_ledger::journal::Journal,
+}
+
+#[napi]
+impl CalaJournal {
+  #[napi]
+  pub fn id(&self) -> String {
+    self.inner.id().to_string()
+  }
+}
+
+#[napi]
 impl CalaJournals {
   pub fn new(inner: &cala_ledger::journal::Journals) -> Self {
     Self {
@@ -28,7 +41,7 @@ impl CalaJournals {
   }
 
   #[napi]
-  pub async fn create(&self, new_journal: NewJournal) -> napi::Result<String> {
+  pub async fn create(&self, new_journal: NewJournal) -> napi::Result<CalaJournal> {
     let id = if let Some(id) = new_journal.id {
       id.parse::<cala_ledger::JournalId>()
         .map_err(crate::generic_napi_error)?
@@ -49,6 +62,6 @@ impl CalaJournals {
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
-    Ok(journal.values.id.to_string())
+    Ok(CalaJournal { inner: journal })
   }
 }

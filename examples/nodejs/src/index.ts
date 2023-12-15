@@ -7,7 +7,7 @@ const main = async () => {
   const cala = await CalaLedger.connect({ pgCon, outbox: { enabled: true } })
   console.log("CalaLedger connected");
 
-  const accountId = await cala.accounts().create({
+  const account = await cala.accounts().create({
     name: "MY NAME",
     code: "USERS_ONE",
     metadata: {
@@ -15,8 +15,8 @@ const main = async () => {
       "more": true
     }
   })
-  console.log("Account created", accountId);
-  const accountId2 = await cala.accounts().create({
+  console.log("Account created", account.id());
+  const account2 = await cala.accounts().create({
     name: "MY NAME",
     code: "USERS_TWO",
     metadata: {
@@ -25,7 +25,7 @@ const main = async () => {
     }
   })
 
-  console.log("Account created", accountId2);
+  console.log("Account created", account2.id());
 
   let result = await cala.accounts().list({ first: 1 });
   console.log("First accounts: ", result);
@@ -33,12 +33,12 @@ const main = async () => {
   result = await cala.accounts().list({ first: 1, after: result.endCursor });
   console.log("Next accounts: ", result);
 
-  const journalId = await cala.journals().create({
+  const journal = await cala.journals().create({
     name: "MY JOURNAL",
     description: "MY DESCRIPTION",
   })
 
-  console.log("Journal Created", journalId);
+  console.log("Journal Created", journal.id());
 }
 
 main()

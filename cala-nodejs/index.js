@@ -281,8 +281,10 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { CalaAccounts, CalaJournals, CalaLedger } = nativeBinding
+const { CalaAccounts, CalaAccount, CalaJournals, CalaJournal, CalaLedger } = nativeBinding
 
 module.exports.CalaAccounts = CalaAccounts
+module.exports.CalaAccount = CalaAccount
 module.exports.CalaJournals = CalaJournals
+module.exports.CalaJournal = CalaJournal
 module.exports.CalaLedger = CalaLedger

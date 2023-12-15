@@ -24,7 +24,7 @@ pub struct AccountValues {
 
 impl From<cala_ledger::account::Account> for AccountValues {
   fn from(account: cala_ledger::account::Account) -> Self {
-    let values = account.values;
+    let values = account.into_values();
     Self {
       id: values.id.to_string(),
       code: values.code,
@@ -50,6 +50,19 @@ pub struct CalaAccounts {
 }
 
 #[napi]
+pub struct CalaAccount {
+  inner: cala_ledger::account::Account,
+}
+
+#[napi]
+impl CalaAccount {
+  #[napi]
+  pub fn id(&self) -> String {
+    self.inner.id().to_string()
+  }
+}
+
+#[napi]
 impl CalaAccounts {
   pub fn new(inner: &cala_ledger::account::Accounts) -> Self {
     Self {
@@ -58,7 +71,7 @@ impl CalaAccounts {
   }
 
   #[napi]
-  pub async fn create(&self, new_account: NewAccount) -> napi::Result<String> {
+  pub async fn create(&self, new_account: NewAccount) -> napi::Result<CalaAccount> {
     let id = if let Some(id) = new_account.id {
       id.parse::<cala_ledger::AccountId>()
         .map_err(crate::generic_napi_error)?
@@ -85,13 +98,13 @@ impl CalaAccounts {
       new.metadata(metadata).map_err(crate::generic_napi_error)?;
     }
 
-    let id = self
+    let account = self
       .inner
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
 
-    Ok(id.to_string())
+    Ok(CalaAccount { inner: account })
   }
 
   #[napi]

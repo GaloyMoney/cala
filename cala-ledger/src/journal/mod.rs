@@ -5,7 +5,7 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::outbox::*;
+use crate::{entity::*, outbox::*};
 
 pub use entity::*;
 use error::*;
@@ -31,18 +31,24 @@ impl Journals {
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
     pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
         let mut tx = self.pool.begin().await?;
-        let (res, journal) = self.repo.create_in_tx(&mut tx, new_journal).await?;
-        self.outbox.persist_events(tx, res.new_events).await?;
+        let EntityUpdate {
+            entity: journal,
+            n_new_events,
+        } = self.repo.create_in_tx(&mut tx, new_journal).await?;
+
+        self.outbox
+            .persist_events(tx, journal.events.last_persisted(n_new_events))
+            .await?;
         Ok(journal)
     }
 }
 
-impl From<JournalEvent> for OutboxEventPayload {
-    fn from(event: JournalEvent) -> Self {
+impl From<&JournalEvent> for OutboxEventPayload {
+    fn from(event: &JournalEvent) -> Self {
         match event {
-            JournalEvent::Initialized { values: journal } => {
-                OutboxEventPayload::JournalCreated { journal }
-            }
+            JournalEvent::Initialized { values: journal } => OutboxEventPayload::JournalCreated {
+                journal: journal.clone(),
+            },
         }
     }
 }
