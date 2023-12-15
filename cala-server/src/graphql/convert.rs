@@ -28,7 +28,7 @@ impl ToGlobalId for cala_types::primitives::JournalId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
-            "account:{}",
+            "journal:{}",
             general_purpose::STANDARD_NO_PAD.encode(self.to_string())
         );
         async_graphql::types::ID::from(id)

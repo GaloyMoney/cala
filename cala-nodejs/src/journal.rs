@@ -44,11 +44,11 @@ impl CalaJournals {
       new.description(description);
     }
 
-    let res = self
+    let journal = self
       .inner
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
-    Ok(res.id.to_string())
+    Ok(journal.values.id.to_string())
   }
 }

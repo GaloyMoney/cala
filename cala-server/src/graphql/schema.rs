@@ -67,7 +67,7 @@ impl Mutation {
         if let Some(description) = input.description {
             new.description(description);
         }
-        let journal_values = app.ledger().journals().create(new.build()?).await?;
-        Ok(journal_values.into())
+        let journal = app.ledger().journals().create(new.build()?).await?;
+        Ok(journal.values.into())
     }
 }

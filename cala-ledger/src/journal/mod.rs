@@ -29,11 +29,11 @@ impl Journals {
     }
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
-    pub async fn create(&self, new_journal: NewJournal) -> Result<JournalValues, JournalError> {
+    pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
         let mut tx = self.pool.begin().await?;
         let (res, journal) = self.repo.create_in_tx(&mut tx, new_journal).await?;
         self.outbox.persist_events(tx, res.new_events).await?;
-        Ok(journal.values)
+        Ok(journal)
     }
 }
 

@@ -54,7 +54,6 @@ impl From<String> for TAG {
 
 impl From<UUID> for cala_ledger::JournalId {
     fn from(uuid: UUID) -> Self {
-        // Convert UUID to cala_ledger::JournalId here
         cala_ledger::JournalId::from(uuid.0)
     }
 }
