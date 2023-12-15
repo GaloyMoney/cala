@@ -52,10 +52,10 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    async fn create_journal(&self, ctx: &Context<'_>, input: JournalInput) -> Result<String> {
+    async fn create_journal(&self, ctx: &Context<'_>, input: JournalInput) -> Result<Journal> {
         let app = ctx.data_unchecked::<CalaApp>();
         let id = if let Some(id) = input.id {
-            id.parse::<cala_ledger::JournalId>()?
+            id.into()
         } else {
             cala_ledger::JournalId::new()
         };
@@ -67,7 +67,7 @@ impl Mutation {
         if let Some(description) = input.description {
             new.description(description);
         }
-        let id = app.ledger().journals().create(new.build()?).await?;
-        Ok(id.to_string())
+        let journal_values = app.ledger().journals().create(new.build()?).await?;
+        Ok(journal_values.into())
     }
 }

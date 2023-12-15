@@ -17,6 +17,32 @@ impl EntityEvent for JournalEvent {
     }
 }
 
+#[derive(Builder)]
+#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+pub struct Journal {
+    pub values: JournalValues,
+}
+
+impl Entity for Journal {
+    type Event = JournalEvent;
+}
+
+impl TryFrom<EntityEvents<JournalEvent>> for Journal {
+    type Error = EntityError;
+
+    fn try_from(events: EntityEvents<JournalEvent>) -> Result<Self, Self::Error> {
+        let mut builder = JournalBuilder::default();
+        for event in events.iter() {
+            match event {
+                JournalEvent::Initialized { values } => {
+                    builder = builder.values(values.clone());
+                }
+            }
+        }
+        builder.build()
+    }
+}
+
 /// Representation of a new ledger journal entity
 /// with required/optional properties and a builder.
 #[derive(Debug, Builder)]

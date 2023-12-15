@@ -34,8 +34,8 @@ async fn main() -> anyhow::Result<()> {
         .name("MY JOURNAL")
         .description("description")
         .build()?;
-    let journal_id = cala.journals().create(new_journal).await?;
-    println!("journal_id: {}", journal_id);
+    let res = cala.journals().create(new_journal).await?;
+    println!("journal_id: {}", res.id);
 
     Ok(())
 }
