@@ -1,3 +1,7 @@
+mod values;
+
+use values::*;
+
 use super::query::*;
 
 #[napi(object)]
@@ -9,32 +13,6 @@ pub struct NewAccount {
   pub description: Option<String>,
   pub tags: Option<Vec<String>>,
   pub metadata: Option<serde_json::Value>,
-}
-
-#[napi(object)]
-pub struct AccountValues {
-  pub id: String,
-  pub code: String,
-  pub name: String,
-  pub tags: Vec<String>,
-  pub external_id: Option<String>,
-  pub description: Option<String>,
-  pub metadata: Option<serde_json::Value>,
-}
-
-impl From<cala_ledger::account::Account> for AccountValues {
-  fn from(account: cala_ledger::account::Account) -> Self {
-    let values = account.into_values();
-    Self {
-      id: values.id.to_string(),
-      code: values.code,
-      name: values.name,
-      tags: values.tags,
-      external_id: values.external_id,
-      description: values.description,
-      metadata: values.metadata,
-    }
-  }
 }
 
 #[napi(object)]
@@ -59,6 +37,11 @@ impl CalaAccount {
   #[napi]
   pub fn id(&self) -> String {
     self.inner.id().to_string()
+  }
+
+  #[napi]
+  pub fn values(&self) -> AccountValues {
+    AccountValues::from(&self.inner)
   }
 }
 

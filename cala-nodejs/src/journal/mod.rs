@@ -1,14 +1,10 @@
+mod values;
+
+use values::*;
+
 #[napi(object)]
 pub struct NewJournal {
   pub id: Option<String>,
-  pub name: String,
-  pub external_id: Option<String>,
-  pub description: Option<String>,
-}
-
-#[napi(object)]
-pub struct JournalValues {
-  pub id: String,
   pub name: String,
   pub external_id: Option<String>,
   pub description: Option<String>,
@@ -29,6 +25,11 @@ impl CalaJournal {
   #[napi]
   pub fn id(&self) -> String {
     self.inner.id().to_string()
+  }
+
+  #[napi]
+  pub fn values(&self) -> JournalValues {
+    JournalValues::from(&self.inner)
   }
 }
 
