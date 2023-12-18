@@ -7,6 +7,7 @@ pub struct CreateJournalInput {
     pub id: Option<UUID>,
     pub name: String,
     pub external_id: Option<String>,
+    #[graphql(default)]
     pub status: Status,
     pub description: Option<String>,
 }

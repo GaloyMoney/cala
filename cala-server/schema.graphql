@@ -45,7 +45,7 @@ input CreateJournalInput {
 	id: UUID
 	name: String!
 	externalId: String
-	status: Status!
+	status: Status! = ACTIVE
 	description: String
 }
 
