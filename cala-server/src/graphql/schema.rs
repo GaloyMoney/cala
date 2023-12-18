@@ -92,15 +92,15 @@ impl Mutation {
         } else {
             cala_ledger::JournalId::new()
         };
-        let mut new = cala_ledger::journal::NewJournal::builder();
-        new.id(id).name(input.name);
+        let mut builder = cala_ledger::journal::NewJournal::builder();
+        builder.id(id).name(input.name).status(input.status.into());
         if let Some(external_id) = input.external_id {
-            new.external_id(external_id);
+            builder.external_id(external_id);
         }
         if let Some(description) = input.description {
-            new.description(description);
+            builder.description(description);
         }
-        let journal = app.ledger().journals().create(new.build()?).await?;
+        let journal = app.ledger().journals().create(builder.build()?).await?;
         Ok(journal.into_values().into())
     }
 }
