@@ -29,7 +29,7 @@ impl Query {
                     .ledger()
                     .accounts()
                     .list(cala_types::query::PaginatedQueryArgs {
-                        first: usize::try_from(first)?,
+                        first,
                         after: after.map(cala_types::query::AccountByNameCursor::from),
                     })
                     .await?;
