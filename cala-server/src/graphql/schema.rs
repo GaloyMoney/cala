@@ -51,6 +51,36 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
+    async fn account_create(
+        &self,
+        ctx: &Context<'_>,
+        input: AccountCreateInput,
+    ) -> Result<AccountCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.into()
+        } else {
+            cala_ledger::AccountId::new()
+        };
+        let mut builder = cala_ledger::account::NewAccount::builder();
+        builder
+            .id(id)
+            .name(input.name)
+            .code(input.code)
+            .normal_balance_type(input.normal_balance_type.into())
+            .status(input.status.into())
+            .tags(input.tags.into_iter().map(String::from).collect())
+            .metadata(input.metadata)?;
+        if let Some(external_id) = input.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+        let account = app.ledger().accounts().create(builder.build()?).await?;
+        Ok(account.into_values().into())
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,

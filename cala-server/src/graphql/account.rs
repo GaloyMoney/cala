@@ -17,6 +17,26 @@ pub(super) struct Account {
     pub metadata: Option<JSON>,
 }
 
+#[derive(InputObject)]
+pub(super) struct AccountCreateInput {
+    pub id: Option<UUID>,
+    pub code: String,
+    pub name: String,
+    #[graphql(default)]
+    pub normal_balance_type: DebitOrCredit,
+    #[graphql(default)]
+    pub status: Status,
+    pub external_id: Option<String>,
+    pub description: Option<String>,
+    pub tags: Vec<TAG>,
+    pub metadata: Option<JSON>,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct AccountCreatePayload {
+    pub account: Account,
+}
+
 #[derive(Serialize, Deserialize)]
 pub(super) struct AccountByNameCursor {
     pub name: String,

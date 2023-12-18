@@ -26,6 +26,22 @@ type AccountConnection {
 	nodes: [Account!]!
 }
 
+input AccountCreateInput {
+	id: UUID
+	code: String!
+	name: String!
+	normalBalanceType: DebitOrCredit! = DEBIT
+	status: Status! = ACTIVE
+	externalId: String
+	description: String
+	tags: [TAG!]!
+	metadata: JSON
+}
+
+type AccountCreatePayload {
+	account: Account!
+}
+
 """
 An edge in a connection.
 """
@@ -73,6 +89,7 @@ type JournalCreatePayload {
 }
 
 type Mutation {
+	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 }
 
