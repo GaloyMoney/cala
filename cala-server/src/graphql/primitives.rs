@@ -8,11 +8,23 @@ pub(super) enum DebitOrCredit {
     Credit,
 }
 
+impl Default for DebitOrCredit {
+    fn default() -> Self {
+        Self::Debit
+    }
+}
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "cala_types::primitives::Status")]
 pub(super) enum Status {
     Active,
     Locked,
+}
+
+impl Default for Status {
+    fn default() -> Self {
+        Self::Active
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -22,12 +34,6 @@ scalar!(JSON);
 impl From<serde_json::Value> for JSON {
     fn from(value: serde_json::Value) -> Self {
         Self(value)
-    }
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Self::Active
     }
 }
 
@@ -52,8 +58,20 @@ impl From<String> for TAG {
     }
 }
 
+impl From<TAG> for String {
+    fn from(tag: TAG) -> Self {
+        tag.0
+    }
+}
+
 impl From<UUID> for cala_ledger::JournalId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::JournalId::from(uuid.0)
+    }
+}
+
+impl From<UUID> for cala_ledger::AccountId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::AccountId::from(uuid.0)
     }
 }

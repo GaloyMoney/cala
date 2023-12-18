@@ -29,7 +29,7 @@ impl Query {
                     .ledger()
                     .accounts()
                     .list(cala_types::query::PaginatedQueryArgs {
-                        first: usize::try_from(first)?,
+                        first,
                         after: after.map(cala_types::query::AccountByNameCursor::from),
                     })
                     .await?;
@@ -51,6 +51,36 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
+    async fn account_create(
+        &self,
+        ctx: &Context<'_>,
+        input: AccountCreateInput,
+    ) -> Result<AccountCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.into()
+        } else {
+            cala_ledger::AccountId::new()
+        };
+        let mut builder = cala_ledger::account::NewAccount::builder();
+        builder
+            .id(id)
+            .name(input.name)
+            .code(input.code)
+            .normal_balance_type(input.normal_balance_type.into())
+            .status(input.status.into())
+            .tags(input.tags.into_iter().map(String::from).collect())
+            .metadata(input.metadata)?;
+        if let Some(external_id) = input.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+        let account = app.ledger().accounts().create(builder.build()?).await?;
+        Ok(account.into_values().into())
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,
@@ -62,15 +92,15 @@ impl Mutation {
         } else {
             cala_ledger::JournalId::new()
         };
-        let mut new = cala_ledger::journal::NewJournal::builder();
-        new.id(id).name(input.name);
+        let mut builder = cala_ledger::journal::NewJournal::builder();
+        builder.id(id).name(input.name).status(input.status.into());
         if let Some(external_id) = input.external_id {
-            new.external_id(external_id);
+            builder.external_id(external_id);
         }
         if let Some(description) = input.description {
-            new.description(description);
+            builder.description(description);
         }
-        let journal = app.ledger().journals().create(new.build()?).await?;
+        let journal = app.ledger().journals().create(builder.build()?).await?;
         Ok(journal.into_values().into())
     }
 }

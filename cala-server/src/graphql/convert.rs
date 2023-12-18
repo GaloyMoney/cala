@@ -52,6 +52,14 @@ impl From<cala_types::account::AccountValues> for Account {
     }
 }
 
+impl From<cala_types::account::AccountValues> for AccountCreatePayload {
+    fn from(value: cala_types::account::AccountValues) -> Self {
+        Self {
+            account: Account::from(value),
+        }
+    }
+}
+
 impl From<cala_types::journal::JournalValues> for Journal {
     fn from(value: cala_types::journal::JournalValues) -> Self {
         Self {
