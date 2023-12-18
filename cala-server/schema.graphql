@@ -51,8 +51,29 @@ enum DebitOrCredit {
 
 scalar JSON
 
+type Journal {
+	id: ID!
+	journalId: UUID!
+	name: String!
+	externalId: String
+	status: Status!
+	description: String
+}
+
+input JournalCreateInput {
+	id: UUID
+	name: String!
+	externalId: String
+	status: Status! = ACTIVE
+	description: String
+}
+
+type JournalCreatePayload {
+	journal: Journal!
+}
+
 type Mutation {
-	hello: String!
+	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 }
 
 """

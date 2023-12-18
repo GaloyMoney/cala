@@ -65,6 +65,14 @@ impl From<cala_types::journal::JournalValues> for Journal {
     }
 }
 
+impl From<cala_types::journal::JournalValues> for JournalCreatePayload {
+    fn from(value: cala_types::journal::JournalValues) -> Self {
+        JournalCreatePayload {
+            journal: Journal::from(value),
+        }
+    }
+}
+
 impl From<&cala_types::account::AccountValues> for AccountByNameCursor {
     fn from(values: &cala_types::account::AccountValues) -> Self {
         Self {

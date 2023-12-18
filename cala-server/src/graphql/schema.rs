@@ -51,7 +51,11 @@ pub struct Mutation;
 
 #[Object]
 impl Mutation {
-    async fn create_journal(&self, ctx: &Context<'_>, input: JournalInput) -> Result<Journal> {
+    async fn journal_create(
+        &self,
+        ctx: &Context<'_>,
+        input: JournalCreateInput,
+    ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let id = if let Some(id) = input.id {
             id.into()
