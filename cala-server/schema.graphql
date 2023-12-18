@@ -41,6 +41,14 @@ type AccountEdge {
 }
 
 
+input CreateJournalInput {
+	id: UUID
+	name: String!
+	externalId: String
+	status: Status!
+	description: String
+}
+
 enum DebitOrCredit {
 	DEBIT
 	CREDIT
@@ -60,16 +68,8 @@ type Journal {
 	description: String
 }
 
-input JournalInput {
-	id: UUID
-	name: String!
-	externalId: String
-	status: Status!
-	description: String
-}
-
 type Mutation {
-	createJournal(input: JournalInput!): Journal!
+	createJournal(input: CreateJournalInput!): Journal!
 }
 
 """

@@ -1,10 +1,9 @@
-use async_graphql::{types::connection::*, *};
-use serde::{Deserialize, Serialize};
+use async_graphql::*;
 
 use super::primitives::*;
 
 #[derive(InputObject)]
-pub struct JournalInput {
+pub struct CreateJournalInput {
     pub id: Option<UUID>,
     pub name: String,
     pub external_id: Option<String>,
