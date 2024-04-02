@@ -74,7 +74,7 @@ impl CalaLedger {
         Ok(())
     }
 
-    pub fn shutdown_outbox(&mut self) -> Result<(), LedgerError> {
+    pub fn shutdown_outbox(&self) -> Result<(), LedgerError> {
         if let Some(handle) = self.outbox_handle.lock().expect("poisened mutex").take() {
             handle.abort();
         }

@@ -39,6 +39,23 @@ const main = async () => {
   })
 
   console.log("Journal Created", journal.id());
+
+  const shutdown = async () => {
+    console.log("Attempting shut down...")
+
+    let shutdown
+    try {
+      shutdown = await cala.shutdownOutbox()
+    } catch(err) {
+      console.log("Error when attempting to shutdown: ", { err })
+    }
+
+    console.log("Shutdown signal sent")
+  }
+
+  setTimeout(shutdown, 2000)
+  console.log("Starting outbox server...")
+  await cala.awaitOutboxServer()
 }
 
 main()

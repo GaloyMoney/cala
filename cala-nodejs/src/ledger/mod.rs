@@ -46,6 +46,14 @@ impl CalaLedger {
   }
 
   #[napi]
+  pub async fn shutdown_outbox(&self) -> napi::Result<()> {
+    self
+      .inner
+      .shutdown_outbox()
+      .map_err(crate::generic_napi_error)
+  }
+
+  #[napi]
   pub async fn await_outbox_server(&self) -> napi::Result<()> {
     self
       .inner
