@@ -77,17 +77,19 @@ impl CalaLedger {
         let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
 
         let handle = match handle {
-            Some(handle) => handle,
+            Some(handle) => Arc::new(handle),
             None => return Ok(()),
         };
 
+        let cloned_handle = handle.clone();
+
         select! {
-            result = handle => {
+            result = Arc::try_unwrap(handle).expect("Handle should be unique") => {
                 result.expect("Couldn't await outbox handle")
             },
 
             _ = self.abort_receiver => {
-                handle.abort();
+                cloned_handle.abort();
                 Ok(())
             },
         }
