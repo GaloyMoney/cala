@@ -3,6 +3,7 @@ pub mod error;
 
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
+use tokio::{select, sync::oneshot};
 
 pub use config::*;
 use error::*;
@@ -19,6 +20,8 @@ pub struct CalaLedger {
     accounts: Accounts,
     journals: Journals,
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
+    abort_sender: oneshot::Sender<()>,
+    abort_receiver: oneshot::Receiver<()>,
 }
 
 impl CalaLedger {
@@ -48,12 +51,16 @@ impl CalaLedger {
             outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
         }
 
+        let (abort_sender, abort_receiver) = oneshot::channel::<()>();
+
         let accounts = Accounts::new(&pool, outbox.clone());
         let journals = Journals::new(&pool, outbox);
         Ok(Self {
             accounts,
             journals,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
+            abort_sender,
+            abort_receiver,
             _pool: pool,
         })
     }
@@ -68,16 +75,26 @@ impl CalaLedger {
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
         let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
-        if let Some(handle) = handle {
-            return handle.await.expect("Couldn't await outbox handle");
+
+        let handle = match handle {
+            Some(handle) => handle,
+            None => return Ok(()),
+        };
+
+        select! {
+            result = handle => {
+                result.expect("Couldn't await outbox handle")
+            },
+
+            _ = self.abort_receiver => {
+                handle.abort();
+                Ok(())
+            },
         }
-        Ok(())
     }
 
     pub fn shutdown_outbox(&self) -> Result<(), LedgerError> {
-        if let Some(handle) = self.outbox_handle.lock().expect("poisened mutex").take() {
-            handle.abort();
-        }
+        self.abort_sender.send(());
         Ok(())
     }
 
