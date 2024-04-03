@@ -76,12 +76,11 @@ impl CalaLedger {
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
         let handle = self.outbox_handle.lock().expect("poisened mutex").take();
 
-        let handle = match handle {
-            Some(handle) => Arc::new(handle),
+        let mut handle = match handle {
+            Some(handle) => handle,
             None => return Ok(()),
         };
 
-        let cloned_handle = handle.clone();
 
         let abort_receiver = self.abort_receiver.lock().expect("poisened mutex").take();
         let abort_receiver = match abort_receiver {
@@ -90,12 +89,12 @@ impl CalaLedger {
         };
 
         select! {
-            result = Arc::try_unwrap(handle).expect("Handle should be unique") => {
+            result = (&mut handle) => {
                 result.expect("Couldn't await outbox handle")
             },
 
             _ = abort_receiver => {
-                cloned_handle.abort();
+                handle.abort();
                 Ok(())
             },
         }
