@@ -20,8 +20,8 @@ pub struct CalaLedger {
     accounts: Accounts,
     journals: Journals,
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
-    abort_sender: oneshot::Sender<()>,
-    abort_receiver: oneshot::Receiver<()>,
+    abort_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    abort_receiver: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
 }
 
 impl CalaLedger {
@@ -59,8 +59,8 @@ impl CalaLedger {
             accounts,
             journals,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
-            abort_sender,
-            abort_receiver,
+            abort_sender: Arc::new(Mutex::new(Some(abort_sender))),
+            abort_receiver: Arc::new(Mutex::new(Some(abort_receiver))),
             _pool: pool,
         })
     }
@@ -74,7 +74,7 @@ impl CalaLedger {
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
-        let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
+        let handle = self.outbox_handle.lock().expect("poisened mutex").take();
 
         let handle = match handle {
             Some(handle) => Arc::new(handle),
@@ -83,12 +83,18 @@ impl CalaLedger {
 
         let cloned_handle = handle.clone();
 
+        let abort_receiver = self.abort_receiver.lock().expect("poisened mutex").take();
+        let abort_receiver = match abort_receiver {
+            Some(abort_receiver) => abort_receiver,
+            None => return Ok(()),
+        };
+
         select! {
             result = Arc::try_unwrap(handle).expect("Handle should be unique") => {
                 result.expect("Couldn't await outbox handle")
             },
 
-            _ = self.abort_receiver => {
+            _ = abort_receiver => {
                 cloned_handle.abort();
                 Ok(())
             },
@@ -96,7 +102,13 @@ impl CalaLedger {
     }
 
     pub fn shutdown_outbox(&self) -> Result<(), LedgerError> {
-        self.abort_sender.send(());
+        let abort_sender = self.abort_sender.lock().expect("poisened mutex").take();
+        let abort_sender = match abort_sender {
+            Some(abort_sender) => abort_sender,
+            None => return Ok(()),
+        };
+
+        let _ = abort_sender.send(());
         Ok(())
     }
 
