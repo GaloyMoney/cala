@@ -74,16 +74,13 @@ impl CalaLedger {
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
-        let handle = self.outbox_handle.lock().expect("poisened mutex").take();
-
-        let mut handle = match handle {
+        let mut handle = match self.outbox_handle.lock().expect("poisened mutex").take() {
             Some(handle) => handle,
             None => return Ok(()),
         };
 
 
-        let abort_receiver = self.abort_receiver.lock().expect("poisened mutex").take();
-        let abort_receiver = match abort_receiver {
+        let abort_receiver = match self.abort_receiver.lock().expect("poisened mutex").take() {
             Some(abort_receiver) => abort_receiver,
             None => return Ok(()),
         };
@@ -101,8 +98,7 @@ impl CalaLedger {
     }
 
     pub fn shutdown_outbox(&self) -> Result<(), LedgerError> {
-        let abort_sender = self.abort_sender.lock().expect("poisened mutex").take();
-        let abort_sender = match abort_sender {
+        let abort_sender = match self.abort_sender.lock().expect("poisened mutex").take() {
             Some(abort_sender) => abort_sender,
             None => return Ok(()),
         };
