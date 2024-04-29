@@ -68,31 +68,40 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
     ]))
 }
 
-#[cfg(feature = "http")]
-pub fn extract_http_tracing(headers: &http::HeaderMap) {
-    use opentelemetry_http::HeaderExtractor;
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-    let extractor = HeaderExtractor(headers);
-    let ctx =
-        opentelemetry::global::get_text_map_propagator(|propagator| propagator.extract(&extractor));
-    tracing::Span::current().set_parent(ctx)
+pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display) {
+    Span::current().record("error", &tracing::field::display("true"));
+    Span::current().record("error.level", &tracing::field::display(level));
+    Span::current().record("error.message", &tracing::field::display(error));
 }
 
-#[cfg(feature = "grpc")]
-pub fn extract_grpc_tracing<T>(request: &tonic::Request<T>) {
-    use opentelemetry::propagation::TextMapPropagator;
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-    let propagator = TraceContextPropagator::new();
-    let parent_cx = propagator.extract(&grpc::RequestContextExtractor(request));
-    tracing::Span::current().set_parent(parent_cx)
+pub mod http {
+    pub fn extract_tracing(headers: &http::HeaderMap) {
+        use opentelemetry_http::HeaderExtractor;
+        use tracing_opentelemetry::OpenTelemetrySpanExt;
+        let extractor = HeaderExtractor(headers);
+        let ctx = opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.extract(&extractor)
+        });
+        tracing::Span::current().set_parent(ctx)
+    }
 }
 
-#[cfg(feature = "grpc")]
-mod grpc {
-    pub(super) struct RequestContextExtractor<'a, T>(pub(super) &'a tonic::Request<T>);
+pub mod grpc {
+    use opentelemetry::{
+        propagation::{Extractor, TextMapPropagator},
+        sdk::propagation::TraceContextPropagator,
+    };
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-    impl<'a, T> opentelemetry::propagation::Extractor for RequestContextExtractor<'a, T> {
+    pub fn extract_tracing<T>(request: &tonic::Request<T>) {
+        let propagator = TraceContextPropagator::new();
+        let parent_cx = propagator.extract(&RequestContextExtractor(request));
+        tracing::Span::current().set_parent(parent_cx)
+    }
+
+    struct RequestContextExtractor<'a, T>(&'a tonic::Request<T>);
+
+    impl<'a, T> Extractor for RequestContextExtractor<'a, T> {
         fn get(&self, key: &str) -> Option<&str> {
             self.0.metadata().get(key).and_then(|s| s.to_str().ok())
         }

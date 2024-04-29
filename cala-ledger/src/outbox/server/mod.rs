@@ -31,7 +31,7 @@ impl OutboxService for OutboxServer {
         &self,
         request: Request<SubscribeRequest>,
     ) -> Result<Response<Self::SubscribeStream>, Status> {
-        cala_tracing::extract_grpc_tracing(&request);
+        cala_tracing::grpc::extract_tracing(&request);
 
         let SubscribeRequest { after_sequence } = request.into_inner();
 

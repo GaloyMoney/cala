@@ -30,7 +30,7 @@ pub async fn graphql_handler(
     schema: Extension<Schema<graphql::Query, graphql::Mutation, EmptySubscription>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
-    cala_tracing::extract_http_tracing(&headers);
+    cala_tracing::http::extract_tracing(&headers);
     let req = req.into_inner();
     schema.execute(req).await.into()
 }
