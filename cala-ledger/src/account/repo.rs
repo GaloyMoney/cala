@@ -1,6 +1,6 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
-use cala_types::query::*;
+use cala_types::{primitives::Tag, query::*};
 
 use super::{entity::*, error::*};
 use crate::entity::*;
@@ -28,7 +28,7 @@ impl AccountRepo {
             new_account.code,
             new_account.name,
             new_account.external_id,
-            &new_account.tags
+            &new_account.tags as &Vec<Tag>
         )
         .execute(&mut **tx)
         .await?;

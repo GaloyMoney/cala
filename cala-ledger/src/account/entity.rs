@@ -76,7 +76,7 @@ pub struct NewAccount {
     #[builder(default)]
     pub(super) status: Status,
     #[builder(default)]
-    pub(super) tags: Vec<String>,
+    pub(super) tags: Vec<Tag>,
     #[builder(setter(custom), default)]
     pub(super) metadata: Option<serde_json::Value>,
 }

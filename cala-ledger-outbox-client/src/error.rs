@@ -15,4 +15,6 @@ pub enum CalaLedgerOutboxClientError {
     Serde(#[from] serde_json::Error),
     #[error("CalaLedgerOutboxError - MissingField")]
     MissingField,
+    #[error("CalaLedgerOutboxError - ParseTagError")]
+    ParseTagError(#[from] cala_types::primitives::ParseTagError),
 }

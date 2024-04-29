@@ -74,6 +74,11 @@ impl CalaAccounts {
     }
 
     if let Some(tags) = new_account.tags {
+      let tags = tags
+        .into_iter()
+        .map(|tag| tag.parse())
+        .collect::<Result<Vec<cala_ledger::Tag>, _>>()
+        .map_err(crate::generic_napi_error)?;
       new.tags(tags);
     }
 

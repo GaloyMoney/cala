@@ -31,3 +31,35 @@ impl Default for Status {
         Self::Active
     }
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone, sqlx::Type)]
+#[sqlx(transparent)]
+pub struct Tag(String);
+
+impl Tag {
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseTagError {
+    #[error("Tag must be 64 characters or less.")]
+    TooLong,
+    #[error("Tag must not contain spaces.")]
+    ContainsSpace,
+}
+
+impl std::str::FromStr for Tag {
+    type Err = ParseTagError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.len() >= 64 {
+            Err(ParseTagError::TooLong)
+        } else if s.contains(' ') {
+            Err(ParseTagError::ContainsSpace)
+        } else {
+            Ok(Tag(s.to_string()))
+        }
+    }
+}

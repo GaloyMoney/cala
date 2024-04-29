@@ -35,6 +35,12 @@ impl ToGlobalId for cala_types::primitives::JournalId {
     }
 }
 
+impl From<cala_types::primitives::Tag> for TAG {
+    fn from(tag: cala_types::primitives::Tag) -> Self {
+        TAG::from(tag.into_inner())
+    }
+}
+
 impl From<cala_types::account::AccountValues> for Account {
     fn from(values: cala_types::account::AccountValues) -> Self {
         Self {

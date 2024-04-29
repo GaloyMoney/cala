@@ -11,7 +11,7 @@ pub struct AccountValues {
     pub status: Status,
     pub external_id: Option<String>,
     pub description: Option<String>,
-    pub tags: Vec<String>,
+    pub tags: Vec<Tag>,
     pub metadata: Option<serde_json::Value>,
 }
 
