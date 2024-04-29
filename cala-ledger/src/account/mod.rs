@@ -48,7 +48,7 @@ impl Accounts {
         &self,
         query: PaginatedQueryArgs<AccountByNameCursor>,
     ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
-        Ok(self.repo.list(query).await?)
+        self.repo.list(query).await
     }
 }
 

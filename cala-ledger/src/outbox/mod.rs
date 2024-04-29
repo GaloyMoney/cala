@@ -43,7 +43,7 @@ impl Outbox {
 
     pub async fn register_listener(
         &self,
-        start_after: Option<EventSequence>,
+        _start_after: Option<EventSequence>,
     ) -> Result<OutboxListener, OutboxError> {
         unimplemented!()
         // let sub = self.event_receiver.resubscribe();

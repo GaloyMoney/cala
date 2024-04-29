@@ -2,7 +2,7 @@ mod config;
 
 use async_graphql::*;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{extract::State, headers::HeaderMap, routing::get, Extension, Json, Router};
+use axum::{headers::HeaderMap, routing::get, Extension, Router};
 
 use crate::{app::CalaApp, graphql};
 

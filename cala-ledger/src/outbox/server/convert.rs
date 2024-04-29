@@ -117,8 +117,9 @@ impl From<Status> for proto::Status {
 
 impl From<OutboxError> for tonic::Status {
     fn from(err: OutboxError) -> Self {
-        match err {
-            _ => tonic::Status::internal(err.to_string()),
-        }
+        // match err {
+        //     _ => tonic::Status::internal(err.to_string()),
+        // }
+        tonic::Status::internal(err.to_string())
     }
 }

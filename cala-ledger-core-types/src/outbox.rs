@@ -35,8 +35,8 @@ pub enum OutboxEventPayload {
 #[sqlx(transparent)]
 pub struct EventSequence(i64);
 impl EventSequence {
-    pub(super) const BEGIN: Self = EventSequence(0);
-    pub(super) fn next(&self) -> Self {
+    pub(super) const _BEGIN: Self = EventSequence(0);
+    pub(super) fn _next(&self) -> Self {
         Self(self.0 + 1)
     }
 }

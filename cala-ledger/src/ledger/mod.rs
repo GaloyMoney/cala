@@ -18,6 +18,7 @@ pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
     journals: Journals,
+    #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
 

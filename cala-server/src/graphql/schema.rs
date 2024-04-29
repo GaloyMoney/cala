@@ -3,10 +3,6 @@ use async_graphql::{types::connection::*, *};
 use super::{account::*, journal::*};
 use crate::app::CalaApp;
 
-// use timestamp::*;
-
-// use crate::app::CalaApp;
-
 pub struct Query;
 
 #[Object]
@@ -29,7 +25,7 @@ impl Query {
                     .ledger()
                     .accounts()
                     .list(cala_types::query::PaginatedQueryArgs {
-                        first: usize::try_from(first)?,
+                        first,
                         after: after.map(cala_types::query::AccountByNameCursor::from),
                     })
                     .await?;

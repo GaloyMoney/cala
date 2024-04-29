@@ -1,3 +1,4 @@
+#![allow(clippy::upper_case_acronyms)]
 use async_graphql::*;
 use serde::{Deserialize, Serialize};
 

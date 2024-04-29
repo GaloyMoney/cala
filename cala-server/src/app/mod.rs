@@ -8,13 +8,16 @@ pub use error::*;
 
 #[derive(Clone)]
 pub struct CalaApp {
-    pool: Pool<Postgres>,
+    _pool: Pool<Postgres>,
     ledger: CalaLedger,
 }
 
 impl CalaApp {
     pub fn new(pool: Pool<Postgres>, ledger: CalaLedger) -> Self {
-        Self { pool, ledger }
+        Self {
+            _pool: pool,
+            ledger,
+        }
     }
 
     pub fn ledger(&self) -> &CalaLedger {
