@@ -47,7 +47,8 @@ impl AccountRepo {
     ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
         let rows = sqlx::query_as!(
             GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event
+            r#"SELECT a.id, e.sequence, e.event,
+              a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
             FROM cala_accounts a
             JOIN cala_account_events e ON a.id = e.id
             WHERE ((a.name, a.id) > ($2, $1)) OR ($1 IS NULL AND $2 IS NULL)

@@ -74,6 +74,7 @@ pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display)
     Span::current().record("error.message", &tracing::field::display(error));
 }
 
+#[cfg(feature = "http")]
 pub mod http {
     pub fn extract_tracing(headers: &http::HeaderMap) {
         use opentelemetry_http::HeaderExtractor;
@@ -86,6 +87,7 @@ pub mod http {
     }
 }
 
+#[cfg(feature = "grpc")]
 pub mod grpc {
     use opentelemetry::{
         propagation::{Extractor, TextMapPropagator},
