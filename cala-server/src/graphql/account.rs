@@ -20,7 +20,7 @@ pub(super) struct Account {
 #[derive(Serialize, Deserialize)]
 pub(super) struct AccountByNameCursor {
     pub name: String,
-    pub id: cala_types::primitives::AccountId,
+    pub id: cala_ledger::primitives::AccountId,
 }
 
 impl CursorType for AccountByNameCursor {

@@ -1,14 +1,15 @@
 //! [Account] holds a balance in a [Journal](crate::journal::Journal)
+mod cursor;
 mod entity;
 pub mod error;
 mod repo;
 
-use cala_types::query::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{entity::*, outbox::*};
+use crate::{entity::*, outbox::*, query::*};
 
+pub use cursor::*;
 pub use entity::*;
 use error::*;
 use repo::*;

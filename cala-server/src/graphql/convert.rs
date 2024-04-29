@@ -4,7 +4,7 @@ trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
 }
 
-impl From<AccountByNameCursor> for cala_types::query::AccountByNameCursor {
+impl From<AccountByNameCursor> for cala_ledger::account::AccountByNameCursor {
     fn from(cursor: AccountByNameCursor) -> Self {
         Self {
             name: cursor.name,
@@ -13,7 +13,7 @@ impl From<AccountByNameCursor> for cala_types::query::AccountByNameCursor {
     }
 }
 
-impl ToGlobalId for cala_types::primitives::AccountId {
+impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
@@ -24,7 +24,7 @@ impl ToGlobalId for cala_types::primitives::AccountId {
     }
 }
 
-impl ToGlobalId for cala_types::primitives::JournalId {
+impl ToGlobalId for cala_ledger::JournalId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
@@ -35,14 +35,14 @@ impl ToGlobalId for cala_types::primitives::JournalId {
     }
 }
 
-impl From<cala_types::primitives::Tag> for TAG {
-    fn from(tag: cala_types::primitives::Tag) -> Self {
+impl From<cala_ledger::Tag> for TAG {
+    fn from(tag: cala_ledger::Tag) -> Self {
         TAG::from(tag.into_inner())
     }
 }
 
-impl From<cala_types::account::AccountValues> for Account {
-    fn from(values: cala_types::account::AccountValues) -> Self {
+impl From<cala_ledger::account::AccountValues> for Account {
+    fn from(values: cala_ledger::account::AccountValues) -> Self {
         Self {
             id: values.id.to_global_id(),
             account_id: UUID::from(values.id),
@@ -58,8 +58,8 @@ impl From<cala_types::account::AccountValues> for Account {
     }
 }
 
-impl From<cala_types::journal::JournalValues> for Journal {
-    fn from(value: cala_types::journal::JournalValues) -> Self {
+impl From<cala_ledger::journal::JournalValues> for Journal {
+    fn from(value: cala_ledger::journal::JournalValues) -> Self {
         Self {
             id: value.id.to_global_id(),
             journal_id: UUID::from(value.id),
@@ -71,16 +71,16 @@ impl From<cala_types::journal::JournalValues> for Journal {
     }
 }
 
-impl From<cala_types::journal::JournalValues> for JournalCreatePayload {
-    fn from(value: cala_types::journal::JournalValues) -> Self {
+impl From<cala_ledger::journal::JournalValues> for JournalCreatePayload {
+    fn from(value: cala_ledger::journal::JournalValues) -> Self {
         JournalCreatePayload {
             journal: Journal::from(value),
         }
     }
 }
 
-impl From<&cala_types::account::AccountValues> for AccountByNameCursor {
-    fn from(values: &cala_types::account::AccountValues) -> Self {
+impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
+    fn from(values: &cala_ledger::account::AccountValues) -> Self {
         Self {
             name: values.name.clone(),
             id: values.id,

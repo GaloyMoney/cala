@@ -3,14 +3,14 @@ use async_graphql::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "cala_types::primitives::DebitOrCredit")]
+#[graphql(remote = "cala_ledger::primitives::DebitOrCredit")]
 pub(super) enum DebitOrCredit {
     Debit,
     Credit,
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "cala_types::primitives::Status")]
+#[graphql(remote = "cala_ledger::primitives::Status")]
 pub(super) enum Status {
     Active,
     Locked,

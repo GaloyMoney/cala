@@ -97,7 +97,7 @@ impl CalaAccounts {
 
   #[napi]
   pub async fn list(&self, query: PaginatedQueryArgs) -> napi::Result<PaginatedAccounts> {
-    let query = cala_types::query::PaginatedQueryArgs {
+    let query = cala_ledger::query::PaginatedQueryArgs {
       after: query.after.map(|c| c.try_into()).transpose()?,
       first: usize::try_from(query.first).map_err(crate::generic_napi_error)?,
     };

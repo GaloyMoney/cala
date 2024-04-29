@@ -24,9 +24,9 @@ impl Query {
                 let result = app
                     .ledger()
                     .accounts()
-                    .list(cala_types::query::PaginatedQueryArgs {
+                    .list(cala_ledger::query::PaginatedQueryArgs {
                         first,
-                        after: after.map(cala_types::query::AccountByNameCursor::from),
+                        after: after.map(cala_ledger::account::AccountByNameCursor::from),
                     })
                     .await?;
                 let mut connection = Connection::new(false, result.has_next_page);

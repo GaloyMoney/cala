@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{primitives::*, query::AccountByNameCursor};
+use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountValues {
@@ -13,13 +13,4 @@ pub struct AccountValues {
     pub description: Option<String>,
     pub tags: Vec<Tag>,
     pub metadata: Option<serde_json::Value>,
-}
-
-impl From<&AccountValues> for AccountByNameCursor {
-    fn from(values: &AccountValues) -> Self {
-        Self {
-            name: values.name.clone(),
-            id: values.id,
-        }
-    }
 }
