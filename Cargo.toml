@@ -19,7 +19,7 @@ base64 = { version = "0.21.5" }
 chrono = { version = "0.4.31", features = ["clock", "serde"], default-features = false }
 clap = { version = "4.4", features = ["derive", "env"] }
 derive_builder = "0.12.0"
-sqlx = { version = "0.7.2", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
+sqlx = { version = "0.7.4", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 thiserror = "1.0.50"
 uuid = { version = "1.3", features = ["serde", "v4"] }
 tracing = "0.1"

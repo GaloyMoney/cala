@@ -1,7 +1,8 @@
+mod config;
 mod entity;
 pub mod error;
 mod repo;
 
+pub use config::*;
 pub use entity::*;
-use error::*;
-use repo::*;
+pub use repo::*;

@@ -10,7 +10,9 @@ pub(super) struct JournalRepo {
 
 impl JournalRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self { _pool: pool.clone() }
+        Self {
+            _pool: pool.clone(),
+        }
     }
 
     pub async fn create_in_tx(

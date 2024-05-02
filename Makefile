@@ -9,6 +9,7 @@ start-deps:
 
 setup-db:
 	cd cala-ledger && cargo sqlx migrate run
+	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 
@@ -22,3 +23,8 @@ update-lib-in-nodejs-example:
 re-run-nodejs-example: clean-deps start-deps
 	sleep 2
 	cd examples/nodejs && yarn run start
+
+check-code:
+	SQLX_OFFLINE=true cargo fmt --check --all
+	SQLX_OFFLINE=true cargo clippy --all-features
+	SQLX_OFFLINE=true cargo audit
