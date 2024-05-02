@@ -47,13 +47,19 @@ impl AccountRepo {
     ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
         let rows = sqlx::query_as!(
             GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-              a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_accounts a
+            r#"
+            WITH accounts AS (
+              SELECT id, name, created_at
+              FROM cala_accounts
+              WHERE ((name, id) > ($2, $1)) OR ($1 IS NULL AND $2 IS NULL)
+              ORDER BY name, id
+              LIMIT $3
+            )
+            SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM accounts a
             JOIN cala_account_events e ON a.id = e.id
-            WHERE ((a.name, a.id) > ($2, $1)) OR ($1 IS NULL AND $2 IS NULL)
-            ORDER BY a.name, a.id, e.sequence
-            LIMIT $3"#,
+            ORDER BY a.name, a.id, e.sequence"#,
             query.after.as_ref().map(|c| c.id) as Option<AccountId>,
             query.after.map(|c| c.name),
             query.first as i64 + 1

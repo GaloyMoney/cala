@@ -99,6 +99,24 @@ impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
     }
 }
 
+impl From<ImportJobByNameCursor> for crate::import_job::ImportJobByNameCursor {
+    fn from(cursor: ImportJobByNameCursor) -> Self {
+        Self {
+            name: cursor.name,
+            id: cursor.id,
+        }
+    }
+}
+
+impl From<&crate::import_job::ImportJob> for ImportJobByNameCursor {
+    fn from(job: &crate::import_job::ImportJob) -> Self {
+        Self {
+            name: job.name.clone(),
+            id: job.id,
+        }
+    }
+}
+
 impl From<crate::import_job::ImportJob> for ImportJob {
     fn from(job: crate::import_job::ImportJob) -> Self {
         Self {

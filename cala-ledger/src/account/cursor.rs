@@ -1,8 +1,6 @@
 use cala_types::{account::AccountValues, primitives::AccountId};
 use serde::{Deserialize, Serialize};
 
-use crate::query::*;
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountByNameCursor {
     pub name: String,
@@ -14,15 +12,6 @@ impl From<&AccountValues> for AccountByNameCursor {
         Self {
             name: values.name.clone(),
             id: values.id,
-        }
-    }
-}
-
-impl Default for PaginatedQueryArgs<AccountByNameCursor> {
-    fn default() -> Self {
-        Self {
-            first: 100,
-            after: None,
         }
     }
 }

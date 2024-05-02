@@ -21,6 +21,15 @@ pub mod query {
         pub after: Option<T>,
     }
 
+    impl<T: std::fmt::Debug> Default for PaginatedQueryArgs<T> {
+        fn default() -> Self {
+            Self {
+                first: 100,
+                after: None,
+            }
+        }
+    }
+
     pub struct PaginatedQueryRet<T, C> {
         pub entities: Vec<T>,
         pub has_next_page: bool,

@@ -1,8 +1,9 @@
 mod error;
 
 use sqlx::{Pool, Postgres};
+use tracing::instrument;
 
-use cala_ledger::CalaLedger;
+use cala_ledger::{query::*, CalaLedger};
 
 use crate::import_job::*;
 pub use error::*;
@@ -28,6 +29,7 @@ impl CalaApp {
         &self.ledger
     }
 
+    #[instrument(name = "cala_server.create_import_job", skip(self))]
     pub async fn create_import_job(
         &self,
         name: String,
@@ -43,5 +45,13 @@ impl CalaApp {
             .build()
             .expect("Could not build import job");
         Ok(self.import_jobs.create(new_import_job).await?)
+    }
+
+    #[instrument(name = "cala_server.list_import_jobs", skip(self))]
+    pub async fn list_import_jobs(
+        &self,
+        query: PaginatedQueryArgs<ImportJobByNameCursor>,
+    ) -> Result<PaginatedQueryRet<ImportJob, ImportJobByNameCursor>, ApplicationError> {
+        Ok(self.import_jobs.list(query).await?)
     }
 }

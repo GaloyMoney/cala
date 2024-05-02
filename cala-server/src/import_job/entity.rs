@@ -32,6 +32,10 @@ pub struct ImportJob {
     pub(super) _events: EntityEvents<ImportJobEvent>,
 }
 
+impl Entity for ImportJob {
+    type Event = ImportJobEvent;
+}
+
 impl TryFrom<EntityEvents<ImportJobEvent>> for ImportJob {
     type Error = EntityError;
 

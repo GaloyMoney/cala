@@ -41,6 +41,39 @@ impl Query {
         )
         .await
     }
+
+    async fn import_jobs(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<ImportJobByNameCursor, ImportJob, EmptyFields, EmptyFields>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let result = app
+                    .list_import_jobs(cala_ledger::query::PaginatedQueryArgs {
+                        first,
+                        after: after.map(crate::import_job::ImportJobByNameCursor::from),
+                    })
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = ImportJobByNameCursor::from(&entity);
+                        Edge::new(cursor, ImportJob::from(entity))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
+    }
 }
 
 pub struct Mutation;
