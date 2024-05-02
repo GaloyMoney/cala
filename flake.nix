@@ -50,6 +50,7 @@
           yarn
           nodejs
           typescript
+          ytt
         ]
         ++ lib.optionals pkgs.stdenv.isDarwin [
           darwin.apple_sdk.frameworks.SystemConfiguration
