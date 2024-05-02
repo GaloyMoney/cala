@@ -1,0 +1,15 @@
+apiVersion: vendir.k14s.io/v1alpha1
+directories:
+- contents:
+  - git:
+      commitTitle: 'fix: remove nix command from check-code (#55)'
+      sha: e186c637e85c89d59f52c3a7ac5a3f23b25b5331
+    path: .
+  path: ../.github/workflows/vendor
+- contents:
+  - git:
+      commitTitle: 'fix: remove nix command from check-code (#55)'
+      sha: e186c637e85c89d59f52c3a7ac5a3f23b25b5331
+    path: .
+  path: vendor
+kind: LockConfig
