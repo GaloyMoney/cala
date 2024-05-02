@@ -30,5 +30,11 @@ check-code: sdl
 	SQLX_OFFLINE=true cargo clippy --all-features
 	SQLX_OFFLINE=true cargo audit
 
+build:
+	SQLX_OFFLINE=true cargo build --locked
+
+e2e: clean-deps start-deps build
+	bats -t bats
+
 sdl:
 	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql

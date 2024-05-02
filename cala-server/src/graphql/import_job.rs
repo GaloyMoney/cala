@@ -20,7 +20,7 @@ pub struct ImportJob {
 
 #[derive(SimpleObject)]
 pub struct ImportJobCreatePayload {
-    pub journal: ImportJob,
+    pub import_job: ImportJob,
 }
 
 #[derive(Serialize, Deserialize)]
