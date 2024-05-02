@@ -1,6 +1,6 @@
 use async_graphql::{types::connection::*, *};
 
-use super::{account::*, journal::*};
+use super::{account::*, import_job::*, journal::*};
 use crate::app::CalaApp;
 
 pub struct Query;
@@ -68,5 +68,17 @@ impl Mutation {
         }
         let journal = app.ledger().journals().create(new.build()?).await?;
         Ok(journal.into_values().into())
+    }
+
+    async fn import_job_create(
+        &self,
+        ctx: &Context<'_>,
+        input: ImportJobCreateInput,
+    ) -> Result<ImportJob> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        Ok(app
+            .create_import_job(input.name, input.description, input.endpoint)
+            .await
+            .map(ImportJob::from)?)
     }
 }

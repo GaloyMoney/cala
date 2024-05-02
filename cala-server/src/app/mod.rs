@@ -32,15 +32,16 @@ impl CalaApp {
         &self,
         name: String,
         description: Option<String>,
-        config: ImportConfig,
-    ) -> Result<(), ApplicationError> {
+        endpoint: String,
+    ) -> Result<ImportJob, ApplicationError> {
         let new_import_job = NewImportJob::builder()
             .name(name)
             .description(description)
-            .import_config(config)
+            .import_config(ImportJobConfig::CalaOutbox(CalaOutboxImportConfig {
+                endpoint,
+            }))
             .build()
             .expect("Could not build import job");
-        self.import_jobs.create(new_import_job).await?;
-        unimplemented!()
+        Ok(self.import_jobs.create(new_import_job).await?)
     }
 }

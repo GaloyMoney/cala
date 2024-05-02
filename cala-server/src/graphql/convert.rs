@@ -1,4 +1,4 @@
-use super::{account::*, journal::*, primitives::*};
+use super::{account::*, import_job::*, journal::*, primitives::*};
 
 trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
@@ -29,6 +29,17 @@ impl ToGlobalId for cala_ledger::JournalId {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
             "journal:{}",
+            general_purpose::STANDARD_NO_PAD.encode(self.to_string())
+        );
+        async_graphql::types::ID::from(id)
+    }
+}
+
+impl ToGlobalId for crate::primitives::ImportJobId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        use base64::{engine::general_purpose, Engine as _};
+        let id = format!(
+            "import_job:{}",
             general_purpose::STANDARD_NO_PAD.encode(self.to_string())
         );
         async_graphql::types::ID::from(id)
@@ -84,6 +95,17 @@ impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
         Self {
             name: values.name.clone(),
             id: values.id,
+        }
+    }
+}
+
+impl From<crate::import_job::ImportJob> for ImportJob {
+    fn from(job: crate::import_job::ImportJob) -> Self {
+        Self {
+            id: job.id.to_global_id(),
+            import_job_id: UUID::from(job.id),
+            name: job.name,
+            description: job.description,
         }
     }
 }

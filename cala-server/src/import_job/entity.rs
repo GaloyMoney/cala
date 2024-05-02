@@ -12,7 +12,7 @@ pub enum ImportJobEvent {
         id: ImportJobId,
         name: String,
         description: Option<String>,
-        import_config: ImportConfig,
+        import_config: ImportJobConfig,
     },
 }
 
@@ -26,6 +26,9 @@ impl EntityEvent for ImportJobEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct ImportJob {
+    pub id: ImportJobId,
+    pub name: String,
+    pub description: Option<String>,
     pub(super) _events: EntityEvents<ImportJobEvent>,
 }
 
@@ -33,7 +36,19 @@ impl TryFrom<EntityEvents<ImportJobEvent>> for ImportJob {
     type Error = EntityError;
 
     fn try_from(events: EntityEvents<ImportJobEvent>) -> Result<Self, Self::Error> {
-        let builder = ImportJobBuilder::default();
+        let mut builder = ImportJobBuilder::default();
+        for event in events.iter() {
+            let ImportJobEvent::Initialized {
+                id,
+                name,
+                description,
+                ..
+            } = event;
+            builder = builder
+                .id(*id)
+                .name(name.clone())
+                .description(description.clone());
+        }
         builder._events(events).build()
     }
 }
@@ -47,7 +62,7 @@ pub struct NewImportJob {
     #[builder(setter(into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(into))]
-    pub(super) import_config: ImportConfig,
+    pub(super) import_config: ImportJobConfig,
 }
 
 impl NewImportJob {

@@ -48,6 +48,19 @@ enum DebitOrCredit {
 
 
 
+type ImportJob {
+	id: ID!
+	importJobId: UUID!
+	name: String!
+	description: String
+}
+
+input ImportJobCreateInput {
+	name: String!
+	description: String
+	endpoint: String!
+}
+
 
 scalar JSON
 
@@ -74,6 +87,7 @@ type JournalCreatePayload {
 
 type Mutation {
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
+	importJobCreate(input: ImportJobCreateInput!): ImportJob!
 }
 
 """
