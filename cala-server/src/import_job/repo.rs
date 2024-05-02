@@ -53,7 +53,7 @@ impl ImportJobs {
             ORDER BY j.name, j.id, e.sequence"#,
             query.after.as_ref().map(|c| c.id) as Option<ImportJobId>,
             query.after.map(|c| c.name),
-            query.first as i64
+            query.first as i64 + 1
         )
         .fetch_all(&self.pool)
         .await?;
