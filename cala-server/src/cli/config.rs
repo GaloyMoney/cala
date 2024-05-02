@@ -15,14 +15,8 @@ pub struct Config {
     pub server: ServerConfig,
     // #[serde(default)]
     // pub app: AppConfig,
-    #[serde(default = "default_tracing_config")]
+    #[serde(default)]
     pub tracing: TracingConfig,
-}
-
-fn default_tracing_config() -> TracingConfig {
-    TracingConfig {
-        service_name: "cala-server".to_string(),
-    }
 }
 
 pub struct EnvOverride {
