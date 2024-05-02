@@ -12,12 +12,14 @@ grpc = ["dep:tonic"]
 [dependencies]
 anyhow = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 opentelemetry-otlp = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
+opentelemetry_sdk = { workspace = true }
 
 tonic = { workspace = true, optional = true }
 opentelemetry-http = { workspace = true, optional = true }
