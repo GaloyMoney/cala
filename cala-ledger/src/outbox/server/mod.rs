@@ -1,3 +1,4 @@
+#![allow(clippy::blocks_in_conditions)]
 mod config;
 mod convert;
 pub mod error;
