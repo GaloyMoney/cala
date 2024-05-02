@@ -1,0 +1,38 @@
+#@ load("@ytt:data", "data")
+
+#@ load("vendor/pipeline-fragments.lib.yml",
+#@   "build_edge_image",
+#@   "public_docker_registry",
+#@   "nodejs_task_image_config",
+#@   "rust_check_code",
+#@   "docker_host_pool",
+#@   "test_on_docker_host",
+#@   "repo_resource",
+#@   "edge_image_resource",
+#@   "version_resource",
+#@   "gh_release_resource",
+#@   "pipeline_tasks_resource",
+#@   "release_task_image_config",
+#@   "rust_task_image_config",
+#@   "charts_repo_resource",
+#@   "charts_repo_bot_branch",
+#@   "slack_resource_type",
+#@   "slack_resource",
+#@   "slack_failure_notification"
+#@ )
+
+groups:
+- name: rust
+  jobs:
+  - check-code
+
+jobs:
+- #@ rust_check_code()
+
+resources:
+- #@ repo_resource(True)
+- #@ pipeline_tasks_resource()
+- #@ slack_resource()
+
+resource_types:
+- #@ slack_resource_type()

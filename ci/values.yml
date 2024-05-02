@@ -1,0 +1,33 @@
+#@data/values
+---
+git_uri: git@github.com:GaloyMoney/cala.git
+git_branch: main
+github_private_key: ((github.private_key))
+github_token: ((github.api_token))
+github_app_id: ((github.github_app_id))
+github_app_private_key: ((github.github_app_private_key))
+
+git_charts_uri: git@github.com:GaloyMoney/charts.git
+git_charts_branch: main
+git_charts_bot_branch: bot-bump-cala-image
+
+docker_registry: us.gcr.io/galoy-org
+docker_registry_user: ((docker-creds.username))
+docker_registry_password: ((docker-creds.password))
+osxcross_docker_username: ((osxcross-image.username))
+osxcross_docker_password: ((osxcross-image.password))
+osxcross_repository: ((osxcross-image.repository))
+
+docker_host_ip: ((staging-ssh.docker_host_ip))
+artifacts_bucket_name: ((staging-gcp-creds.bucket_name))
+staging_inception_creds: ((staging-gcp-creds.creds_json))
+staging_ssh_private_key: ((staging-ssh.ssh_private_key))
+staging_ssh_pub_key: ((staging-ssh.ssh_public_key))
+git_version_branch: version
+gh_org: GaloyMoney
+gh_repository: cala
+
+slack_channel: cala-github
+slack_username: concourse
+slack_webhook_url: ((addons-slack.api_url))
+
