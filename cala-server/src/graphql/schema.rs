@@ -107,11 +107,13 @@ impl Mutation {
         &self,
         ctx: &Context<'_>,
         input: ImportJobCreateInput,
-    ) -> Result<ImportJob> {
+    ) -> Result<ImportJobCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        Ok(app
-            .create_import_job(input.name, input.description, input.endpoint)
-            .await
-            .map(ImportJob::from)?)
+        Ok(ImportJobCreatePayload {
+            import_job: app
+                .create_import_job(input.name, input.description, input.endpoint)
+                .await
+                .map(ImportJob::from)?,
+        })
     }
 }

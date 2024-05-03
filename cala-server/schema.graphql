@@ -76,6 +76,10 @@ input ImportJobCreateInput {
 	endpoint: String!
 }
 
+type ImportJobCreatePayload {
+	importJob: ImportJob!
+}
+
 """
 An edge in a connection.
 """
@@ -116,7 +120,7 @@ type JournalCreatePayload {
 
 type Mutation {
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
-	importJobCreate(input: ImportJobCreateInput!): ImportJob!
+	importJobCreate(input: ImportJobCreateInput!): ImportJobCreatePayload!
 }
 
 """

@@ -71,15 +71,16 @@ pub struct NewImportJob {
 
 impl NewImportJob {
     pub fn builder() -> NewImportJobBuilder {
-        NewImportJobBuilder::default()
+        let mut builder = NewImportJobBuilder::default();
+        builder.id(ImportJobId::new());
+        builder
     }
 
     pub(super) fn initial_events(self) -> EntityEvents<ImportJobEvent> {
-        let id = ImportJobId::new();
         EntityEvents::init(
-            id,
+            self.id,
             [ImportJobEvent::Initialized {
-                id,
+                id: self.id,
                 name: self.name,
                 description: self.description,
                 import_config: self.import_config,

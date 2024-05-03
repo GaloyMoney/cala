@@ -2,8 +2,7 @@ use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, query::*, 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
-    let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
+    let pg_con = format!("postgres://user:password@localhost:5433/pg");
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&pg_con)
@@ -15,6 +14,7 @@ async fn main() -> anyhow::Result<()> {
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
+        .outbox(OutboxServerConfig::default())
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
     let new_account = NewAccount::builder()
