@@ -2,7 +2,8 @@ mod config;
 
 use async_graphql::*;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{headers::HeaderMap, routing::get, Extension, Router};
+use axum::{routing::get, Extension, Router};
+use axum_extra::headers::HeaderMap;
 
 use crate::{app::CalaApp, graphql};
 
@@ -19,9 +20,10 @@ pub async fn run(config: ServerConfig, app: CalaApp) -> anyhow::Result<()> {
         .layer(Extension(schema));
 
     println!("Starting graphql server on port {}", config.port);
-    axum::Server::bind(&std::net::SocketAddr::from(([0, 0, 0, 0], config.port)))
-        .serve(app.into_make_service())
-        .await?;
+    let listener =
+        tokio::net::TcpListener::bind(&std::net::SocketAddr::from(([0, 0, 0, 0], config.port)))
+            .await?;
+    axum::serve(listener, app.into_make_service()).await?;
     Ok(())
 }
 
