@@ -2,7 +2,7 @@ use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, query::*, 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let pg_con = format!("postgres://user:password@localhost:5433/pg");
+    let pg_con = "postgres://user:password@localhost:5433/pg".to_string();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&pg_con)
