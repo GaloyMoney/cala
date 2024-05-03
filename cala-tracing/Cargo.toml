@@ -11,7 +11,7 @@ grpc = ["dep:tonic"]
 
 [dependencies]
 anyhow = { workspace = true }
-axum-extra = { version = "0.9.3", default-features = false, features = ["tracing", "typed-header"] }
+axum-extra = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
