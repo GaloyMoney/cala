@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::import_job::error::*;
+use crate::{import_job::error::*, job_execution::error::*};
 
 #[derive(Error, Debug)]
 pub enum ApplicationError {
@@ -8,4 +8,6 @@ pub enum ApplicationError {
     Sqlx(#[from] sqlx::Error),
     #[error("ApplicationError - ImportJobError: {0}")]
     ImportJob(#[from] ImportJobError),
+    #[error("ApplicationError - JobExecutionError: {0}")]
+    JobExecution(#[from] JobExecutionError),
 }
