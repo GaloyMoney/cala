@@ -13,6 +13,7 @@ cala-ledger = { path = "../cala-ledger" }
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
 async-graphql-axum = { workspace = true }
+async-trait = { workspace = true }
 axum = { workspace = true }
 axum-extra = { workspace = true }
 base64 = { workspace = true }

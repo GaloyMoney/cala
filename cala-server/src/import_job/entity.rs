@@ -2,7 +2,7 @@ use cala_ledger::entity::*;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use super::config::*;
+use super::{cala_outbox::*, config::*, runner::*};
 use crate::primitives::*;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -12,7 +12,7 @@ pub enum ImportJobEvent {
         id: ImportJobId,
         name: String,
         description: Option<String>,
-        import_config: ImportJobConfig,
+        config: ImportJobConfig,
     },
 }
 
@@ -29,7 +29,15 @@ pub struct ImportJob {
     pub id: ImportJobId,
     pub name: String,
     pub description: Option<String>,
+    config: ImportJobConfig,
     pub(super) _events: EntityEvents<ImportJobEvent>,
+}
+
+impl ImportJob {
+    pub fn runner(&self) -> Box<dyn ImportJobRunner> {
+        let ImportJobConfig::CalaOutbox(config) = &self.config;
+        Box::new(CalaOutboxImportJob::new(config.clone()))
+    }
 }
 
 impl Entity for ImportJob {
@@ -46,12 +54,13 @@ impl TryFrom<EntityEvents<ImportJobEvent>> for ImportJob {
                 id,
                 name,
                 description,
-                ..
+                config,
             } = event;
             builder = builder
                 .id(*id)
                 .name(name.clone())
-                .description(description.clone());
+                .description(description.clone())
+                .config(config.clone());
         }
         builder._events(events).build()
     }
@@ -66,7 +75,7 @@ pub struct NewImportJob {
     #[builder(setter(into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(into))]
-    pub(super) import_config: ImportJobConfig,
+    pub(super) config: ImportJobConfig,
 }
 
 impl NewImportJob {
@@ -83,7 +92,7 @@ impl NewImportJob {
                 id: self.id,
                 name: self.name,
                 description: self.description,
-                import_config: self.import_config,
+                config: self.config,
             }],
         )
     }

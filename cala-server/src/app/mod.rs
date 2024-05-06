@@ -25,7 +25,13 @@ impl CalaApp {
         ledger: CalaLedger,
     ) -> Result<Self, ApplicationError> {
         let import_jobs = ImportJobs::new(&pool);
-        let mut job_execution = JobExecution::new(&pool, config.job_execution.clone());
+        let import_deps = ImportJobRunnerDeps {};
+        let mut job_execution = JobExecution::new(
+            &pool,
+            config.job_execution.clone(),
+            import_jobs.clone(),
+            import_deps,
+        );
         job_execution.start_poll().await?;
         Ok(Self {
             pool,
@@ -49,9 +55,9 @@ impl CalaApp {
         let new_import_job = NewImportJob::builder()
             .name(name)
             .description(description)
-            .import_config(ImportJobConfig::CalaOutbox(CalaOutboxImportConfig {
-                endpoint,
-            }))
+            .config(ImportJobConfig::CalaOutbox(
+                cala_outbox::CalaOutboxImportConfig { endpoint },
+            ))
             .build()
             .expect("Could not build import job");
         let mut tx = self.pool.begin().await?;

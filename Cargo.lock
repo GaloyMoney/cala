@@ -640,6 +640,7 @@ dependencies = [
  "anyhow",
  "async-graphql",
  "async-graphql-axum",
+ "async-trait",
  "axum 0.7.5",
  "axum-extra",
  "base64 0.22.1",

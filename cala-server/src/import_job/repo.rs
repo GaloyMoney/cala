@@ -74,4 +74,22 @@ impl ImportJobs {
             end_cursor,
         })
     }
+
+    pub async fn find_by_id(&self, id: ImportJobId) -> Result<ImportJob, ImportJobError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                      a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM import_jobs a
+            JOIN import_job_events e ON a.id = e.id
+            WHERE a.id = $1
+            ORDER BY e.sequence"#,
+            id as ImportJobId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let res = EntityEvents::load_first::<ImportJob>(rows)?;
+        Ok(res)
+    }
 }
