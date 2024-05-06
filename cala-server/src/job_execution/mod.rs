@@ -9,6 +9,12 @@ use crate::{import_job::ImportJob, primitives::ImportJobId};
 pub use config::*;
 use error::JobExecutionError;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "JobType", rename_all = "snake_case")]
+pub enum JobType {
+    Import,
+}
+
 #[derive(Clone)]
 pub struct JobExecution {
     pool: PgPool,
@@ -30,18 +36,30 @@ impl JobExecution {
         let server_id = self.config.server_id.clone();
         let poll_interval = self.config.poll_interval;
         let handle = tokio::spawn(async move {
+            let poll_limit = 2;
             loop {
                 let res = sqlx::query!(
                     r#"
-                    UPDATE job_executions
+                    WITH selected_jobs AS (
+                        SELECT id
+                        FROM job_executions
+                        WHERE reschedule_after < NOW()
+                        LIMIT $2
+                        FOR UPDATE
+                    )
+                    UPDATE job_executions AS je
                     SET reschedule_after = NOW() + INTERVAL '20 second',
-                    executing_server_id = $1
-                    WHERE reschedule_after < NOW()
-                "#,
-                    server_id
+                        executing_server_id = $1
+                    FROM selected_jobs
+                    WHERE je.id = selected_jobs.id
+                    RETURNING je.id, je.type AS "job_type: JobType"
+                    "#,
+                    server_id,
+                    poll_limit
                 )
                 .fetch_all(&pool)
                 .await;
+
                 tokio::time::sleep(poll_interval).await;
             }
         });
