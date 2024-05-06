@@ -14,3 +14,13 @@ CREATE TABLE import_job_events (
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
+
+CREATE TYPE JobType AS ENUM ('import');
+
+CREATE TABLE job_executions (
+  id UUID NOT NULL UNIQUE,
+  type JobType NOT NULL,
+  executing_server_id VARCHAR,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

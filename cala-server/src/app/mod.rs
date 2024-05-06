@@ -1,28 +1,44 @@
+mod config;
 mod error;
 
-use sqlx::{Pool, Postgres};
+use sqlx::PgPool;
 use tracing::instrument;
 
 use cala_ledger::{query::*, CalaLedger};
 
-use crate::import_job::*;
+use crate::{import_job::*, job_execution::*};
+pub use config::*;
 pub use error::*;
 
 #[derive(Clone)]
 pub struct CalaApp {
-    _pool: Pool<Postgres>,
+    pool: PgPool,
     ledger: CalaLedger,
     import_jobs: ImportJobs,
+    job_execution: JobExecution,
 }
 
 impl CalaApp {
-    pub fn new(pool: Pool<Postgres>, ledger: CalaLedger) -> Self {
+    pub async fn run(
+        pool: PgPool,
+        config: AppConfig,
+        ledger: CalaLedger,
+    ) -> Result<Self, ApplicationError> {
         let import_jobs = ImportJobs::new(&pool);
-        Self {
-            _pool: pool,
+        let import_deps = ImportJobRunnerDeps {};
+        let mut job_execution = JobExecution::new(
+            &pool,
+            config.job_execution.clone(),
+            import_jobs.clone(),
+            import_deps,
+        );
+        job_execution.start_poll().await?;
+        Ok(Self {
+            pool,
             ledger,
             import_jobs,
-        }
+            job_execution,
+        })
     }
 
     pub fn ledger(&self) -> &CalaLedger {
@@ -39,12 +55,21 @@ impl CalaApp {
         let new_import_job = NewImportJob::builder()
             .name(name)
             .description(description)
-            .import_config(ImportJobConfig::CalaOutbox(CalaOutboxImportConfig {
-                endpoint,
-            }))
+            .config(ImportJobConfig::CalaOutbox(
+                cala_outbox::CalaOutboxImportConfig { endpoint },
+            ))
             .build()
             .expect("Could not build import job");
-        Ok(self.import_jobs.create(new_import_job).await?)
+        let mut tx = self.pool.begin().await?;
+        let job = self
+            .import_jobs
+            .create_in_tx(&mut tx, new_import_job)
+            .await?;
+        self.job_execution
+            .register_import_job(&mut tx, &job)
+            .await?;
+        tx.commit().await?;
+        Ok(job)
     }
 
     #[instrument(name = "cala_server.list_import_jobs", skip(self))]

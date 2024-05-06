@@ -1,4 +1,4 @@
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{cursor::*, entity::*, error::*};
 use crate::primitives::ImportJobId;
@@ -14,8 +14,11 @@ impl ImportJobs {
         Self { pool: pool.clone() }
     }
 
-    pub async fn create(&self, new_import_job: NewImportJob) -> Result<ImportJob, ImportJobError> {
-        let mut tx = self.pool.begin().await?;
+    pub async fn create_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        new_import_job: NewImportJob,
+    ) -> Result<ImportJob, ImportJobError> {
         let id = new_import_job.id;
         sqlx::query!(
             r#"INSERT INTO import_jobs (id, name)
@@ -23,12 +26,11 @@ impl ImportJobs {
             id as ImportJobId,
             new_import_job.name,
         )
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await?;
         let mut events = new_import_job.initial_events();
-        events.persist(&mut tx).await?;
+        events.persist(tx).await?;
         let import_job = ImportJob::try_from(events)?;
-        tx.commit().await?;
         Ok(import_job)
     }
 
@@ -71,5 +73,23 @@ impl ImportJobs {
             has_next_page,
             end_cursor,
         })
+    }
+
+    pub async fn find_by_id(&self, id: ImportJobId) -> Result<ImportJob, ImportJobError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                      a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM import_jobs a
+            JOIN import_job_events e ON a.id = e.id
+            WHERE a.id = $1
+            ORDER BY e.sequence"#,
+            id as ImportJobId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let res = EntityEvents::load_first::<ImportJob>(rows)?;
+        Ok(res)
     }
 }

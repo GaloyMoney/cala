@@ -25,6 +25,8 @@ struct Cli {
         value_name = "DIRECTORY"
     )]
     cala_home: String,
+    #[clap(long, env = "CALA_SERVER_ID")]
+    server_id: Option<String>,
     #[clap(env = "PG_CON")]
     pg_con: String,
 }
@@ -32,7 +34,13 @@ struct Cli {
 pub async fn run() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let config = Config::from_path(cli.config, EnvOverride { db_con: cli.pg_con })?;
+    let config = Config::from_path(
+        cli.config,
+        EnvOverride {
+            db_con: cli.pg_con,
+            server_id: cli.server_id,
+        },
+    )?;
 
     run_cmd(&cli.cala_home, config).await?;
 
@@ -46,7 +54,7 @@ async fn run_cmd(cala_home: &str, config: Config) -> anyhow::Result<()> {
     let pool = db::init_pool(&config.db).await?;
     let ledger_config = CalaLedgerConfig::builder().pool(pool.clone()).build()?;
     let ledger = CalaLedger::init(ledger_config).await?;
-    let app = crate::app::CalaApp::new(pool, ledger);
+    let app = crate::app::CalaApp::run(pool, config.app, ledger).await?;
     crate::server::run(config.server, app).await?;
     Ok(())
 }
