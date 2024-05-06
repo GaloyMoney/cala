@@ -646,6 +646,7 @@ dependencies = [
  "base64 0.22.1",
  "cala-ledger",
  "cala-ledger-core-types",
+ "cala-ledger-outbox-client",
  "cala-tracing",
  "chrono",
  "clap",

@@ -9,6 +9,7 @@ edition = "2021"
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"] }
 cala-ledger = { path = "../cala-ledger" }
+cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }

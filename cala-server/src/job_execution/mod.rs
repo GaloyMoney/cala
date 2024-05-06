@@ -78,7 +78,7 @@ impl JobExecution {
                     pg_interval.clone(),
                     &running_jobs,
                     &import_jobs,
-                    import_job_runner_deps.clone(),
+                    &import_job_runner_deps,
                 )
                 .await;
                 tokio::time::sleep(poll_interval).await;
@@ -105,6 +105,7 @@ impl JobExecution {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[instrument(
         name = "job_execution.poll_jobs",
         skip(pool, running_jobs, import_jobs, import_job_runner_deps,),
@@ -119,7 +120,7 @@ impl JobExecution {
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
         import_jobs: &ImportJobs,
-        import_job_runner_deps: ImportJobRunnerDeps,
+        import_job_runner_deps: &ImportJobRunnerDeps,
     ) -> Result<(), JobExecutionError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);
@@ -172,11 +173,11 @@ impl JobExecution {
                 let id = row.id;
                 let job_type = row.job_type;
                 let _ = Self::spawn_job(
-                    &running_jobs,
+                    running_jobs,
                     id,
                     job_type,
-                    &import_job_runner_deps,
-                    &import_jobs,
+                    import_job_runner_deps,
+                    import_jobs,
                 )
                 .await;
             }
