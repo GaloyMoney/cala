@@ -21,18 +21,63 @@
 #@   "slack_failure_notification"
 #@ )
 
+#@ def on_nix_host(name, cmd):
+#@ params = {}
+#@ params["REPO_PATH"] = data.values.gh_repository
+#@ params["GOOGLE_CREDENTIALS"] = "((staging-gcp-creds.creds_json))"
+#@ params["SSH_PRIVATE_KEY"] = "((staging-ssh.ssh_private_key))"
+#@ params["SSH_PUB_KEY"] = "((staging-ssh.ssh_public_key))"
+#@ params["CMD"] = cmd
+name: #@ name
+serial: true
+plan:
+- { put: nix-host, params: { acquire: true } }
+- in_parallel:
+  - get: repo
+    trigger: true
+  - { get: pipeline-tasks }
+- task: #@ name
+  attempts: 2
+  timeout: 18m
+  tags: ["galoy-staging"]
+  config:
+    platform: linux
+    image_resource: #@ rust_task_image_config()
+    inputs:
+    - name: pipeline-tasks
+    - name: nix-host
+    - name: repo
+      path: #@ data.values.gh_repository
+    params: #@ params
+    run:
+      path: pipeline-tasks/ci/tasks/run-on-nix-host.sh
+  ensure:
+    put: nix-host
+    params:
+      release: nix-host
+#@ end
+
 groups:
 - name: rust
   jobs:
   - check-code
+  - bats-tests
 
 jobs:
 - #@ rust_check_code()
+- #@ on_nix_host("bats-tests", "make e2e")
 
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
 - #@ slack_resource()
+- name: nix-host
+  type: pool
+  source:
+    uri: git@github.com:GaloyMoney/concourse-locks.git
+    branch: main
+    pool: docker-hosts
+    private_key: #@ data.values.github_private_key
 
 resource_types:
 - #@ slack_resource_type()
