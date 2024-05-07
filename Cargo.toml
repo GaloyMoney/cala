@@ -7,6 +7,8 @@ members = [
   "cala-server",
   "cala-tracing",
   "cala-nodejs",
+  "cala-cel-parser",
+  "cala-cel-interpreter",
   "examples/rust",
 ]
 
@@ -34,9 +36,9 @@ opentelemetry-http = "0.11.1"
 opentelemetry-semantic-conventions = "0.14.0"
 tokio = { version = "1.34", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
-serde = "1.0"
-serde_yaml = "0.9.25"
-serde_json = "1.0"
+serde = { version = "1.0.200", features = ["derive"] }
+serde_yaml = "0.9.33"
+serde_json = "1.0.116"
 serde_with = "3.8.1"
 tonic = "0.11"
 tonic-health = "0.11"
@@ -44,6 +46,10 @@ prost = "0.12.1"
 prost-wkt-types = { version = "0.5.0", features = ["vendored-protoc"]}
 futures = "0.3.29"
 http = "0.2.9"
+lalrpop-util = { version = "0.20", features = ["lexer"] }
+lalrpop = { version = "0.20", features = ["lexer"] }
+rust_decimal_macros = "1.34.2"
+rust_decimal = "1.35.0"
 
 [profile.release]
 lto = true
