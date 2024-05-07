@@ -1,0 +1,19 @@
+[package]
+name = "cala-cel-parser"
+description = "A parser for the Common Expression Language (CEL)"
+repository = "https://github.com/GaloyMoney/cala"
+version = "0.1.0-dev"
+authors = ["Justin Carter <justin@galoy.io>"]
+edition = "2021"
+license = "MIT"
+categories = ["parsing", "cel"]
+
+[features]
+
+fail-on-warnings = []
+
+[dependencies]
+lalrpop-util = { workspace = true }
+
+[build-dependencies]
+lalrpop = { workspace = true }
