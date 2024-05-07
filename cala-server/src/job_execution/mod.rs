@@ -197,11 +197,10 @@ impl JobExecution {
         import_jobs: &ImportJobs,
     ) -> Result<(), ImportJobError> {
         let job = import_jobs.find_by_id(ImportJobId::from(id)).await?;
-        let runner = job.runner();
-        let deps = deps.clone();
+        let runner = job.runner(deps);
         let all_jobs = Arc::clone(running_jobs);
         let handle = tokio::spawn(async move {
-            let _ = runner.run(deps).await;
+            let _ = runner.run().await;
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             all_jobs.write().await.remove(&id);
         });

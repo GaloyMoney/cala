@@ -5,5 +5,5 @@ pub struct ImportJobRunnerDeps {}
 
 #[async_trait]
 pub trait ImportJobRunner: Send {
-    async fn run(&self, deps: ImportJobRunnerDeps) -> Result<(), Box<dyn std::error::Error>>;
+    async fn run(&self) -> Result<(), Box<dyn std::error::Error>>;
 }
