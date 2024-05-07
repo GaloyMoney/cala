@@ -4,14 +4,20 @@ use super::{error::*, event::*};
 
 #[derive(Clone)]
 pub(super) struct OutboxRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl OutboxRepo {
     pub(super) fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
+    }
+
+    pub async fn highest_known_sequence(&self) -> Result<EventSequence, OutboxError> {
+        let row =
+            sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max" FROM cala_outbox_events"#)
+                .fetch_one(&self.pool)
+                .await?;
+        Ok(EventSequence::from(row.max.unwrap_or(0) as u64))
     }
 
     pub async fn persist_events(
@@ -45,6 +51,47 @@ impl OutboxRepo {
                 payload,
             })
             .collect::<Vec<_>>();
+        Ok(events)
+    }
+
+    pub async fn load_next_page(
+        &self,
+        sequence: EventSequence,
+        buffer_size: usize,
+    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+              g.seq AS "sequence!: EventSequence",
+              e.id,
+              e.payload AS "payload?",
+              e.recorded_at AS "recorded_at?"
+            FROM
+                generate_series($1 + 1, $1 + $2) AS g(seq)
+            LEFT JOIN
+                cala_outbox_events e ON g.seq = e.sequence
+            WHERE
+                g.seq > $1
+            ORDER BY
+                g.seq ASC
+            LIMIT $2"#,
+            sequence as EventSequence,
+            buffer_size as i64,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut events = Vec::new();
+        for row in rows {
+            events.push(OutboxEvent {
+                id: OutboxEventId::from(row.id),
+                sequence: row.sequence,
+                payload: row
+                    .payload
+                    .map(|p| serde_json::from_value(p).expect("Could not deserialize payload"))
+                    .unwrap_or(OutboxEventPayload::Empty),
+                recorded_at: row.recorded_at.unwrap_or_default(),
+            });
+        }
         Ok(events)
     }
 }

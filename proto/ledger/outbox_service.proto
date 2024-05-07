@@ -18,8 +18,9 @@ message CalaLedgerEvent {
   uint64 sequence = 2;
   google.protobuf.Timestamp recorded_at = 3;
   oneof payload {
-    AccountCreated account_created = 4;
-    JournalCreated journal_created = 5;
+    bool empty = 4;
+    AccountCreated account_created = 5;
+    JournalCreated journal_created = 6;
   }
 }
 

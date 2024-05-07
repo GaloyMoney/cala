@@ -43,7 +43,7 @@ impl CalaLedger {
             sqlx::migrate!().run(&pool).await?;
         }
 
-        let outbox = Outbox::new(&pool);
+        let outbox = Outbox::init(&pool).await?;
         let mut outbox_handle = None;
         if let Some(outbox_config) = config.outbox {
             outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
