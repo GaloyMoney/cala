@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              WITH selected_jobs AS (\n                  SELECT id\n                  FROM job_executions\n                  WHERE reschedule_after < NOW()\n                  LIMIT $2\n                  FOR UPDATE\n              )\n              UPDATE job_executions AS je\n              SET reschedule_after = NOW() + $3::interval,\n                  executing_server_id = $1\n              FROM selected_jobs\n              WHERE je.id = selected_jobs.id\n              RETURNING je.id, je.job_type\n              ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int8",
+        "Interval"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7e34a4defc270d6366a47d1b1191618da870c3c28867127b9d69cf1952c7678a"
+}

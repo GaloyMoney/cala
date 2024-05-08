@@ -3,7 +3,10 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 use super::{cala_outbox::*, config::*, runner::ImportJobRunnerDeps};
-use crate::{jobs::JobRunner, primitives::*};
+use crate::{
+    jobs::{JobRunner, JobTemplate},
+    primitives::*,
+};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -37,6 +40,12 @@ impl ImportJob {
     pub fn runner(&self, deps: &ImportJobRunnerDeps) -> Box<dyn JobRunner> {
         let ImportJobConfig::CalaOutbox(config) = &self.config;
         Box::new(CalaOutboxImportJob::new(config.clone(), deps))
+    }
+}
+
+impl From<&ImportJob> for JobTemplate {
+    fn from(job: &ImportJob) -> Self {
+        JobTemplate::new(CALA_OUTBOX_IMPORT_JOB_TYPE, job.id)
     }
 }
 

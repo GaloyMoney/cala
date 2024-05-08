@@ -1,25 +1,38 @@
-use std::collections::HashMap;
 use uuid::Uuid;
 
-use super::traits::*;
+use std::collections::HashMap;
+
+use super::{error::JobExecutorError, traits::*};
 
 pub struct JobRegistry {
     initializers: HashMap<JobType, Box<dyn JobInitializer>>,
 }
 
 impl JobRegistry {
-    pub fn add_initializer<I: JobInitializer + 'static>(
-        &mut self,
-        job_type: JobType,
-        initializer: I,
-    ) {
-        self.initializers.insert(job_type, Box::new(initializer));
+    pub fn new() -> Self {
+        Self {
+            initializers: HashMap::new(),
+        }
     }
-    pub async fn init_job(
+
+    pub fn add_initializer(&mut self, job_type: JobType, initializer: Box<dyn JobInitializer>) {
+        self.initializers.insert(job_type, initializer);
+    }
+
+    pub(super) fn initializer_exists(&self, job_type: JobType) -> bool {
+        self.initializers.contains_key(job_type)
+    }
+
+    pub(super) async fn init_job(
         &self,
-        job_type: JobType,
+        job_type: &str,
         id: Uuid,
-    ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
-        self.initializers.get(&job_type).unwrap().init(id).await
+    ) -> Result<Box<dyn JobRunner>, JobExecutorError> {
+        self.initializers
+            .get(&job_type)
+            .expect("no initializer present")
+            .init(id)
+            .await
+            .map_err(|e| JobExecutorError::JobInitError(e.to_string()))
     }
 }

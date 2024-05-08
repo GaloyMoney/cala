@@ -5,13 +5,14 @@ use async_trait::async_trait;
 use cala_ledger_outbox_client::{
     CalaLedgerOutboxClient as Client, CalaLedgerOutboxClientConfig as ClientConfig,
 };
-use serde_json::Value;
 use tracing::instrument;
 
 use super::runner::ImportJobRunnerDeps;
 use crate::jobs::JobRunner;
 
 pub use config::*;
+
+pub const CALA_OUTBOX_IMPORT_JOB_TYPE: &str = "cala-outbox-import-job";
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,

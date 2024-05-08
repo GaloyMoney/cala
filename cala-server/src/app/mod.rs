@@ -15,7 +15,7 @@ pub struct CalaApp {
     pool: PgPool,
     ledger: CalaLedger,
     import_jobs: ImportJobs,
-    // job_execution: JobExecution,
+    job_executor: JobExecutor,
 }
 
 impl CalaApp {
@@ -26,18 +26,18 @@ impl CalaApp {
     ) -> Result<Self, ApplicationError> {
         let import_jobs = ImportJobs::new(&pool);
         let import_deps = ImportJobRunnerDeps {};
-        // let mut job_execution = JobExecutor::new(
-        //     &pool,
-        //     config.job_execution.clone(),
-        //     import_jobs.clone(),
-        //     import_deps,
-        // );
-        // job_execution.start_poll().await?;
+        let mut registry = JobRegistry::new();
+        registry.add_initializer(
+            CALA_OUTBOX_IMPORT_JOB_TYPE,
+            Box::new(ImportJobInitializer::new(import_jobs.clone(), import_deps)),
+        );
+        let mut job_executor = JobExecutor::new(&pool, config.job_execution.clone(), registry);
+        job_executor.start_poll().await?;
         Ok(Self {
             pool,
             ledger,
             import_jobs,
-            // job_execution,
+            job_executor,
         })
     }
 
@@ -65,9 +65,7 @@ impl CalaApp {
             .import_jobs
             .create_in_tx(&mut tx, new_import_job)
             .await?;
-        // self.job_execution
-        //     .register_import_job(&mut tx, &job)
-        //     .await?;
+        self.job_executor.spawn_job(&mut tx, &job).await?;
         tx.commit().await?;
         Ok(job)
     }
