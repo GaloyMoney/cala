@@ -15,15 +15,6 @@ use crate::{
 pub use config::*;
 use error::JobExecutionError;
 
-struct JobHandle(Option<tokio::task::JoinHandle<()>>);
-impl Drop for JobHandle {
-    fn drop(&mut self) {
-        if let Some(handle) = self.0.take() {
-            handle.abort();
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "JobType", rename_all = "snake_case")]
 pub enum JobType {
@@ -73,7 +64,7 @@ impl JobExecution {
                 let _ = Self::poll_jobs(
                     &pool,
                     &mut keep_alive,
-                    server_id.clone(),
+                    &server_id,
                     poll_limit,
                     pg_interval.clone(),
                     &running_jobs,
@@ -115,7 +106,7 @@ impl JobExecution {
     async fn poll_jobs(
         pool: &PgPool,
         keep_alive: &mut bool,
-        server_id: String,
+        server_id: &str,
         poll_limit: u32,
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
@@ -199,15 +190,14 @@ impl JobExecution {
         let job = import_jobs.find_by_id(ImportJobId::from(id)).await?;
         let runner = job.runner(deps);
         let all_jobs = Arc::clone(running_jobs);
-        let handle = tokio::spawn(async move {
-            let _ = runner.run().await;
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            all_jobs.write().await.remove(&id);
-        });
-        running_jobs
-            .write()
-            .await
-            .insert(id, JobHandle(Some(handle)));
+        // let handle = tokio::spawn(async move {
+        //     let _ = runner.run(None).await;
+        //     all_jobs.write().await.remove(&id);
+        // });
+        // running_jobs
+        //     .write()
+        //     .await
+        //     .insert(id, JobHandle(Some(handle)));
         Ok(())
     }
 }

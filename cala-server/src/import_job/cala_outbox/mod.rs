@@ -5,9 +5,11 @@ use async_trait::async_trait;
 use cala_ledger_outbox_client::{
     CalaLedgerOutboxClient as Client, CalaLedgerOutboxClientConfig as ClientConfig,
 };
+use serde_json::Value;
 use tracing::instrument;
 
-use super::runner::*;
+use super::runner::ImportJobRunnerDeps;
+use crate::jobs::JobRunner;
 
 pub use config::*;
 
@@ -26,7 +28,7 @@ impl CalaOutboxImportJob {
 }
 
 #[async_trait]
-impl ImportJobRunner for CalaOutboxImportJob {
+impl JobRunner for CalaOutboxImportJob {
     #[instrument(name = "import_job.cala_outbox.run", skip(self), err)]
     async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!(

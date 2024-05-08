@@ -15,11 +15,9 @@ CREATE TABLE import_job_events (
   UNIQUE(id, sequence)
 );
 
-CREATE TYPE JobType AS ENUM ('import');
-
 CREATE TABLE job_executions (
   id UUID NOT NULL UNIQUE,
-  type JobType NOT NULL,
+  job_type VARCHAR NOT NULL,
   executing_server_id VARCHAR,
   state JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
