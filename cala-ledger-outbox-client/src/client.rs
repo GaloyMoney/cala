@@ -27,7 +27,7 @@ impl CalaLedgerOutboxClient {
         })
     }
 
-    #[instrument(name = "cala_ledger.outbox_client.subscribe", skip(self))]
+    #[instrument(name = "cala_ledger_outbox_client.subscribe", skip(self))]
     pub async fn subscribe(
         &mut self,
         after_sequence: Option<u64>,

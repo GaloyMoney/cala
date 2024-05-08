@@ -14,10 +14,10 @@ impl OutboxRepo {
 
     pub async fn highest_known_sequence(&self) -> Result<EventSequence, OutboxError> {
         let row =
-            sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max" FROM cala_outbox_events"#)
+            sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max!" FROM cala_outbox_events"#)
                 .fetch_one(&self.pool)
                 .await?;
-        Ok(EventSequence::from(row.max.unwrap_or(0) as u64))
+        Ok(EventSequence::from(row.max as u64))
     }
 
     pub async fn persist_events(
@@ -56,18 +56,20 @@ impl OutboxRepo {
 
     pub async fn load_next_page(
         &self,
-        sequence: EventSequence,
+        from_sequence: EventSequence,
         buffer_size: usize,
     ) -> Result<Vec<OutboxEvent>, OutboxError> {
         let rows = sqlx::query!(
             r#"
             SELECT
               g.seq AS "sequence!: EventSequence",
-              e.id,
+              e.id AS "id?",
               e.payload AS "payload?",
               e.recorded_at AS "recorded_at?"
             FROM
-                generate_series($1 + 1, $1 + $2) AS g(seq)
+                generate_series($1 + 1,
+                  LEAST($1 + $2, (SELECT MAX(sequence) FROM cala_outbox_events)))
+                AS g(seq)
             LEFT JOIN
                 cala_outbox_events e ON g.seq = e.sequence
             WHERE
@@ -75,15 +77,20 @@ impl OutboxRepo {
             ORDER BY
                 g.seq ASC
             LIMIT $2"#,
-            sequence as EventSequence,
+            from_sequence as EventSequence,
             buffer_size as i64,
         )
         .fetch_all(&self.pool)
         .await?;
         let mut events = Vec::new();
+        let mut empty_ids = Vec::new();
         for row in rows {
+            if row.id.is_none() {
+                empty_ids.push(row.sequence);
+                continue;
+            }
             events.push(OutboxEvent {
-                id: OutboxEventId::from(row.id),
+                id: OutboxEventId::from(row.id.expect("already checked")),
                 sequence: row.sequence,
                 payload: row
                     .payload
@@ -92,6 +99,34 @@ impl OutboxRepo {
                 recorded_at: row.recorded_at.unwrap_or_default(),
             });
         }
+
+        if !empty_ids.is_empty() {
+            let rows = sqlx::query!(
+                r#"
+                INSERT INTO cala_outbox_events (sequence)
+                SELECT unnest($1::bigint[]) AS sequence
+                ON CONFLICT (sequence) DO UPDATE
+                SET sequence = EXCLUDED.sequence
+                RETURNING id, sequence AS "sequence!: EventSequence", payload, recorded_at
+            "#,
+                &empty_ids as &[EventSequence]
+            )
+            .fetch_all(&self.pool)
+            .await?;
+            for row in rows {
+                events.push(OutboxEvent {
+                    id: OutboxEventId::from(row.id),
+                    sequence: row.sequence,
+                    payload: row
+                        .payload
+                        .map(|p| serde_json::from_value(p).expect("Could not deserialize payload"))
+                        .unwrap_or(OutboxEventPayload::Empty),
+                    recorded_at: row.recorded_at,
+                });
+            }
+            events.sort_by(|a, b| a.sequence.cmp(&b.sequence));
+        }
+
         Ok(events)
     }
 }

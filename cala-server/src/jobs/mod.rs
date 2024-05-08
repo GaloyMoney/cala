@@ -156,7 +156,7 @@ impl JobExecutor {
         Ok(())
     }
 
-    #[instrument(name = "job_executor.start_job", skip(registry, running_jobs))]
+    #[instrument(name = "job_executor.start_job", skip(registry, running_jobs), err)]
     async fn start_job(
         registry: &Arc<JobRegistry>,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,

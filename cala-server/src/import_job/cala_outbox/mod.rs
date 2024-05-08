@@ -5,6 +5,7 @@ use async_trait::async_trait;
 use cala_ledger_outbox_client::{
     CalaLedgerOutboxClient as Client, CalaLedgerOutboxClientConfig as ClientConfig,
 };
+use futures::StreamExt;
 use tracing::instrument;
 
 use super::runner::ImportJobRunnerDeps;
@@ -37,8 +38,13 @@ impl JobRunner for CalaOutboxImportJob {
             self.config.endpoint
         );
         let mut client = Client::connect(ClientConfig::from(&self.config)).await?;
-        let _stream = client.subscribe(None).await?;
+        let mut stream = client.subscribe(Some(0)).await?;
         println!("created stream");
+        while let Some(event) = stream.next().await {
+            let message = event?;
+            println!("message: {:?}", message);
+        }
+
         tokio::time::sleep(tokio::time::Duration::from_secs(600)).await;
         Ok(())
     }
