@@ -8,25 +8,46 @@ mod event {
     pub use cala_types::primitives::OutboxEventId;
 }
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{postgres::PgListener, PgPool, Postgres, Transaction};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+use tokio::sync::broadcast;
 
 use error::*;
 pub use event::*;
 use listener::*;
 use repo::*;
 
+const DEFAULT_BUFFER_SIZE: usize = 100;
+
 #[derive(Clone)]
 pub struct Outbox {
     repo: OutboxRepo,
     _pool: PgPool,
+    event_sender: broadcast::Sender<OutboxEvent>,
+    event_receiver: Arc<broadcast::Receiver<OutboxEvent>>,
+    highest_known_sequence: Arc<AtomicU64>,
+    buffer_size: usize,
 }
 
 impl Outbox {
-    pub fn new(pool: &PgPool) -> Self {
-        Self {
-            repo: OutboxRepo::new(pool),
+    pub async fn init(pool: &PgPool) -> Result<Self, OutboxError> {
+        let buffer_size = DEFAULT_BUFFER_SIZE;
+        let (sender, recv) = broadcast::channel(buffer_size);
+        let repo = OutboxRepo::new(pool);
+        let highest_known_sequence =
+            Arc::new(AtomicU64::from(repo.highest_known_sequence().await?));
+        Self::spawn_pg_listener(pool, sender.clone(), Arc::clone(&highest_known_sequence)).await?;
+        Ok(Self {
+            event_sender: sender,
+            event_receiver: Arc::new(recv),
+            repo,
+            highest_known_sequence,
             _pool: pool.clone(),
-        }
+            buffer_size,
+        })
     }
 
     pub(crate) async fn persist_events(
@@ -34,29 +55,60 @@ impl Outbox {
         mut tx: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) -> Result<(), OutboxError> {
-        self.repo
+        let events = self
+            .repo
             .persist_events(&mut tx, events.into_iter().map(Into::into))
             .await?;
         tx.commit().await?;
+
+        let mut new_highest_sequence = EventSequence::BEGIN;
+        for event in events {
+            new_highest_sequence = event.sequence;
+            self.event_sender
+                .send(event)
+                .map_err(|_| OutboxError::SendEventError)?;
+        }
+        self.highest_known_sequence
+            .fetch_max(u64::from(new_highest_sequence), Ordering::AcqRel);
         Ok(())
     }
 
     pub async fn register_listener(
         &self,
-        _start_after: Option<EventSequence>,
+        start_after: Option<EventSequence>,
     ) -> Result<OutboxListener, OutboxError> {
-        unimplemented!()
-        // let sub = self.event_receiver.resubscribe();
-        // let latest_known = self.sequences_for(account_id).await?.read().await.0;
-        // let start = start_after.unwrap_or(latest_known);
-        // Ok(OutboxListener::new(
-        //     self.repo.clone(),
-        //     augment.then(|| self.augmenter.clone()),
-        //     sub,
-        //     account_id,
-        //     start,
-        //     latest_known,
-        //     self.buffer_size,
-        // ))
+        let sub = self.event_receiver.resubscribe();
+        let latest_known = EventSequence::from(self.highest_known_sequence.load(Ordering::Relaxed));
+        let start = start_after.unwrap_or(latest_known);
+        Ok(OutboxListener::new(
+            self.repo.clone(),
+            sub,
+            start,
+            latest_known,
+            self.buffer_size,
+        ))
+    }
+
+    async fn spawn_pg_listener(
+        pool: &PgPool,
+        sender: broadcast::Sender<OutboxEvent>,
+        highest_known_sequence: Arc<AtomicU64>,
+    ) -> Result<(), OutboxError> {
+        let mut listener = PgListener::connect_with(pool).await?;
+        listener.listen("cala_outbox_events").await?;
+        tokio::spawn(async move {
+            loop {
+                if let Ok(notification) = listener.recv().await {
+                    if let Ok(event) = serde_json::from_str::<OutboxEvent>(notification.payload()) {
+                        let new_highest_sequence = u64::from(event.sequence);
+                        highest_known_sequence.fetch_max(new_highest_sequence, Ordering::AcqRel);
+                        if sender.send(event).is_err() {
+                            break;
+                        }
+                    }
+                }
+            }
+        });
+        Ok(())
     }
 }

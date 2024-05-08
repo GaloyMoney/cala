@@ -13,18 +13,22 @@ pub use config::*;
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,
+    _deps: ImportJobRunnerDeps,
 }
 
 impl CalaOutboxImportJob {
-    pub fn new(config: CalaOutboxImportConfig) -> Self {
-        Self { config }
+    pub fn new(config: CalaOutboxImportConfig, deps: &ImportJobRunnerDeps) -> Self {
+        Self {
+            config,
+            _deps: deps.clone(),
+        }
     }
 }
 
 #[async_trait]
 impl ImportJobRunner for CalaOutboxImportJob {
-    #[instrument(name = "import_job.cala_outbox.run", skip(self, _deps), err)]
-    async fn run(&self, _deps: ImportJobRunnerDeps) -> Result<(), Box<dyn std::error::Error>> {
+    #[instrument(name = "import_job.cala_outbox.run", skip(self), err)]
+    async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Running CalaOutboxImportJob with endpoint: {}",
             self.config.endpoint

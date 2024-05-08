@@ -13,6 +13,9 @@ setup-db:
 
 reset-deps: clean-deps start-deps setup-db
 
+run-server:
+	cargo run --bin cala-server
+
 rust-example:
 	cargo run --bin cala-ledger-example-rust
 

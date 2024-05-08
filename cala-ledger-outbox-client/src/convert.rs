@@ -43,6 +43,7 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     journal.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::Empty(_) => Empty,
         };
         Ok(res)
     }

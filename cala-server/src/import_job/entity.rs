@@ -34,9 +34,9 @@ pub struct ImportJob {
 }
 
 impl ImportJob {
-    pub fn runner(&self) -> Box<dyn ImportJobRunner> {
+    pub fn runner(&self, deps: &ImportJobRunnerDeps) -> Box<dyn ImportJobRunner> {
         let ImportJobConfig::CalaOutbox(config) = &self.config;
-        Box::new(CalaOutboxImportJob::new(config.clone()))
+        Box::new(CalaOutboxImportJob::new(config.clone(), deps))
     }
 }
 

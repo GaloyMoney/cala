@@ -32,6 +32,7 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                     journal: Some(proto::Journal::from(journal)),
                 })
             }
+            OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
         };
         proto::CalaLedgerEvent {
             id: id.to_string(),
