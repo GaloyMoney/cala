@@ -4,8 +4,10 @@
 pub mod account;
 pub mod entity;
 pub mod journal;
-mod ledger;
 pub mod migrate;
+pub mod tx_template;
+
+mod ledger;
 mod outbox;
 
 pub use ledger::*;
