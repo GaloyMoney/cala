@@ -3,6 +3,7 @@ pub mod error;
 
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
+use uuid::Uuid;
 
 pub use config::*;
 use error::*;
@@ -12,6 +13,7 @@ use crate::{
     journal::Journals,
     outbox::{server, Outbox},
 };
+use cala_types::outbox::OutboxEvent;
 
 #[derive(Clone)]
 pub struct CalaLedger {
@@ -65,6 +67,14 @@ impl CalaLedger {
 
     pub fn journals(&self) -> &Journals {
         &self.journals
+    }
+
+    pub async fn sync_outbox_event(
+        &self,
+        source_id: Uuid,
+        event: OutboxEvent,
+    ) -> Result<(), LedgerError> {
+        Ok(())
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {

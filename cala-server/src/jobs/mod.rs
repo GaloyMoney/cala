@@ -1,4 +1,5 @@
 mod config;
+mod current;
 pub mod error;
 mod registry;
 mod traits;
@@ -11,6 +12,7 @@ use uuid::Uuid;
 use std::{collections::HashMap, sync::Arc};
 
 pub use config::*;
+pub use current::*;
 use error::JobExecutorError;
 pub use registry::*;
 pub use traits::*;
@@ -166,7 +168,8 @@ impl JobExecutor {
         let runner = registry.init_job(job_type, id).await?;
         let all_jobs = Arc::clone(running_jobs);
         let handle = tokio::spawn(async move {
-            let _ = runner.run().await;
+            let current_job = CurrentJob::new(id);
+            let _ = runner.run(current_job).await;
             all_jobs.write().await.remove(&id);
         });
         running_jobs

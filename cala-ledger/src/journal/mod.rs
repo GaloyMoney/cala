@@ -5,7 +5,7 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{entity::*, outbox::*};
+use crate::{entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -47,6 +47,7 @@ impl From<&JournalEvent> for OutboxEventPayload {
     fn from(event: &JournalEvent) -> Self {
         match event {
             JournalEvent::Initialized { values: journal } => OutboxEventPayload::JournalCreated {
+                source: DataSource::Local,
                 journal: journal.clone(),
             },
         }

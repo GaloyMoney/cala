@@ -7,7 +7,7 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{entity::*, outbox::*, query::*};
+use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
 
 pub use cursor::*;
 pub use entity::*;
@@ -57,6 +57,7 @@ impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
         match event {
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
+                source: DataSource::Local,
                 account: account.clone(),
             },
         }

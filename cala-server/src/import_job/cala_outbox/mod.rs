@@ -9,7 +9,7 @@ use futures::StreamExt;
 use tracing::instrument;
 
 use super::runner::ImportJobRunnerDeps;
-use crate::jobs::JobRunner;
+use crate::jobs::{CurrentJob, JobRunner};
 
 pub use config::*;
 
@@ -31,8 +31,8 @@ impl CalaOutboxImportJob {
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "import_job.cala_outbox.run", skip(self), err)]
-    async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    #[instrument(name = "import_job.cala_outbox.run", skip(self, current_job), err)]
+    async fn run(&self, current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Running CalaOutboxImportJob with endpoint: {}",
             self.config.endpoint
@@ -40,8 +40,7 @@ impl JobRunner for CalaOutboxImportJob {
         let mut client = Client::connect(ClientConfig::from(&self.config)).await?;
         let mut stream = client.subscribe(Some(0)).await?;
         println!("created stream");
-        while let Some(event) = stream.next().await {
-            let message = event?;
+        while let Some(Ok(message)) = stream.next().await {
             println!("message: {:?}", message);
         }
 

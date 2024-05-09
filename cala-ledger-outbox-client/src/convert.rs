@@ -30,15 +30,19 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
         use cala_types::outbox::OutboxEventPayload::*;
         let res = match payload {
             proto::cala_ledger_event::Payload::AccountCreated(proto::AccountCreated {
+                data_source_id,
                 account,
             }) => AccountCreated {
+                source: data_source_id.parse()?,
                 account: AccountValues::try_from(
                     account.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
             proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
+                data_source_id,
                 journal,
             }) => JournalCreated {
+                source: data_source_id.parse()?,
                 journal: JournalValues::try_from(
                     journal.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
