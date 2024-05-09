@@ -70,6 +70,13 @@ impl Accounts {
 impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
         match event {
+            AccountEvent::Imported {
+                source,
+                values: account,
+            } => OutboxEventPayload::AccountCreated {
+                source: *source,
+                account: account.clone(),
+            },
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
                 source: DataSource::Local,
                 account: account.clone(),

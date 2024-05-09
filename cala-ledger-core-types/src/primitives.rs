@@ -68,7 +68,7 @@ impl std::str::FromStr for Tag {
 
 const _LOCAL_UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Copy, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DataSource {
     Local,

@@ -7,7 +7,13 @@ pub use cala_types::{account::*, primitives::AccountId};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AccountEvent {
-    Initialized { values: AccountValues },
+    Imported {
+        source: DataSource,
+        values: AccountValues,
+    },
+    Initialized {
+        values: AccountValues,
+    },
 }
 
 impl EntityEvent for AccountEvent {
@@ -21,6 +27,7 @@ impl EntityEvent for AccountEvent {
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct Account {
     values: AccountValues,
+    pub source: DataSource,
     pub(super) events: EntityEvents<AccountEvent>,
 }
 
@@ -50,7 +57,10 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
         for event in events.iter() {
             match event {
                 AccountEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.source(DataSource::Local).values(values.clone());
+                }
+                AccountEvent::Imported { source, values } => {
+                    builder = builder.source(*source).values(values.clone());
                 }
             }
         }
