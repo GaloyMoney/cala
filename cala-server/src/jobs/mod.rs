@@ -152,7 +152,7 @@ impl JobExecutor {
         span.record("n_jobs_to_spawn", rows.len());
         if !rows.is_empty() {
             for row in rows {
-                let _ = Self::start_job(registry, running_jobs, &row.job_type, row.id).await;
+                let _ = Self::start_job(pool, registry, running_jobs, &row.job_type, row.id).await;
             }
         }
         Ok(())
@@ -160,6 +160,7 @@ impl JobExecutor {
 
     #[instrument(name = "job_executor.start_job", skip(registry, running_jobs), err)]
     async fn start_job(
+        pool: &PgPool,
         registry: &Arc<JobRegistry>,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
         job_type: &str,
@@ -167,8 +168,9 @@ impl JobExecutor {
     ) -> Result<(), JobExecutorError> {
         let runner = registry.init_job(job_type, id).await?;
         let all_jobs = Arc::clone(running_jobs);
+        let pool = pool.clone();
         let handle = tokio::spawn(async move {
-            let current_job = CurrentJob::new(id);
+            let current_job = CurrentJob::new(id, pool);
             let _ = runner.run(current_job).await;
             all_jobs.write().await.remove(&id);
         });

@@ -3,6 +3,7 @@ pub mod error;
 
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
+use tracing::instrument;
 
 pub use config::*;
 use error::*;
@@ -69,11 +70,24 @@ impl CalaLedger {
         &self.journals
     }
 
+    #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, tx))]
     pub async fn sync_outbox_event(
         &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         event: OutboxEvent,
     ) -> Result<(), LedgerError> {
+        use crate::outbox::OutboxEventPayload::*;
+
+        match event.payload {
+            Empty => (),
+            AccountCreated { account, .. } => {
+                self.accounts
+                    .sync_account_creation(tx, origin, account)
+                    .await?
+            }
+            JournalCreated { journal, .. } => (),
+        }
         Ok(())
     }
 

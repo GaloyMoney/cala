@@ -41,9 +41,11 @@ impl JobRunner for CalaOutboxImportJob {
         let mut client = Client::connect(ClientConfig::from(&self.config)).await?;
         let mut stream = client.subscribe(Some(0)).await?;
         while let Some(Ok(message)) = stream.next().await {
+            let mut tx = current_job.pool().begin().await?;
             self.ledger
-                .sync_outbox_event(DataSourceId::from(current_job.id), message)
+                .sync_outbox_event(&mut tx, DataSourceId::from(current_job.id()), message)
                 .await?;
+            tx.commit().await?;
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(600)).await;

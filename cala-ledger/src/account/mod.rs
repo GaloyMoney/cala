@@ -7,7 +7,12 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
+use crate::{
+    entity::*,
+    outbox::*,
+    primitives::{DataSource, DataSourceId},
+    query::*,
+};
 
 pub use cursor::*;
 pub use entity::*;
@@ -50,6 +55,15 @@ impl Accounts {
         query: PaginatedQueryArgs<AccountByNameCursor>,
     ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
         self.repo.list(query).await
+    }
+
+    pub async fn sync_account_creation(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        values: AccountValues,
+    ) -> Result<(), AccountError> {
+        Ok(())
     }
 }
 

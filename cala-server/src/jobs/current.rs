@@ -1,11 +1,21 @@
+use sqlx::PgPool;
 use uuid::Uuid;
 
 pub struct CurrentJob {
-    pub id: Uuid,
+    id: Uuid,
+    pool: PgPool,
 }
 
 impl CurrentJob {
-    pub(super) fn new(id: Uuid) -> Self {
-        Self { id }
+    pub(super) fn new(id: Uuid, pool: PgPool) -> Self {
+        Self { id, pool }
+    }
+
+    pub fn id(&self) -> Uuid {
+        self.id
+    }
+
+    pub fn pool(&self) -> &PgPool {
+        &self.pool
     }
 }
