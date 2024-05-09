@@ -667,6 +667,7 @@ dependencies = [
 name = "cala-ledger-outbox-client"
 version = "0.1.0"
 dependencies = [
+ "cala-cel-interpreter",
  "cala-ledger-core-types",
  "futures",
  "prost",

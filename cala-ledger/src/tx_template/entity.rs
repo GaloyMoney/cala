@@ -23,7 +23,7 @@ impl EntityEvent for TxTemplateEvent {
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct TxTemplate {
     values: TxTemplateValues,
-    pub(super) _events: EntityEvents<TxTemplateEvent>,
+    pub(super) events: EntityEvents<TxTemplateEvent>,
 }
 
 impl Entity for TxTemplate {
@@ -56,7 +56,7 @@ impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
                 }
             }
         }
-        builder._events(events).build()
+        builder.events(events).build()
     }
 }
 
@@ -233,14 +233,27 @@ impl NewTxInputBuilder {
 }
 
 impl From<NewTxInput> for cala_types::tx_template::TxInput {
-    fn from(input: NewTxInput) -> Self {
+    fn from(
+        NewTxInput {
+            effective,
+            journal_id,
+            correlation_id,
+            external_id,
+            description,
+            metadata,
+        }: NewTxInput,
+    ) -> Self {
         cala_types::tx_template::TxInput {
-            effective: input.effective,
-            journal_id: input.journal_id,
-            correlation_id: input.correlation_id,
-            external_id: input.external_id,
-            description: input.description,
-            metadata: input.metadata,
+            effective: CelExpression::try_from(effective).expect("always a valid effective date"),
+            journal_id: CelExpression::try_from(journal_id).expect("always a valid journal id"),
+            correlation_id: correlation_id
+                .map(|c| CelExpression::try_from(c).expect("always a valid correlation id")),
+            external_id: external_id
+                .map(|id| CelExpression::try_from(id).expect("always a valid external id")),
+            description: description
+                .map(|d| CelExpression::try_from(d).expect("always a valid description")),
+            metadata: metadata
+                .map(|m| CelExpression::try_from(m).expect("always a valid metadata")),
         }
     }
 }

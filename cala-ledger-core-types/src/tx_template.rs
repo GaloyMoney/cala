@@ -7,10 +7,10 @@ use super::primitives::*;
 pub struct TxTemplateValues {
     pub id: TxTemplateId,
     pub code: String,
-    pub description: Option<String>,
     pub params: Option<Vec<ParamDefinition>>,
     pub tx_input: TxInput,
     pub entries: Vec<EntryInput>,
+    pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -35,12 +35,12 @@ pub struct EntryInput {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxInput {
-    pub effective: String,
-    pub journal_id: String,
-    pub correlation_id: Option<String>,
-    pub external_id: Option<String>,
-    pub description: Option<String>,
-    pub metadata: Option<String>,
+    pub effective: CelExpression,
+    pub journal_id: CelExpression,
+    pub correlation_id: Option<CelExpression>,
+    pub external_id: Option<CelExpression>,
+    pub description: Option<CelExpression>,
+    pub metadata: Option<CelExpression>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
@@ -55,7 +55,6 @@ pub enum ParamDataType {
     JSON,
 }
 
-// need a place to handle this
 impl TryFrom<&CelValue> for ParamDataType {
     type Error = String;
 

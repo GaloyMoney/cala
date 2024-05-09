@@ -9,6 +9,7 @@ fail-on-warnings = []
 
 [dependencies]
 cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
+cala-cel-interpreter = { path = "../cala-cel-interpreter" }
 
 futures = { workspace = true }
 uuid = { workspace = true }
