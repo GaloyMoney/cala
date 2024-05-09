@@ -1,5 +1,7 @@
 mod config;
 pub mod error;
+mod registry;
+mod traits;
 
 use sqlx::{postgres::types::PgInterval, PgPool, Postgres, Transaction};
 use tokio::sync::RwLock;
@@ -8,77 +10,74 @@ use uuid::Uuid;
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{
-    import_job::{error::ImportJobError, *},
-    primitives::*,
-};
 pub use config::*;
-use error::JobExecutionError;
-
-struct JobHandle(Option<tokio::task::JoinHandle<()>>);
-impl Drop for JobHandle {
-    fn drop(&mut self) {
-        if let Some(handle) = self.0.take() {
-            handle.abort();
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, sqlx::Type)]
-#[sqlx(type_name = "JobType", rename_all = "snake_case")]
-pub enum JobType {
-    Import,
-}
+use error::JobExecutorError;
+pub use registry::*;
+pub use traits::*;
 
 #[derive(Clone)]
-pub struct JobExecution {
+pub struct JobExecutor {
+    config: JobExecutorConfig,
     pool: PgPool,
-    import_jobs: ImportJobs,
-    import_job_runner_deps: ImportJobRunnerDeps,
-    config: JobExecutionConfig,
+    registry: Arc<JobRegistry>,
     poller_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     running_jobs: Arc<RwLock<HashMap<Uuid, JobHandle>>>,
 }
 
-impl JobExecution {
-    pub fn new(
-        pool: &PgPool,
-        config: JobExecutionConfig,
-        import_jobs: ImportJobs,
-        import_job_runner_deps: ImportJobRunnerDeps,
-    ) -> Self {
+impl JobExecutor {
+    pub fn new(pool: &PgPool, config: JobExecutorConfig, registry: JobRegistry) -> Self {
         Self {
             pool: pool.clone(),
             poller_handle: None,
             config,
-            import_jobs,
-            import_job_runner_deps,
+            registry: Arc::new(registry),
             running_jobs: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
-    pub async fn start_poll(&mut self) -> Result<(), JobExecutionError> {
+    pub async fn spawn_job<T: Into<JobTemplate>>(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        job: T,
+    ) -> Result<(), JobExecutorError> {
+        let template: JobTemplate = job.into();
+        if !self.registry.initializer_exists(template.job_type) {
+            return Err(JobExecutorError::InvalidJobType(template.job_type));
+        }
+
+        sqlx::query!(
+            r#"
+          INSERT INTO job_executions (id, job_type)
+          VALUES ($1, $2)
+        "#,
+            template.id,
+            template.job_type
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn start_poll(&mut self) -> Result<(), JobExecutorError> {
         let pool = self.pool.clone();
         let server_id = self.config.server_id.clone();
         let poll_interval = self.config.poll_interval;
         let pg_interval = PgInterval::try_from(poll_interval * 4)
-            .map_err(|e| JobExecutionError::InvalidPollInterval(e.to_string()))?;
+            .map_err(|e| JobExecutorError::InvalidPollInterval(e.to_string()))?;
         let running_jobs = Arc::clone(&self.running_jobs);
-        let import_jobs = self.import_jobs.clone();
-        let import_job_runner_deps = self.import_job_runner_deps.clone();
+        let registry = Arc::clone(&self.registry);
         let handle = tokio::spawn(async move {
             let poll_limit = 2;
             let mut keep_alive = false;
             loop {
                 let _ = Self::poll_jobs(
                     &pool,
+                    &registry,
                     &mut keep_alive,
-                    server_id.clone(),
+                    &server_id,
                     poll_limit,
                     pg_interval.clone(),
                     &running_jobs,
-                    &import_jobs,
-                    &import_job_runner_deps,
                 )
                 .await;
                 tokio::time::sleep(poll_interval).await;
@@ -88,40 +87,21 @@ impl JobExecution {
         Ok(())
     }
 
-    pub async fn register_import_job(
-        &self,
-        tx: &mut Transaction<'_, Postgres>,
-        job: &ImportJob,
-    ) -> Result<(), JobExecutionError> {
-        sqlx::query!(
-            r#"
-          INSERT INTO job_executions (id, type)
-          VALUES ($1, 'import')
-        "#,
-            job.id as ImportJobId,
-        )
-        .execute(&mut **tx)
-        .await?;
-        Ok(())
-    }
-
-    #[allow(clippy::too_many_arguments)]
     #[instrument(
-        name = "job_execution.poll_jobs",
-        skip(pool, running_jobs, import_jobs, import_job_runner_deps,),
+        name = "job_executor.poll_jobs",
+        skip(pool, registry, running_jobs),
         fields(n_jobs_to_spawn, n_jobs_running),
         err
     )]
     async fn poll_jobs(
         pool: &PgPool,
+        registry: &Arc<JobRegistry>,
         keep_alive: &mut bool,
-        server_id: String,
+        server_id: &str,
         poll_limit: u32,
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
-        import_jobs: &ImportJobs,
-        import_job_runner_deps: &ImportJobRunnerDeps,
-    ) -> Result<(), JobExecutionError> {
+    ) -> Result<(), JobExecutorError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);
         {
@@ -159,7 +139,7 @@ impl JobExecution {
                   executing_server_id = $1
               FROM selected_jobs
               WHERE je.id = selected_jobs.id
-              RETURNING je.id, je.type AS "job_type: JobType"
+              RETURNING je.id, je.job_type
               "#,
             server_id,
             poll_limit as i32,
@@ -170,38 +150,23 @@ impl JobExecution {
         span.record("n_jobs_to_spawn", rows.len());
         if !rows.is_empty() {
             for row in rows {
-                let id = row.id;
-                let job_type = row.job_type;
-                let _ = Self::spawn_job(
-                    running_jobs,
-                    id,
-                    job_type,
-                    import_job_runner_deps,
-                    import_jobs,
-                )
-                .await;
+                let _ = Self::start_job(registry, running_jobs, &row.job_type, row.id).await;
             }
         }
         Ok(())
     }
 
-    #[instrument(
-        name = "job_execution.spawn_job",
-        skip(running_jobs, deps, import_jobs)
-    )]
-    async fn spawn_job(
+    #[instrument(name = "job_executor.start_job", skip(registry, running_jobs), err)]
+    async fn start_job(
+        registry: &Arc<JobRegistry>,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
+        job_type: &str,
         id: Uuid,
-        _job_type: JobType,
-        deps: &ImportJobRunnerDeps,
-        import_jobs: &ImportJobs,
-    ) -> Result<(), ImportJobError> {
-        let job = import_jobs.find_by_id(ImportJobId::from(id)).await?;
-        let runner = job.runner(deps);
+    ) -> Result<(), JobExecutorError> {
+        let runner = registry.init_job(job_type, id).await?;
         let all_jobs = Arc::clone(running_jobs);
         let handle = tokio::spawn(async move {
             let _ = runner.run().await;
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
             all_jobs.write().await.remove(&id);
         });
         running_jobs
@@ -212,9 +177,10 @@ impl JobExecution {
     }
 }
 
-impl Drop for JobExecution {
+struct JobHandle(Option<tokio::task::JoinHandle<()>>);
+impl Drop for JobHandle {
     fn drop(&mut self) {
-        if let Some(handle) = self.poller_handle.take() {
+        if let Some(handle) = self.0.take() {
             handle.abort();
         }
     }

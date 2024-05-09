@@ -106,7 +106,12 @@ impl Stream for OutboxListener {
             let last_sequence = self.last_returned_sequence;
             let buffer_size = self.buffer_size;
             self.next_page_handle = Some(tokio::spawn(async move {
-                repo.load_next_page(last_sequence, buffer_size).await
+                repo.load_next_page(last_sequence, buffer_size)
+                    .await
+                    .map_err(|e| {
+                        eprintln!("Error loading next page: {:?}", e);
+                        e
+                    })
             }));
             return self.poll_next(cx);
         }

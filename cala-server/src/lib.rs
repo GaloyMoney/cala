@@ -5,6 +5,6 @@ pub mod app;
 pub mod cli;
 pub mod graphql;
 pub mod import_job;
-mod job_execution;
+mod jobs;
 pub mod primitives;
 pub mod server;

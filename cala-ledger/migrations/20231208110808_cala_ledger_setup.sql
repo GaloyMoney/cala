@@ -54,7 +54,7 @@ CREATE TABLE cala_journal_events (
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,
-  payload JSONB NOT NULL,
+  payload JSONB,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
