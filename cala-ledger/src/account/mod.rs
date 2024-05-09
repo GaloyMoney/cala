@@ -7,12 +7,9 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{
-    entity::*,
-    outbox::*,
-    primitives::{DataSource, DataSourceId},
-    query::*,
-};
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
+use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
 
 pub use cursor::*;
 pub use entity::*;
@@ -57,19 +54,22 @@ impl Accounts {
         self.repo.list(query).await
     }
 
+    #[cfg(feature = "import")]
     pub async fn sync_account_creation(
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         values: AccountValues,
     ) -> Result<(), AccountError> {
-        Ok(())
+        let account = Account::import(origin, values);
+        self.repo.import(tx, origin, account).await
     }
 }
 
 impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
         match event {
+            #[cfg(feature = "import")]
             AccountEvent::Imported {
                 source,
                 values: account,

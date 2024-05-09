@@ -2,6 +2,7 @@ use thiserror::Error;
 
 use crate::{
     account::error::AccountError,
+    journal::error::JournalError,
     outbox::{error::OutboxError, server::error::OutboxServerError},
 };
 
@@ -19,4 +20,6 @@ pub enum LedgerError {
     OutboxServer(#[from] OutboxServerError),
     #[error("LedgerError - AccountError: {0}")]
     AccountError(#[from] AccountError),
+    #[error("LedgerError - JournalError: {0}")]
+    JournalError(#[from] JournalError),
 }

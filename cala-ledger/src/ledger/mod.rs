@@ -3,7 +3,6 @@ pub mod error;
 
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
-use tracing::instrument;
 
 pub use config::*;
 use error::*;
@@ -12,9 +11,15 @@ use crate::{
     account::Accounts,
     journal::Journals,
     outbox::{server, Outbox},
-    primitives::DataSourceId,
 };
-use cala_types::outbox::OutboxEvent;
+#[cfg(feature = "import")]
+mod import_deps {
+    pub use crate::primitives::DataSourceId;
+    pub use cala_types::outbox::OutboxEvent;
+    pub use tracing::instrument;
+}
+#[cfg(feature = "import")]
+use import_deps::*;
 
 #[derive(Clone)]
 pub struct CalaLedger {
@@ -70,6 +75,7 @@ impl CalaLedger {
         &self.journals
     }
 
+    #[cfg(feature = "import")]
     #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, tx))]
     pub async fn sync_outbox_event(
         &self,
@@ -86,7 +92,11 @@ impl CalaLedger {
                     .sync_account_creation(tx, origin, account)
                     .await?
             }
-            JournalCreated { journal, .. } => (),
+            JournalCreated { journal, .. } => {
+                self.journals
+                    .sync_journal_creation(tx, origin, journal)
+                    .await?
+            }
         }
         Ok(())
     }

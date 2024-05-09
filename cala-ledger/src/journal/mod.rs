@@ -5,6 +5,8 @@ mod repo;
 use sqlx::PgPool;
 use tracing::instrument;
 
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
 use crate::{entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
@@ -41,14 +43,30 @@ impl Journals {
             .await?;
         Ok(journal)
     }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_journal_creation(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        values: JournalValues,
+    ) -> Result<(), JournalError> {
+        let journal = Journal::import(origin, values);
+        self.repo.import(tx, origin, journal).await
+    }
 }
 
 impl From<&JournalEvent> for OutboxEventPayload {
     fn from(event: &JournalEvent) -> Self {
         match event {
-            JournalEvent::Initialized { values: journal } => OutboxEventPayload::JournalCreated {
+            #[cfg(feature = "import")]
+            JournalEvent::Imported { source, values } => OutboxEventPayload::JournalCreated {
+                source: *source,
+                journal: values.clone(),
+            },
+            JournalEvent::Initialized { values } => OutboxEventPayload::JournalCreated {
                 source: DataSource::Local,
-                journal: journal.clone(),
+                journal: values.clone(),
             },
         }
     }
