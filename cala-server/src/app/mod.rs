@@ -25,11 +25,13 @@ impl CalaApp {
         ledger: CalaLedger,
     ) -> Result<Self, ApplicationError> {
         let import_jobs = ImportJobs::new(&pool);
-        let import_deps = ImportJobRunnerDeps {};
         let mut registry = JobRegistry::new();
         registry.add_initializer(
             CALA_OUTBOX_IMPORT_JOB_TYPE,
-            Box::new(ImportJobInitializer::new(import_jobs.clone(), import_deps)),
+            Box::new(ImportJobInitializer::new(
+                import_jobs.clone(),
+                ledger.clone(),
+            )),
         );
         let mut job_executor = JobExecutor::new(&pool, config.job_execution.clone(), registry);
         job_executor.start_poll().await?;

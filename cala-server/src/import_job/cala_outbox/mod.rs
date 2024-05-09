@@ -8,7 +8,8 @@ use cala_ledger_outbox_client::{
 use futures::StreamExt;
 use tracing::instrument;
 
-use super::runner::ImportJobRunnerDeps;
+use cala_ledger::{primitives::DataSourceId, CalaLedger};
+
 use crate::jobs::{CurrentJob, JobRunner};
 
 pub use config::*;
@@ -17,14 +18,14 @@ pub const CALA_OUTBOX_IMPORT_JOB_TYPE: &str = "cala-outbox-import-job";
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,
-    _deps: ImportJobRunnerDeps,
+    ledger: CalaLedger,
 }
 
 impl CalaOutboxImportJob {
-    pub fn new(config: CalaOutboxImportConfig, deps: &ImportJobRunnerDeps) -> Self {
+    pub fn new(config: CalaOutboxImportConfig, ledger: &CalaLedger) -> Self {
         Self {
             config,
-            _deps: deps.clone(),
+            ledger: ledger.clone(),
         }
     }
 }
@@ -39,9 +40,10 @@ impl JobRunner for CalaOutboxImportJob {
         );
         let mut client = Client::connect(ClientConfig::from(&self.config)).await?;
         let mut stream = client.subscribe(Some(0)).await?;
-        println!("created stream");
         while let Some(Ok(message)) = stream.next().await {
-            println!("message: {:?}", message);
+            self.ledger
+                .sync_outbox_event(DataSourceId::from(current_job.id), message)
+                .await?;
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(600)).await;

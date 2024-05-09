@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
+use cala_ledger::CalaLedger;
+
 use crate::{
     jobs::{JobInitializer, JobRunner},
     primitives::ImportJobId,
@@ -8,17 +10,14 @@ use crate::{
 
 use super::ImportJobs;
 
-#[derive(Clone)]
-pub struct ImportJobRunnerDeps {}
-
 pub struct ImportJobInitializer {
     repo: ImportJobs,
-    deps: ImportJobRunnerDeps,
+    ledger: CalaLedger,
 }
 
 impl ImportJobInitializer {
-    pub fn new(repo: ImportJobs, deps: ImportJobRunnerDeps) -> Self {
-        Self { repo, deps }
+    pub fn new(repo: ImportJobs, ledger: CalaLedger) -> Self {
+        Self { repo, ledger }
     }
 }
 
@@ -29,6 +28,6 @@ impl JobInitializer for ImportJobInitializer {
             .repo
             .find_by_id(ImportJobId::from(id))
             .await?
-            .runner(&self.deps))
+            .runner(&self.ledger))
     }
 }
