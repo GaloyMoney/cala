@@ -5,7 +5,7 @@ use cala_types::primitives::Tag;
 use super::{cursor::*, entity::*, error::*};
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, query::*};
+use crate::{entity::*, primitives::DataSource, query::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountRepo {
@@ -35,7 +35,7 @@ impl AccountRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_account.initial_events();
-        let n_new_events = events.persist(tx).await?;
+        let n_new_events = events.persist(tx, DataSource::Local).await?;
         let account = Account::try_from(events)?;
         Ok(EntityUpdate {
             entity: account,
@@ -102,7 +102,7 @@ impl AccountRepo {
         )
         .execute(&mut **tx)
         .await?;
-        account.events.persist(tx).await?;
+        account.events.persist(tx, origin).await?;
         Ok(())
     }
 }

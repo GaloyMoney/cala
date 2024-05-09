@@ -2,6 +2,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use sqlx::Row;
 
 use super::error::EntityError;
+use crate::primitives::DataSourceId;
 
 #[derive(sqlx::Type)]
 pub struct GenericEvent {
@@ -95,8 +96,10 @@ where
     pub async fn persist(
         &mut self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        data_source: impl Into<Option<DataSourceId>>,
     ) -> Result<usize, sqlx::Error> {
         let uuid: uuid::Uuid = self.entity_id.into();
+        let source_id = data_source.into();
         let mut events = Vec::new();
         std::mem::swap(&mut events, &mut self.new_events);
 
@@ -105,8 +108,9 @@ where
         }
 
         let mut query_builder = sqlx::QueryBuilder::new(format!(
-            "INSERT INTO {} (id, sequence, event_type, event)",
+            "INSERT INTO {} ({}id, sequence, event_type, event)",
             <T as EntityEvent>::event_table_name(),
+            source_id.map(|_| "data_source_id, ").unwrap_or(""),
         ));
 
         let sequence = self.persisted_events.len() + 1;
@@ -119,6 +123,9 @@ where
                 .and_then(serde_json::Value::as_str)
                 .expect("Could not get type")
                 .to_owned();
+            if let Some(source_id) = source_id {
+                builder.push_bind(source_id);
+            }
             builder.push_bind(uuid);
             builder.push_bind((sequence + offset) as i32);
             builder.push_bind(event_type);

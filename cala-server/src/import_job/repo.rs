@@ -29,7 +29,7 @@ impl ImportJobs {
         .execute(&mut **tx)
         .await?;
         let mut events = new_import_job.initial_events();
-        events.persist(tx).await?;
+        events.persist(tx, None).await?;
         let import_job = ImportJob::try_from(events)?;
         Ok(import_job)
     }

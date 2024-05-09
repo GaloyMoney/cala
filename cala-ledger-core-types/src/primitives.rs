@@ -75,6 +75,15 @@ pub enum DataSource {
     Remote { id: DataSourceId },
 }
 
+impl From<DataSource> for Option<DataSourceId> {
+    fn from(source: DataSource) -> Self {
+        match source {
+            DataSource::Local => None,
+            DataSource::Remote { id } => Some(id),
+        }
+    }
+}
+
 impl std::fmt::Display for DataSource {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

@@ -1,9 +1,9 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{entity::*, error::*};
-use crate::entity::*;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
+use crate::{entity::*, primitives::DataSource};
 
 #[derive(Debug, Clone)]
 pub(super) struct JournalRepo {
@@ -33,7 +33,7 @@ impl JournalRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_journal.initial_events();
-        let n_new_events = events.persist(tx).await?;
+        let n_new_events = events.persist(tx, DataSource::Local).await?;
         let journal = Journal::try_from(events)?;
         Ok(EntityUpdate {
             entity: journal,
@@ -58,7 +58,7 @@ impl JournalRepo {
         )
         .execute(&mut **tx)
         .await?;
-        journal.events.persist(tx).await?;
+        journal.events.persist(tx, origin).await?;
         Ok(())
     }
 }
