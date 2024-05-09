@@ -8,8 +8,9 @@ use cala_ledger_outbox_client::{
 use futures::StreamExt;
 use tracing::instrument;
 
-use super::runner::ImportJobRunnerDeps;
-use crate::jobs::JobRunner;
+use cala_ledger::{primitives::DataSourceId, CalaLedger};
+
+use crate::jobs::{CurrentJob, JobRunner};
 
 pub use config::*;
 
@@ -17,32 +18,34 @@ pub const CALA_OUTBOX_IMPORT_JOB_TYPE: &str = "cala-outbox-import-job";
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,
-    _deps: ImportJobRunnerDeps,
+    ledger: CalaLedger,
 }
 
 impl CalaOutboxImportJob {
-    pub fn new(config: CalaOutboxImportConfig, deps: &ImportJobRunnerDeps) -> Self {
+    pub fn new(config: CalaOutboxImportConfig, ledger: &CalaLedger) -> Self {
         Self {
             config,
-            _deps: deps.clone(),
+            ledger: ledger.clone(),
         }
     }
 }
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "import_job.cala_outbox.run", skip(self), err)]
-    async fn run(&self) -> Result<(), Box<dyn std::error::Error>> {
+    #[instrument(name = "import_job.cala_outbox.run", skip(self, current_job), err)]
+    async fn run(&self, current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Running CalaOutboxImportJob with endpoint: {}",
             self.config.endpoint
         );
         let mut client = Client::connect(ClientConfig::from(&self.config)).await?;
         let mut stream = client.subscribe(Some(0)).await?;
-        println!("created stream");
-        while let Some(event) = stream.next().await {
-            let message = event?;
-            println!("message: {:?}", message);
+        while let Some(Ok(message)) = stream.next().await {
+            let mut tx = current_job.pool().begin().await?;
+            self.ledger
+                .sync_outbox_event(&mut tx, DataSourceId::from(current_job.id()), message)
+                .await?;
+            tx.commit().await?;
         }
 
         tokio::time::sleep(tokio::time::Duration::from_secs(600)).await;

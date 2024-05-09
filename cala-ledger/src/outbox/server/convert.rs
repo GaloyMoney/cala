@@ -21,14 +21,16 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
         }: OutboxEvent,
     ) -> Self {
         let payload = match payload {
-            OutboxEventPayload::AccountCreated { account } => {
+            OutboxEventPayload::AccountCreated { source, account } => {
                 proto::cala_ledger_event::Payload::AccountCreated(proto::AccountCreated {
+                    data_source_id: source.to_string(),
                     account: Some(proto::Account::from(account)),
                 })
             }
 
-            OutboxEventPayload::JournalCreated { journal } => {
+            OutboxEventPayload::JournalCreated { source, journal } => {
                 proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
+                    data_source_id: source.to_string(),
                     journal: Some(proto::Journal::from(journal)),
                 })
             }

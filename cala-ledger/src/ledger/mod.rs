@@ -12,6 +12,14 @@ use crate::{
     journal::Journals,
     outbox::{server, Outbox},
 };
+#[cfg(feature = "import")]
+mod import_deps {
+    pub use crate::primitives::DataSourceId;
+    pub use cala_types::outbox::OutboxEvent;
+    pub use tracing::instrument;
+}
+#[cfg(feature = "import")]
+use import_deps::*;
 
 #[derive(Clone)]
 pub struct CalaLedger {
@@ -65,6 +73,32 @@ impl CalaLedger {
 
     pub fn journals(&self) -> &Journals {
         &self.journals
+    }
+
+    #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, tx))]
+    pub async fn sync_outbox_event(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        event: OutboxEvent,
+    ) -> Result<(), LedgerError> {
+        use crate::outbox::OutboxEventPayload::*;
+
+        match event.payload {
+            Empty => (),
+            AccountCreated { account, .. } => {
+                self.accounts
+                    .sync_account_creation(tx, origin, account)
+                    .await?
+            }
+            JournalCreated { journal, .. } => {
+                self.journals
+                    .sync_journal_creation(tx, origin, journal)
+                    .await?
+            }
+        }
+        Ok(())
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {

@@ -25,8 +25,14 @@ impl Clone for OutboxEvent {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum OutboxEventPayload {
     Empty,
-    AccountCreated { account: AccountValues },
-    JournalCreated { journal: JournalValues },
+    AccountCreated {
+        source: DataSource,
+        account: AccountValues,
+    },
+    JournalCreated {
+        source: DataSource,
+        journal: JournalValues,
+    },
 }
 
 #[derive(

@@ -7,7 +7,14 @@ pub use cala_types::{account::*, primitives::AccountId};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AccountEvent {
-    Initialized { values: AccountValues },
+    #[cfg(feature = "import")]
+    Imported {
+        source: DataSource,
+        values: AccountValues,
+    },
+    Initialized {
+        values: AccountValues,
+    },
 }
 
 impl EntityEvent for AccountEvent {
@@ -29,6 +36,18 @@ impl Entity for Account {
 }
 
 impl Account {
+    #[cfg(feature = "import")]
+    pub(super) fn import(source: DataSourceId, values: AccountValues) -> Self {
+        let events = EntityEvents::init(
+            values.id,
+            [AccountEvent::Imported {
+                source: DataSource::Remote { id: source },
+                values,
+            }],
+        );
+        Self::try_from(events).expect("Failed to build account from events")
+    }
+
     pub fn id(&self) -> AccountId {
         self.values.id
     }
@@ -49,6 +68,10 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
         let mut builder = AccountBuilder::default();
         for event in events.iter() {
             match event {
+                #[cfg(feature = "import")]
+                AccountEvent::Imported { source: _, values } => {
+                    builder = builder.values(values.clone());
+                }
                 AccountEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }

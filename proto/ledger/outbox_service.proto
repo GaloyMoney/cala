@@ -35,7 +35,8 @@ enum Status {
 }
 
 message AccountCreated {
-  Account account = 1;
+  string data_source_id = 1;
+  Account account = 2;
 }
 
 message Account {
@@ -51,14 +52,15 @@ message Account {
 }
 
 message JournalCreated {
-    Journal journal = 1;
+  string data_source_id = 1;
+  Journal journal = 2;
 }
 
 message Journal {
-    string id = 1;
-    string name = 2;
-    Status status = 3;
-    optional string external_id = 4;
-    optional string description = 5;
+  string id = 1;
+  string name = 2;
+  Status status = 3;
+  optional string external_id = 4;
+  optional string description = 5;
 }
 

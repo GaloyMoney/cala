@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
+use super::current::CurrentJob;
+
 pub type JobType = &'static str;
 
 pub struct JobTemplate {
@@ -19,7 +21,7 @@ impl JobTemplate {
 
 #[async_trait]
 pub trait JobRunner: Send + Sync + 'static {
-    async fn run(&self) -> Result<(), Box<dyn std::error::Error>>;
+    async fn run(&self, current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>>;
 }
 
 #[async_trait]

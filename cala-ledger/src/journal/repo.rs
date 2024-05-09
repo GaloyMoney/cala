@@ -2,6 +2,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{entity::*, error::*};
 use crate::entity::*;
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
 
 #[derive(Debug, Clone)]
 pub(super) struct JournalRepo {
@@ -37,5 +39,26 @@ impl JournalRepo {
             entity: journal,
             n_new_events,
         })
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        mut journal: Journal,
+    ) -> Result<(), JournalError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_journals (data_source_id, id, name, external_id)
+            VALUES ($1, $2, $3, $4)"#,
+            origin as DataSourceId,
+            journal.values().id as JournalId,
+            journal.values().name,
+            journal.values().external_id,
+        )
+        .execute(&mut **tx)
+        .await?;
+        journal.events.persist(tx).await?;
+        Ok(())
     }
 }

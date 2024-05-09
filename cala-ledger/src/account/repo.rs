@@ -3,6 +3,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use cala_types::primitives::Tag;
 
 use super::{cursor::*, entity::*, error::*};
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
 use crate::{entity::*, query::*};
 
 #[derive(Debug, Clone)]
@@ -79,5 +81,28 @@ impl AccountRepo {
             has_next_page,
             end_cursor,
         })
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        mut account: Account,
+    ) -> Result<(), AccountError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, tags)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            origin as DataSourceId,
+            account.values().id as AccountId,
+            account.values().code,
+            account.values().name,
+            account.values().external_id,
+            &account.values().tags as &Vec<Tag>
+        )
+        .execute(&mut **tx)
+        .await?;
+        account.events.persist(tx).await?;
+        Ok(())
     }
 }

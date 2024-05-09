@@ -7,7 +7,14 @@ pub use cala_types::{journal::*, primitives::JournalId};
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JournalEvent {
-    Initialized { values: JournalValues },
+    #[cfg(feature = "import")]
+    Imported {
+        source: DataSource,
+        values: JournalValues,
+    },
+    Initialized {
+        values: JournalValues,
+    },
 }
 
 impl EntityEvent for JournalEvent {
@@ -29,6 +36,18 @@ impl Entity for Journal {
 }
 
 impl Journal {
+    #[cfg(feature = "import")]
+    pub(super) fn import(source: DataSourceId, values: JournalValues) -> Self {
+        let events = EntityEvents::init(
+            values.id,
+            [JournalEvent::Imported {
+                source: DataSource::Remote { id: source },
+                values,
+            }],
+        );
+        Self::try_from(events).expect("Failed to build account from events")
+    }
+
     pub fn id(&self) -> JournalId {
         self.values.id
     }
@@ -49,6 +68,10 @@ impl TryFrom<EntityEvents<JournalEvent>> for Journal {
         let mut builder = JournalBuilder::default();
         for event in events.iter() {
             match event {
+                #[cfg(feature = "import")]
+                JournalEvent::Imported { source: _, values } => {
+                    builder = builder.values(values.clone());
+                }
                 JournalEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }

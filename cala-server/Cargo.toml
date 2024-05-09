@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"] }
-cala-ledger = { path = "../cala-ledger" }
+cala-ledger = { path = "../cala-ledger" , features = ["import"]}
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client" }
 
 anyhow = { workspace = true }

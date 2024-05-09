@@ -12,6 +12,7 @@ categories = ["accounting", "ledger"]
 [features]
 
 fail-on-warnings = []
+import = []
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }

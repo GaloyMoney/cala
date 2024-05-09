@@ -1,8 +1,8 @@
-use cala_ledger::entity::*;
+use cala_ledger::{entity::*, CalaLedger};
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use super::{cala_outbox::*, config::*, runner::ImportJobRunnerDeps};
+use super::{cala_outbox::*, config::*};
 use crate::{
     jobs::{JobRunner, JobTemplate},
     primitives::*,
@@ -37,9 +37,9 @@ pub struct ImportJob {
 }
 
 impl ImportJob {
-    pub fn runner(&self, deps: &ImportJobRunnerDeps) -> Box<dyn JobRunner> {
+    pub fn runner(&self, ledger: &CalaLedger) -> Box<dyn JobRunner> {
         let ImportJobConfig::CalaOutbox(config) = &self.config;
-        Box::new(CalaOutboxImportJob::new(config.clone(), deps))
+        Box::new(CalaOutboxImportJob::new(config.clone(), ledger))
     }
 }
 
