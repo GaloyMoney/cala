@@ -49,8 +49,10 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 )?,
             },
             proto::cala_ledger_event::Payload::TxTemplateCreated(proto::TxTemplateCreated {
+                data_source_id,
                 tx_template,
             }) => TxTemplateCreated {
+                source: data_source_id.parse()?,
                 tx_template: TxTemplateValues::try_from(
                     tx_template.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,

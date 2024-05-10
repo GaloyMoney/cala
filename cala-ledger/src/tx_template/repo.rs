@@ -1,7 +1,10 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
+use crate::{entity::*, primitives::DataSource};
+
 use super::{entity::*, error::*};
-use crate::entity::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct TxTemplateRepo {
@@ -30,11 +33,31 @@ impl TxTemplateRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_tx_template.initial_events();
-        let n_new_events = events.persist(tx).await?;
+        let n_new_events = events.persist(tx, DataSource::Local).await?;
         let tx_template = TxTemplate::try_from(events)?;
         Ok(EntityUpdate {
             entity: tx_template,
             n_new_events,
         })
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        mut tx_template: TxTemplate,
+    ) -> Result<(), TxTemplateError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_tx_templates (data_source_id, id, code)
+            VALUES ($1, $2, $3)"#,
+            origin as DataSourceId,
+            tx_template.values().id as TxTemplateId,
+            tx_template.values().code,
+        )
+        .execute(&mut **tx)
+        .await?;
+        tx_template.events.persist(tx, origin).await?;
+        Ok(())
     }
 }

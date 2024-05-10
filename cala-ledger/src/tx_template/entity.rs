@@ -2,14 +2,23 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 use cala_cel_interpreter::CelExpression;
+pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 
 use crate::entity::*;
-pub use cala_types::{primitives::TxTemplateId, tx_template::*};
+#[cfg(feature = "import")]
+use crate::primitives::*;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TxTemplateEvent {
-    Initialized { values: TxTemplateValues },
+    #[cfg(feature = "import")]
+    Imported {
+        source: DataSource,
+        values: TxTemplateValues,
+    },
+    Initialized {
+        values: TxTemplateValues,
+    },
 }
 
 impl EntityEvent for TxTemplateEvent {
@@ -31,6 +40,18 @@ impl Entity for TxTemplate {
 }
 
 impl TxTemplate {
+    #[cfg(feature = "import")]
+    pub(super) fn import(source: DataSourceId, values: TxTemplateValues) -> Self {
+        let events = EntityEvents::init(
+            values.id,
+            [TxTemplateEvent::Imported {
+                source: DataSource::Remote { id: source },
+                values,
+            }],
+        );
+        Self::try_from(events).expect("Failed to build tx_template from events")
+    }
+
     pub fn id(&self) -> TxTemplateId {
         self.values.id
     }
@@ -51,6 +72,10 @@ impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
         let mut builder = TxTemplateBuilder::default();
         for event in events.iter() {
             match event {
+                #[cfg(feature = "import")]
+                TxTemplateEvent::Imported { source: _, values } => {
+                    builder = builder.values(values.clone());
+                }
                 TxTemplateEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }

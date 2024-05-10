@@ -34,11 +34,13 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                     journal: Some(proto::Journal::from(journal)),
                 })
             }
-            OutboxEventPayload::TxTemplateCreated { tx_template } => {
-                proto::cala_ledger_event::Payload::TxTemplateCreated(proto::TxTemplateCreated {
-                    tx_template: Some(proto::TxTemplate::from(tx_template)),
-                })
-            }
+            OutboxEventPayload::TxTemplateCreated {
+                source,
+                tx_template,
+            } => proto::cala_ledger_event::Payload::TxTemplateCreated(proto::TxTemplateCreated {
+                data_source_id: source.to_string(),
+                tx_template: Some(proto::TxTemplate::from(tx_template)),
+            }),
             OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
         };
         proto::CalaLedgerEvent {

@@ -7,7 +7,9 @@ pub mod error;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{entity::*, outbox::*};
+#[cfg(feature = "import")]
+use crate::primitives::DataSourceId;
+use crate::{entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -44,14 +46,31 @@ impl TxTemplates {
             .await?;
         Ok(tx_template)
     }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_tx_template_creation(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        values: TxTemplateValues,
+    ) -> Result<(), TxTemplateError> {
+        let tx_template = TxTemplate::import(origin, values);
+        self.repo.import(tx, origin, tx_template).await
+    }
 }
 
 impl From<&TxTemplateEvent> for OutboxEventPayload {
     fn from(event: &TxTemplateEvent) -> Self {
         match event {
+            #[cfg(feature = "import")]
+            TxTemplateEvent::Imported { source, values } => OutboxEventPayload::TxTemplateCreated {
+                source: *source,
+                tx_template: values.clone(),
+            },
             TxTemplateEvent::Initialized {
                 values: tx_template,
             } => OutboxEventPayload::TxTemplateCreated {
+                source: DataSource::Local,
                 tx_template: tx_template.clone(),
             },
         }

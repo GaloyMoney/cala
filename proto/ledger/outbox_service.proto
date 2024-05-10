@@ -66,52 +66,53 @@ message Journal {
 }
 
 message TxTemplateCreated {
-    TxTemplate tx_template = 1;
+  string data_source_id = 1;
+  TxTemplate tx_template = 2;
 }
 
 message TxTemplate {
-    string id = 1;
-    string code = 2;
-    repeated ParamDefinition params = 3;
-    TxInput tx_input = 4;
-    repeated EntryInput entries = 5;
-    optional string description = 6;
-    optional google.protobuf.Struct metadata = 7;
+  string id = 1;
+  string code = 2;
+  repeated ParamDefinition params = 3;
+  TxInput tx_input = 4;
+  repeated EntryInput entries = 5;
+  optional string description = 6;
+  optional google.protobuf.Struct metadata = 7;
 }
 
 message EntryInput {
-    string entry_type = 1;
-    string account_id = 2;
-    string layer = 3;
-    string direction = 4;
-    string units = 5;
-    string currency = 6;
+  string entry_type = 1;
+  string account_id = 2;
+  string layer = 3;
+  string direction = 4;
+  string units = 5;
+  string currency = 6;
     optional string description = 7;
 }
 
 message TxInput {
-    string effective = 1;
-    string journal_id = 2;
-    optional string correlation_id = 3;
-    optional string external_id = 4;
-    optional string description = 5;
-    optional string metadata = 6;
+  string effective = 1;
+  string journal_id = 2;
+  optional string correlation_id = 3;
+  optional string external_id = 4;
+  optional string description = 5;
+  optional string metadata = 6;
 }
 
 message ParamDefinition {
-    string name = 1;
-    ParamDataType data_type = 2;
-    optional string default = 3;
-    optional string description = 4;
+  string name = 1;
+  ParamDataType data_type = 2;
+  optional string default = 3;
+  optional string description = 4;
 }
 
 enum ParamDataType {
-    STRING = 0;
-    INTEGER = 1;
-    DECIMAL = 2;
-    BOOLEAN = 3;
-    UUID = 4;
-    DATE = 5;
-    TIMESTAMP = 6;
-    JSON = 7;
+  STRING = 0;
+  INTEGER = 1;
+  DECIMAL = 2;
+  BOOLEAN = 3;
+  UUID = 4;
+  DATE = 5;
+  TIMESTAMP = 6;
+  JSON = 7;
 }

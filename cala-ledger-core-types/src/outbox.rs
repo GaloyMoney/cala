@@ -34,6 +34,7 @@ pub enum OutboxEventPayload {
         journal: JournalValues,
     },
     TxTemplateCreated {
+        source: DataSource,
         tx_template: TxTemplateValues,
     },
 }
