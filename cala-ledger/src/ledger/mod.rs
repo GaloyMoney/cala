@@ -11,6 +11,7 @@ use crate::{
     account::Accounts,
     journal::Journals,
     outbox::{server, Outbox},
+    tx_template::TxTemplates,
 };
 #[cfg(feature = "import")]
 mod import_deps {
@@ -26,6 +27,7 @@ pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
     journals: Journals,
+    tx_templates: TxTemplates,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
@@ -58,10 +60,12 @@ impl CalaLedger {
         }
 
         let accounts = Accounts::new(&pool, outbox.clone());
-        let journals = Journals::new(&pool, outbox);
+        let journals = Journals::new(&pool, outbox.clone());
+        let tx_templates = TxTemplates::new(&pool, outbox);
         Ok(Self {
             accounts,
             journals,
+            tx_templates,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
@@ -73,6 +77,10 @@ impl CalaLedger {
 
     pub fn journals(&self) -> &Journals {
         &self.journals
+    }
+
+    pub fn tx_templates(&self) -> &TxTemplates {
+        &self.tx_templates
     }
 
     #[cfg(feature = "import")]
@@ -95,6 +103,11 @@ impl CalaLedger {
             JournalCreated { journal, .. } => {
                 self.journals
                     .sync_journal_creation(tx, origin, journal)
+                    .await?
+            }
+            TxTemplateCreated { tx_template, .. } => {
+                self.tx_templates
+                    .sync_tx_template_creation(tx, origin, tx_template)
                     .await?
             }
         }

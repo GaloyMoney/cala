@@ -615,6 +615,7 @@ dependencies = [
 name = "cala-ledger"
 version = "0.1.0-dev"
 dependencies = [
+ "cala-cel-interpreter",
  "cala-ledger-core-types",
  "cala-tracing",
  "chrono",
@@ -642,7 +643,9 @@ dependencies = [
 name = "cala-ledger-core-types"
 version = "0.1.0"
 dependencies = [
+ "cala-cel-interpreter",
  "chrono",
+ "derive_builder",
  "serde",
  "serde_json",
  "sqlx",
@@ -664,6 +667,7 @@ dependencies = [
 name = "cala-ledger-outbox-client"
 version = "0.1.0"
 dependencies = [
+ "cala-cel-interpreter",
  "cala-ledger-core-types",
  "futures",
  "prost",
@@ -689,6 +693,7 @@ dependencies = [
  "axum 0.7.5",
  "axum-extra",
  "base64 0.22.1",
+ "cala-cel-interpreter",
  "cala-ledger",
  "cala-ledger-core-types",
  "cala-ledger-outbox-client",

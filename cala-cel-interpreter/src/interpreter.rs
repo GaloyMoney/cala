@@ -16,6 +16,7 @@ pub struct CelExpression {
     source: String,
     expr: Expression,
 }
+
 impl CelExpression {
     pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = E>, E: From<CelError>>(
         &'a self,
