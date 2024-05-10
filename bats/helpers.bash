@@ -23,6 +23,21 @@ server_cmd() {
 }
 
 start_server() {
+  # Check for running server
+  if [ -n "$BASH_VERSION" ]; then
+    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${PIPESTATUS[2]})
+  elif [ -n "$ZSH_VERSION" ]; then
+    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${pipestatus[3]})
+  else
+    echo "Unsupported shell."
+    exit 1
+  fi
+  exit_status=$(echo "$server_process_and_status" | tail -n 1)
+  if [ "$exit_status" -eq 0 ]; then
+    return 0
+  fi
+
+  # Start server if not already running
   background server_cmd > .e2e-logs
   for i in {1..20}
   do
