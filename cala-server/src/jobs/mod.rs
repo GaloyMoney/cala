@@ -141,7 +141,7 @@ impl JobExecutor {
                   executing_server_id = $1
               FROM selected_jobs
               WHERE je.id = selected_jobs.id
-              RETURNING je.id, je.job_type
+              RETURNING je.id, je.job_type, je.state_json
               "#,
             server_id,
             poll_limit as i32,
@@ -152,7 +152,15 @@ impl JobExecutor {
         span.record("n_jobs_to_spawn", rows.len());
         if !rows.is_empty() {
             for row in rows {
-                let _ = Self::start_job(pool, registry, running_jobs, &row.job_type, row.id).await;
+                let _ = Self::start_job(
+                    pool,
+                    registry,
+                    running_jobs,
+                    &row.job_type,
+                    row.id,
+                    row.state_json,
+                )
+                .await;
             }
         }
         Ok(())
@@ -165,12 +173,13 @@ impl JobExecutor {
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
         job_type: &str,
         id: Uuid,
+        job_state: Option<serde_json::Value>,
     ) -> Result<(), JobExecutorError> {
         let runner = registry.init_job(job_type, id).await?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();
         let handle = tokio::spawn(async move {
-            let current_job = CurrentJob::new(id, pool);
+            let current_job = CurrentJob::new(id, pool, job_state);
             let _ = runner.run(current_job).await;
             all_jobs.write().await.remove(&id);
         });

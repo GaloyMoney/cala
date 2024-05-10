@@ -52,6 +52,12 @@ impl EventSequence {
     }
 }
 
+impl Default for EventSequence {
+    fn default() -> Self {
+        Self::BEGIN
+    }
+}
+
 impl From<u64> for EventSequence {
     fn from(n: u64) -> Self {
         Self(n as i64)

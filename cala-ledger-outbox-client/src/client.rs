@@ -30,12 +30,14 @@ impl CalaLedgerOutboxClient {
     #[instrument(name = "cala_ledger_outbox_client.subscribe", skip(self))]
     pub async fn subscribe(
         &mut self,
-        after_sequence: Option<u64>,
+        after_sequence: Option<EventSequence>,
     ) -> Result<
         impl futures::Stream<Item = Result<OutboxEvent, CalaLedgerOutboxClientError>>,
         CalaLedgerOutboxClientError,
     > {
-        let request = tonic::Request::new(proto::SubscribeRequest { after_sequence });
+        let request = tonic::Request::new(proto::SubscribeRequest {
+            after_sequence: after_sequence.map(|s| s.into()),
+        });
         let stream = self.proto_client.subscribe(request).await?.into_inner();
         Ok(stream.map(|e| {
             e.map_err(CalaLedgerOutboxClientError::from)
