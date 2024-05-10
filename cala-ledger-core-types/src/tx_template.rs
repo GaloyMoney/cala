@@ -1,4 +1,4 @@
-use cala_cel_interpreter::{CelExpression, CelType, CelValue};
+use cel_interpreter::{CelExpression, CelType, CelValue};
 use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
@@ -59,7 +59,7 @@ impl TryFrom<&CelValue> for ParamDataType {
     type Error = String;
 
     fn try_from(value: &CelValue) -> Result<Self, Self::Error> {
-        use cala_cel_interpreter::CelType::*;
+        use cel_interpreter::CelType::*;
         match CelType::from(value) {
             Int => Ok(ParamDataType::INTEGER),
             String => Ok(ParamDataType::STRING),

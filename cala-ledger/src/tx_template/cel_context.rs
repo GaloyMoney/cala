@@ -1,4 +1,4 @@
-use cala_cel_interpreter::CelContext;
+use cel_interpreter::CelContext;
 
 pub(super) fn initialize() -> CelContext {
     let mut ctx = CelContext::new();

@@ -10,7 +10,7 @@ cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-t
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"] }
 cala-ledger = { path = "../cala-ledger", features = ["import"]}
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client" }
-cala-cel-interpreter = { path = "../cala-cel-interpreter" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }

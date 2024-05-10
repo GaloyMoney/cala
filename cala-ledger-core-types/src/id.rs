@@ -43,9 +43,9 @@ macro_rules! entity_id {
             }
         }
 
-        impl From<$name> for cala_cel_interpreter::CelValue {
+        impl From<$name> for cel_interpreter::CelValue {
             fn from(id: $name) -> Self {
-                cala_cel_interpreter::CelValue::Uuid(id.0)
+                cel_interpreter::CelValue::Uuid(id.0)
             }
         }
 

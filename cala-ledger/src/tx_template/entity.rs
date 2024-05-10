@@ -1,8 +1,8 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use cala_cel_interpreter::CelExpression;
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
+use cel_interpreter::CelExpression;
 
 use crate::entity::*;
 #[cfg(feature = "import")]
