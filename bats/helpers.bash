@@ -41,8 +41,8 @@ stop_server() {
 }
 
 stop_rust_example() {
-  if [[ -f ${CALA_HOME}/rust-examlpe-pid ]]; then
-    kill -9 $(cat ${CALA_HOME}/rust-examlpe-pid) || true
+  if [[ -f ${CALA_HOME}/rust-example-pid ]]; then
+    kill -9 $(cat ${CALA_HOME}/rust-example-pid) || true
   fi
 }
 
