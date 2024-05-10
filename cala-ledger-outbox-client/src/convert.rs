@@ -1,5 +1,5 @@
-use cala_cel_interpreter::CelExpression;
 use cala_types::{account::*, journal::*, outbox::*, primitives::*, tx_template::*};
+use cel_interpreter::CelExpression;
 
 use crate::{client::proto, error::*};
 
