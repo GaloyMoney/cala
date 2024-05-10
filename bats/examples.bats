@@ -14,6 +14,9 @@ teardown_file() {
 
 
 @test "rust: entities sync to server" {
+  exec_graphql 'list-accounts'
+  accounts_before=$(graphql_output '.data.accounts.nodes | length')
+
   variables=$(
     jq -n \
     '{
@@ -34,7 +37,6 @@ teardown_file() {
   sleep 5
 
   exec_graphql 'list-accounts'
-
-  name=$(graphql_output '.data.accounts.nodes[0].name')
-  [[ "$name" == "MY ACCOUNT" ]] || exit 1;
+  accounts_after=$(graphql_output '.data.accounts.nodes | length')
+  [[ "$accounts_after" -gt "$accounts_before" ]] || exit 1
 }

@@ -10,3 +10,4 @@ cala-ledger = { path = "../../cala-ledger" }
 anyhow = { workspace = true }
 tokio = { workspace = true }
 sqlx = { workspace = true }
+rand = "0.8.5"

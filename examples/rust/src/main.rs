@@ -1,4 +1,5 @@
 use anyhow::Context;
+use rand::Rng;
 use std::fs;
 
 use cala_ledger::{
@@ -36,10 +37,12 @@ async fn main() -> anyhow::Result<()> {
         .outbox(OutboxServerConfig::default())
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
+    let random_number = rand::thread_rng().gen_range(0..1000);
+    let code_string = format!("USERS.{:03}", random_number);
     let new_account = NewAccount::builder()
         .id(AccountId::new())
-        .name("MY ACCOUNT")
-        .code("USERS.abc")
+        .name(format!("ACCOUNT #{:03}", random_number))
+        .code(code_string)
         .description("description")
         .build()?;
     let account = cala.accounts().create(new_account).await?;
