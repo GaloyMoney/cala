@@ -87,7 +87,7 @@ message EntryInput {
   string direction = 4;
   string units = 5;
   string currency = 6;
-    optional string description = 7;
+  optional string description = 7;
 }
 
 message TxInput {
