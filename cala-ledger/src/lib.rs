@@ -5,6 +5,7 @@ pub mod account;
 pub mod entity;
 pub mod journal;
 pub mod migrate;
+pub mod transaction;
 pub mod tx_template;
 
 mod ledger;

@@ -1,4 +1,6 @@
-use cala_types::{account::*, journal::*, outbox::*, primitives::*, tx_template::*};
+use cala_types::{
+    account::*, journal::*, outbox::*, primitives::*, transaction::*, tx_template::*,
+};
 use cel_interpreter::CelExpression;
 
 use crate::{client::proto, error::*};
@@ -55,6 +57,15 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 source: data_source_id.parse()?,
                 tx_template: TxTemplateValues::try_from(
                     tx_template.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
+            proto::cala_ledger_event::Payload::TransactionCreated(proto::TransactionCreated {
+                data_source_id,
+                transaction,
+            }) => TransactionCreated {
+                source: data_source_id.parse()?,
+                transaction: TransactionValues::try_from(
+                    transaction.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
             proto::cala_ledger_event::Payload::Empty(_) => Empty,
@@ -244,5 +255,33 @@ impl From<proto::ParamDataType> for ParamDataType {
             proto::ParamDataType::Timestamp => ParamDataType::Timestamp,
             proto::ParamDataType::Json => ParamDataType::Json,
         }
+    }
+}
+
+impl TryFrom<proto::Transaction> for TransactionValues {
+    type Error = CalaLedgerOutboxClientError;
+    fn try_from(
+        proto::Transaction {
+            id,
+            journal_id,
+            tx_template_id,
+            effective,
+            correlation_id,
+            external_id,
+            description,
+            metadata,
+        }: proto::Transaction,
+    ) -> Result<Self, Self::Error> {
+        let res = Self {
+            id: id.parse()?,
+            journal_id: journal_id.parse()?,
+            tx_template_id: tx_template_id.parse()?,
+            effective: effective.parse()?,
+            correlation_id: correlation_id.parse()?,
+            external_id,
+            description: description.map(String::from),
+            metadata: metadata.map(serde_json::to_value).transpose()?,
+        };
+        Ok(res)
     }
 }

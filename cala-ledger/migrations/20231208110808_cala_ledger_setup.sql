@@ -71,6 +71,29 @@ CREATE TABLE cala_tx_template_events (
   FOREIGN KEY (data_source_id, id) REFERENCES cala_tx_templates(data_source_id, id)
 );
 
+CREATE TABLE cala_transactions (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  journal_id UUID NOT NULL,
+  tx_template_id UUID NOT NULL,
+  correlation_id UUID NOT NULL,
+  external_id VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id),
+  UNIQUE(data_source_id, external_id)
+);
+
+CREATE TABLE cala_transaction_events (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id, sequence),
+  FOREIGN KEY (data_source_id, id) REFERENCES cala_transactions(data_source_id, id)
+);
+
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,

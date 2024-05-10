@@ -7,6 +7,7 @@ use crate::{
         error::OutboxError,
         event::{OutboxEvent, OutboxEventPayload},
     },
+    transaction::TransactionValues,
     tx_template::*,
 };
 
@@ -40,6 +41,13 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             } => proto::cala_ledger_event::Payload::TxTemplateCreated(proto::TxTemplateCreated {
                 data_source_id: source.to_string(),
                 tx_template: Some(proto::TxTemplate::from(tx_template)),
+            }),
+            OutboxEventPayload::TransactionCreated {
+                source,
+                transaction,
+            } => proto::cala_ledger_event::Payload::TransactionCreated(proto::TransactionCreated {
+                data_source_id: source.to_string(),
+                transaction: Some(proto::Transaction::from(transaction)),
             }),
             OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
         };
@@ -232,6 +240,34 @@ impl From<TxInput> for proto::TxInput {
             external_id: external_id.map(String::from),
             description: description.map(String::from),
             metadata: metadata.map(String::from),
+        }
+    }
+}
+
+impl From<TransactionValues> for proto::Transaction {
+    fn from(
+        TransactionValues {
+            id,
+            journal_id,
+            tx_template_id,
+            correlation_id,
+            external_id,
+            effective,
+            description,
+            metadata,
+        }: TransactionValues,
+    ) -> Self {
+        proto::Transaction {
+            id: id.to_string(),
+            journal_id: journal_id.to_string(),
+            tx_template_id: tx_template_id.to_string(),
+            correlation_id: correlation_id.to_string(),
+            external_id,
+            effective: effective.to_string(),
+            description: description.map(String::from),
+            metadata: metadata.map(|json| {
+                serde_json::from_value(json).expect("Could not transfer json -> struct")
+            }),
         }
     }
 }

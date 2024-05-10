@@ -22,6 +22,7 @@ message CalaLedgerEvent {
     AccountCreated account_created = 5;
     JournalCreated journal_created = 6;
     TxTemplateCreated tx_template_created = 7;
+    TransactionCreated transaction_created = 8;
   }
 }
 
@@ -115,4 +116,20 @@ enum ParamDataType {
   DATE = 5;
   TIMESTAMP = 6;
   JSON = 7;
+}
+
+message TransactionCreated {
+  string data_source_id = 1;
+  Transaction transaction = 2;
+}
+
+message Transaction {
+  string id = 1;
+  string journal_id = 2;
+  string tx_template_id = 3;
+  string effective= 4;
+  string correlation_id = 5;
+  string external_id = 6;
+  optional string description = 7;
+  optional google.protobuf.Struct metadata = 8;
 }

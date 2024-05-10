@@ -669,6 +669,7 @@ version = "0.1.0"
 dependencies = [
  "cala-cel-interpreter",
  "cala-ledger-core-types",
+ "chrono",
  "futures",
  "prost",
  "prost-wkt-types",
