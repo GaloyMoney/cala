@@ -90,7 +90,7 @@ pub struct NewTransaction {
     #[builder(setter(into))]
     pub(super) tx_template_id: TxTemplateId,
     pub(super) effective: chrono::NaiveDate,
-    #[builder(setter(into))]
+    #[builder(setter(into), default)]
     pub(super) correlation_id: Option<CorrelationId>,
     #[builder(setter(strip_option, into), default)]
     pub(super) external_id: Option<String>,
@@ -146,6 +146,7 @@ mod tests {
             .id(uuid::Uuid::new_v4())
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
+            .effective(chrono::NaiveDate::default())
             .build()
             .unwrap();
         assert!(new_transaction.correlation_id.is_none());
@@ -165,6 +166,7 @@ mod tests {
             .id(uuid::Uuid::new_v4())
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
+            .effective(chrono::NaiveDate::default())
             .metadata(json!({"foo": "bar"}))
             .unwrap()
             .build()
