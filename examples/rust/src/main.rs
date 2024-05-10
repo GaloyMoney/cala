@@ -54,5 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let journal = cala.journals().create(new_journal).await?;
     println!("journal_id: {}", journal.id());
 
-    Ok(())
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
 }

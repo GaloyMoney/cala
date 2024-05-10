@@ -47,12 +47,16 @@ impl Journals {
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         values: JournalValues,
     ) -> Result<(), JournalError> {
-        let journal = Journal::import(origin, values);
-        self.repo.import(tx, origin, journal).await
+        let mut journal = Journal::import(origin, values);
+        self.repo.import(&mut tx, origin, &mut journal).await?;
+        self.outbox
+            .persist_events(tx, journal.events.last_persisted(1))
+            .await?;
+        Ok(())
     }
 }
 

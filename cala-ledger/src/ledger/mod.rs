@@ -87,7 +87,7 @@ impl CalaLedger {
     #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, tx))]
     pub async fn sync_outbox_event(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         event: OutboxEvent,
     ) -> Result<(), LedgerError> {

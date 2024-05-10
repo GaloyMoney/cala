@@ -50,12 +50,16 @@ impl TxTemplates {
     #[cfg(feature = "import")]
     pub async fn sync_tx_template_creation(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         values: TxTemplateValues,
     ) -> Result<(), TxTemplateError> {
-        let tx_template = TxTemplate::import(origin, values);
-        self.repo.import(tx, origin, tx_template).await
+        let mut tx_template = TxTemplate::import(origin, values);
+        self.repo.import(&mut tx, origin, &mut tx_template).await?;
+        self.outbox
+            .persist_events(tx, tx_template.events.last_persisted(1))
+            .await?;
+        Ok(())
     }
 }
 

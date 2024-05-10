@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 
 use std::time::Duration;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde_with::serde_as]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JobExecutorConfig {
     #[serde(default = "random_server_id")]
     pub server_id: String,

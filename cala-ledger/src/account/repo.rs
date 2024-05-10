@@ -88,7 +88,7 @@ impl AccountRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
-        mut account: Account,
+        account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
             r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, tags)
