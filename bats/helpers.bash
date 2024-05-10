@@ -19,7 +19,7 @@ server_cmd() {
     server_location="${CARGO_TARGET_DIR}/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
   fi
 
-  ${server_location} $@
+  bash -c ${server_location} $@
 }
 
 start_server() {
