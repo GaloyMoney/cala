@@ -41,7 +41,7 @@ tunnel_pid="$!"
 # Retry loop with a 1-second sleep to wait for the rsync command to succeed
 rsync_ready=false
 for i in {1..30}; do
-  rsync -avr --delete --exclude="buck-out/**" --exclude="**/node_modules/**" \
+  rsync -avr --delete --exclude="target/**" --exclude="**/node_modules/**" \
     -e "ssh -o StrictHostKeyChecking=no -i ${CI_ROOT}/login.ssh -p 2222" \
     "${REPO_PATH}/" \
     "${login_user}@localhost:${REPO_PATH}" && {

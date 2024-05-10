@@ -19,7 +19,7 @@ CREATE TABLE job_executions (
   id UUID NOT NULL UNIQUE,
   job_type VARCHAR NOT NULL,
   executing_server_id VARCHAR,
-  state JSONB,
+  state_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
