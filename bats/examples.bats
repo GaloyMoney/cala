@@ -9,6 +9,7 @@ setup_file() {
 
 teardown_file() {
   stop_server
+  stop_rust_example
 }
 
 
@@ -29,5 +30,12 @@ teardown_file() {
   [[ "$name" == "rust-example" ]] || exit 1;
 
 
-  cargo run --bin cala-ledger-example-rust
+  background cargo run --bin cala-ledger-example-rust > .rust-example-logs
+
+  sleep 5
+
+  exec_graphql 'list-accounts'
+
+  name=$(graphql_output '.data.accounts.nodes[0].name')
+  [[ "$name" == "MY ACCOUNT" ]] || exit 1;
 }

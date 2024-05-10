@@ -46,7 +46,7 @@ impl JournalRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
-        mut journal: Journal,
+        journal: &mut Journal,
     ) -> Result<(), JournalError> {
         sqlx::query!(
             r#"INSERT INTO cala_journals (data_source_id, id, name, external_id)

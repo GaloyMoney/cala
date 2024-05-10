@@ -46,7 +46,7 @@ impl TxTemplateRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
-        mut tx_template: TxTemplate,
+        tx_template: &mut TxTemplate,
     ) -> Result<(), TxTemplateError> {
         sqlx::query!(
             r#"INSERT INTO cala_tx_templates (data_source_id, id, code)

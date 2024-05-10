@@ -61,14 +61,17 @@ impl OutboxRepo {
     ) -> Result<Vec<OutboxEvent>, OutboxError> {
         let rows = sqlx::query!(
             r#"
+            WITH max_sequence AS (
+                SELECT COALESCE(MAX(sequence), 0) AS max FROM cala_outbox_events
+            )
             SELECT
               g.seq AS "sequence!: EventSequence",
               e.id AS "id?",
               e.payload AS "payload?",
               e.recorded_at AS "recorded_at?"
             FROM
-                generate_series($1 + 1,
-                  LEAST($1 + $2, (SELECT MAX(sequence) FROM cala_outbox_events)))
+                generate_series(LEAST($1 + 1, (SELECT max FROM max_sequence)),
+                  LEAST($1 + $2, (SELECT max FROM max_sequence)))
                 AS g(seq)
             LEFT JOIN
                 cala_outbox_events e ON g.seq = e.sequence

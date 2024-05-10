@@ -100,10 +100,8 @@ where
     ) -> Result<usize, sqlx::Error> {
         let uuid: uuid::Uuid = self.entity_id.into();
         let source_id = data_source.into();
-        let mut events = Vec::new();
-        std::mem::swap(&mut events, &mut self.new_events);
 
-        if events.is_empty() {
+        if self.new_events.is_empty() {
             return Ok(0);
         }
 
@@ -114,23 +112,25 @@ where
         ));
 
         let sequence = self.persisted_events.len() + 1;
-        let n_persisted = self.new_events.len();
 
-        query_builder.push_values(events.iter().enumerate(), |mut builder, (offset, event)| {
-            let event_json = serde_json::to_value(event).expect("Could not serialize event");
-            let event_type = event_json
-                .get("type")
-                .and_then(serde_json::Value::as_str)
-                .expect("Could not get type")
-                .to_owned();
-            if let Some(source_id) = source_id {
-                builder.push_bind(source_id);
-            }
-            builder.push_bind(uuid);
-            builder.push_bind((sequence + offset) as i32);
-            builder.push_bind(event_type);
-            builder.push_bind(event_json);
-        });
+        query_builder.push_values(
+            self.new_events.iter().enumerate(),
+            |mut builder, (offset, event)| {
+                let event_json = serde_json::to_value(event).expect("Could not serialize event");
+                let event_type = event_json
+                    .get("type")
+                    .and_then(serde_json::Value::as_str)
+                    .expect("Could not get type")
+                    .to_owned();
+                if let Some(source_id) = source_id {
+                    builder.push_bind(source_id);
+                }
+                builder.push_bind(uuid);
+                builder.push_bind((sequence + offset) as i32);
+                builder.push_bind(event_type);
+                builder.push_bind(event_json);
+            },
+        );
         query_builder.push("RETURNING recorded_at");
         let query = query_builder.build();
 
@@ -146,7 +146,8 @@ where
             self.entity_first_persisted_at = Some(recorded_at);
         }
 
-        self.persisted_events.extend(events);
+        let n_persisted = self.new_events.len();
+        self.persisted_events.append(&mut self.new_events);
         Ok(n_persisted)
     }
 
@@ -218,7 +219,7 @@ where
     }
 
     pub fn last_persisted(&self, n: usize) -> impl Iterator<Item = &T> {
-        let start = self.persisted_events.len() - n - 1;
+        let start = self.persisted_events.len() - n;
         self.persisted_events[start..].iter()
     }
 

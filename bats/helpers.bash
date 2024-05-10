@@ -14,9 +14,9 @@ reset_pg() {
 }
 
 server_cmd() {
-  server_location=${REPO_ROOT}/target/debug/cala-server
+  server_location="${REPO_ROOT}/target/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
   if [[ ! -z ${CARGO_TARGET_DIR} ]] ; then
-    server_location=${CARGO_TARGET_DIR}/debug/cala-server
+    server_location="${CARGO_TARGET_DIR}/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
   fi
 
   ${server_location} $@
@@ -37,6 +37,12 @@ start_server() {
 stop_server() {
   if [[ -f ${CALA_HOME}/server-pid ]]; then
     kill -9 $(cat ${CALA_HOME}/server-pid) || true
+  fi
+}
+
+stop_rust_example() {
+  if [[ -f ${CALA_HOME}/rust-examlpe-pid ]]; then
+    kill -9 $(cat ${CALA_HOME}/rust-examlpe-pid) || true
   fi
 }
 
