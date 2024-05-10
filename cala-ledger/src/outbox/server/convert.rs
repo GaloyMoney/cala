@@ -261,7 +261,7 @@ impl From<TransactionValues> for proto::Transaction {
             id: id.to_string(),
             journal_id: journal_id.to_string(),
             tx_template_id: tx_template_id.to_string(),
-            correlation_id: correlation_id.to_string(),
+            correlation_id,
             external_id,
             effective: effective.to_string(),
             description: description.map(String::from),

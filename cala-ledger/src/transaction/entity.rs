@@ -91,7 +91,7 @@ pub struct NewTransaction {
     pub(super) tx_template_id: TxTemplateId,
     pub(super) effective: chrono::NaiveDate,
     #[builder(setter(into), default)]
-    pub(super) correlation_id: Option<CorrelationId>,
+    pub(super) correlation_id: Option<String>,
     #[builder(setter(strip_option, into), default)]
     pub(super) external_id: Option<String>,
     #[builder(setter(strip_option, into), default)]
@@ -114,10 +114,8 @@ impl NewTransaction {
                     journal_id: self.journal_id,
                     tx_template_id: self.tx_template_id,
                     effective: self.effective,
-                    correlation_id: self
-                        .correlation_id
-                        .unwrap_or_else(|| CorrelationId::from(uuid::Uuid::from(self.id))),
-                    external_id: self.external_id.unwrap_or_else(|| self.id.to_string()),
+                    correlation_id: self.correlation_id.unwrap_or_else(|| self.id.to_string()),
+                    external_id: self.external_id,
                     description: self.description,
                     metadata: self.metadata,
                 },

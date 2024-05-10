@@ -8,8 +8,8 @@ pub struct TransactionValues {
     pub journal_id: JournalId,
     pub tx_template_id: TxTemplateId,
     pub effective: chrono::NaiveDate,
-    pub correlation_id: CorrelationId,
-    pub external_id: String,
+    pub correlation_id: String,
+    pub external_id: Option<String>,
     pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }

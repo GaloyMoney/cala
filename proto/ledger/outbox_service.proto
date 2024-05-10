@@ -129,7 +129,7 @@ message Transaction {
   string tx_template_id = 3;
   string effective= 4;
   string correlation_id = 5;
-  string external_id = 6;
+  optional string external_id = 6;
   optional string description = 7;
   optional google.protobuf.Struct metadata = 8;
 }

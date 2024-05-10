@@ -8,7 +8,7 @@
         "Uuid",
         "Uuid",
         "Uuid",
-        "Uuid",
+        "Varchar",
         "Varchar"
       ]
     },

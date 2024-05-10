@@ -8,11 +8,7 @@ use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{
-    entity::*,
-    outbox::*,
-    primitives::{DataSource, TxTemplateId},
-};
+use crate::{entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -49,23 +45,19 @@ impl Transactions {
         Ok(transaction)
     }
 
-    #[instrument(name = "cala_ledger.transactions.list_by_template_id", skip(self))]
-    pub async fn list_by_template_id(
-        &self,
-        tx_template_id: TxTemplateId,
-    ) -> Result<Vec<Transaction>, TransactionError> {
-        self.repo.list_by_template_id(tx_template_id).await
-    }
-
     #[cfg(feature = "import")]
     pub async fn sync_transaction_creation(
         &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
-        let transaction = Transaction::import(origin, values);
-        self.repo.import(tx, origin, transaction).await
+        let mut transaction = Transaction::import(origin, values);
+        self.repo.import(&mut tx, origin, &mut transaction).await?;
+        self.outbox
+            .persist_events(tx, transaction.events.last_persisted(1))
+            .await?;
+        Ok(())
     }
 }
 

@@ -76,8 +76,8 @@ CREATE TABLE cala_transactions (
   id UUID NOT NULL,
   journal_id UUID NOT NULL,
   tx_template_id UUID NOT NULL,
-  correlation_id UUID NOT NULL,
-  external_id VARCHAR NOT NULL,
+  correlation_id VARCHAR NOT NULL,
+  external_id VARCHAR DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   UNIQUE(data_source_id, external_id)
@@ -93,6 +93,7 @@ CREATE TABLE cala_transaction_events (
   UNIQUE(data_source_id, id, sequence),
   FOREIGN KEY (data_source_id, id) REFERENCES cala_transactions(data_source_id, id)
 );
+CREATE UNIQUE INDEX idx_cala_transactions_data_source_id_external_id ON cala_transactions (data_source_id, external_id) WHERE external_id IS NOT NULL;
 
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

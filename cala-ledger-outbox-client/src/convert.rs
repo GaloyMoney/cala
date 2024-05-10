@@ -277,7 +277,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             journal_id: journal_id.parse()?,
             tx_template_id: tx_template_id.parse()?,
             effective: effective.parse()?,
-            correlation_id: correlation_id.parse()?,
+            correlation_id,
             external_id,
             description: description.map(String::from),
             metadata: metadata.map(serde_json::to_value).transpose()?,
