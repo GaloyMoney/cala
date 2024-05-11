@@ -47,6 +47,33 @@ impl CalaApp {
         &self.ledger
     }
 
+    #[instrument(name = "cala_server.create_and_spawn_job", skip(self, config))]
+    pub async fn create_and_spawn_job<C: serde::Serialize>(
+        &self,
+        name: String,
+        description: Option<String>,
+        job_type: JobType,
+        config: C,
+    ) -> Result<(), ApplicationError> {
+        // let new_import_job = NewImportJob::builder()
+        //     .name(name)
+        //     .description(description)
+        //     .config(ImportJobConfig::CalaOutbox(
+        //         cala_outbox::CalaOutboxImportConfig { endpoint },
+        //     ))
+        //     .build()
+        //     .expect("Could not build import job");
+        // let mut tx = self.pool.begin().await?;
+        // let job = self
+        //     .import_jobs
+        //     .create_in_tx(&mut tx, new_import_job)
+        //     .await?;
+        // self.job_executor.spawn_job(&mut tx, &job).await?;
+        // tx.commit().await?;
+        // Ok(job)
+        unimplemented!()
+    }
+
     #[instrument(name = "cala_server.create_import_job", skip(self))]
     pub(crate) async fn create_import_job(
         &self,
