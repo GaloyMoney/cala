@@ -11,4 +11,5 @@ pub mod primitives;
 pub mod server;
 
 // Re exports
+pub use async_graphql;
 pub use tokio;

@@ -1,10 +1,11 @@
-#[derive(Default)]
-pub struct MutationExtension;
-impl super::MutationExtensionMarker for MutationExtension {}
-
-#[async_graphql::Object]
-impl MutationExtension {
-    async fn test(&self) -> bool {
-        true
-    }
+#[derive(async_graphql::SimpleObject, Default)]
+pub struct CoreMutationExtension {
+    hello: String,
 }
+
+#[derive(async_graphql::SimpleObject, Default)]
+pub struct MutationExtension {
+    #[graphql(flatten)]
+    core: CoreMutationExtension,
+}
+impl super::MutationExtensionMarker for MutationExtension {}

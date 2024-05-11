@@ -83,6 +83,7 @@ pub struct CoreMutation<E: MutationExtensionMarker> {
 
 #[Object(name = "Mutation")]
 impl<E: MutationExtensionMarker> CoreMutation<E> {
+    #[graphql(flatten)]
     async fn extension(&self) -> E {
         E::default()
     }
