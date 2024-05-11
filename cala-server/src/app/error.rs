@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::{import_job::error::*, jobs::error::*};
+use crate::{import_job::error::*, job::error::*};
 
 #[derive(Error, Debug)]
 pub enum ApplicationError {

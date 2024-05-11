@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{cala_outbox::*, config::*};
 use crate::{
-    jobs::{JobRunner, JobTemplate},
+    job::{JobRunner, JobTemplate},
     primitives::*,
 };
 

@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use cala_ledger::{query::*, CalaLedger};
 
-use crate::{import_job::*, jobs::*};
+use crate::{import_job::*, job::*};
 pub use config::*;
 pub use error::*;
 

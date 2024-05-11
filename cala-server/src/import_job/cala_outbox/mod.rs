@@ -11,7 +11,7 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::jobs::{CurrentJob, JobRunner};
+use crate::job::{CurrentJob, JobRunner};
 
 pub use config::*;
 

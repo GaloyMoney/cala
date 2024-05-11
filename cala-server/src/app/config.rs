@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::jobs::JobExecutorConfig;
+use crate::job::JobExecutorConfig;
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct AppConfig {

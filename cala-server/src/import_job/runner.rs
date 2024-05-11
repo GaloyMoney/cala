@@ -4,7 +4,7 @@ use uuid::Uuid;
 use cala_ledger::CalaLedger;
 
 use crate::{
-    jobs::{JobInitializer, JobRunner},
+    job::{JobInitializer, JobRunner},
     primitives::ImportJobId,
 };
 
