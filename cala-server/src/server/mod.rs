@@ -5,23 +5,21 @@ use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{routing::get, Extension, Router};
 use axum_extra::headers::HeaderMap;
 
-use cala_extension::*;
-
-use crate::{app::CalaApp, graphql};
+use crate::{app::CalaApp, extension::MutationExtensionMarker, graphql};
 
 pub use config::*;
 
-pub async fn run<M: MutationExtension>(
+pub async fn run<M: MutationExtensionMarker>(
     config: ServerConfig,
     app: CalaApp,
-    _extensions: Vec<Box<dyn CalaExtension>>,
+    // _extensions: Vec<Box<dyn CalaExtension>>,
 ) -> anyhow::Result<()> {
     let schema = graphql::schema::<M>(Some(app.clone()));
 
     let app = Router::new()
         .route(
             "/graphql",
-            get(playground).post(axum::routing::post(graphql_handler)),
+            get(playground).post(axum::routing::post(graphql_handler::<M>)),
         )
         .layer(Extension(schema));
 
@@ -33,9 +31,9 @@ pub async fn run<M: MutationExtension>(
     Ok(())
 }
 
-pub async fn graphql_handler(
+pub async fn graphql_handler<M: MutationExtensionMarker>(
     headers: HeaderMap,
-    schema: Extension<Schema<graphql::Query, graphql::CoreMutations, EmptySubscription>>,
+    schema: Extension<Schema<graphql::Query, graphql::CoreMutation<M>, EmptySubscription>>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     cala_tracing::http::extract_tracing(&headers);

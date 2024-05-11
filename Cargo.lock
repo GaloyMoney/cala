@@ -612,13 +612,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cala-extension"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
-]
-
-[[package]]
 name = "cala-ledger"
 version = "0.1.0-dev"
 dependencies = [
@@ -701,7 +694,6 @@ dependencies = [
  "axum-extra",
  "base64 0.22.1",
  "cala-cel-interpreter",
- "cala-extension",
  "cala-ledger",
  "cala-ledger-core-types",
  "cala-ledger-outbox-client",
@@ -715,7 +707,6 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "sqlx",
- "test-extension",
  "thiserror",
  "tokio",
  "tracing",
@@ -3419,14 +3410,6 @@ dependencies = [
  "dirs-next",
  "rustversion",
  "winapi",
-]
-
-[[package]]
-name = "test-extension"
-version = "0.1.0"
-dependencies = [
- "async-graphql",
- "cala-extension",
 ]
 
 [[package]]

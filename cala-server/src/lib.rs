@@ -3,9 +3,12 @@
 
 pub mod app;
 pub mod cli;
-pub mod extensions;
+pub mod extension;
 pub mod graphql;
 pub mod import_job;
 mod jobs;
 pub mod primitives;
 pub mod server;
+
+// Re exports
+pub use tokio;
