@@ -3,6 +3,7 @@
 
 pub mod app;
 pub mod cli;
+pub mod extensions;
 pub mod graphql;
 pub mod import_job;
 mod jobs;

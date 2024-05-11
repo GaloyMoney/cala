@@ -4,6 +4,7 @@ mod error;
 use sqlx::PgPool;
 use tracing::instrument;
 
+// use cala_extension::CalaExtension;
 use cala_ledger::{query::*, CalaLedger};
 
 use crate::{import_job::*, jobs::*};

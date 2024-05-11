@@ -121,6 +121,7 @@ type JournalCreatePayload {
 type Mutation {
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	importJobCreate(input: ImportJobCreateInput!): ImportJobCreatePayload!
+	test: Boolean!
 }
 
 """

@@ -2,6 +2,7 @@ pub mod config;
 mod db;
 
 use anyhow::Context;
+use cala_extension::*;
 use clap::Parser;
 use std::{fs, path::PathBuf};
 
@@ -31,7 +32,9 @@ struct Cli {
     pg_con: String,
 }
 
-pub async fn run() -> anyhow::Result<()> {
+pub async fn run<M: MutationExtension>(
+    extensions: Vec<Box<dyn CalaExtension>>,
+) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let config = Config::from_path(
@@ -42,12 +45,16 @@ pub async fn run() -> anyhow::Result<()> {
         },
     )?;
 
-    run_cmd(&cli.cala_home, config).await?;
+    run_cmd::<M>(&cli.cala_home, config, extensions).await?;
 
     Ok(())
 }
 
-async fn run_cmd(cala_home: &str, config: Config) -> anyhow::Result<()> {
+async fn run_cmd<M: MutationExtension>(
+    cala_home: &str,
+    config: Config,
+    extensions: Vec<Box<dyn CalaExtension>>,
+) -> anyhow::Result<()> {
     use cala_ledger::{CalaLedger, CalaLedgerConfig};
     cala_tracing::init_tracer(config.tracing)?;
     store_server_pid(cala_home, std::process::id())?;
@@ -55,7 +62,7 @@ async fn run_cmd(cala_home: &str, config: Config) -> anyhow::Result<()> {
     let ledger_config = CalaLedgerConfig::builder().pool(pool.clone()).build()?;
     let ledger = CalaLedger::init(ledger_config).await?;
     let app = crate::app::CalaApp::run(pool, config.app, ledger).await?;
-    crate::server::run(config.server, app).await?;
+    crate::server::run::<M>(config.server, app, extensions).await?;
     Ok(())
 }
 

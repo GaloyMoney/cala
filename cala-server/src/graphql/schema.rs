@@ -76,10 +76,11 @@ impl Query {
     }
 }
 
-pub struct Mutation;
+#[derive(Default)]
+pub struct CoreMutations;
 
 #[Object]
-impl Mutation {
+impl CoreMutations {
     async fn journal_create(
         &self,
         ctx: &Context<'_>,

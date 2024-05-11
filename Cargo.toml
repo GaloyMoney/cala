@@ -10,6 +10,8 @@ members = [
   "cala-cel-parser",
   "cala-cel-interpreter",
   "examples/rust",
+  "cala-extension",
+  "extensions/test-extension",
 ]
 
 [workspace.dependencies]

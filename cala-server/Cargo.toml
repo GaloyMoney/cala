@@ -11,6 +11,8 @@ cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"] }
 cala-ledger = { path = "../cala-ledger", features = ["import"]}
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client" }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
+cala-extension = { path = "../cala-extension" }
+test-extension = { path = "../extensions/test-extension" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
