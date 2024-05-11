@@ -32,8 +32,7 @@ struct Cli {
     pg_con: String,
 }
 
-pub async fn run<M: MutationExtensionMarker>(// extensions: Vec<Box<dyn CalaExtension>>,
-) -> anyhow::Result<()> {
+pub async fn run<M: MutationExtensionMarker>() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let config = Config::from_path(
@@ -52,7 +51,6 @@ pub async fn run<M: MutationExtensionMarker>(// extensions: Vec<Box<dyn CalaExte
 async fn run_cmd<M: MutationExtensionMarker>(
     cala_home: &str,
     config: Config,
-    // extensions: Vec<Box<dyn CalaExtension>>,
 ) -> anyhow::Result<()> {
     use cala_ledger::{CalaLedger, CalaLedgerConfig};
     cala_tracing::init_tracer(config.tracing)?;

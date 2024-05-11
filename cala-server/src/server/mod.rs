@@ -12,7 +12,6 @@ pub use config::*;
 pub async fn run<M: MutationExtensionMarker>(
     config: ServerConfig,
     app: CalaApp,
-    // _extensions: Vec<Box<dyn CalaExtension>>,
 ) -> anyhow::Result<()> {
     let schema = graphql::schema::<M>(Some(app.clone()));
 
