@@ -10,10 +10,12 @@ use async_graphql::*;
 
 pub use schema::*;
 
-use crate::app::CalaApp;
+use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
-pub fn schema(app: Option<CalaApp>) -> Schema<Query, Mutation, EmptySubscription> {
-    let schema = Schema::build(Query, Mutation, EmptySubscription);
+pub fn schema<M: MutationExtensionMarker>(
+    app: Option<CalaApp>,
+) -> Schema<Query, CoreMutation<M>, EmptySubscription> {
+    let schema = Schema::build(Query, CoreMutation::<M>::default(), EmptySubscription);
     if let Some(app) = app {
         schema.data(app).finish()
     } else {

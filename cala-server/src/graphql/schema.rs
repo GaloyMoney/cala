@@ -1,7 +1,7 @@
 use async_graphql::{types::connection::*, *};
 
 use super::{account::*, import_job::*, journal::*};
-use crate::app::CalaApp;
+use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
 
@@ -76,10 +76,18 @@ impl Query {
     }
 }
 
-pub struct Mutation;
+#[derive(Default)]
+pub struct CoreMutation<E: MutationExtensionMarker> {
+    _phantom: std::marker::PhantomData<E>,
+}
 
-#[Object]
-impl Mutation {
+#[Object(name = "Mutation")]
+impl<E: MutationExtensionMarker> CoreMutation<E> {
+    #[graphql(flatten)]
+    async fn extension(&self) -> E {
+        E::default()
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,

@@ -19,7 +19,7 @@ pub struct CalaApp {
 }
 
 impl CalaApp {
-    pub async fn run(
+    pub(crate) async fn run(
         pool: PgPool,
         config: AppConfig,
         ledger: CalaLedger,
@@ -43,12 +43,12 @@ impl CalaApp {
         })
     }
 
-    pub fn ledger(&self) -> &CalaLedger {
+    pub(crate) fn ledger(&self) -> &CalaLedger {
         &self.ledger
     }
 
     #[instrument(name = "cala_server.create_import_job", skip(self))]
-    pub async fn create_import_job(
+    pub(crate) async fn create_import_job(
         &self,
         name: String,
         description: Option<String>,
@@ -73,7 +73,7 @@ impl CalaApp {
     }
 
     #[instrument(name = "cala_server.list_import_jobs", skip(self))]
-    pub async fn list_import_jobs(
+    pub(crate) async fn list_import_jobs(
         &self,
         query: PaginatedQueryArgs<ImportJobByNameCursor>,
     ) -> Result<PaginatedQueryRet<ImportJob, ImportJobByNameCursor>, ApplicationError> {

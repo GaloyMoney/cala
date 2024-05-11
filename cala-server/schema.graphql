@@ -119,6 +119,7 @@ type JournalCreatePayload {
 }
 
 type Mutation {
+	hello: String!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	importJobCreate(input: ImportJobCreateInput!): ImportJobCreatePayload!
 }
