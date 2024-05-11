@@ -2,13 +2,36 @@ use cala_ledger::entity::*;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
+use std::borrow::Cow;
+
+use super::error::JobExecutorError;
 use crate::primitives::JobId;
+
+#[derive(Clone, Eq, Hash, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
+#[sqlx(transparent)]
+#[serde(transparent)]
+pub struct JobType(Cow<'static, str>);
+impl JobType {
+    pub const fn new(job_type: &'static str) -> Self {
+        JobType(Cow::Borrowed(job_type))
+    }
+
+    pub(super) fn from_db(job_type: String) -> Self {
+        JobType(Cow::Owned(job_type))
+    }
+}
+impl std::fmt::Display for JobType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum JobEvent {
     Initialized {
         id: JobId,
+        job_type: JobType,
         name: String,
         description: Option<String>,
         config: serde_json::Value,
@@ -27,6 +50,7 @@ impl EntityEvent for JobEvent {
 pub struct Job {
     pub id: JobId,
     pub name: String,
+    pub job_type: JobType,
     pub description: Option<String>,
     config: serde_json::Value,
     pub(super) _events: EntityEvents<JobEvent>,
@@ -45,12 +69,14 @@ impl TryFrom<EntityEvents<JobEvent>> for Job {
             let JobEvent::Initialized {
                 id,
                 name,
+                job_type,
                 description,
                 config,
             } = event;
             builder = builder
                 .id(*id)
                 .name(name.clone())
+                .job_type(job_type.clone())
                 .description(description.clone())
                 .config(config.clone());
         }
@@ -64,6 +90,8 @@ pub struct NewJob {
     pub id: JobId,
     #[builder(setter(into))]
     pub(super) name: String,
+    #[builder(setter(into))]
+    pub(super) job_type: JobType,
     #[builder(setter(into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(custom))]
@@ -83,6 +111,7 @@ impl NewJob {
             [JobEvent::Initialized {
                 id: self.id,
                 name: self.name,
+                job_type: self.job_type,
                 description: self.description,
                 config: self.config,
             }],
@@ -94,8 +123,9 @@ impl NewJobBuilder {
     pub fn config<C: serde::Serialize>(
         &mut self,
         config: C,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.config = Some(serde_json::to_value(config)?);
+    ) -> Result<&mut Self, JobExecutorError> {
+        self.config =
+            Some(serde_json::to_value(config).map_err(JobExecutorError::CouldNotSerializeConfig)?);
         Ok(self)
     }
 }

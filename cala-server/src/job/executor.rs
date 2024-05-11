@@ -5,7 +5,9 @@ use uuid::Uuid;
 
 use std::{collections::HashMap, sync::Arc};
 
-pub use super::{config::*, current::*, error::JobExecutorError, registry::*, traits::*};
+pub use super::{
+    config::*, current::*, entity::JobType, error::JobExecutorError, registry::*, traits::*,
+};
 
 #[derive(Clone)]
 pub struct JobExecutor {
@@ -33,7 +35,7 @@ impl JobExecutor {
         job: T,
     ) -> Result<(), JobExecutorError> {
         let template: JobTemplate = job.into();
-        if !self.registry.initializer_exists(template.job_type) {
+        if !self.registry.initializer_exists(&template.job_type) {
             return Err(JobExecutorError::InvalidJobType(template.job_type));
         }
 
@@ -43,7 +45,7 @@ impl JobExecutor {
           VALUES ($1, $2)
         "#,
             template.id,
-            template.job_type
+            template.job_type as JobType
         )
         .execute(&mut **tx)
         .await?;
@@ -146,7 +148,7 @@ impl JobExecutor {
                     pool,
                     registry,
                     running_jobs,
-                    &row.job_type,
+                    JobType::from_db(row.job_type),
                     row.id,
                     row.state_json,
                 )
@@ -161,7 +163,7 @@ impl JobExecutor {
         pool: &PgPool,
         registry: &Arc<JobRegistry>,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
-        job_type: &str,
+        job_type: JobType,
         id: Uuid,
         job_state: Option<serde_json::Value>,
     ) -> Result<(), JobExecutorError> {

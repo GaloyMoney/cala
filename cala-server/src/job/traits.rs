@@ -1,9 +1,7 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use super::current::CurrentJob;
-
-pub type JobType = &'static str;
+use super::{current::CurrentJob, entity::JobType};
 
 pub struct JobTemplate {
     pub job_type: JobType,

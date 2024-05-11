@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use super::traits::JobType;
+use super::entity::JobType;
 
 #[derive(Error, Debug)]
 pub enum JobExecutorError {
@@ -12,4 +12,6 @@ pub enum JobExecutorError {
     InvalidJobType(JobType),
     #[error("JobExecutorError - JobInitError: {0}")]
     JobInitError(String),
+    #[error("JobExecutorError - BadConfig: {0}")]
+    CouldNotSerializeConfig(serde_json::Error),
 }

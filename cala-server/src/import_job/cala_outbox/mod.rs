@@ -11,11 +11,11 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::job::{CurrentJob, JobRunner};
+use crate::job::{CurrentJob, JobRunner, JobType};
 
 pub use config::*;
 
-pub const CALA_OUTBOX_IMPORT_JOB_TYPE: &str = "cala-outbox-import-job";
+pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,

@@ -55,14 +55,13 @@ impl CalaApp {
         job_type: JobType,
         config: C,
     ) -> Result<(), ApplicationError> {
-        // let new_import_job = NewImportJob::builder()
-        //     .name(name)
-        //     .description(description)
-        //     .config(ImportJobConfig::CalaOutbox(
-        //         cala_outbox::CalaOutboxImportConfig { endpoint },
-        //     ))
-        //     .build()
-        //     .expect("Could not build import job");
+        let _new_job = NewJob::builder()
+            .name(name)
+            .description(description)
+            .config(config)?
+            .job_type(job_type)
+            .build()
+            .expect("Could not build job");
         // let mut tx = self.pool.begin().await?;
         // let job = self
         //     .import_jobs
