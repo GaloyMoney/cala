@@ -1,5 +1,4 @@
 use async_graphql::*;
-use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
 
@@ -23,16 +22,16 @@ pub(super) struct ParamDefinition {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Enum, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Enum, Copy)]
 pub enum ParamDataType {
-    STRING,
-    INTEGER,
-    DECIMAL,
-    BOOLEAN,
-    UUID,
-    DATE,
-    TIMESTAMP,
-    JSON,
+    String,
+    Integer,
+    Decimal,
+    Boolean,
+    Uuid,
+    Date,
+    Timestamp,
+    Json,
 }
 
 #[derive(SimpleObject)]

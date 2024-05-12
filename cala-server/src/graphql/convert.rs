@@ -174,14 +174,14 @@ impl From<cala_ledger::tx_template::ParamDefinition> for ParamDefinition {
 impl From<cala_ledger::tx_template::ParamDataType> for ParamDataType {
     fn from(value: cala_ledger::tx_template::ParamDataType) -> Self {
         match value {
-            cala_ledger::tx_template::ParamDataType::STRING => ParamDataType::STRING,
-            cala_ledger::tx_template::ParamDataType::INTEGER => ParamDataType::INTEGER,
-            cala_ledger::tx_template::ParamDataType::DECIMAL => ParamDataType::DECIMAL,
-            cala_ledger::tx_template::ParamDataType::BOOLEAN => ParamDataType::BOOLEAN,
-            cala_ledger::tx_template::ParamDataType::UUID => ParamDataType::UUID,
-            cala_ledger::tx_template::ParamDataType::DATE => ParamDataType::DATE,
-            cala_ledger::tx_template::ParamDataType::TIMESTAMP => ParamDataType::TIMESTAMP,
-            cala_ledger::tx_template::ParamDataType::JSON => ParamDataType::JSON,
+            cala_ledger::tx_template::ParamDataType::STRING => ParamDataType::String,
+            cala_ledger::tx_template::ParamDataType::INTEGER => ParamDataType::Integer,
+            cala_ledger::tx_template::ParamDataType::DECIMAL => ParamDataType::Decimal,
+            cala_ledger::tx_template::ParamDataType::BOOLEAN => ParamDataType::Boolean,
+            cala_ledger::tx_template::ParamDataType::UUID => ParamDataType::Uuid,
+            cala_ledger::tx_template::ParamDataType::DATE => ParamDataType::Date,
+            cala_ledger::tx_template::ParamDataType::TIMESTAMP => ParamDataType::Timestamp,
+            cala_ledger::tx_template::ParamDataType::JSON => ParamDataType::Json,
         }
     }
 }
@@ -189,14 +189,14 @@ impl From<cala_ledger::tx_template::ParamDataType> for ParamDataType {
 impl From<ParamDataType> for cala_ledger::tx_template::ParamDataType {
     fn from(value: ParamDataType) -> Self {
         match value {
-            ParamDataType::STRING => cala_ledger::tx_template::ParamDataType::STRING,
-            ParamDataType::INTEGER => cala_ledger::tx_template::ParamDataType::INTEGER,
-            ParamDataType::DECIMAL => cala_ledger::tx_template::ParamDataType::DECIMAL,
-            ParamDataType::BOOLEAN => cala_ledger::tx_template::ParamDataType::BOOLEAN,
-            ParamDataType::UUID => cala_ledger::tx_template::ParamDataType::UUID,
-            ParamDataType::DATE => cala_ledger::tx_template::ParamDataType::DATE,
-            ParamDataType::TIMESTAMP => cala_ledger::tx_template::ParamDataType::TIMESTAMP,
-            ParamDataType::JSON => cala_ledger::tx_template::ParamDataType::JSON,
+            ParamDataType::String => cala_ledger::tx_template::ParamDataType::STRING,
+            ParamDataType::Integer => cala_ledger::tx_template::ParamDataType::INTEGER,
+            ParamDataType::Decimal => cala_ledger::tx_template::ParamDataType::DECIMAL,
+            ParamDataType::Boolean => cala_ledger::tx_template::ParamDataType::BOOLEAN,
+            ParamDataType::Uuid => cala_ledger::tx_template::ParamDataType::UUID,
+            ParamDataType::Date => cala_ledger::tx_template::ParamDataType::DATE,
+            ParamDataType::Timestamp => cala_ledger::tx_template::ParamDataType::TIMESTAMP,
+            ParamDataType::Json => cala_ledger::tx_template::ParamDataType::JSON,
         }
     }
 }

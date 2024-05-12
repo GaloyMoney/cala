@@ -1,7 +1,9 @@
 use anyhow::Context;
 use std::fs;
 
-use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, query::*, *};
+use cala_ledger::{
+    account::*, journal::*, migrate::IncludeMigrations, query::*, tx_template::*, *,
+};
 
 pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
     create_cala_dir(cala_home)?;
@@ -52,7 +54,46 @@ async fn main() -> anyhow::Result<()> {
         .description("description")
         .build()?;
     let journal = cala.journals().create(new_journal).await?;
-    println!("journal_id: {}", journal.id());
+    let journal_id = journal.id();
+    println!("journal_id: {}", journal_id);
+
+    let tx_input = NewTxInput::builder()
+        .journal_id(format!("UUID('{}')", journal_id))
+        .effective("DATE('2022-11-01')")
+        .build()?;
+    let entries = vec![
+        NewEntryInput::builder()
+            .entry_type("'TEST_DR'")
+            .account_id("param.recipient")
+            .layer("'SETTLED'")
+            .direction("'DEBIT'")
+            .units("1290")
+            .currency("'BTC'")
+            .build()
+            .unwrap(),
+        NewEntryInput::builder()
+            .entry_type("'TEST_CR'")
+            .account_id("param.sender")
+            .layer("'SETTLED'")
+            .direction("'CREDIT'")
+            .units("1290")
+            .currency("'BTC'")
+            .build()
+            .unwrap(),
+    ];
+    let tx_template_id = TxTemplateId::new();
+
+    let new_tx_template = NewTxTemplate::builder()
+        .id(tx_template_id)
+        .code("CODE")
+        .tx_input(tx_input)
+        .entries(entries)
+        .build()
+        .unwrap();
+    let tx_template = cala.tx_templates().create(new_tx_template).await?;
+    println!("tx_template_id: {}", tx_template.id());
+    let code = tx_template.into_values().code;
+    println!("tx_template_code: {}", code);
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;

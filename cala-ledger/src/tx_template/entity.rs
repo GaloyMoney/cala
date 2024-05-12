@@ -372,7 +372,7 @@ mod tests {
             .code("CODE")
             .tx_input(
                 NewTxInput::builder()
-                    .effective("date('2022-11-01')")
+                    .effective("DATE('2022-11-01')")
                     .journal_id(format!("'{journal_id}'"))
                     .build()
                     .unwrap(),
