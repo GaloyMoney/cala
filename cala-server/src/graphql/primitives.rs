@@ -58,3 +58,25 @@ impl From<UUID> for cala_ledger::JournalId {
         cala_ledger::JournalId::from(uuid.0)
     }
 }
+
+impl From<UUID> for cala_ledger::TxTemplateId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::TxTemplateId::from(uuid.0)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Expression(String);
+scalar!(Expression);
+
+impl From<cel_interpreter::CelExpression> for Expression {
+    fn from(expr: cel_interpreter::CelExpression) -> Self {
+        Self(expr.to_string())
+    }
+}
+impl AsRef<str> for Expression {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}

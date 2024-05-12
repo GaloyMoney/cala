@@ -1,4 +1,4 @@
-use super::{account::*, import_job::*, journal::*, primitives::*};
+use super::{account::*, import_job::*, journal::*, primitives::*, tx_template::*};
 
 trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
@@ -29,6 +29,17 @@ impl ToGlobalId for cala_ledger::JournalId {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
             "journal:{}",
+            general_purpose::STANDARD_NO_PAD.encode(self.to_string())
+        );
+        async_graphql::types::ID::from(id)
+    }
+}
+
+impl ToGlobalId for cala_ledger::TxTemplateId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        use base64::{engine::general_purpose, Engine as _};
+        let id = format!(
+            "tx_template:{}",
             general_purpose::STANDARD_NO_PAD.encode(self.to_string())
         );
         async_graphql::types::ID::from(id)
@@ -78,6 +89,114 @@ impl From<cala_ledger::journal::JournalValues> for Journal {
             external_id: value.external_id,
             status: Status::from(value.status),
             description: value.description,
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::TxTemplateValues> for TxTemplate {
+    fn from(value: cala_ledger::tx_template::TxTemplateValues) -> Self {
+        let tx_input = TxInput::from(value.tx_input);
+        let entries = value.entries.into_iter().map(EntryInput::from).collect();
+        let params = value
+            .params
+            .map(|params| params.into_iter().map(ParamDefinition::from).collect());
+        Self {
+            id: value.id.to_global_id(),
+            tx_template_id: UUID::from(value.id),
+            code: value.code,
+            tx_input,
+            entries,
+            params,
+            description: value.description,
+            metadata: value.metadata.map(JSON::from),
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::TxInput> for TxInput {
+    fn from(
+        cala_ledger::tx_template::TxInput {
+            effective,
+            journal_id,
+            correlation_id,
+            external_id,
+            description,
+            metadata,
+        }: cala_ledger::tx_template::TxInput,
+    ) -> Self {
+        Self {
+            effective: Expression::from(effective),
+            journal_id: Expression::from(journal_id),
+            correlation_id: correlation_id.map(Expression::from),
+            external_id: external_id.map(Expression::from),
+            description: description.map(Expression::from),
+            metadata: metadata.map(Expression::from),
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::EntryInput> for EntryInput {
+    fn from(
+        cala_ledger::tx_template::EntryInput {
+            entry_type,
+            account_id,
+            layer,
+            direction,
+            units,
+            currency,
+            description,
+        }: cala_ledger::tx_template::EntryInput,
+    ) -> Self {
+        Self {
+            entry_type: Expression::from(entry_type),
+            account_id: Expression::from(account_id),
+            layer: Expression::from(layer),
+            direction: Expression::from(direction),
+            units: Expression::from(units),
+            currency: Expression::from(currency),
+            description: description.map(Expression::from),
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::ParamDefinition> for ParamDefinition {
+    fn from(value: cala_ledger::tx_template::ParamDefinition) -> Self {
+        let default = value.default.map(Expression::from);
+        Self {
+            name: value.name,
+            r#type: ParamDataType::from(value.r#type),
+            default,
+            description: value.description,
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::ParamDataType> for ParamDataType {
+    fn from(value: cala_ledger::tx_template::ParamDataType) -> Self {
+        match value {
+            cala_ledger::tx_template::ParamDataType::STRING => ParamDataType::STRING,
+            cala_ledger::tx_template::ParamDataType::INTEGER => ParamDataType::INTEGER,
+            cala_ledger::tx_template::ParamDataType::DECIMAL => ParamDataType::DECIMAL,
+            cala_ledger::tx_template::ParamDataType::BOOLEAN => ParamDataType::BOOLEAN,
+            cala_ledger::tx_template::ParamDataType::UUID => ParamDataType::UUID,
+            cala_ledger::tx_template::ParamDataType::DATE => ParamDataType::DATE,
+            cala_ledger::tx_template::ParamDataType::TIMESTAMP => ParamDataType::TIMESTAMP,
+            cala_ledger::tx_template::ParamDataType::JSON => ParamDataType::JSON,
+        }
+    }
+}
+
+impl From<ParamDataType> for cala_ledger::tx_template::ParamDataType {
+    fn from(value: ParamDataType) -> Self {
+        match value {
+            ParamDataType::STRING => cala_ledger::tx_template::ParamDataType::STRING,
+            ParamDataType::INTEGER => cala_ledger::tx_template::ParamDataType::INTEGER,
+            ParamDataType::DECIMAL => cala_ledger::tx_template::ParamDataType::DECIMAL,
+            ParamDataType::BOOLEAN => cala_ledger::tx_template::ParamDataType::BOOLEAN,
+            ParamDataType::UUID => cala_ledger::tx_template::ParamDataType::UUID,
+            ParamDataType::DATE => cala_ledger::tx_template::ParamDataType::DATE,
+            ParamDataType::TIMESTAMP => cala_ledger::tx_template::ParamDataType::TIMESTAMP,
+            ParamDataType::JSON => cala_ledger::tx_template::ParamDataType::JSON,
         }
     }
 }

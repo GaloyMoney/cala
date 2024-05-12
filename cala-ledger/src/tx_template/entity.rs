@@ -367,7 +367,7 @@ mod tests {
             .currency("'BTC'")
             .build()
             .unwrap()];
-        let new_journal = NewTxTemplate::builder()
+        let new_tx_template = NewTxTemplate::builder()
             .id(TxTemplateId::new())
             .code("CODE")
             .tx_input(
@@ -380,7 +380,7 @@ mod tests {
             .entries(entries)
             .build()
             .unwrap();
-        assert_eq!(new_journal.description, None);
+        assert_eq!(new_tx_template.description, None);
     }
 
     #[test]

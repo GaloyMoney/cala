@@ -46,6 +46,18 @@ enum DebitOrCredit {
 	CREDIT
 }
 
+type EntryInput {
+	entryType: Expression!
+	accountId: Expression!
+	layer: Expression!
+	direction: Expression!
+	units: Expression!
+	currency: Expression!
+	description: Expression
+}
+
+scalar Expression
+
 
 
 type ImportJob {
@@ -121,6 +133,7 @@ type JournalCreatePayload {
 type Mutation {
 	hello: String!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
+	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	importJobCreate(input: ImportJobCreateInput!): ImportJobCreatePayload!
 }
 
@@ -146,6 +159,31 @@ type PageInfo {
 	endCursor: String
 }
 
+enum ParamDataType {
+	STRING
+	INTEGER
+	DECIMAL
+	BOOLEAN
+	UUID
+	DATE
+	TIMESTAMP
+	JSON
+}
+
+type ParamDefinition {
+	name: String!
+	type: ParamDataType!
+	default: Expression
+	description: String
+}
+
+input ParamDefinitionInput {
+	name: String!
+	type: ParamDataType!
+	default: Expression
+	description: String
+}
+
 type Query {
 	accounts(first: Int!, after: String): AccountConnection!
 	importJobs(first: Int!, after: String): ImportJobConnection!
@@ -158,6 +196,59 @@ enum Status {
 
 
 scalar TAG
+
+type TxInput {
+	effective: Expression!
+	journalId: Expression!
+	correlationId: Expression
+	externalId: Expression
+	description: Expression
+	metadata: Expression
+}
+
+type TxTemplate {
+	id: ID!
+	txTemplateId: UUID!
+	code: String!
+	params: [ParamDefinition!]
+	txInput: TxInput!
+	entries: [EntryInput!]!
+	description: String
+	metadata: JSON
+}
+
+input TxTemplateCreateInput {
+	id: UUID
+	code: String!
+	params: [ParamDefinitionInput!]
+	txInput: TxTemplateTxInput!
+	entries: [TxTemplateEntryInput!]!
+	description: String
+	metadata: JSON
+}
+
+type TxTemplateCreatePayload {
+	txTemplate: TxTemplate!
+}
+
+input TxTemplateEntryInput {
+	entryType: Expression!
+	accountId: Expression!
+	layer: Expression!
+	direction: Expression!
+	units: Expression!
+	currency: Expression!
+	description: Expression
+}
+
+input TxTemplateTxInput {
+	effective: Expression!
+	journalId: Expression!
+	correlationId: Expression
+	externalId: Expression
+	description: Expression
+	metadata: Expression
+}
 
 scalar UUID
 
