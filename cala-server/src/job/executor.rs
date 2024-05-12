@@ -6,8 +6,14 @@ use uuid::Uuid;
 use std::{collections::HashMap, sync::Arc};
 
 pub use super::{
-    config::*, current::*, entity::JobType, error::JobExecutorError, registry::*, traits::*,
+    config::*,
+    current::*,
+    entity::{JobTemplate, JobType},
+    error::JobError,
+    registry::*,
+    traits::*,
 };
+use crate::primitives::JobId;
 
 #[derive(Clone)]
 pub struct JobExecutor {
@@ -33,10 +39,10 @@ impl JobExecutor {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         job: T,
-    ) -> Result<(), JobExecutorError> {
+    ) -> Result<(), JobError> {
         let template: JobTemplate = job.into();
         if !self.registry.initializer_exists(&template.job_type) {
-            return Err(JobExecutorError::InvalidJobType(template.job_type));
+            return Err(JobError::InvalidJobType(template.job_type));
         }
 
         sqlx::query!(
@@ -44,7 +50,7 @@ impl JobExecutor {
           INSERT INTO job_executions (id, job_type)
           VALUES ($1, $2)
         "#,
-            template.id,
+            template.id as JobId,
             template.job_type as JobType
         )
         .execute(&mut **tx)
@@ -52,12 +58,12 @@ impl JobExecutor {
         Ok(())
     }
 
-    pub async fn start_poll(&mut self) -> Result<(), JobExecutorError> {
+    pub async fn start_poll(&mut self) -> Result<(), JobError> {
         let pool = self.pool.clone();
         let server_id = self.config.server_id.clone();
         let poll_interval = self.config.poll_interval;
         let pg_interval = PgInterval::try_from(poll_interval * 4)
-            .map_err(|e| JobExecutorError::InvalidPollInterval(e.to_string()))?;
+            .map_err(|e| JobError::InvalidPollInterval(e.to_string()))?;
         let running_jobs = Arc::clone(&self.running_jobs);
         let registry = Arc::clone(&self.registry);
         let handle = tokio::spawn(async move {
@@ -95,7 +101,7 @@ impl JobExecutor {
         poll_limit: u32,
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
-    ) -> Result<(), JobExecutorError> {
+    ) -> Result<(), JobError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);
         {
@@ -166,7 +172,7 @@ impl JobExecutor {
         job_type: JobType,
         id: Uuid,
         job_state: Option<serde_json::Value>,
-    ) -> Result<(), JobExecutorError> {
+    ) -> Result<(), JobError> {
         let runner = registry.init_job(job_type, id).await?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();

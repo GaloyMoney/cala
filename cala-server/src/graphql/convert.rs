@@ -1,4 +1,5 @@
-use super::{account::*, import_job::*, journal::*, primitives::*, tx_template::*};
+use super::{account::*, job::*, journal::*, primitives::*};
+use super::{account::*, job::*, journal::*, primitives::*, tx_template::*};
 
 trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
@@ -46,11 +47,11 @@ impl ToGlobalId for cala_ledger::TxTemplateId {
     }
 }
 
-impl ToGlobalId for crate::primitives::ImportJobId {
+impl ToGlobalId for crate::primitives::JobId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
-            "import_job:{}",
+            "job:{}",
             general_purpose::STANDARD_NO_PAD.encode(self.to_string())
         );
         async_graphql::types::ID::from(id)
@@ -188,8 +189,8 @@ impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
     }
 }
 
-impl From<ImportJobByNameCursor> for crate::import_job::ImportJobByNameCursor {
-    fn from(cursor: ImportJobByNameCursor) -> Self {
+impl From<JobByNameCursor> for crate::job::JobByNameCursor {
+    fn from(cursor: JobByNameCursor) -> Self {
         Self {
             name: cursor.name,
             id: cursor.id,
@@ -197,8 +198,8 @@ impl From<ImportJobByNameCursor> for crate::import_job::ImportJobByNameCursor {
     }
 }
 
-impl From<&crate::import_job::ImportJob> for ImportJobByNameCursor {
-    fn from(job: &crate::import_job::ImportJob) -> Self {
+impl From<&crate::job::Job> for JobByNameCursor {
+    fn from(job: &crate::job::Job) -> Self {
         Self {
             name: job.name.clone(),
             id: job.id,
@@ -206,11 +207,11 @@ impl From<&crate::import_job::ImportJob> for ImportJobByNameCursor {
     }
 }
 
-impl From<crate::import_job::ImportJob> for ImportJob {
-    fn from(job: crate::import_job::ImportJob) -> Self {
+impl From<crate::job::Job> for Job {
+    fn from(job: crate::job::Job) -> Self {
         Self {
             id: job.id.to_global_id(),
-            import_job_id: UUID::from(job.id),
+            job_id: UUID::from(job.id),
             name: job.name,
             description: job.description,
         }

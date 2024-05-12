@@ -1,6 +1,6 @@
 mod account;
 mod convert;
-mod import_job;
+mod job;
 mod journal;
 mod primitives;
 mod schema;

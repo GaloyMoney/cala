@@ -1,21 +1,7 @@
 use async_trait::async_trait;
 use uuid::Uuid;
 
-use super::{current::CurrentJob, entity::JobType};
-
-pub struct JobTemplate {
-    pub job_type: JobType,
-    pub id: Uuid,
-}
-
-impl JobTemplate {
-    pub fn new(job_type: JobType, id: impl Into<Uuid>) -> Self {
-        Self {
-            job_type,
-            id: id.into(),
-        }
-    }
-}
+use super::current::CurrentJob;
 
 #[async_trait]
 pub trait JobRunner: Send + Sync + 'static {

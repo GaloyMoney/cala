@@ -4,8 +4,19 @@ use serde::{Deserialize, Serialize};
 
 use std::borrow::Cow;
 
-use super::error::JobExecutorError;
+use super::error::JobError;
 use crate::primitives::JobId;
+
+pub struct JobTemplate {
+    pub job_type: JobType,
+    pub id: JobId,
+}
+
+impl JobTemplate {
+    pub fn new(job_type: JobType, id: JobId) -> Self {
+        Self { job_type, id }
+    }
+}
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
@@ -120,12 +131,15 @@ impl NewJob {
 }
 
 impl NewJobBuilder {
-    pub fn config<C: serde::Serialize>(
-        &mut self,
-        config: C,
-    ) -> Result<&mut Self, JobExecutorError> {
+    pub fn config<C: serde::Serialize>(&mut self, config: C) -> Result<&mut Self, JobError> {
         self.config =
-            Some(serde_json::to_value(config).map_err(JobExecutorError::CouldNotSerializeConfig)?);
+            Some(serde_json::to_value(config).map_err(JobError::CouldNotSerializeConfig)?);
         Ok(self)
+    }
+}
+
+impl From<&Job> for JobTemplate {
+    fn from(job: &Job) -> Self {
+        JobTemplate::new(job.job_type.clone(), job.id)
     }
 }
