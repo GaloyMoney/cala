@@ -3,13 +3,6 @@ use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
 
-#[derive(InputObject)]
-pub struct JobCreateInput {
-    pub name: String,
-    pub description: Option<String>,
-    pub endpoint: String,
-}
-
 #[derive(SimpleObject)]
 pub struct Job {
     pub id: ID,
