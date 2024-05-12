@@ -130,7 +130,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             correlation_id,
             external_id,
             description,
-            ..
+            metadata,
         } = input.tx_input;
         new_tx_input_builder
             .effective(effective.as_ref().to_string())
@@ -144,6 +144,9 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if let Some(description) = description {
             new_tx_input_builder.description(description.as_ref().to_string());
         };
+        if let Some(metadata) = metadata {
+            new_tx_input_builder.metadata(metadata.as_ref().to_string());
+        }
         let new_tx_input = new_tx_input_builder.build()?;
         let mut new_params = Vec::new();
         if let Some(params) = input.params {
@@ -195,6 +198,9 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .entries(new_entries);
         if let Some(desc) = input.description {
             new_tx_template_builder.description(desc);
+        }
+        if let Some(metadata) = input.metadata {
+            new_tx_template_builder.metadata(metadata)?;
         }
 
         let new_tx_template = new_tx_template_builder.build()?;
