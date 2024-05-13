@@ -40,7 +40,7 @@ start_server() {
   fi
 
   # Start server if not already running
-  background server_cmd > .e2e-logs
+  background server_cmd > .e2e-logs 2>&1
   for i in {1..20}
   do
     if head .e2e-logs | grep -q 'Starting graphql server on port'; then

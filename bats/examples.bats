@@ -37,7 +37,7 @@ wait_for_new_import_job() {
   error_msg=$(graphql_output '.errors[0].message')
   [[ "$name" == "rust-example" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
-  background cargo run --bin cala-ledger-example-rust > .rust-example-logs
+  background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 20 1 wait_for_new_import_job $job_count || true
