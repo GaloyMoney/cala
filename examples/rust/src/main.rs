@@ -88,7 +88,7 @@ async fn main() -> anyhow::Result<()> {
 
     let new_tx_template = NewTxTemplate::builder()
         .id(tx_template_id)
-        .code("CODE")
+        .code(format!("CODE_{:03}", random_number))
         .tx_input(tx_input)
         .entries(entries)
         .build()
