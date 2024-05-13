@@ -1,5 +1,4 @@
 REPO_ROOT=$(git rev-parse --show-toplevel)
-GQL_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/gql"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${REPO_ROOT##*/}}"
 
 GQL_ENDPOINT="http://localhost:2252/graphql"
@@ -62,7 +61,7 @@ stop_rust_example() {
 }
 
 gql_file() {
-  echo "${GQL_DIR}/$1.gql"
+  echo "${REPO_ROOT}/bats/gql/$1.gql"
 }
 
 gql_query() {
