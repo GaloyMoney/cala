@@ -26,14 +26,14 @@ pub(super) struct ParamDefinition {
 #[graphql(remote = "cala_ledger::tx_template::ParamDataType")]
 #[allow(clippy::upper_case_acronyms)]
 pub enum ParamDataType {
-    STRING,
-    INTEGER,
-    DECIMAL,
-    BOOLEAN,
-    UUID,
-    DATE,
-    TIMESTAMP,
-    JSON,
+    String,
+    Integer,
+    Decimal,
+    Boolean,
+    Uuid,
+    Date,
+    Timestamp,
+    Json,
 }
 
 #[derive(SimpleObject)]

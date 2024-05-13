@@ -45,14 +45,14 @@ pub struct TxInput {
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
 pub enum ParamDataType {
-    STRING,
-    INTEGER,
-    DECIMAL,
-    BOOLEAN,
-    UUID,
-    DATE,
-    TIMESTAMP,
-    JSON,
+    String,
+    Integer,
+    Decimal,
+    Boolean,
+    Uuid,
+    Date,
+    Timestamp,
+    Json,
 }
 
 impl TryFrom<&CelValue> for ParamDataType {
@@ -61,13 +61,13 @@ impl TryFrom<&CelValue> for ParamDataType {
     fn try_from(value: &CelValue) -> Result<Self, Self::Error> {
         use cel_interpreter::CelType::*;
         match CelType::from(value) {
-            Int => Ok(ParamDataType::INTEGER),
-            String => Ok(ParamDataType::STRING),
-            Map => Ok(ParamDataType::JSON),
-            Date => Ok(ParamDataType::DATE),
-            Uuid => Ok(ParamDataType::UUID),
-            Decimal => Ok(ParamDataType::DECIMAL),
-            Bool => Ok(ParamDataType::BOOLEAN),
+            Int => Ok(ParamDataType::Integer),
+            String => Ok(ParamDataType::String),
+            Map => Ok(ParamDataType::Json),
+            Date => Ok(ParamDataType::Date),
+            Uuid => Ok(ParamDataType::Uuid),
+            Decimal => Ok(ParamDataType::Decimal),
+            Bool => Ok(ParamDataType::Boolean),
             _ => Err(format!("Unsupported type: {value:?}")),
         }
     }
