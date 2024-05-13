@@ -94,7 +94,7 @@ pub struct NewTxTemplate {
     #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(strip_option), default)]
-    pub(super) params: Vec<NewParamDefinition>,
+    pub(super) params: Option<Vec<NewParamDefinition>>,
     pub(super) tx_input: NewTxInput,
     pub(super) entries: Vec<NewEntryInput>,
     #[builder(setter(custom), default)]
@@ -114,7 +114,9 @@ impl NewTxTemplate {
                     id: self.id,
                     code: self.code,
                     description: self.description,
-                    params: self.params.into_iter().map(|p| p.into()).collect(),
+                    params: self
+                        .params
+                        .map(|p| p.into_iter().map(|p| p.into()).collect()),
                     tx_input: self.tx_input.into(),
                     entries: self.entries.into_iter().map(|e| e.into()).collect(),
                     metadata: self.metadata,
@@ -285,7 +287,6 @@ fn validate_expression(expr: &str) -> Result<(), String> {
     CelExpression::try_from(expr).map_err(|e| e.to_string())?;
     Ok(())
 }
-
 fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
     if let Some(Some(expr)) = expr.as_ref() {
         CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
@@ -372,7 +373,7 @@ mod tests {
             .tx_input(
                 NewTxInput::builder()
                     .effective("date('2022-11-01')")
-                    .journal_id(format!("'{journal_id}'"))
+                    .journal_id(format!("uuid('{journal_id}')"))
                     .build()
                     .unwrap(),
             )
@@ -392,7 +393,7 @@ mod tests {
     fn build_param_definition() {
         let definition = NewParamDefinition::builder()
             .name("name")
-            .r#type(ParamDataType::JSON)
+            .r#type(ParamDataType::Json)
             .default_expr("{'key': 'value'}")
             .build()
             .unwrap();

@@ -152,7 +152,7 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
         let res = Self {
             id: id.parse()?,
             code,
-            params,
+            params: Some(params),
             tx_input,
             entries,
             description,

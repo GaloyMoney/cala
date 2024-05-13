@@ -99,9 +99,7 @@ impl From<cala_ledger::tx_template::TxTemplateValues> for TxTemplate {
         let entries = value.entries.into_iter().map(EntryInput::from).collect();
         let params = value
             .params
-            .into_iter()
-            .map(ParamDefinition::from)
-            .collect();
+            .map(|params| params.into_iter().map(ParamDefinition::from).collect());
         Self {
             id: value.id.to_global_id(),
             tx_template_id: UUID::from(value.id),

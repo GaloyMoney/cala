@@ -7,7 +7,7 @@ use super::primitives::*;
 pub struct TxTemplateValues {
     pub id: TxTemplateId,
     pub code: String,
-    pub params: Vec<ParamDefinition>,
+    pub params: Option<Vec<ParamDefinition>>,
     pub tx_input: TxInput,
     pub entries: Vec<EntryInput>,
     pub description: Option<String>,

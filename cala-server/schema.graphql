@@ -210,7 +210,7 @@ type TxTemplate {
 	id: ID!
 	txTemplateId: UUID!
 	code: String!
-	params: [ParamDefinition!]!
+	params: [ParamDefinition!]
 	txInput: TxInput!
 	entries: [EntryInput!]!
 	description: String
@@ -220,7 +220,7 @@ type TxTemplate {
 input TxTemplateCreateInput {
 	id: UUID
 	code: String!
-	params: [ParamDefinitionInput!]!
+	params: [ParamDefinitionInput!]
 	txInput: TxTemplateTxInput!
 	entries: [TxTemplateEntryInput!]!
 	description: String

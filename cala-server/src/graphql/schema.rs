@@ -149,17 +149,19 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
         let new_tx_input = new_tx_input_builder.build()?;
         let mut new_params = Vec::new();
-        for param in input.params {
-            let mut param_builder = NewParamDefinition::builder();
-            param_builder.name(param.name).r#type(param.r#type.into());
-            if let Some(default) = param.default {
-                param_builder.default_expr(default.as_ref().to_string());
+        if let Some(params) = input.params {
+            for param in params {
+                let mut param_builder = NewParamDefinition::builder();
+                param_builder.name(param.name).r#type(param.r#type.into());
+                if let Some(default) = param.default {
+                    param_builder.default_expr(default.as_ref().to_string());
+                }
+                if let Some(desc) = param.description {
+                    param_builder.description(desc);
+                }
+                let new_param = param_builder.build()?;
+                new_params.push(new_param);
             }
-            if let Some(desc) = param.description {
-                param_builder.description(desc);
-            }
-            let new_param = param_builder.build()?;
-            new_params.push(new_param);
         }
         let mut new_entries = Vec::new();
         for entry in input.entries {
