@@ -22,16 +22,18 @@ pub(super) struct ParamDefinition {
     pub description: Option<String>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Enum, Copy)]
+#[derive(Enum, Copy, Clone, PartialEq, Eq)]
+#[graphql(remote = "cala_ledger::tx_template::ParamDataType")]
+#[allow(clippy::upper_case_acronyms)]
 pub enum ParamDataType {
-    String,
-    Integer,
-    Decimal,
-    Boolean,
-    Uuid,
-    Date,
-    Timestamp,
-    Json,
+    STRING,
+    INTEGER,
+    DECIMAL,
+    BOOLEAN,
+    UUID,
+    DATE,
+    TIMESTAMP,
+    JSON,
 }
 
 #[derive(SimpleObject)]

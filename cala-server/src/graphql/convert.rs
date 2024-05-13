@@ -173,36 +173,6 @@ impl From<cala_ledger::tx_template::ParamDefinition> for ParamDefinition {
     }
 }
 
-impl From<cala_ledger::tx_template::ParamDataType> for ParamDataType {
-    fn from(value: cala_ledger::tx_template::ParamDataType) -> Self {
-        match value {
-            cala_ledger::tx_template::ParamDataType::STRING => ParamDataType::String,
-            cala_ledger::tx_template::ParamDataType::INTEGER => ParamDataType::Integer,
-            cala_ledger::tx_template::ParamDataType::DECIMAL => ParamDataType::Decimal,
-            cala_ledger::tx_template::ParamDataType::BOOLEAN => ParamDataType::Boolean,
-            cala_ledger::tx_template::ParamDataType::UUID => ParamDataType::Uuid,
-            cala_ledger::tx_template::ParamDataType::DATE => ParamDataType::Date,
-            cala_ledger::tx_template::ParamDataType::TIMESTAMP => ParamDataType::Timestamp,
-            cala_ledger::tx_template::ParamDataType::JSON => ParamDataType::Json,
-        }
-    }
-}
-
-impl From<ParamDataType> for cala_ledger::tx_template::ParamDataType {
-    fn from(value: ParamDataType) -> Self {
-        match value {
-            ParamDataType::String => cala_ledger::tx_template::ParamDataType::STRING,
-            ParamDataType::Integer => cala_ledger::tx_template::ParamDataType::INTEGER,
-            ParamDataType::Decimal => cala_ledger::tx_template::ParamDataType::DECIMAL,
-            ParamDataType::Boolean => cala_ledger::tx_template::ParamDataType::BOOLEAN,
-            ParamDataType::Uuid => cala_ledger::tx_template::ParamDataType::UUID,
-            ParamDataType::Date => cala_ledger::tx_template::ParamDataType::DATE,
-            ParamDataType::Timestamp => cala_ledger::tx_template::ParamDataType::TIMESTAMP,
-            ParamDataType::Json => cala_ledger::tx_template::ParamDataType::JSON,
-        }
-    }
-}
-
 impl From<cala_ledger::journal::JournalValues> for JournalCreatePayload {
     fn from(value: cala_ledger::journal::JournalValues) -> Self {
         JournalCreatePayload {
