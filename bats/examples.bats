@@ -3,7 +3,6 @@
 load "helpers"
 
 setup_file() {
-  reset_pg
   start_server
 }
 
