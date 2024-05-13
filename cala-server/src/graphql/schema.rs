@@ -133,19 +133,19 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             metadata,
         } = input.tx_input;
         new_tx_input_builder
-            .effective(effective.as_ref().to_string())
-            .journal_id(journal_id.as_ref().to_string());
+            .effective(effective)
+            .journal_id(journal_id);
         if let Some(correlation_id) = correlation_id {
-            new_tx_input_builder.correlation_id(correlation_id.as_ref().to_string());
+            new_tx_input_builder.correlation_id(correlation_id);
         };
         if let Some(external_id) = external_id {
-            new_tx_input_builder.external_id(external_id.as_ref().to_string());
+            new_tx_input_builder.external_id(external_id);
         };
         if let Some(description) = description {
-            new_tx_input_builder.description(description.as_ref().to_string());
+            new_tx_input_builder.description(description);
         };
         if let Some(metadata) = metadata {
-            new_tx_input_builder.metadata(metadata.as_ref().to_string());
+            new_tx_input_builder.metadata(metadata);
         }
         let new_tx_input = new_tx_input_builder.build()?;
         let mut new_params = Vec::new();
@@ -154,7 +154,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
                 let mut param_builder = NewParamDefinition::builder();
                 param_builder.name(param.name).r#type(param.r#type.into());
                 if let Some(default) = param.default {
-                    param_builder.default_expr(default.as_ref().to_string());
+                    param_builder.default_expr(default);
                 }
                 if let Some(desc) = param.description {
                     param_builder.description(desc);
@@ -176,14 +176,14 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             } = entry;
             let mut new_entry_input_builder = cala_ledger::tx_template::NewEntryInput::builder();
             new_entry_input_builder
-                .entry_type(entry_type.as_ref().to_string())
-                .account_id(account_id.as_ref().to_string())
-                .layer(layer.as_ref().to_string())
-                .direction(direction.as_ref().to_string())
-                .units(units.as_ref().to_string())
-                .currency(currency.as_ref().to_string());
+                .entry_type(entry_type)
+                .account_id(account_id)
+                .layer(layer)
+                .direction(direction)
+                .units(units)
+                .currency(currency);
             if let Some(desc) = description {
-                new_entry_input_builder.description(desc.as_ref().to_string());
+                new_entry_input_builder.description(desc);
             }
 
             let new_entry_input = new_entry_input_builder.build()?;

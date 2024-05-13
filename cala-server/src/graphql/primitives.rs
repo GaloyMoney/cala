@@ -75,8 +75,9 @@ impl From<cel_interpreter::CelExpression> for Expression {
         Self(expr.to_string())
     }
 }
-impl AsRef<str> for Expression {
-    fn as_ref(&self) -> &str {
-        &self.0
+
+impl From<Expression> for String {
+    fn from(expr: Expression) -> Self {
+        expr.0
     }
 }

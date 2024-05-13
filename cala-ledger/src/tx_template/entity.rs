@@ -151,7 +151,7 @@ pub struct NewEntryInput {
     units: String,
     #[builder(setter(into))]
     currency: String,
-    #[builder(setter(strip_option), default)]
+    #[builder(setter(strip_option, into), default)]
     description: Option<String>,
 }
 
