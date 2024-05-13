@@ -23,7 +23,7 @@ pub struct TxTemplates {
 }
 
 impl TxTemplates {
-    pub fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
         Self {
             repo: TxTemplateRepo::new(pool),
             outbox,

@@ -25,7 +25,7 @@ pub struct Accounts {
 }
 
 impl Accounts {
-    pub fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
         Self {
             repo: AccountRepo::new(pool),
             outbox,

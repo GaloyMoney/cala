@@ -17,13 +17,13 @@ use tokio::sync::broadcast;
 
 use error::*;
 pub use event::*;
-use listener::*;
+pub use listener::*;
 use repo::*;
 
 const DEFAULT_BUFFER_SIZE: usize = 100;
 
 #[derive(Clone)]
-pub struct Outbox {
+pub(crate) struct Outbox {
     repo: OutboxRepo,
     _pool: PgPool,
     event_sender: broadcast::Sender<OutboxEvent>,
@@ -33,7 +33,7 @@ pub struct Outbox {
 }
 
 impl Outbox {
-    pub async fn init(pool: &PgPool) -> Result<Self, OutboxError> {
+    pub(crate) async fn init(pool: &PgPool) -> Result<Self, OutboxError> {
         let buffer_size = DEFAULT_BUFFER_SIZE;
         let (sender, recv) = broadcast::channel(buffer_size);
         let repo = OutboxRepo::new(pool);

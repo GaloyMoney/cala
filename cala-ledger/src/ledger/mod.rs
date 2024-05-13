@@ -10,7 +10,7 @@ use error::*;
 use crate::{
     account::Accounts,
     journal::Journals,
-    outbox::{server, Outbox},
+    outbox::{server, EventSequence, Outbox, OutboxListener},
     tx_template::TxTemplates,
 };
 #[cfg(feature = "import")]
@@ -28,6 +28,7 @@ pub struct CalaLedger {
     accounts: Accounts,
     journals: Journals,
     tx_templates: TxTemplates,
+    outbox: Outbox,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
@@ -61,11 +62,12 @@ impl CalaLedger {
 
         let accounts = Accounts::new(&pool, outbox.clone());
         let journals = Journals::new(&pool, outbox.clone());
-        let tx_templates = TxTemplates::new(&pool, outbox);
+        let tx_templates = TxTemplates::new(&pool, outbox.clone());
         Ok(Self {
             accounts,
             journals,
             tx_templates,
+            outbox,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
@@ -81,6 +83,13 @@ impl CalaLedger {
 
     pub fn tx_templates(&self) -> &TxTemplates {
         &self.tx_templates
+    }
+
+    pub async fn register_outbox_listener(
+        &self,
+        start_after: Option<EventSequence>,
+    ) -> Result<OutboxListener, LedgerError> {
+        Ok(self.outbox.register_listener(start_after).await?)
     }
 
     #[cfg(feature = "import")]

@@ -8,7 +8,7 @@ pub mod migrate;
 pub mod tx_template;
 
 mod ledger;
-mod outbox;
+pub mod outbox;
 
 pub use ledger::*;
 

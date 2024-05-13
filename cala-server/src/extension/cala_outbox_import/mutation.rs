@@ -26,11 +26,10 @@ impl Mutation {
         input: CalaOutboxImportJobCreateInput,
     ) -> async_graphql::Result<CalaOutboxImportJobCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let name = input.name.clone();
         let job = app
             .create_and_spawn_job::<CalaOutboxImportJobInitializer, _>(
-                name,
-                None,
+                input.name.clone(),
+                input.description.clone(),
                 CalaOutboxImportConfig::from(input),
             )
             .await?;

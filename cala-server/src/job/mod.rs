@@ -9,6 +9,9 @@ mod traits;
 
 pub mod error;
 
+pub(crate) use cursor::*;
+pub(crate) use executor::*;
+
 pub use current::*;
-pub use cursor::*;
-pub use executor::*;
+pub use entity::*;
+pub use traits::*;

@@ -22,7 +22,7 @@ pub struct Journals {
 }
 
 impl Journals {
-    pub fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
         Self {
             repo: JournalRepo::new(pool),
             outbox,
