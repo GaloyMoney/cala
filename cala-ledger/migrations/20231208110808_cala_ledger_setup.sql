@@ -77,7 +77,8 @@ CREATE TABLE cala_transactions (
   journal_id UUID NOT NULL,
   external_id VARCHAR DEFAULT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  UNIQUE(data_source_id, id),
+  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id)
 );
 CREATE UNIQUE INDEX idx_cala_transactions_data_source_id_external_id ON cala_transactions (data_source_id, external_id) WHERE external_id IS NOT NULL;
 
