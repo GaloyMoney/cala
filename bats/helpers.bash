@@ -4,6 +4,8 @@ COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${REPO_ROOT##*/}}"
 GQL_ENDPOINT="http://localhost:2252/graphql"
 
 CALA_HOME="${CALA_HOME:-.cala}"
+SERVER_PID_FILE="${CALA_HOME}/server-pid"
+EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
 
 reset_pg() {
   docker exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
@@ -33,6 +35,7 @@ start_server() {
   fi
   exit_status=$(echo "$server_process_and_status" | tail -n 1)
   if [ "$exit_status" -eq 0 ]; then
+    rm -f "$SERVER_PID_FILE"
     return 0
   fi
 
@@ -49,14 +52,14 @@ start_server() {
 }
 
 stop_server() {
-  if [[ -f ${CALA_HOME}/server-pid ]]; then
-    kill -9 $(cat ${CALA_HOME}/server-pid) || true
+  if [[ -f "$SERVER_PID_FILE" ]]; then
+    kill -9 $(cat "$SERVER_PID_FILE") || true
   fi
 }
 
 stop_rust_example() {
-  if [[ -f ${CALA_HOME}/rust-example-pid ]]; then
-    kill -9 $(cat ${CALA_HOME}/rust-example-pid) || true
+  if [[ -f "$EXAMPLE_PID_FILE" ]]; then
+    kill -9 $(cat "$EXAMPLE_PID_FILE") || true
   fi
 }
 
