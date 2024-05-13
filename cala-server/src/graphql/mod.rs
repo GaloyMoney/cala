@@ -1,6 +1,6 @@
 mod account;
 mod convert;
-mod import_job;
+mod job;
 mod journal;
 mod primitives;
 mod schema;
@@ -9,6 +9,7 @@ mod tx_template;
 
 use async_graphql::*;
 
+pub use job::Job;
 pub use schema::*;
 
 use crate::{app::CalaApp, extension::MutationExtensionMarker};

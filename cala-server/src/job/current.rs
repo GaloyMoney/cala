@@ -1,15 +1,17 @@
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
-use uuid::Uuid;
+
+use super::error::JobError;
+use crate::primitives::JobId;
 
 pub struct CurrentJob {
-    id: Uuid,
+    id: JobId,
     pool: PgPool,
     state_json: Option<serde_json::Value>,
 }
 
 impl CurrentJob {
-    pub(super) fn new(id: Uuid, pool: PgPool, state: Option<serde_json::Value>) -> Self {
+    pub(super) fn new(id: JobId, pool: PgPool, state: Option<serde_json::Value>) -> Self {
         Self {
             id,
             pool,
@@ -29,8 +31,8 @@ impl CurrentJob {
         &mut self,
         tx: &mut Transaction<'_, Postgres>,
         state: T,
-    ) -> Result<(), sqlx::Error> {
-        let state_json = serde_json::to_value(state).expect("Could not serialize state");
+    ) -> Result<(), JobError> {
+        let state_json = serde_json::to_value(state).map_err(JobError::CouldNotSerializeState)?;
         sqlx::query!(
             r#"
           UPDATE job_executions
@@ -38,7 +40,7 @@ impl CurrentJob {
           WHERE id = $2
         "#,
             state_json,
-            self.id
+            self.id as JobId
         )
         .execute(&mut **tx)
         .await?;
@@ -46,7 +48,7 @@ impl CurrentJob {
         Ok(())
     }
 
-    pub fn id(&self) -> Uuid {
+    pub fn id(&self) -> JobId {
         self.id
     }
 

@@ -3,3 +3,4 @@
 pub struct ServerId(String);
 
 cala_types::entity_id! { ImportJobId }
+cala_types::entity_id! { JobId }

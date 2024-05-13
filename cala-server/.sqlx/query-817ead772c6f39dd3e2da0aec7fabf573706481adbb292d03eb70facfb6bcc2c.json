@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO import_jobs (id, name)\n            VALUES ($1, $2)",
+  "query": "INSERT INTO jobs (id, name)\n            VALUES ($1, $2)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -11,5 +11,5 @@
     },
     "nullable": []
   },
-  "hash": "c230176ac2699b17b80458c3be0556632cd455544ea7148f110a9604c19fe57e"
+  "hash": "817ead772c6f39dd3e2da0aec7fabf573706481adbb292d03eb70facfb6bcc2c"
 }

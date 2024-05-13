@@ -1,15 +1,15 @@
 use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{cursor::*, entity::*, error::*};
-use crate::primitives::ImportJobId;
+use crate::primitives::JobId;
 use cala_ledger::{entity::*, query::*};
 
 #[derive(Debug, Clone)]
-pub struct ImportJobs {
+pub struct Jobs {
     pool: PgPool,
 }
 
-impl ImportJobs {
+impl Jobs {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
     }
@@ -17,53 +17,53 @@ impl ImportJobs {
     pub async fn create_in_tx(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        new_import_job: NewImportJob,
-    ) -> Result<ImportJob, ImportJobError> {
-        let id = new_import_job.id;
+        new_job: NewJob,
+    ) -> Result<Job, JobError> {
+        let id = new_job.id;
         sqlx::query!(
-            r#"INSERT INTO import_jobs (id, name)
+            r#"INSERT INTO jobs (id, name)
             VALUES ($1, $2)"#,
-            id as ImportJobId,
-            new_import_job.name,
+            id as JobId,
+            new_job.name,
         )
         .execute(&mut **tx)
         .await?;
-        let mut events = new_import_job.initial_events();
+        let mut events = new_job.initial_events();
         events.persist(tx, None).await?;
-        let import_job = ImportJob::try_from(events)?;
-        Ok(import_job)
+        let job = Job::try_from(events)?;
+        Ok(job)
     }
 
     pub async fn list(
         &self,
-        query: PaginatedQueryArgs<ImportJobByNameCursor>,
-    ) -> Result<PaginatedQueryRet<ImportJob, ImportJobByNameCursor>, ImportJobError> {
+        query: PaginatedQueryArgs<JobByNameCursor>,
+    ) -> Result<PaginatedQueryRet<Job, JobByNameCursor>, JobError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"
-            WITH jobs AS (
+            WITH limited_jobs AS (
               SELECT id, name, created_at
-              FROM import_jobs
+              FROM jobs
               WHERE ((name, id) > ($2, $1)) OR ($1 IS NULL AND $2 IS NULL)
               ORDER BY name, id
               LIMIT $3
             )
             SELECT j.id, e.sequence, e.event,
                 j.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM jobs j
-            JOIN import_job_events e ON j.id = e.id
+            FROM limited_jobs j
+            JOIN job_events e ON j.id = e.id
             ORDER BY j.name, j.id, e.sequence"#,
-            query.after.as_ref().map(|c| c.id) as Option<ImportJobId>,
+            query.after.as_ref().map(|c| c.id) as Option<JobId>,
             query.after.map(|c| c.name),
             query.first as i64 + 1
         )
         .fetch_all(&self.pool)
         .await?;
 
-        let (entities, has_next_page) = EntityEvents::load_n::<ImportJob>(rows, query.first)?;
+        let (entities, has_next_page) = EntityEvents::load_n::<Job>(rows, query.first)?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(ImportJobByNameCursor {
+            end_cursor = Some(JobByNameCursor {
                 id: last.id,
                 name: last.name.clone(),
             });
@@ -74,22 +74,21 @@ impl ImportJobs {
             end_cursor,
         })
     }
-
-    pub async fn find_by_id(&self, id: ImportJobId) -> Result<ImportJob, ImportJobError> {
+    pub async fn find_by_id(&self, id: JobId) -> Result<Job, JobError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
                       a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM import_jobs a
-            JOIN import_job_events e ON a.id = e.id
+            FROM jobs a
+            JOIN job_events e ON a.id = e.id
             WHERE a.id = $1
             ORDER BY e.sequence"#,
-            id as ImportJobId
+            id as JobId
         )
         .fetch_all(&self.pool)
         .await?;
 
-        let res = EntityEvents::load_first::<ImportJob>(rows)?;
+        let res = EntityEvents::load_first::<Job>(rows)?;
         Ok(res)
     }
 }

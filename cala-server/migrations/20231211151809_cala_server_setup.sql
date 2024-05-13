@@ -1,13 +1,13 @@
 -- Add migration script here
 
-CREATE TABLE import_jobs (
+CREATE TABLE jobs (
   id UUID NOT NULL UNIQUE,
   name VARCHAR NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE import_job_events (
-  id UUID REFERENCES import_jobs(id) NOT NULL,
+CREATE TABLE job_events (
+  id UUID REFERENCES jobs(id) NOT NULL,
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
@@ -16,8 +16,7 @@ CREATE TABLE import_job_events (
 );
 
 CREATE TABLE job_executions (
-  id UUID NOT NULL UNIQUE,
-  job_type VARCHAR NOT NULL,
+  id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
   executing_server_id VARCHAR,
   state_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

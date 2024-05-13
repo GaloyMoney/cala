@@ -1,16 +1,16 @@
 use serde::{Deserialize, Serialize};
 
 use super::entity::*;
-use crate::primitives::ImportJobId;
+use crate::primitives::JobId;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ImportJobByNameCursor {
+pub struct JobByNameCursor {
     pub name: String,
-    pub id: ImportJobId,
+    pub id: JobId,
 }
 
-impl From<ImportJob> for ImportJobByNameCursor {
-    fn from(job: ImportJob) -> Self {
+impl From<Job> for JobByNameCursor {
+    fn from(job: Job) -> Self {
         Self {
             name: job.name.clone(),
             id: job.id,

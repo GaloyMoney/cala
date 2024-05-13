@@ -1,7 +1,7 @@
 use async_graphql::{types::connection::*, *};
 use cala_ledger::tx_template::NewParamDefinition;
 
-use super::{account::*, import_job::*, journal::*, tx_template::*};
+use super::{account::*, job::*, journal::*, tx_template::*};
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
@@ -43,12 +43,12 @@ impl Query {
         .await
     }
 
-    async fn import_jobs(
+    async fn jobs(
         &self,
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<ImportJobByNameCursor, ImportJob, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         query(
             after,
@@ -58,17 +58,17 @@ impl Query {
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
                 let result = app
-                    .list_import_jobs(cala_ledger::query::PaginatedQueryArgs {
+                    .list_jobs(cala_ledger::query::PaginatedQueryArgs {
                         first,
-                        after: after.map(crate::import_job::ImportJobByNameCursor::from),
+                        after: after.map(crate::job::JobByNameCursor::from),
                     })
                     .await?;
                 let mut connection = Connection::new(false, result.has_next_page);
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = ImportJobByNameCursor::from(&entity);
-                        Edge::new(cursor, ImportJob::from(entity))
+                        let cursor = JobByNameCursor::from(&entity);
+                        Edge::new(cursor, Job::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },
@@ -209,19 +209,5 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             tx_template: tx_template.into_values().into(),
         };
         Ok(tx_template_payload)
-    }
-
-    async fn import_job_create(
-        &self,
-        ctx: &Context<'_>,
-        input: ImportJobCreateInput,
-    ) -> Result<ImportJobCreatePayload> {
-        let app = ctx.data_unchecked::<CalaApp>();
-        Ok(ImportJobCreatePayload {
-            import_job: app
-                .create_import_job(input.name, input.description, input.endpoint)
-                .await
-                .map(ImportJob::from)?,
-        })
     }
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, e.sequence, e.event,\n                      a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM import_jobs a\n            JOIN import_job_events e ON a.id = e.id\n            WHERE a.id = $1\n            ORDER BY e.sequence",
+  "query": "SELECT a.id, e.sequence, e.event,\n                      a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM jobs a\n            JOIN job_events e ON a.id = e.id\n            WHERE a.id = $1\n            ORDER BY e.sequence",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "b6c08c5c69de29b7a73992255c9ebdb66a52b734664bd682bc2a126dc0f9841e"
+  "hash": "e7184d9f5535d163c0aefa79c824d7fd2d7a2d6b76fdc552a2026a10755bc89a"
 }

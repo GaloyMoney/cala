@@ -1,9 +1,0 @@
-mutation importJobCreate($input: ImportJobCreateInput!) {
-  importJobCreate(input: $input) {
-    importJob {
-      importJobId
-      name
-    }
-  }
-}
-

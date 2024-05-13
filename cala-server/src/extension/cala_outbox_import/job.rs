@@ -1,5 +1,4 @@
 #![allow(clippy::blocks_in_conditions)]
-mod config;
 
 use async_trait::async_trait;
 use cala_ledger::{primitives::DataSourceId, CalaLedger};
@@ -11,24 +10,37 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::jobs::{CurrentJob, JobRunner};
+use crate::job::*;
 
-pub use config::*;
+pub use super::config::*;
 
-pub const CALA_OUTBOX_IMPORT_JOB_TYPE: &str = "cala-outbox-import-job";
+pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
+
+#[derive(Default)]
+pub struct CalaOutboxImportJobInitializer;
+
+#[async_trait]
+impl JobInitializer for CalaOutboxImportJobInitializer {
+    fn job_type() -> JobType {
+        CALA_OUTBOX_IMPORT_JOB_TYPE
+    }
+
+    async fn init(
+        &self,
+        job: &Job,
+        ledger: &CalaLedger,
+    ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
+        let config = job.config()?;
+        Ok(Box::new(CalaOutboxImportJob {
+            config,
+            ledger: ledger.clone(),
+        }))
+    }
+}
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,
     ledger: CalaLedger,
-}
-
-impl CalaOutboxImportJob {
-    pub fn new(config: CalaOutboxImportConfig, ledger: &CalaLedger) -> Self {
-        Self {
-            config,
-            ledger: ledger.clone(),
-        }
-    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -38,7 +50,7 @@ struct CalaOutboxImportJobState {
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "import_job.cala_outbox.run", skip(self, current_job), err)]
+    #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
     async fn run(&self, mut current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Executing CalaOutboxImportJob importing from endpoint: {}",
@@ -54,7 +66,11 @@ impl JobRunner for CalaOutboxImportJob {
             state.last_synced = message.sequence;
             current_job.update_state(&mut tx, &state).await?;
             self.ledger
-                .sync_outbox_event(tx, DataSourceId::from(current_job.id()), message)
+                .sync_outbox_event(
+                    tx,
+                    DataSourceId::from(uuid::Uuid::from(current_job.id())),
+                    message,
+                )
                 .await?;
         }
         Ok(())

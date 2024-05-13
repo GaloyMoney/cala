@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          INSERT INTO job_executions (id)\n          VALUES ($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c2333793a6e4791712fdb5f2567b6b415a3e17928b7c8e6f4385ca6d0c53fe6"
+}

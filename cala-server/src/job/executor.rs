@@ -1,73 +1,74 @@
-mod config;
-mod current;
-pub mod error;
-mod registry;
-mod traits;
-
 use sqlx::{postgres::types::PgInterval, PgPool, Postgres, Transaction};
 use tokio::sync::RwLock;
 use tracing::instrument;
-use uuid::Uuid;
 
 use std::{collections::HashMap, sync::Arc};
 
-pub use config::*;
-pub use current::*;
-use error::JobExecutorError;
-pub use registry::*;
-pub use traits::*;
+pub use super::{
+    config::*, current::*, entity::*, error::JobError, registry::*, repo::*, traits::*,
+};
+use crate::primitives::JobId;
 
 #[derive(Clone)]
 pub struct JobExecutor {
     config: JobExecutorConfig,
     pool: PgPool,
-    registry: Arc<JobRegistry>,
+    registry: Arc<RwLock<JobRegistry>>,
     poller_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
-    running_jobs: Arc<RwLock<HashMap<Uuid, JobHandle>>>,
+    running_jobs: Arc<RwLock<HashMap<JobId, JobHandle>>>,
+    jobs: Jobs,
 }
 
 impl JobExecutor {
-    pub fn new(pool: &PgPool, config: JobExecutorConfig, registry: JobRegistry) -> Self {
+    pub fn new(
+        pool: &PgPool,
+        config: JobExecutorConfig,
+        registry: JobRegistry,
+        jobs: &Jobs,
+    ) -> Self {
         Self {
             pool: pool.clone(),
             poller_handle: None,
             config,
-            registry: Arc::new(registry),
+            registry: Arc::new(RwLock::new(registry)),
             running_jobs: Arc::new(RwLock::new(HashMap::new())),
+            jobs: jobs.clone(),
         }
     }
 
-    pub async fn spawn_job<T: Into<JobTemplate>>(
+    pub async fn spawn_job<I: JobInitializer + Default>(
         &self,
         tx: &mut Transaction<'_, Postgres>,
-        job: T,
-    ) -> Result<(), JobExecutorError> {
-        let template: JobTemplate = job.into();
-        if !self.registry.initializer_exists(template.job_type) {
-            return Err(JobExecutorError::InvalidJobType(template.job_type));
+        job: &Job,
+    ) -> Result<(), JobError> {
+        let init_exists = { self.registry.read().await.initializer_exists(&job.job_type) };
+        if !init_exists {
+            self.registry
+                .write()
+                .await
+                .add_initializer(<I as JobInitializer>::job_type(), Box::<I>::default());
         }
-
         sqlx::query!(
             r#"
-          INSERT INTO job_executions (id, job_type)
-          VALUES ($1, $2)
+          INSERT INTO job_executions (id)
+          VALUES ($1)
         "#,
-            template.id,
-            template.job_type
+            job.id as JobId,
         )
         .execute(&mut **tx)
         .await?;
         Ok(())
     }
 
-    pub async fn start_poll(&mut self) -> Result<(), JobExecutorError> {
+    pub async fn start_poll(&mut self) -> Result<(), JobError> {
         let pool = self.pool.clone();
         let server_id = self.config.server_id.clone();
         let poll_interval = self.config.poll_interval;
         let pg_interval = PgInterval::try_from(poll_interval * 4)
-            .map_err(|e| JobExecutorError::InvalidPollInterval(e.to_string()))?;
+            .map_err(|e| JobError::InvalidPollInterval(e.to_string()))?;
         let running_jobs = Arc::clone(&self.running_jobs);
         let registry = Arc::clone(&self.registry);
+        let jobs = self.jobs.clone();
         let handle = tokio::spawn(async move {
             let poll_limit = 2;
             let mut keep_alive = false;
@@ -80,6 +81,7 @@ impl JobExecutor {
                     poll_limit,
                     pg_interval.clone(),
                     &running_jobs,
+                    &jobs,
                 )
                 .await;
                 tokio::time::sleep(poll_interval).await;
@@ -89,6 +91,7 @@ impl JobExecutor {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[instrument(
         name = "job_executor.poll_jobs",
         skip(pool, registry, running_jobs),
@@ -97,13 +100,14 @@ impl JobExecutor {
     )]
     async fn poll_jobs(
         pool: &PgPool,
-        registry: &Arc<JobRegistry>,
+        registry: &Arc<RwLock<JobRegistry>>,
         keep_alive: &mut bool,
         server_id: &str,
         poll_limit: u32,
         pg_interval: PgInterval,
-        running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
-    ) -> Result<(), JobExecutorError> {
+        running_jobs: &Arc<RwLock<HashMap<JobId, JobHandle>>>,
+        jobs: &Jobs,
+    ) -> Result<(), JobError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);
         {
@@ -118,7 +122,7 @@ impl JobExecutor {
                         executing_server_id = $2
                     WHERE id = ANY($1)
                     "#,
-                    &ids,
+                    &ids as &[JobId],
                     server_id,
                     pg_interval
                 )
@@ -141,7 +145,7 @@ impl JobExecutor {
                   executing_server_id = $1
               FROM selected_jobs
               WHERE je.id = selected_jobs.id
-              RETURNING je.id, je.job_type, je.state_json
+              RETURNING je.id AS "id!: JobId", je.state_json
               "#,
             server_id,
             poll_limit as i32,
@@ -152,30 +156,27 @@ impl JobExecutor {
         span.record("n_jobs_to_spawn", rows.len());
         if !rows.is_empty() {
             for row in rows {
-                let _ = Self::start_job(
-                    pool,
-                    registry,
-                    running_jobs,
-                    &row.job_type,
-                    row.id,
-                    row.state_json,
-                )
-                .await;
+                let job = jobs.find_by_id(row.id).await?;
+                let _ = Self::start_job(pool, registry, running_jobs, job, row.state_json).await;
             }
         }
         Ok(())
     }
 
-    #[instrument(name = "job_executor.start_job", skip(registry, running_jobs), err)]
+    #[instrument(
+        name = "job_executor.start_job",
+        skip(registry, running_jobs, job),
+        err
+    )]
     async fn start_job(
         pool: &PgPool,
-        registry: &Arc<JobRegistry>,
-        running_jobs: &Arc<RwLock<HashMap<Uuid, JobHandle>>>,
-        job_type: &str,
-        id: Uuid,
+        registry: &Arc<RwLock<JobRegistry>>,
+        running_jobs: &Arc<RwLock<HashMap<JobId, JobHandle>>>,
+        job: Job,
         job_state: Option<serde_json::Value>,
-    ) -> Result<(), JobExecutorError> {
-        let runner = registry.init_job(job_type, id).await?;
+    ) -> Result<(), JobError> {
+        let id = job.id;
+        let runner = registry.read().await.init_job(&job).await?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();
         let handle = tokio::spawn(async move {

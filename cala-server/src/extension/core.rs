@@ -1,6 +1,7 @@
 #[derive(async_graphql::SimpleObject, Default)]
 pub struct CoreMutationExtension {
-    hello: String,
+    #[graphql(flatten)]
+    cala_outbox_import: super::cala_outbox_import::Mutation,
 }
 
 #[derive(async_graphql::SimpleObject, Default)]

@@ -3,33 +3,26 @@ use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
 
-#[derive(InputObject)]
-pub struct ImportJobCreateInput {
-    pub name: String,
-    pub description: Option<String>,
-    pub endpoint: String,
-}
-
 #[derive(SimpleObject)]
-pub struct ImportJob {
+pub struct Job {
     pub id: ID,
-    pub import_job_id: UUID,
+    pub job_id: UUID,
     pub name: String,
     pub description: Option<String>,
 }
 
 #[derive(SimpleObject)]
-pub struct ImportJobCreatePayload {
-    pub import_job: ImportJob,
+pub struct JobCreatePayload {
+    pub job: Job,
 }
 
 #[derive(Serialize, Deserialize)]
-pub(super) struct ImportJobByNameCursor {
+pub(super) struct JobByNameCursor {
     pub name: String,
-    pub id: crate::primitives::ImportJobId,
+    pub id: crate::primitives::JobId,
 }
 
-impl CursorType for ImportJobByNameCursor {
+impl CursorType for JobByNameCursor {
     type Error = String;
 
     fn encode_cursor(&self) -> String {

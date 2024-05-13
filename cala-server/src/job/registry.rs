@@ -1,16 +1,18 @@
-use uuid::Uuid;
-
 use std::collections::HashMap;
 
-use super::{error::JobExecutorError, traits::*};
+use cala_ledger::CalaLedger;
+
+use super::{entity::*, error::JobError, traits::*};
 
 pub struct JobRegistry {
+    ledger: CalaLedger,
     initializers: HashMap<JobType, Box<dyn JobInitializer>>,
 }
 
 impl JobRegistry {
-    pub fn new() -> Self {
+    pub(crate) fn new(ledger: &CalaLedger) -> Self {
         Self {
+            ledger: ledger.clone(),
             initializers: HashMap::new(),
         }
     }
@@ -19,20 +21,16 @@ impl JobRegistry {
         self.initializers.insert(job_type, initializer);
     }
 
-    pub(super) fn initializer_exists(&self, job_type: JobType) -> bool {
+    pub(super) fn initializer_exists(&self, job_type: &JobType) -> bool {
         self.initializers.contains_key(job_type)
     }
 
-    pub(super) async fn init_job(
-        &self,
-        job_type: &str,
-        id: Uuid,
-    ) -> Result<Box<dyn JobRunner>, JobExecutorError> {
+    pub(super) async fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
         self.initializers
-            .get(&job_type)
+            .get(&job.job_type)
             .expect("no initializer present")
-            .init(id)
+            .init(job, &self.ledger)
             .await
-            .map_err(|e| JobExecutorError::JobInitError(e.to_string()))
+            .map_err(|e| JobError::JobInitError(e.to_string()))
     }
 }
