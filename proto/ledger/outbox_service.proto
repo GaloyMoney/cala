@@ -127,7 +127,7 @@ message Transaction {
   string id = 1;
   string journal_id = 2;
   string tx_template_id = 3;
-  string effective= 4;
+  string effective = 4;
   string correlation_id = 5;
   optional string external_id = 6;
   optional string description = 7;

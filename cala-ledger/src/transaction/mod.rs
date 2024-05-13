@@ -22,13 +22,14 @@ pub struct Transactions {
 }
 
 impl Transactions {
-    pub fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
         Self {
             repo: TransactionRepo::new(pool),
             outbox,
             pool: pool.clone(),
         }
     }
+
     #[instrument(name = "cala_ledger.transactions.create", skip(self))]
     pub async fn create(
         &self,

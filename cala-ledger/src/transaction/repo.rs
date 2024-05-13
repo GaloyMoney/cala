@@ -6,7 +6,7 @@ use cala_types::primitives::*;
 use crate::primitives::DataSourceId;
 use crate::{
     entity::*,
-    primitives::{DataSource, TransactionId, TxTemplateId},
+    primitives::{DataSource, TransactionId},
 };
 
 use super::{entity::*, error::*};
@@ -28,18 +28,11 @@ impl TransactionRepo {
         tx: &mut sqlx::Transaction<'_, Postgres>,
         new_transaction: NewTransaction,
     ) -> Result<EntityUpdate<Transaction>, TransactionError> {
-        let tx_id = new_transaction.id;
-        let correlation_id = new_transaction
-            .correlation_id
-            .as_ref()
-            .map_or_else(|| tx_id.to_string(), |id| id.to_string());
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (id, journal_id, tx_template_id, correlation_id, external_id)
-            VALUES ($1, $2, $3, $4, $5)"#,
-            tx_id as TransactionId,
+            r#"INSERT INTO cala_transactions (id, journal_id, external_id)
+            VALUES ($1, $2, $3)"#,
+            new_transaction.id as TransactionId,
             new_transaction.journal_id as JournalId,
-            new_transaction.tx_template_id as TxTemplateId,
-            correlation_id,
             new_transaction.external_id
         )
         .execute(&mut **tx)
@@ -61,13 +54,11 @@ impl TransactionRepo {
         transaction: &mut Transaction,
     ) -> Result<(), TransactionError> {
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, tx_template_id, correlation_id, external_id)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id)
+            VALUES ($1, $2, $3, $4)"#,
             origin as DataSourceId,
             transaction.values().id as TransactionId,
             transaction.values().journal_id as JournalId,
-            transaction.values().tx_template_id as TxTemplateId,
-            transaction.values().correlation_id,
             transaction.values().external_id,
         )
         .execute(&mut **tx)

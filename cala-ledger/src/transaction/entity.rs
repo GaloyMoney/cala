@@ -48,6 +48,7 @@ impl Transaction {
         );
         Self::try_from(events).expect("Failed to build transaction from events")
     }
+
     pub fn id(&self) -> TransactionId {
         self.values.id
     }
