@@ -19,13 +19,12 @@ pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-impor
 #[derive(Default)]
 pub struct CalaOutboxImportJobInitializer;
 
-#[async_trait]
 impl JobInitializer for CalaOutboxImportJobInitializer {
     fn job_type() -> JobType {
         CALA_OUTBOX_IMPORT_JOB_TYPE
     }
 
-    async fn init(
+    fn init(
         &self,
         job: &Job,
         ledger: &CalaLedger,

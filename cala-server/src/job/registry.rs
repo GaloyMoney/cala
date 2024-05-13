@@ -25,12 +25,11 @@ impl JobRegistry {
         self.initializers.contains_key(job_type)
     }
 
-    pub(super) async fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
+    pub(super) fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
         self.initializers
             .get(&job.job_type)
             .expect("no initializer present")
             .init(job, &self.ledger)
-            .await
             .map_err(|e| JobError::JobInitError(e.to_string()))
     }
 }

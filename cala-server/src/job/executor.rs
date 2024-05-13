@@ -176,7 +176,7 @@ impl JobExecutor {
         job_state: Option<serde_json::Value>,
     ) -> Result<(), JobError> {
         let id = job.id;
-        let runner = registry.read().await.init_job(&job).await?;
+        let runner = registry.read().await.init_job(&job)?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();
         let handle = tokio::spawn(async move {

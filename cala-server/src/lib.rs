@@ -12,6 +12,7 @@ pub mod server;
 // Re exports
 pub use async_graphql;
 pub use async_trait;
+pub use futures;
 pub use tokio;
 pub use tracing;
 
