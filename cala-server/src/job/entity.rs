@@ -52,6 +52,12 @@ pub struct Job {
     pub(super) _events: EntityEvents<JobEvent>,
 }
 
+impl Job {
+    pub fn config<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_value(self.config.clone())
+    }
+}
+
 impl Entity for Job {
     type Event = JobEvent;
 }

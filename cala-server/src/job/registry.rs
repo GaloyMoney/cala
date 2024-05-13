@@ -1,14 +1,18 @@
 use std::collections::HashMap;
 
+use cala_ledger::CalaLedger;
+
 use super::{entity::*, error::JobError, traits::*};
 
 pub struct JobRegistry {
+    ledger: CalaLedger,
     initializers: HashMap<JobType, Box<dyn JobInitializer>>,
 }
 
 impl JobRegistry {
-    pub fn new() -> Self {
+    pub(crate) fn new(ledger: &CalaLedger) -> Self {
         Self {
+            ledger: ledger.clone(),
             initializers: HashMap::new(),
         }
     }
@@ -25,7 +29,7 @@ impl JobRegistry {
         self.initializers
             .get(&job.job_type)
             .expect("no initializer present")
-            .init(job)
+            .init(job, &self.ledger)
             .await
             .map_err(|e| JobError::JobInitError(e.to_string()))
     }

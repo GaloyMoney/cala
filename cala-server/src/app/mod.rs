@@ -25,7 +25,7 @@ impl CalaApp {
         ledger: CalaLedger,
     ) -> Result<Self, ApplicationError> {
         let jobs = Jobs::new(&pool);
-        let registry = JobRegistry::new();
+        let registry = JobRegistry::new(&ledger);
         // registry.add_initializer(
         //     CALA_OUTBOX_IMPORT_JOB_TYPE,
         //     Box::new(ImportJobInitializer::new(

@@ -8,11 +8,28 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::job::{CurrentJob, JobRunner, JobType};
+use crate::job::*;
 
 pub use super::config::*;
 
 pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
+
+pub struct CalaOutboxImportJobInitializer;
+
+#[async_trait]
+impl JobInitializer for CalaOutboxImportJobInitializer {
+    async fn init(
+        &self,
+        job: &Job,
+        ledger: &CalaLedger,
+    ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
+        let config = job.config()?;
+        Ok(Box::new(CalaOutboxImportJob {
+            config,
+            ledger: ledger.clone(),
+        }))
+    }
+}
 
 pub struct CalaOutboxImportJob {
     config: CalaOutboxImportConfig,
@@ -26,7 +43,7 @@ struct CalaOutboxImportJobState {
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "import_job.cala_outbox.run", skip(self, current_job), err)]
+    #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
     async fn run(&self, mut current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>> {
         println!(
             "Executing CalaOutboxImportJob importing from endpoint: {}",
