@@ -1,6 +1,7 @@
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
 
+use super::error::JobError;
 use crate::primitives::JobId;
 
 pub struct CurrentJob {
@@ -30,8 +31,8 @@ impl CurrentJob {
         &mut self,
         tx: &mut Transaction<'_, Postgres>,
         state: T,
-    ) -> Result<(), sqlx::Error> {
-        let state_json = serde_json::to_value(state).expect("Could not serialize state");
+    ) -> Result<(), JobError> {
+        let state_json = serde_json::to_value(state).map_err(JobError::CouldNotSerializeState)?;
         sqlx::query!(
             r#"
           UPDATE job_executions

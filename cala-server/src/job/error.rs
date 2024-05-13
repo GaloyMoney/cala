@@ -16,4 +16,6 @@ pub enum JobError {
     JobInitError(String),
     #[error("JobError - BadConfig: {0}")]
     CouldNotSerializeConfig(serde_json::Error),
+    #[error("JobError - BadState: {0}")]
+    CouldNotSerializeState(serde_json::Error),
 }

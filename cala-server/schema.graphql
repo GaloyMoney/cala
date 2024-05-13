@@ -42,7 +42,7 @@ type AccountEdge {
 
 
 input CalaOutboxImportJobCreateInput {
-	jobName: String!
+	name: String!
 	description: String
 	endpoint: String!
 }
