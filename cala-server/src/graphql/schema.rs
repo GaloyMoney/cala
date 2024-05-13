@@ -1,6 +1,7 @@
 use async_graphql::{types::connection::*, *};
+use cala_ledger::tx_template::NewParamDefinition;
 
-use super::{account::*, import_job::*, journal::*};
+use super::{account::*, import_job::*, journal::*, tx_template::*};
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
@@ -109,6 +110,105 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
         let journal = app.ledger().journals().create(new.build()?).await?;
         Ok(journal.into_values().into())
+    }
+
+    async fn tx_template_create(
+        &self,
+        ctx: &Context<'_>,
+        input: TxTemplateCreateInput,
+    ) -> Result<TxTemplateCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.into()
+        } else {
+            cala_ledger::TxTemplateId::new()
+        };
+        let mut new_tx_input_builder = cala_ledger::tx_template::NewTxInput::builder();
+        let TxTemplateTxInput {
+            effective,
+            journal_id,
+            correlation_id,
+            external_id,
+            description,
+            metadata,
+        } = input.tx_input;
+        new_tx_input_builder
+            .effective(effective)
+            .journal_id(journal_id);
+        if let Some(correlation_id) = correlation_id {
+            new_tx_input_builder.correlation_id(correlation_id);
+        };
+        if let Some(external_id) = external_id {
+            new_tx_input_builder.external_id(external_id);
+        };
+        if let Some(description) = description {
+            new_tx_input_builder.description(description);
+        };
+        if let Some(metadata) = metadata {
+            new_tx_input_builder.metadata(metadata);
+        }
+        let new_tx_input = new_tx_input_builder.build()?;
+        let mut new_params = Vec::new();
+        if let Some(params) = input.params {
+            for param in params {
+                let mut param_builder = NewParamDefinition::builder();
+                param_builder.name(param.name).r#type(param.r#type.into());
+                if let Some(default) = param.default {
+                    param_builder.default_expr(default);
+                }
+                if let Some(desc) = param.description {
+                    param_builder.description(desc);
+                }
+                let new_param = param_builder.build()?;
+                new_params.push(new_param);
+            }
+        }
+        let mut new_entries = Vec::new();
+        for entry in input.entries {
+            let TxTemplateEntryInput {
+                entry_type,
+                account_id,
+                layer,
+                direction,
+                units,
+                currency,
+                description,
+            } = entry;
+            let mut new_entry_input_builder = cala_ledger::tx_template::NewEntryInput::builder();
+            new_entry_input_builder
+                .entry_type(entry_type)
+                .account_id(account_id)
+                .layer(layer)
+                .direction(direction)
+                .units(units)
+                .currency(currency);
+            if let Some(desc) = description {
+                new_entry_input_builder.description(desc);
+            }
+
+            let new_entry_input = new_entry_input_builder.build()?;
+            new_entries.push(new_entry_input);
+        }
+        let mut new_tx_template_builder = cala_ledger::tx_template::NewTxTemplate::builder();
+        new_tx_template_builder
+            .id(id)
+            .code(input.code)
+            .tx_input(new_tx_input)
+            .params(new_params)
+            .entries(new_entries);
+        if let Some(desc) = input.description {
+            new_tx_template_builder.description(desc);
+        }
+        if let Some(metadata) = input.metadata {
+            new_tx_template_builder.metadata(metadata)?;
+        }
+
+        let new_tx_template = new_tx_template_builder.build()?;
+        let tx_template = app.ledger().tx_templates().create(new_tx_template).await?;
+        let tx_template_payload = TxTemplateCreatePayload {
+            tx_template: tx_template.into_values().into(),
+        };
+        Ok(tx_template_payload)
     }
 
     async fn import_job_create(

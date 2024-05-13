@@ -40,6 +40,12 @@ impl CelExpression {
     }
 }
 
+impl std::fmt::Display for CelExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.source)
+    }
+}
+
 enum EvalType<'a> {
     Value(CelValue),
     ContextItem(&'a ContextItem),

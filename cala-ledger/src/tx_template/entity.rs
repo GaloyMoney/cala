@@ -151,7 +151,7 @@ pub struct NewEntryInput {
     units: String,
     #[builder(setter(into))]
     currency: String,
-    #[builder(setter(strip_option), default)]
+    #[builder(setter(strip_option, into), default)]
     description: Option<String>,
 }
 
@@ -367,20 +367,20 @@ mod tests {
             .currency("'BTC'")
             .build()
             .unwrap()];
-        let new_journal = NewTxTemplate::builder()
+        let new_tx_template = NewTxTemplate::builder()
             .id(TxTemplateId::new())
             .code("CODE")
             .tx_input(
                 NewTxInput::builder()
                     .effective("date('2022-11-01')")
-                    .journal_id(format!("'{journal_id}'"))
+                    .journal_id(format!("uuid('{journal_id}')"))
                     .build()
                     .unwrap(),
             )
             .entries(entries)
             .build()
             .unwrap();
-        assert_eq!(new_journal.description, None);
+        assert_eq!(new_tx_template.description, None);
     }
 
     #[test]
@@ -393,7 +393,7 @@ mod tests {
     fn build_param_definition() {
         let definition = NewParamDefinition::builder()
             .name("name")
-            .r#type(ParamDataType::JSON)
+            .r#type(ParamDataType::Json)
             .default_expr("{'key': 'value'}")
             .build()
             .unwrap();

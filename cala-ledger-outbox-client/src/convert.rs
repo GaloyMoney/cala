@@ -235,14 +235,14 @@ impl TryFrom<proto::EntryInput> for EntryInput {
 impl From<proto::ParamDataType> for ParamDataType {
     fn from(data_type: proto::ParamDataType) -> Self {
         match data_type {
-            proto::ParamDataType::String => ParamDataType::STRING,
-            proto::ParamDataType::Integer => ParamDataType::INTEGER,
-            proto::ParamDataType::Decimal => ParamDataType::DECIMAL,
-            proto::ParamDataType::Boolean => ParamDataType::BOOLEAN,
-            proto::ParamDataType::Uuid => ParamDataType::UUID,
-            proto::ParamDataType::Date => ParamDataType::DATE,
-            proto::ParamDataType::Timestamp => ParamDataType::TIMESTAMP,
-            proto::ParamDataType::Json => ParamDataType::JSON,
+            proto::ParamDataType::String => ParamDataType::String,
+            proto::ParamDataType::Integer => ParamDataType::Integer,
+            proto::ParamDataType::Decimal => ParamDataType::Decimal,
+            proto::ParamDataType::Boolean => ParamDataType::Boolean,
+            proto::ParamDataType::Uuid => ParamDataType::Uuid,
+            proto::ParamDataType::Date => ParamDataType::Date,
+            proto::ParamDataType::Timestamp => ParamDataType::Timestamp,
+            proto::ParamDataType::Json => ParamDataType::Json,
         }
     }
 }

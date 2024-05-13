@@ -202,14 +202,14 @@ impl From<ParamDefinition> for proto::ParamDefinition {
 impl From<ParamDataType> for proto::ParamDataType {
     fn from(param_data_type: ParamDataType) -> Self {
         match param_data_type {
-            ParamDataType::STRING => proto::ParamDataType::String,
-            ParamDataType::INTEGER => proto::ParamDataType::Integer,
-            ParamDataType::DECIMAL => proto::ParamDataType::Decimal,
-            ParamDataType::BOOLEAN => proto::ParamDataType::Boolean,
-            ParamDataType::UUID => proto::ParamDataType::Uuid,
-            ParamDataType::DATE => proto::ParamDataType::Date,
-            ParamDataType::TIMESTAMP => proto::ParamDataType::Timestamp,
-            ParamDataType::JSON => proto::ParamDataType::Json,
+            ParamDataType::String => proto::ParamDataType::String,
+            ParamDataType::Integer => proto::ParamDataType::Integer,
+            ParamDataType::Decimal => proto::ParamDataType::Decimal,
+            ParamDataType::Boolean => proto::ParamDataType::Boolean,
+            ParamDataType::Uuid => proto::ParamDataType::Uuid,
+            ParamDataType::Date => proto::ParamDataType::Date,
+            ParamDataType::Timestamp => proto::ParamDataType::Timestamp,
+            ParamDataType::Json => proto::ParamDataType::Json,
         }
     }
 }
