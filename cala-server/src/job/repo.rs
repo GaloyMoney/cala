@@ -74,7 +74,6 @@ impl Jobs {
             end_cursor,
         })
     }
-
     pub async fn find_by_id(&self, id: JobId) -> Result<Job, JobError> {
         let rows = sqlx::query_as!(
             GenericEvent,

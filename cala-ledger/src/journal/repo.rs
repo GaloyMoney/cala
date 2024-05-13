@@ -7,14 +7,12 @@ use crate::{entity::*, primitives::DataSource};
 
 #[derive(Debug, Clone)]
 pub(super) struct JournalRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl JournalRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
     }
 
     pub async fn create_in_tx(

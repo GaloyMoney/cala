@@ -7,17 +7,6 @@ use std::borrow::Cow;
 use super::error::JobError;
 use crate::primitives::JobId;
 
-pub struct JobTemplate {
-    pub job_type: JobType,
-    pub id: JobId,
-}
-
-impl JobTemplate {
-    pub fn new(job_type: JobType, id: JobId) -> Self {
-        Self { job_type, id }
-    }
-}
-
 #[derive(Clone, Eq, Hash, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
 #[serde(transparent)]
@@ -25,10 +14,6 @@ pub struct JobType(Cow<'static, str>);
 impl JobType {
     pub const fn new(job_type: &'static str) -> Self {
         JobType(Cow::Borrowed(job_type))
-    }
-
-    pub(super) fn from_db(job_type: String) -> Self {
-        JobType(Cow::Owned(job_type))
     }
 }
 impl std::fmt::Display for JobType {
@@ -135,11 +120,5 @@ impl NewJobBuilder {
         self.config =
             Some(serde_json::to_value(config).map_err(JobError::CouldNotSerializeConfig)?);
         Ok(self)
-    }
-}
-
-impl From<&Job> for JobTemplate {
-    fn from(job: &Job) -> Self {
-        JobTemplate::new(job.job_type.clone(), job.id)
     }
 }

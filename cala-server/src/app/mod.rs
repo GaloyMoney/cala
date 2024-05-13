@@ -33,7 +33,8 @@ impl CalaApp {
         //         ledger.clone(),
         //     )),
         // );
-        let mut job_executor = JobExecutor::new(&pool, config.job_execution.clone(), registry);
+        let mut job_executor =
+            JobExecutor::new(&pool, config.job_execution.clone(), registry, &jobs);
         job_executor.start_poll().await?;
         Ok(Self {
             pool,

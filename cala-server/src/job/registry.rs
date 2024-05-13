@@ -1,8 +1,6 @@
-use uuid::Uuid;
-
 use std::collections::HashMap;
 
-use super::{entity::JobType, error::JobError, traits::*};
+use super::{entity::*, error::JobError, traits::*};
 
 pub struct JobRegistry {
     initializers: HashMap<JobType, Box<dyn JobInitializer>>,
@@ -23,15 +21,11 @@ impl JobRegistry {
         self.initializers.contains_key(job_type)
     }
 
-    pub(super) async fn init_job(
-        &self,
-        job_type: JobType,
-        id: Uuid,
-    ) -> Result<Box<dyn JobRunner>, JobError> {
+    pub(super) async fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
         self.initializers
-            .get(&job_type)
+            .get(&job.job_type)
             .expect("no initializer present")
-            .init(id)
+            .init(job)
             .await
             .map_err(|e| JobError::JobInitError(e.to_string()))
     }
