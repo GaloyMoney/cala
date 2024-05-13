@@ -58,8 +58,8 @@ async fn main() -> anyhow::Result<()> {
     println!("journal_id: {}", journal_id);
 
     let tx_input = NewTxInput::builder()
-        .journal_id(format!("UUID('{}')", journal_id))
-        .effective("DATE('2022-11-01')")
+        .journal_id(format!("uuid('{}')", journal_id))
+        .effective("date('2022-11-01')")
         .build()?;
     let entries = vec![
         NewEntryInput::builder()

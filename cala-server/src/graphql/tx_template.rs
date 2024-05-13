@@ -7,7 +7,7 @@ pub(super) struct TxTemplate {
     pub id: ID,
     pub tx_template_id: UUID,
     pub code: String,
-    pub params: Option<Vec<ParamDefinition>>,
+    pub params: Vec<ParamDefinition>,
     pub tx_input: TxInput,
     pub entries: Vec<EntryInput>,
     pub description: Option<String>,
@@ -59,7 +59,7 @@ pub(super) struct TxInput {
 pub(super) struct TxTemplateCreateInput {
     pub id: Option<UUID>,
     pub code: String,
-    pub params: Option<Vec<ParamDefinitionInput>>,
+    pub params: Vec<ParamDefinitionInput>,
     pub tx_input: TxTemplateTxInput,
     pub entries: Vec<TxTemplateEntryInput>,
     pub description: Option<String>,

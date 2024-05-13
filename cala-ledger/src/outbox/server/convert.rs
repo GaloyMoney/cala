@@ -137,15 +137,10 @@ impl From<TxTemplateValues> for proto::TxTemplate {
             metadata,
         }: TxTemplateValues,
     ) -> Self {
-        let params = params
-            .unwrap_or_default()
-            .into_iter()
-            .map(|param| param.into())
-            .collect();
         proto::TxTemplate {
             id: id.to_string(),
             code,
-            params,
+            params: params.into_iter().map(|param| param.into()).collect(),
             tx_input: Some(tx_input.into()),
             entries: entries.into_iter().map(|entry| entry.into()).collect(),
             description,
