@@ -18,7 +18,7 @@ pub struct CalaOutboxImportJobCreatePayload {
 #[derive(Default)]
 pub struct Mutation;
 
-#[Object(name = "BigQueryMutation")]
+#[Object(name = "CalaOutboxImportMutation")]
 impl Mutation {
     async fn cala_outbox_import_job_create(
         &self,
