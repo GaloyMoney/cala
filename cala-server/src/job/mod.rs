@@ -11,6 +11,4 @@ pub mod error;
 
 pub use current::*;
 pub use cursor::*;
-pub use entity::*;
 pub use executor::*;
-pub use repo::*;

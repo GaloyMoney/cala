@@ -26,13 +26,6 @@ impl CalaApp {
     ) -> Result<Self, ApplicationError> {
         let jobs = Jobs::new(&pool);
         let registry = JobRegistry::new(&ledger);
-        // registry.add_initializer(
-        //     CALA_OUTBOX_IMPORT_JOB_TYPE,
-        //     Box::new(ImportJobInitializer::new(
-        //         import_jobs.clone(),
-        //         ledger.clone(),
-        //     )),
-        // );
         let mut job_executor =
             JobExecutor::new(&pool, config.job_execution.clone(), registry, &jobs);
         job_executor.start_poll().await?;
@@ -49,23 +42,22 @@ impl CalaApp {
     }
 
     #[instrument(name = "cala_server.create_and_spawn_job", skip(self, config))]
-    pub async fn create_and_spawn_job<C: serde::Serialize>(
+    pub async fn create_and_spawn_job<I: JobInitializer + Default, C: serde::Serialize>(
         &self,
         name: String,
         description: Option<String>,
-        job_type: JobType,
         config: C,
     ) -> Result<Job, ApplicationError> {
         let new_job = NewJob::builder()
             .name(name)
             .description(description)
             .config(config)?
-            .job_type(job_type)
+            .job_type(<I as JobInitializer>::job_type())
             .build()
             .expect("Could not build job");
         let mut tx = self.pool.begin().await?;
         let job = self.jobs.create_in_tx(&mut tx, new_job).await?;
-        self.job_executor.spawn_job(&mut tx, &job).await?;
+        self.job_executor.spawn_job::<I>(&mut tx, &job).await?;
         tx.commit().await?;
         Ok(job)
     }

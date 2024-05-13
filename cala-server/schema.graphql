@@ -41,6 +41,16 @@ type AccountEdge {
 }
 
 
+input CalaOutboxImportJobCreateInput {
+	jobName: String!
+	description: String
+	endpoint: String!
+}
+
+type CalaOutboxImportJobCreatePayload {
+	job: Job!
+}
+
 enum DebitOrCredit {
 	DEBIT
 	CREDIT
@@ -60,14 +70,17 @@ scalar Expression
 
 
 
-type ImportJob {
+
+scalar JSON
+
+type Job {
 	id: ID!
-	importJobId: UUID!
+	jobId: UUID!
 	name: String!
 	description: String
 }
 
-type ImportJobConnection {
+type JobConnection {
 	"""
 	Information to aid in pagination.
 	"""
@@ -75,39 +88,26 @@ type ImportJobConnection {
 	"""
 	A list of edges.
 	"""
-	edges: [ImportJobEdge!]!
+	edges: [JobEdge!]!
 	"""
 	A list of nodes.
 	"""
-	nodes: [ImportJob!]!
-}
-
-input ImportJobCreateInput {
-	name: String!
-	description: String
-	endpoint: String!
-}
-
-type ImportJobCreatePayload {
-	importJob: ImportJob!
+	nodes: [Job!]!
 }
 
 """
 An edge in a connection.
 """
-type ImportJobEdge {
+type JobEdge {
 	"""
 	The item at the end of the edge
 	"""
-	node: ImportJob!
+	node: Job!
 	"""
 	A cursor for use in pagination
 	"""
 	cursor: String!
 }
-
-
-scalar JSON
 
 type Journal {
 	id: ID!
@@ -131,10 +131,9 @@ type JournalCreatePayload {
 }
 
 type Mutation {
-	hello: String!
+	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
-	importJobCreate(input: ImportJobCreateInput!): ImportJobCreatePayload!
 }
 
 """
@@ -186,7 +185,7 @@ input ParamDefinitionInput {
 
 type Query {
 	accounts(first: Int!, after: String): AccountConnection!
-	importJobs(first: Int!, after: String): ImportJobConnection!
+	jobs(first: Int!, after: String): JobConnection!
 }
 
 enum Status {

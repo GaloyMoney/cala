@@ -1,3 +1,5 @@
+#![allow(clippy::blocks_in_conditions)]
+
 use async_trait::async_trait;
 use cala_ledger::{primitives::DataSourceId, CalaLedger};
 use cala_ledger_outbox_client::{
@@ -14,10 +16,15 @@ pub use super::config::*;
 
 pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
 
+#[derive(Default)]
 pub struct CalaOutboxImportJobInitializer;
 
 #[async_trait]
 impl JobInitializer for CalaOutboxImportJobInitializer {
+    fn job_type() -> JobType {
+        CALA_OUTBOX_IMPORT_JOB_TYPE
+    }
+
     async fn init(
         &self,
         job: &Job,

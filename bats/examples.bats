@@ -24,11 +24,10 @@ teardown_file() {
     }'
   )
 
-  exec_graphql 'import-job-create' "$variables"
+  exec_graphql 'cala-outbox-import-job-create' "$variables"
 
-  name=$(graphql_output '.data.importJobCreate.importJob.name')
+  name=$(graphql_output '.data.calaOutboxImportJobCreate.job.name')
   [[ "$name" == "rust-example" ]] || exit 1;
-
 
   background cargo run --bin cala-ledger-example-rust > .rust-example-logs
 

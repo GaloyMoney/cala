@@ -13,7 +13,7 @@ use crate::primitives::JobId;
 pub struct JobExecutor {
     config: JobExecutorConfig,
     pool: PgPool,
-    registry: Arc<JobRegistry>,
+    registry: Arc<RwLock<JobRegistry>>,
     poller_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     running_jobs: Arc<RwLock<HashMap<JobId, JobHandle>>>,
     jobs: Jobs,
@@ -30,21 +30,24 @@ impl JobExecutor {
             pool: pool.clone(),
             poller_handle: None,
             config,
-            registry: Arc::new(registry),
+            registry: Arc::new(RwLock::new(registry)),
             running_jobs: Arc::new(RwLock::new(HashMap::new())),
             jobs: jobs.clone(),
         }
     }
 
-    pub async fn spawn_job(
+    pub async fn spawn_job<I: JobInitializer + Default>(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         job: &Job,
     ) -> Result<(), JobError> {
-        if !self.registry.initializer_exists(&job.job_type) {
-            return Err(JobError::InvalidJobType(job.job_type.clone()));
+        let init_exists = { self.registry.read().await.initializer_exists(&job.job_type) };
+        if !init_exists {
+            self.registry
+                .write()
+                .await
+                .add_initializer(<I as JobInitializer>::job_type(), Box::<I>::default());
         }
-
         sqlx::query!(
             r#"
           INSERT INTO job_executions (id)
@@ -88,6 +91,7 @@ impl JobExecutor {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[instrument(
         name = "job_executor.poll_jobs",
         skip(pool, registry, running_jobs),
@@ -96,7 +100,7 @@ impl JobExecutor {
     )]
     async fn poll_jobs(
         pool: &PgPool,
-        registry: &Arc<JobRegistry>,
+        registry: &Arc<RwLock<JobRegistry>>,
         keep_alive: &mut bool,
         server_id: &str,
         poll_limit: u32,
@@ -166,13 +170,13 @@ impl JobExecutor {
     )]
     async fn start_job(
         pool: &PgPool,
-        registry: &Arc<JobRegistry>,
+        registry: &Arc<RwLock<JobRegistry>>,
         running_jobs: &Arc<RwLock<HashMap<JobId, JobHandle>>>,
         job: Job,
         job_state: Option<serde_json::Value>,
     ) -> Result<(), JobError> {
         let id = job.id;
-        let runner = registry.init_job(&job).await?;
+        let runner = registry.read().await.init_job(&job).await?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();
         let handle = tokio::spawn(async move {
