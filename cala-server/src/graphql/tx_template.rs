@@ -24,7 +24,6 @@ pub(super) struct ParamDefinition {
 
 #[derive(Enum, Copy, Clone, PartialEq, Eq)]
 #[graphql(remote = "cala_ledger::tx_template::ParamDataType")]
-#[allow(clippy::upper_case_acronyms)]
 pub enum ParamDataType {
     String,
     Integer,
