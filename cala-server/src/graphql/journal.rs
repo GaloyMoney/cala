@@ -4,7 +4,7 @@ use super::primitives::*;
 
 #[derive(InputObject)]
 pub struct JournalCreateInput {
-    pub id: Option<UUID>,
+    pub journal_id: UUID,
     pub name: String,
     pub external_id: Option<String>,
     #[graphql(default)]

@@ -95,15 +95,9 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: AccountCreateInput,
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let id = if let Some(id) = input.id {
-            id.into()
-        } else {
-            cala_ledger::AccountId::new()
-        };
-
         let mut builder = cala_ledger::account::NewAccount::builder();
         builder
-            .id(id)
+            .id(input.account_id)
             .name(input.name)
             .code(input.code)
             .normal_balance_type(input.normal_balance_type.into())
@@ -135,21 +129,15 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: JournalCreateInput,
     ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let id = if let Some(id) = input.id {
-            id.into()
-        } else {
-            cala_ledger::JournalId::new()
-        };
-
-        let mut new = cala_ledger::journal::NewJournal::builder();
-        new.id(id).name(input.name);
+        let mut builder = cala_ledger::journal::NewJournal::builder();
+        builder.id(input.journal_id).name(input.name);
         if let Some(external_id) = input.external_id {
-            new.external_id(external_id);
+            builder.external_id(external_id);
         }
         if let Some(description) = input.description {
-            new.description(description);
+            builder.description(description);
         }
-        let journal = app.ledger().journals().create(new.build()?).await?;
+        let journal = app.ledger().journals().create(builder.build()?).await?;
 
         Ok(journal.into_values().into())
     }
@@ -160,12 +148,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: TxTemplateCreateInput,
     ) -> Result<TxTemplateCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let id = if let Some(id) = input.id {
-            id.into()
-        } else {
-            cala_ledger::TxTemplateId::new()
-        };
-
         let mut new_tx_input_builder = cala_ledger::tx_template::NewTxInput::builder();
         let TxTemplateTxInput {
             effective,
@@ -236,7 +218,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         let mut new_tx_template_builder = cala_ledger::tx_template::NewTxTemplate::builder();
         new_tx_template_builder
-            .id(id)
+            .id(input.tx_template_id)
             .code(input.code)
             .tx_input(new_tx_input)
             .params(new_params)

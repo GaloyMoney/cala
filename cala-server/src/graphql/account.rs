@@ -44,7 +44,7 @@ impl CursorType for AccountByNameCursor {
 
 #[derive(InputObject)]
 pub(super) struct AccountCreateInput {
-    pub id: Option<UUID>,
+    pub account_id: UUID,
     pub external_id: Option<String>,
     pub code: String,
     pub name: String,

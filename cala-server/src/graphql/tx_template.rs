@@ -45,7 +45,7 @@ pub(super) struct TxInput {
 
 #[derive(InputObject)]
 pub(super) struct TxTemplateCreateInput {
-    pub id: Option<UUID>,
+    pub tx_template_id: UUID,
     pub code: String,
     pub params: Option<Vec<ParamDefinitionInput>>,
     pub tx_input: TxTemplateTxInput,
