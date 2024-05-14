@@ -232,9 +232,3 @@ impl From<crate::job::Job> for Job {
         }
     }
 }
-
-impl From<TAG> for cala_ledger::Tag {
-    fn from(tag: TAG) -> Self {
-        cala_ledger::Tag::from(tag.into_inner())
-    }
-}

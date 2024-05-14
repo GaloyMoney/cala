@@ -72,9 +72,9 @@ impl From<String> for TAG {
     }
 }
 
-impl TAG {
-    pub fn into_inner(self) -> String {
-        self.0
+impl AsRef<str> for TAG {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
