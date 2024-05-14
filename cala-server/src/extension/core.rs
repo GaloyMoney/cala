@@ -10,3 +10,7 @@ pub struct MutationExtension {
     core: CoreMutationExtension,
 }
 impl super::MutationExtensionMarker for MutationExtension {}
+
+pub fn job_registration(registry: &mut crate::job::JobRegistry) {
+    registry.add_initializer::<super::cala_outbox_import::CalaOutboxImportJobInitializer>();
+}
