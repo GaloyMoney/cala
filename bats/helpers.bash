@@ -1,10 +1,11 @@
 REPO_ROOT=$(git rev-parse --show-toplevel)
-GQL_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/gql"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${REPO_ROOT##*/}}"
 
 GQL_ENDPOINT="http://localhost:2252/graphql"
 
 CALA_HOME="${CALA_HOME:-.cala}"
+SERVER_PID_FILE="${CALA_HOME}/server-pid"
+EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
 
 reset_pg() {
   docker exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
@@ -19,11 +20,27 @@ server_cmd() {
     server_location="${CARGO_TARGET_DIR}/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
   fi
 
-  ${server_location} $@
+  bash -c ${server_location} $@
 }
 
 start_server() {
-  background server_cmd > .e2e-logs
+  # Check for running server
+  if [ -n "$BASH_VERSION" ]; then
+    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${PIPESTATUS[2]})
+  elif [ -n "$ZSH_VERSION" ]; then
+    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${pipestatus[3]})
+  else
+    echo "Unsupported shell."
+    exit 1
+  fi
+  exit_status=$(echo "$server_process_and_status" | tail -n 1)
+  if [ "$exit_status" -eq 0 ]; then
+    rm -f "$SERVER_PID_FILE"
+    return 0
+  fi
+
+  # Start server if not already running
+  background server_cmd > .e2e-logs 2>&1
   for i in {1..20}
   do
     if head .e2e-logs | grep -q 'Starting graphql server on port'; then
@@ -35,19 +52,19 @@ start_server() {
 }
 
 stop_server() {
-  if [[ -f ${CALA_HOME}/server-pid ]]; then
-    kill -9 $(cat ${CALA_HOME}/server-pid) || true
+  if [[ -f "$SERVER_PID_FILE" ]]; then
+    kill -9 $(cat "$SERVER_PID_FILE") || true
   fi
 }
 
 stop_rust_example() {
-  if [[ -f ${CALA_HOME}/rust-example-pid ]]; then
-    kill -9 $(cat ${CALA_HOME}/rust-example-pid) || true
+  if [[ -f "$EXAMPLE_PID_FILE" ]]; then
+    kill -9 $(cat "$EXAMPLE_PID_FILE") || true
   fi
 }
 
 gql_file() {
-  echo "${GQL_DIR}/$1.gql"
+  echo "${REPO_ROOT}/bats/gql/$1.gql"
 }
 
 gql_query() {

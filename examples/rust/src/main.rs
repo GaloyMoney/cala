@@ -1,4 +1,5 @@
 use anyhow::Context;
+use rand::Rng;
 use std::fs;
 
 use cala_ledger::{
@@ -20,6 +21,9 @@ fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let random_number = rand::thread_rng().gen_range(0..1000);
+    let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{:03}", random_number));
+
     store_server_pid(".cala", std::process::id())?;
     let pg_con = "postgres://user:password@localhost:5433/pg".to_string();
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -36,10 +40,11 @@ async fn main() -> anyhow::Result<()> {
         .outbox(OutboxServerConfig::default())
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
+    let code_string = format!("USERS.{}", example_suffix);
     let new_account = NewAccount::builder()
         .id(AccountId::new())
-        .name("MY ACCOUNT")
-        .code("USERS.abc")
+        .name(format!("ACCOUNT #{:03}", random_number))
+        .code(code_string)
         .description("description")
         .build()?;
     let account = cala.accounts().create(new_account).await?;
@@ -85,7 +90,7 @@ async fn main() -> anyhow::Result<()> {
 
     let new_tx_template = NewTxTemplate::builder()
         .id(tx_template_id)
-        .code("CODE")
+        .code(format!("CODE_{}", example_suffix))
         .tx_input(tx_input)
         .entries(entries)
         .build()
