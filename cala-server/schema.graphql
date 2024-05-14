@@ -26,6 +26,22 @@ type AccountConnection {
 	nodes: [Account!]!
 }
 
+input AccountCreateInput {
+	id: UUID
+	externalId: String
+	code: String!
+	name: String!
+	normalBalanceType: DebitOrCredit! = CREDIT
+	description: String
+	status: Status! = ACTIVE
+	tags: [TAG!]!
+	metadata: JSON
+}
+
+type AccountCreatePayload {
+	account: Account!
+}
+
 """
 An edge in a connection.
 """
@@ -132,6 +148,7 @@ type JournalCreatePayload {
 
 type Mutation {
 	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
+	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 }

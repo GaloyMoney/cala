@@ -41,3 +41,23 @@ impl CursorType for AccountByNameCursor {
         serde_json::from_str(&json).map_err(|e| e.to_string())
     }
 }
+
+#[derive(InputObject)]
+pub(super) struct AccountCreateInput {
+    pub id: Option<UUID>,
+    pub external_id: Option<String>,
+    pub code: String,
+    pub name: String,
+    #[graphql(default)]
+    pub normal_balance_type: DebitOrCredit,
+    pub description: Option<String>,
+    #[graphql(default)]
+    pub status: Status,
+    pub tags: Vec<TAG>,
+    pub metadata: Option<JSON>,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct AccountCreatePayload {
+    pub account: Account,
+}

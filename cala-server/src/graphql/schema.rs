@@ -89,6 +89,40 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         E::default()
     }
 
+    async fn account_create(
+        &self,
+        ctx: &Context<'_>,
+        input: AccountCreateInput,
+    ) -> Result<AccountCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let id = if let Some(id) = input.id {
+            id.into()
+        } else {
+            cala_ledger::AccountId::new()
+        };
+
+        let mut builder = cala_ledger::account::NewAccount::builder();
+        builder
+            .id(id)
+            .name(input.name)
+            .code(input.code)
+            .normal_balance_type(input.normal_balance_type.into())
+            .status(input.status.into())
+            .tags(input.tags.into_iter().map(|tag| tag.into()).collect());
+        if let Some(external_id) = input.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+        if let Some(metadata) = input.metadata {
+            builder.metadata(metadata)?;
+        }
+        let account = app.ledger().accounts().create(builder.build()?).await?;
+
+        Ok(account.into_values().into())
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,
@@ -100,6 +134,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         } else {
             cala_ledger::JournalId::new()
         };
+
         let mut new = cala_ledger::journal::NewJournal::builder();
         new.id(id).name(input.name);
         if let Some(external_id) = input.external_id {
@@ -109,6 +144,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             new.description(description);
         }
         let journal = app.ledger().journals().create(new.build()?).await?;
+
         Ok(journal.into_values().into())
     }
 
@@ -123,6 +159,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         } else {
             cala_ledger::TxTemplateId::new()
         };
+
         let mut new_tx_input_builder = cala_ledger::tx_template::NewTxInput::builder();
         let TxTemplateTxInput {
             effective,
@@ -148,6 +185,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             new_tx_input_builder.metadata(metadata);
         }
         let new_tx_input = new_tx_input_builder.build()?;
+
         let mut new_params = Vec::new();
         if let Some(params) = input.params {
             for param in params {
@@ -163,6 +201,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
                 new_params.push(new_param);
             }
         }
+
         let mut new_entries = Vec::new();
         for entry in input.entries {
             let TxTemplateEntryInput {
@@ -185,10 +224,10 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             if let Some(desc) = description {
                 new_entry_input_builder.description(desc);
             }
-
             let new_entry_input = new_entry_input_builder.build()?;
             new_entries.push(new_entry_input);
         }
+
         let mut new_tx_template_builder = cala_ledger::tx_template::NewTxTemplate::builder();
         new_tx_template_builder
             .id(id)
@@ -202,12 +241,9 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if let Some(metadata) = input.metadata {
             new_tx_template_builder.metadata(metadata)?;
         }
-
         let new_tx_template = new_tx_template_builder.build()?;
         let tx_template = app.ledger().tx_templates().create(new_tx_template).await?;
-        let tx_template_payload = TxTemplateCreatePayload {
-            tx_template: tx_template.into_values().into(),
-        };
-        Ok(tx_template_payload)
+
+        Ok(tx_template.into_values().into())
     }
 }
