@@ -179,6 +179,22 @@ impl From<cala_ledger::journal::JournalValues> for JournalCreatePayload {
     }
 }
 
+impl From<cala_types::account::AccountValues> for AccountCreatePayload {
+    fn from(value: cala_types::account::AccountValues) -> Self {
+        Self {
+            account: Account::from(value),
+        }
+    }
+}
+
+impl From<cala_types::tx_template::TxTemplateValues> for TxTemplateCreatePayload {
+    fn from(value: cala_types::tx_template::TxTemplateValues) -> Self {
+        Self {
+            tx_template: TxTemplate::from(value),
+        }
+    }
+}
+
 impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
     fn from(values: &cala_ledger::account::AccountValues) -> Self {
         Self {
@@ -194,6 +210,14 @@ impl From<JobByNameCursor> for crate::job::JobByNameCursor {
             name: cursor.name,
             id: cursor.id,
         }
+    }
+}
+
+impl TryFrom<TAG> for cala_ledger::Tag {
+    type Error = cala_ledger::ParseTagError;
+
+    fn try_from(tag: TAG) -> Result<Self, Self::Error> {
+        tag.as_ref().parse()
     }
 }
 
