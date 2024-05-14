@@ -27,7 +27,7 @@ type AccountConnection {
 }
 
 input AccountCreateInput {
-	id: UUID
+	accountId: UUID!
 	externalId: String
 	code: String!
 	name: String!
@@ -135,7 +135,7 @@ type Journal {
 }
 
 input JournalCreateInput {
-	id: UUID
+	journalId: UUID!
 	name: String!
 	externalId: String
 	status: Status! = ACTIVE
@@ -234,7 +234,7 @@ type TxTemplate {
 }
 
 input TxTemplateCreateInput {
-	id: UUID
+	txTemplateId: UUID!
 	code: String!
 	params: [ParamDefinitionInput!]
 	txInput: TxTemplateTxInput!
