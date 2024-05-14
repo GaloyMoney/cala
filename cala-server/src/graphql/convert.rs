@@ -213,6 +213,14 @@ impl From<JobByNameCursor> for crate::job::JobByNameCursor {
     }
 }
 
+impl TryFrom<TAG> for cala_ledger::Tag {
+    type Error = cala_ledger::ParseTagError;
+
+    fn try_from(tag: TAG) -> Result<Self, Self::Error> {
+        tag.as_ref().parse()
+    }
+}
+
 impl From<&crate::job::Job> for JobByNameCursor {
     fn from(job: &crate::job::Job) -> Self {
         Self {

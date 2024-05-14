@@ -111,7 +111,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let tags = input
             .tags
             .into_iter()
-            .map(|tag| tag.as_ref().parse::<cala_ledger::Tag>())
+            .map(cala_ledger::Tag::try_from)
             .collect::<Result<Vec<_>, cala_ledger::ParseTagError>>()?;
         builder.tags(tags);
 
