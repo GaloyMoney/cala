@@ -4,11 +4,10 @@ mod entity;
 mod repo;
 
 use sqlx::PgPool;
-use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource};
+use crate::{outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -18,7 +17,7 @@ use repo::*;
 pub struct Transactions {
     repo: TransactionRepo,
     outbox: Outbox,
-    pool: PgPool,
+    _pool: PgPool,
 }
 
 impl Transactions {
@@ -26,24 +25,8 @@ impl Transactions {
         Self {
             repo: TransactionRepo::new(pool),
             outbox,
-            pool: pool.clone(),
+            _pool: pool.clone(),
         }
-    }
-
-    #[instrument(name = "cala_ledger.transactions.create", skip(self))]
-    pub async fn create(
-        &self,
-        new_transaction: NewTransaction,
-    ) -> Result<Transaction, TransactionError> {
-        let mut tx = self.pool.begin().await?;
-        let EntityUpdate {
-            entity: transaction,
-            n_new_events,
-        } = self.repo.create_in_tx(&mut tx, new_transaction).await?;
-        self.outbox
-            .persist_events(tx, transaction.events.last_persisted(n_new_events))
-            .await?;
-        Ok(transaction)
     }
 
     #[cfg(feature = "import")]
