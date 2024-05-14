@@ -17,8 +17,9 @@ impl JobRegistry {
         }
     }
 
-    pub fn add_initializer(&mut self, job_type: JobType, initializer: Box<dyn JobInitializer>) {
-        self.initializers.insert(job_type, initializer);
+    pub fn add_initializer<I: JobInitializer + Default>(&mut self) {
+        self.initializers
+            .insert(<I as JobInitializer>::job_type(), Box::<I>::default());
     }
 
     pub(super) fn initializer_exists(&self, job_type: &JobType) -> bool {
@@ -28,7 +29,7 @@ impl JobRegistry {
     pub(super) fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
         self.initializers
             .get(&job.job_type)
-            .expect("no initializer present")
+            .ok_or(JobError::NoInitializerPresent)?
             .init(job, &self.ledger)
             .map_err(|e| JobError::JobInitError(e.to_string()))
     }

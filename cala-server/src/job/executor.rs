@@ -43,10 +43,7 @@ impl JobExecutor {
     ) -> Result<(), JobError> {
         let init_exists = { self.registry.read().await.initializer_exists(&job.job_type) };
         if !init_exists {
-            self.registry
-                .write()
-                .await
-                .add_initializer(<I as JobInitializer>::job_type(), Box::<I>::default());
+            self.registry.write().await.add_initializer::<I>();
         }
         sqlx::query!(
             r#"
