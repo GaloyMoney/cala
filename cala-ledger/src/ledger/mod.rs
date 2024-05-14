@@ -11,6 +11,7 @@ use crate::{
     account::Accounts,
     journal::Journals,
     outbox::{server, EventSequence, Outbox, OutboxListener},
+    transaction::Transactions,
     tx_template::TxTemplates,
 };
 #[cfg(feature = "import")]
@@ -27,6 +28,7 @@ pub struct CalaLedger {
     _pool: PgPool,
     accounts: Accounts,
     journals: Journals,
+    transactions: Transactions,
     tx_templates: TxTemplates,
     outbox: Outbox,
     #[allow(clippy::type_complexity)]
@@ -63,11 +65,13 @@ impl CalaLedger {
         let accounts = Accounts::new(&pool, outbox.clone());
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
+        let transactions = Transactions::new(&pool, outbox.clone());
         Ok(Self {
             accounts,
             journals,
             tx_templates,
             outbox,
+            transactions,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
@@ -83,6 +87,10 @@ impl CalaLedger {
 
     pub fn tx_templates(&self) -> &TxTemplates {
         &self.tx_templates
+    }
+
+    pub fn transactions(&self) -> &Transactions {
+        &self.transactions
     }
 
     pub async fn register_outbox_listener(
@@ -112,6 +120,11 @@ impl CalaLedger {
             JournalCreated { journal, .. } => {
                 self.journals
                     .sync_journal_creation(tx, origin, journal)
+                    .await?
+            }
+            TransactionCreated { transaction, .. } => {
+                self.transactions
+                    .sync_transaction_creation(tx, origin, transaction)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {

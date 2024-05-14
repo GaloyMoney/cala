@@ -4,6 +4,7 @@ use crate::{
     account::error::AccountError,
     journal::error::JournalError,
     outbox::{error::OutboxError, server::error::OutboxServerError},
+    transaction::error::TransactionError,
     tx_template::error::TxTemplateError,
 };
 
@@ -25,4 +26,6 @@ pub enum LedgerError {
     JournalError(#[from] JournalError),
     #[error("LedgerError - TxTemplateError: {0}")]
     TxTemplateError(#[from] TxTemplateError),
+    #[error("LedgerError - TransactionError: {0}")]
+    TransactionError(#[from] TransactionError),
 }

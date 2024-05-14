@@ -19,4 +19,6 @@ pub enum CalaLedgerOutboxClientError {
     ParseTagError(#[from] cala_types::primitives::ParseTagError),
     #[error("CalaLedgerOutboxError - CelError: {0}")]
     CelError(#[from] cel_interpreter::CelError),
+    #[error("CalaLedgerOutboxError - ChronoError: {0}")]
+    ChronoError(#[from] chrono::ParseError),
 }
