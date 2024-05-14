@@ -53,6 +53,7 @@ pub(super) struct AccountCreateInput {
     pub description: Option<String>,
     #[graphql(default)]
     pub status: Status,
+    #[graphql(default)]
     pub tags: Vec<TAG>,
     pub metadata: Option<JSON>,
 }

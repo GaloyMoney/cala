@@ -34,7 +34,7 @@ input AccountCreateInput {
 	normalBalanceType: DebitOrCredit! = CREDIT
 	description: String
 	status: Status! = ACTIVE
-	tags: [TAG!]!
+	tags: [TAG!]! = []
 	metadata: JSON
 }
 
