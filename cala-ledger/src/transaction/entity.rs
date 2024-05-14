@@ -83,6 +83,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 }
 
 #[derive(Builder, Debug)]
+#[allow(dead_code)]
 pub struct NewTransaction {
     #[builder(setter(into))]
     pub(super) id: TransactionId,
@@ -106,6 +107,7 @@ impl NewTransaction {
         NewTransactionBuilder::default()
     }
 
+    #[allow(dead_code)]
     pub(super) fn initial_events(self) -> EntityEvents<TransactionEvent> {
         EntityEvents::init(
             self.id,
