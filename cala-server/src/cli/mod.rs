@@ -6,7 +6,7 @@ use clap::Parser;
 use std::{fs, path::PathBuf};
 
 use self::config::{Config, EnvOverride};
-use crate::extension::MutationExtensionMarker;
+use crate::{extension::MutationExtensionMarker, job::JobRegistry};
 
 #[derive(Parser)]
 #[clap(long_about = None)]
@@ -32,7 +32,9 @@ struct Cli {
     pg_con: String,
 }
 
-pub async fn run<M: MutationExtensionMarker>() -> anyhow::Result<()> {
+pub async fn run<M: MutationExtensionMarker>(
+    job_registration: impl FnOnce(&mut JobRegistry),
+) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let config = Config::from_path(
@@ -43,7 +45,7 @@ pub async fn run<M: MutationExtensionMarker>() -> anyhow::Result<()> {
         },
     )?;
 
-    run_cmd::<M>(&cli.cala_home, config).await?;
+    run_cmd::<M>(&cli.cala_home, config, job_registration).await?;
 
     Ok(())
 }
@@ -51,6 +53,7 @@ pub async fn run<M: MutationExtensionMarker>() -> anyhow::Result<()> {
 async fn run_cmd<M: MutationExtensionMarker>(
     cala_home: &str,
     config: Config,
+    job_registration: impl FnOnce(&mut JobRegistry),
 ) -> anyhow::Result<()> {
     use cala_ledger::{CalaLedger, CalaLedgerConfig};
     cala_tracing::init_tracer(config.tracing)?;
@@ -58,7 +61,9 @@ async fn run_cmd<M: MutationExtensionMarker>(
     let pool = db::init_pool(&config.db).await?;
     let ledger_config = CalaLedgerConfig::builder().pool(pool.clone()).build()?;
     let ledger = CalaLedger::init(ledger_config).await?;
-    let app = crate::app::CalaApp::run(pool, config.app, ledger).await?;
+    let mut registry = JobRegistry::new(&ledger);
+    job_registration(&mut registry);
+    let app = crate::app::CalaApp::run(pool, config.app, ledger, registry).await?;
     crate::server::run::<M>(config.server, app).await?;
     Ok(())
 }

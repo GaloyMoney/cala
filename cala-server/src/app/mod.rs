@@ -23,9 +23,9 @@ impl CalaApp {
         pool: PgPool,
         config: AppConfig,
         ledger: CalaLedger,
+        registry: JobRegistry,
     ) -> Result<Self, ApplicationError> {
         let jobs = Jobs::new(&pool);
-        let registry = JobRegistry::new(&ledger);
         let mut job_executor =
             JobExecutor::new(&pool, config.job_execution.clone(), registry, &jobs);
         job_executor.start_poll().await?;
