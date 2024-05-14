@@ -45,12 +45,6 @@ impl Tag {
     }
 }
 
-impl From<String> for Tag {
-    fn from(s: String) -> Self {
-        Tag(s)
-    }
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum ParseTagError {
     #[error("Tag must be 64 characters or less.")]
