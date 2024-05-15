@@ -615,6 +615,7 @@ dependencies = [
 name = "cala-ledger"
 version = "0.1.0-dev"
 dependencies = [
+ "anyhow",
  "cala-cel-interpreter",
  "cala-ledger-core-types",
  "cala-tracing",
@@ -625,6 +626,7 @@ dependencies = [
  "prost",
  "prost-wkt-types",
  "protobuf-src",
+ "rand",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -632,6 +634,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tokio-test",
  "tonic",
  "tonic-build",
  "tonic-health",
@@ -3571,6 +3574,19 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2468baabc3311435b55dd935f702f42cd1b8abb7e754fb7dfb16bd36aa88f9f7"
+dependencies = [
+ "async-stream",
+ "bytes",
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
