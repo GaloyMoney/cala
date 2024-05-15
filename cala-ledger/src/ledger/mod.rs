@@ -117,21 +117,18 @@ impl CalaLedger {
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
     ) -> Result<(), LedgerError> {
-        let tx_template = self
+        let prepared_tx = self
             .tx_templates
-            .find_latest_version_by_code(tx_template_code)
+            .prepare_transaction(
+                tx_id,
+                tx_template_code,
+                params.map(|p| p.into()).unwrap_or_default(),
+            )
             .await?;
-        let (_new_tx, _new_entries) = self.tx_templates.prepare_transaction(
-            tx_id,
-            &tx_template,
-            params.map(|p| p.into()).unwrap_or_default(),
-        )?;
         Ok(())
-        // let (new_tx, new_entries) =
-        //     tx_template.prep_tx(params.map(|p| p.into()).unwrap_or_default())?;
         // let (journal_id, tx_id) = self
         //     .transactions
-        //     .create_in_tx(&mut tx, tx_id, new_tx)
+        //     .create_in_tx(&mut tx, prepared_tx.transaction)
         //     .await?;
         // let entries = self
         //     .entries

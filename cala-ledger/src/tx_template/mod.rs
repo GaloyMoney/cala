@@ -8,7 +8,7 @@ pub mod error;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -22,6 +22,11 @@ pub use entity::*;
 use error::*;
 use repo::*;
 pub use tx_params::*;
+
+pub(crate) struct PreparedTransaction {
+    pub transaction: NewTransaction,
+    pub entries: Vec<NewEntry>,
+}
 
 #[derive(Clone)]
 pub struct TxTemplates {
@@ -55,24 +60,19 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    pub(crate) async fn find_latest_version_by_code(
-        &self,
-        code: &str,
-    ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
-        self.repo.find_latest_version(code).await
-    }
-
     #[instrument(
         level = "trace",
         name = "cala_ledger.tx_template.prepare_transaction",
         skip(self)
     )]
-    pub(crate) fn prepare_transaction(
+    pub(crate) async fn prepare_transaction(
         &self,
         tx_id: TransactionId,
-        tmpl: &TxTemplateValues,
+        code: &str,
         params: TxParams,
-    ) -> Result<(NewTransaction, Vec<NewEntry>), TxTemplateError> {
+    ) -> Result<PreparedTransaction, TxTemplateError> {
+        let tmpl = self.repo.find_latest_version(code).await?;
+
         let mut tx_builder = NewTransaction::builder();
         tx_builder.id(tx_id).tx_template_id(tmpl.id);
 
@@ -101,13 +101,16 @@ impl TxTemplates {
 
         if let Some(metadata) = tmpl.tx_input.metadata.as_ref() {
             let metadata: serde_json::Value = metadata.try_evaluate(&ctx)?;
-            tx_builder.metadata(metadata).expect("already serialized");
+            tx_builder.metadata(metadata);
         }
 
         let tx = tx_builder.build().expect("tx_build should succeed");
-        let entries = self.prep_entries(tmpl, tx_id, JournalId::from(journal_id), ctx)?;
+        let entries = self.prep_entries(&tmpl, tx_id, JournalId::from(journal_id), ctx)?;
 
-        Ok((tx, entries))
+        Ok(PreparedTransaction {
+            transaction: tx,
+            entries,
+        })
     }
 
     fn prep_entries(
