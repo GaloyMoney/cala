@@ -1,7 +1,10 @@
+use rust_decimal::prelude::ToPrimitive;
+
 use crate::primitives::*;
 
 use crate::{
     account::AccountValues,
+    entry::*,
     journal::JournalValues,
     outbox::{
         error::OutboxError,
@@ -49,6 +52,12 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                 data_source_id: source.to_string(),
                 transaction: Some(proto::Transaction::from(transaction)),
             }),
+            OutboxEventPayload::EntryCreated { source, entry } => {
+                proto::cala_ledger_event::Payload::EntryCreated(proto::EntryCreated {
+                    data_source_id: source.to_string(),
+                    entry: Some(proto::Entry::from(entry)),
+                })
+            }
             OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
         };
         proto::CalaLedgerEvent {
@@ -268,6 +277,49 @@ impl From<TransactionValues> for proto::Transaction {
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),
+        }
+    }
+}
+
+impl From<EntryValues> for proto::Entry {
+    fn from(
+        EntryValues {
+            id,
+            journal_id,
+            transaction_id,
+            account_id,
+            entry_type,
+            layer,
+            direction,
+            currency,
+            units,
+            description,
+        }: EntryValues,
+    ) -> Self {
+        let layer: proto::Layer = layer.into();
+        let direction: proto::DebitOrCredit = direction.into();
+        let units = units.to_f64().expect("could not convert units to f64");
+        proto::Entry {
+            id: id.to_string(),
+            journal_id: journal_id.to_string(),
+            transaction_id: transaction_id.to_string(),
+            account_id: account_id.to_string(),
+            entry_type: entry_type.to_string(),
+            layer: layer.into(),
+            direction: direction.into(),
+            currency: currency.to_string(),
+            units,
+            description: description.map(String::from),
+        }
+    }
+}
+
+impl From<Layer> for proto::Layer {
+    fn from(layer: Layer) -> Self {
+        match layer {
+            Layer::Settled => proto::Layer::Settled,
+            Layer::Pending => proto::Layer::Pending,
+            Layer::Encumbered => proto::Layer::Encumbered,
         }
     }
 }

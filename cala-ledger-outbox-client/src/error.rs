@@ -21,4 +21,8 @@ pub enum CalaLedgerOutboxClientError {
     CelError(#[from] cel_interpreter::CelError),
     #[error("CalaLedgerOutboxError - ChronoError: {0}")]
     ChronoError(#[from] chrono::ParseError),
+    #[error("CalaLedgerOutboxError - DecimalError: {0}")]
+    DecimalError(#[from] rust_decimal::Error),
+    #[error("CalaLedgerOutboxError - ParseCurrencyError: {0}")]
+    ParseCurrencyError(#[from] cala_types::primitives::ParseCurrencyError),
 }

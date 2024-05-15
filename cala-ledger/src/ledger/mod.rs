@@ -9,6 +9,7 @@ use error::*;
 
 use crate::{
     account::Accounts,
+    entry::Entries,
     journal::Journals,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     transaction::Transactions,
@@ -30,6 +31,7 @@ pub struct CalaLedger {
     journals: Journals,
     transactions: Transactions,
     tx_templates: TxTemplates,
+    entries: Entries,
     outbox: Outbox,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
@@ -66,12 +68,14 @@ impl CalaLedger {
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
+        let entries = Entries::new(&pool, outbox.clone());
         Ok(Self {
             accounts,
             journals,
             tx_templates,
             outbox,
             transactions,
+            entries,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             _pool: pool,
         })
@@ -131,6 +135,9 @@ impl CalaLedger {
                 self.tx_templates
                     .sync_tx_template_creation(tx, origin, tx_template)
                     .await?
+            }
+            EntryCreated { entry, .. } => {
+                self.entries.sync_entry_creation(tx, origin, entry).await?
             }
         }
         Ok(())

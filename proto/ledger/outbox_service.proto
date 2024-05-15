@@ -23,6 +23,7 @@ message CalaLedgerEvent {
     JournalCreated journal_created = 6;
     TxTemplateCreated tx_template_created = 7;
     TransactionCreated transaction_created = 8;
+    EntryCreated entry_created = 9;
   }
 }
 
@@ -34,6 +35,12 @@ enum DebitOrCredit {
 enum Status {
   ACTIVE = 0;
   LOCKED = 1;
+}
+
+enum Layer {
+  SETTLED = 0;
+  PENDING = 1;
+  ENCUMBERED = 2;
 }
 
 message AccountCreated {
@@ -132,4 +139,22 @@ message Transaction {
   optional string external_id = 6;
   optional string description = 7;
   optional google.protobuf.Struct metadata = 8;
+}
+
+message EntryCreated {
+  string data_source_id = 1;
+  Entry entry = 2;
+}
+
+message Entry {
+  string id = 1; 
+  string transaction_id = 2;
+  string journal_id = 3;
+  string account_id = 4;
+  string entry_type = 5;
+  Layer layer = 6;
+  double units = 7;
+  string currency = 8;
+  DebitOrCredit direction = 9;
+  optional string description = 10;
 }

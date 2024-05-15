@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod entity;
+pub mod entry;
 pub mod journal;
 pub mod migrate;
 pub mod transaction;
