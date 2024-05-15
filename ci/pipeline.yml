@@ -62,15 +62,18 @@ groups:
   jobs:
   - check-code
   - bats-tests
+  - build-edge-image
 
 jobs:
 - #@ rust_check_code()
 - #@ on_nix_host("bats-tests", "make e2e")
+- #@ build_edge_image()
 
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
 - #@ slack_resource()
+- #@ edge_image_resource()
 - name: nix-host
   type: pool
   source:

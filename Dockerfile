@@ -1,7 +1,7 @@
 FROM clux/muslrust:stable AS build
   COPY . /src
   WORKDIR /src
-  RUN SQLX_OFFLINE=true cargo build --locked
+  RUN SQLX_OFFLINE=true cargo build --locked --bin cala-server
 
 FROM ubuntu
   COPY --from=build /src/target/x86_64-unknown-linux-musl/debug/cala-server /usr/local/bin
