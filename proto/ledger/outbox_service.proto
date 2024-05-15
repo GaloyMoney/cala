@@ -152,9 +152,10 @@ message Entry {
   string journal_id = 3;
   string account_id = 4;
   string entry_type = 5;
-  Layer layer = 6;
-  double units = 7;
-  string currency = 8;
-  DebitOrCredit direction = 9;
-  optional string description = 10;
+  uint32 sequence = 6;
+  Layer layer = 7;
+  double units = 8;
+  string currency = 9;
+  DebitOrCredit direction = 10;
+  optional string description = 11;
 }

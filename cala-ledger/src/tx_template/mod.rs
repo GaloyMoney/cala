@@ -122,12 +122,13 @@ impl TxTemplates {
     ) -> Result<Vec<NewEntry>, TxTemplateError> {
         let mut new_entries = Vec::new();
         let mut totals = HashMap::new();
-        for entry in tmpl.entries.iter() {
+        for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
             let mut builder = NewEntry::builder();
             builder
                 .id(EntryId::new())
                 .transaction_id(transaction_id)
-                .journal_id(journal_id);
+                .journal_id(journal_id)
+                .sequence(zero_based_sequence as u32 + 1);
             let account_id: Uuid = entry.account_id.try_evaluate(&ctx)?;
             builder.account_id(account_id);
 

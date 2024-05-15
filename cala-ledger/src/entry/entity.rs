@@ -95,6 +95,8 @@ pub(crate) struct NewEntry {
     pub(super) account_id: AccountId,
     #[builder(setter(into))]
     pub(super) entry_type: String,
+    #[builder(setter(into))]
+    pub(super) sequence: u32,
     #[builder(default)]
     pub(super) layer: Layer,
     #[builder(setter(into))]
@@ -123,6 +125,7 @@ impl NewEntry {
                     journal_id: self.journal_id,
                     account_id: self.account_id,
                     entry_type: self.entry_type,
+                    sequence: self.sequence,
                     layer: self.layer,
                     units: self.units,
                     currency: self.currency,
@@ -150,6 +153,7 @@ mod tests {
             .journal_id(JournalId::new())
             .layer(Layer::Settled)
             .entry_type("ENTRY_TYPE")
+            .sequence(1u32)
             .units(rust_decimal::Decimal::from(1))
             .currency(currency)
             .direction(DebitOrCredit::Debit);
