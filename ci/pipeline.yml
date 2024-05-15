@@ -65,6 +65,62 @@ groups:
   - build-edge-image
   - release
   - release-docker
+  - set-dev-version
+
+  plan:
+  - in_parallel:
+    - { get: repo, passed: [release] }
+    - { get: pipeline-tasks }
+    - get: version
+      trigger: true
+      params: { bump: patch }
+      passed: [release]
+  - task: set-dev-version
+    config:
+      image_resource: #@ release_task_image_config()
+      platform: linux
+      inputs:
+      - name: version
+      - name: repo
+      - name: pipeline-tasks
+      outputs:
+      - name: repo
+      run:
+        path: pipeline-tasks/ci/tasks/set-dev-version.sh
+      params:
+        BRANCH: #@ data.values.git_branch
+  - put: repo
+    params:
+      repository: repo
+      rebase: true
+
+- name: set-dev-version
+  plan:
+  - in_parallel:
+    - { get: repo, passed: [release] }
+    - { get: pipeline-tasks }
+    - get: version
+      trigger: true
+      params: { bump: patch }
+      passed: [release]
+  - task: set-dev-version
+    config:
+      image_resource: #@ release_task_image_config()
+      platform: linux
+      inputs:
+      - name: version
+      - name: repo
+      - name: pipeline-tasks
+      outputs:
+      - name: repo
+      run:
+        path: pipeline-tasks/ci/tasks/set-dev-version.sh
+      params:
+        BRANCH: #@ data.values.git_branch
+  - put: repo
+    params:
+      repository: repo
+      rebase: true
 
 jobs:
 - #@ rust_check_code()
@@ -253,6 +309,34 @@ jobs:
     params:
       image: image/image.tar
       additional_tags: version/version
+
+- name: set-dev-version
+  plan:
+  - in_parallel:
+    - { get: repo, passed: [release] }
+    - { get: pipeline-tasks }
+    - get: version
+      trigger: true
+      params: { bump: patch }
+      passed: [release]
+  - task: set-dev-version
+    config:
+      image_resource: #@ release_task_image_config()
+      platform: linux
+      inputs:
+      - name: version
+      - name: repo
+      - name: pipeline-tasks
+      outputs:
+      - name: repo
+      run:
+        path: pipeline-tasks/ci/tasks/set-dev-version.sh
+      params:
+        BRANCH: #@ data.values.git_branch
+  - put: repo
+    params:
+      repository: repo
+      rebase: true
 
 resources:
 - #@ repo_resource(True)
