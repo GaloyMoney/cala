@@ -1,5 +1,5 @@
 use cala_types::{
-    account::*, journal::*, outbox::*, primitives::*, transaction::*, tx_template::*,
+    account::*, entry::*, journal::*, outbox::*, primitives::*, transaction::*, tx_template::*,
 };
 use cel_interpreter::CelExpression;
 
@@ -68,6 +68,16 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     transaction.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::EntryCreated(proto::EntryCreated {
+                data_source_id,
+                entry,
+            }) => EntryCreated {
+                source: data_source_id.parse()?,
+                entry: EntryValues::try_from(
+                    entry.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
+
             proto::cala_ledger_event::Payload::Empty(_) => Empty,
         };
         Ok(res)
@@ -283,5 +293,47 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             metadata: metadata.map(serde_json::to_value).transpose()?,
         };
         Ok(res)
+    }
+}
+
+impl TryFrom<proto::Entry> for EntryValues {
+    type Error = CalaLedgerOutboxClientError;
+    fn try_from(
+        proto::Entry {
+            id,
+            journal_id,
+            transaction_id,
+            entry_type,
+            account_id,
+            layer,
+            direction,
+            units,
+            currency,
+            description,
+        }: proto::Entry,
+    ) -> Result<Self, Self::Error> {
+        let res = Self {
+            id: id.parse()?,
+            journal_id: journal_id.parse()?,
+            transaction_id: transaction_id.parse()?,
+            account_id: account_id.parse()?,
+            entry_type,
+            layer: proto::Layer::try_from(layer).map(Layer::from)?,
+            direction: proto::DebitOrCredit::try_from(direction).map(DebitOrCredit::from)?,
+            units: rust_decimal::Decimal::try_from(units)?,
+            currency: currency.parse::<Currency>()?,
+            description: description.map(String::from),
+        };
+        Ok(res)
+    }
+}
+
+impl From<proto::Layer> for Layer {
+    fn from(layer: proto::Layer) -> Self {
+        match layer {
+            proto::Layer::Settled => Layer::Settled,
+            proto::Layer::Pending => Layer::Pending,
+            proto::Layer::Encumbered => Layer::Encumbered,
+        }
     }
 }

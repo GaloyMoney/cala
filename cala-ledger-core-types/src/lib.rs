@@ -4,6 +4,7 @@
 mod id;
 
 pub mod account;
+pub mod entry;
 pub mod journal;
 pub mod outbox;
 pub mod primitives;

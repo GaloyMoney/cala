@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{account::*, journal::*, primitives::*, transaction::*, tx_template::*};
+use crate::{account::*, entry::*, journal::*, primitives::*, transaction::*, tx_template::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OutboxEvent {
@@ -40,6 +40,10 @@ pub enum OutboxEventPayload {
     TransactionCreated {
         source: DataSource,
         transaction: TransactionValues,
+    },
+    EntryCreated {
+        source: DataSource,
+        entry: EntryValues,
     },
 }
 

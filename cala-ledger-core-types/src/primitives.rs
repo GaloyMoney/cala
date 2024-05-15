@@ -1,5 +1,8 @@
+use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+
+use cel_interpreter::{CelResult, CelValue};
 
 crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
@@ -7,6 +10,7 @@ crate::entity_id! { JournalId }
 crate::entity_id! { DataSourceId }
 crate::entity_id! { TxTemplateId }
 crate::entity_id! { TransactionId }
+crate::entity_id! { EntryId }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]
@@ -33,6 +37,39 @@ pub enum Status {
 impl Default for Status {
     fn default() -> Self {
         Self::Active
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[sqlx(type_name = "Layer", rename_all = "snake_case")]
+pub enum Layer {
+    Settled,
+    Pending,
+    Encumbered,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseLayerError {
+    #[error("CalaCoreTypeError - UnknownLayer: {0:?}")]
+    UnknownLayer(String),
+}
+
+impl<'a> TryFrom<CelResult<'a>> for Layer {
+    type Error = ParseLayerError;
+
+    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+        match val {
+            CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
+            CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
+            CelValue::String(v) if v.as_ref() == "ENCUMBERED" => Ok(Layer::Encumbered),
+            v => Err(ParseLayerError::UnknownLayer(format!("{v:?}"))),
+        }
+    }
+}
+
+impl Default for Layer {
+    fn default() -> Self {
+        Self::Settled
     }
 }
 
@@ -64,6 +101,86 @@ impl std::str::FromStr for Tag {
             Err(ParseTagError::ContainsSpace)
         } else {
             Ok(Tag(s.to_string()))
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
+#[serde(try_from = "String")]
+#[serde(into = "&str")]
+pub enum Currency {
+    Iso(&'static iso::Currency),
+    Crypto(&'static crypto::Currency),
+}
+
+impl Currency {
+    pub fn code(&self) -> &'static str {
+        match self {
+            Currency::Iso(c) => c.iso_alpha_code,
+            Currency::Crypto(c) => c.code,
+        }
+    }
+}
+
+impl std::fmt::Display for Currency {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.code())
+    }
+}
+
+impl std::hash::Hash for Currency {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.code().hash(state);
+    }
+}
+
+impl PartialEq for Currency {
+    fn eq(&self, other: &Self) -> bool {
+        self.code() == other.code()
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseCurrencyError {
+    #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
+    UnknownCurrency(String),
+}
+
+impl std::str::FromStr for Currency {
+    type Err = ParseCurrencyError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match iso::find(s) {
+            Some(c) => Ok(Currency::Iso(c)),
+            _ => match crypto::find(s) {
+                Some(c) => Ok(Currency::Crypto(c)),
+                _ => Err(ParseCurrencyError::UnknownCurrency(s.to_string())),
+            },
+        }
+    }
+}
+
+impl TryFrom<String> for Currency {
+    type Error = ParseCurrencyError;
+
+    fn try_from(s: String) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+impl From<Currency> for &'static str {
+    fn from(c: Currency) -> Self {
+        c.code()
+    }
+}
+
+impl<'a> TryFrom<CelResult<'a>> for Currency {
+    type Error = ParseCurrencyError;
+
+    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+        match val {
+            CelValue::String(v) => v.as_ref().parse(),
+            v => Err(ParseCurrencyError::UnknownCurrency(format!("{v:?}"))),
         }
     }
 }
