@@ -20,7 +20,7 @@ impl TxParams {
         self.values.insert(k.into(), v.into());
     }
 
-    pub(crate) fn _to_context(
+    pub(crate) fn into_context(
         mut self,
         defs: Option<&Vec<ParamDefinition>>,
     ) -> Result<CelContext, TxTemplateError> {

@@ -84,7 +84,7 @@ impl TryFrom<EntityEvents<EntryEvent>> for Entry {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub struct NewEntry {
+pub(crate) struct NewEntry {
     #[builder(setter(into))]
     pub id: EntryId,
     #[builder(setter(into))]

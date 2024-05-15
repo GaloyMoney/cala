@@ -48,7 +48,7 @@ impl TxTemplateRepo {
     ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
         let row = sqlx::query!(
             r#"
-            SELECT t.id AS "id: TxTemplateId", MAX(sequence) AS "version!" 
+            SELECT t.id AS "id?: TxTemplateId", MAX(e.sequence) AS "version" 
             FROM cala_tx_templates t
             JOIN cala_tx_template_events e ON t.id = e.id
             WHERE t.code = $1
@@ -58,17 +58,11 @@ impl TxTemplateRepo {
         .fetch_optional(&self.pool)
         .await?;
         if let Some(row) = row {
-            find_versioned_template_cached(
-                &self.pool,
-                TxTemplateIdVersionCacheKey {
-                    id: row.id,
-                    version: row.version,
-                },
-            )
-            .await
-        } else {
-            Err(TxTemplateError::NotFound)
+            if let (Some(id), Some(version)) = (row.id, row.version) {
+                return find_versioned_template_cached(&self.pool, id, version).await;
+            }
         }
+        Err(TxTemplateError::NotFound)
     }
 
     #[cfg(feature = "import")]
@@ -92,29 +86,24 @@ impl TxTemplateRepo {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
-struct TxTemplateIdVersionCacheKey {
-    id: TxTemplateId,
-    version: i32,
-}
-
 #[cached(
-    key = "TxTemplateIdVersionCacheKey",
-    convert = r#"{ key }"#,
+    key = "(TxTemplateId, i32)",
+    convert = "{ (id, version) }",
     result = true,
     sync_writes = true
 )]
 async fn find_versioned_template_cached(
     pool: &PgPool,
-    key: TxTemplateIdVersionCacheKey,
+    id: TxTemplateId,
+    version: i32,
 ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
     let row = sqlx::query!(
         r#"
           SELECT event 
           FROM cala_tx_template_events
           WHERE id = $1 AND sequence = $2"#,
-        key.id as TxTemplateId,
-        key.version as i32,
+        id as TxTemplateId,
+        version,
     )
     .fetch_optional(pool)
     .await?;

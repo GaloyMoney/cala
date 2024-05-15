@@ -22,7 +22,6 @@ mod import_deps {
     pub use cala_types::outbox::OutboxEvent;
     pub use tracing::instrument;
 }
-use cala_types::tx_template::TxTemplateValues;
 #[cfg(feature = "import")]
 use import_deps::*;
 
@@ -104,25 +103,30 @@ impl CalaLedger {
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
-    ) -> Result<Arc<TxTemplateValues>, LedgerError> {
+    ) -> Result<(), LedgerError> {
         let tx = self.pool.begin().await?;
         self.post_transaction_in_tx(tx, tx_id, tx_template_code, params)
             .await
     }
 
-    #[instrument(name = "cala.ledger.post_transaction", skip(self, _tx))]
+    #[instrument(name = "cala_ledger.post_transaction", skip(self, _tx))]
     pub async fn post_transaction_in_tx(
         &self,
         mut _tx: Transaction<'_, Postgres>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
-    ) -> Result<Arc<TxTemplateValues>, LedgerError> {
+    ) -> Result<(), LedgerError> {
         let tx_template = self
             .tx_templates
             .find_latest_version_by_code(tx_template_code)
             .await?;
-        Ok(tx_template)
+        let (_new_tx, _new_entries) = self.tx_templates.prepare_transaction(
+            tx_id,
+            &tx_template,
+            params.map(|p| p.into()).unwrap_or_default(),
+        )?;
+        Ok(())
         // let (new_tx, new_entries) =
         //     tx_template.prep_tx(params.map(|p| p.into()).unwrap_or_default())?;
         // let (journal_id, tx_id) = self

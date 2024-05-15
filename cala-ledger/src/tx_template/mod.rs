@@ -5,13 +5,18 @@ mod tx_params;
 
 pub mod error;
 
+use chrono::NaiveDate;
+use rust_decimal::Decimal;
 use sqlx::PgPool;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 use tracing::instrument;
+use uuid::Uuid;
 
 #[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource};
+use crate::primitives::*;
+use crate::{
+    entity::*, entry::NewEntry, outbox::*, primitives::DataSource, transaction::NewTransaction,
+};
 
 pub use entity::*;
 use error::*;
@@ -34,7 +39,7 @@ impl TxTemplates {
         }
     }
 
-    #[instrument(name = "cala_ledger.accounts.create", skip(self))]
+    #[instrument(name = "cala_ledger.tx_template.create", skip(self))]
     pub async fn create(
         &self,
         new_tx_template: NewTxTemplate,
@@ -55,6 +60,108 @@ impl TxTemplates {
         code: &str,
     ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
         self.repo.find_latest_version(code).await
+    }
+
+    #[instrument(
+        level = "trace",
+        name = "cala_ledger.tx_template.prepare_transaction",
+        skip(self)
+    )]
+    pub(crate) fn prepare_transaction(
+        &self,
+        tx_id: TransactionId,
+        tmpl: &TxTemplateValues,
+        params: TxParams,
+    ) -> Result<(NewTransaction, Vec<NewEntry>), TxTemplateError> {
+        let mut tx_builder = NewTransaction::builder();
+        tx_builder.id(tx_id).tx_template_id(tmpl.id);
+
+        let ctx = params.into_context(tmpl.params.as_ref())?;
+
+        let journal_id: Uuid = tmpl.tx_input.journal_id.try_evaluate(&ctx)?;
+        tx_builder.journal_id(journal_id);
+
+        let effective: NaiveDate = tmpl.tx_input.effective.try_evaluate(&ctx)?;
+        tx_builder.effective(effective);
+
+        if let Some(correlation_id) = tmpl.tx_input.correlation_id.as_ref() {
+            let correlation_id: String = correlation_id.try_evaluate(&ctx)?;
+            tx_builder.correlation_id(correlation_id);
+        }
+
+        if let Some(external_id) = tmpl.tx_input.external_id.as_ref() {
+            let external_id: String = external_id.try_evaluate(&ctx)?;
+            tx_builder.external_id(external_id);
+        }
+
+        if let Some(description) = tmpl.tx_input.description.as_ref() {
+            let description: String = description.try_evaluate(&ctx)?;
+            tx_builder.description(description);
+        }
+
+        if let Some(metadata) = tmpl.tx_input.metadata.as_ref() {
+            let metadata: serde_json::Value = metadata.try_evaluate(&ctx)?;
+            tx_builder.metadata(metadata).expect("already serialized");
+        }
+
+        let tx = tx_builder.build().expect("tx_build should succeed");
+        let entries = self.prep_entries(tmpl, tx_id, JournalId::from(journal_id), ctx)?;
+
+        Ok((tx, entries))
+    }
+
+    fn prep_entries(
+        &self,
+        tmpl: &TxTemplateValues,
+        transaction_id: TransactionId,
+        journal_id: JournalId,
+        ctx: cel_interpreter::CelContext,
+    ) -> Result<Vec<NewEntry>, TxTemplateError> {
+        let mut new_entries = Vec::new();
+        let mut totals = HashMap::new();
+        for entry in tmpl.entries.iter() {
+            let mut builder = NewEntry::builder();
+            builder
+                .id(EntryId::new())
+                .transaction_id(transaction_id)
+                .journal_id(journal_id);
+            let account_id: Uuid = entry.account_id.try_evaluate(&ctx)?;
+            builder.account_id(account_id);
+
+            let entry_type: String = entry.entry_type.try_evaluate(&ctx)?;
+            builder.entry_type(entry_type);
+
+            let layer: Layer = entry.layer.try_evaluate(&ctx)?;
+            builder.layer(layer);
+
+            let units: Decimal = entry.units.try_evaluate(&ctx)?;
+            let currency: Currency = entry.currency.try_evaluate(&ctx)?;
+            let direction: DebitOrCredit = entry.direction.try_evaluate(&ctx)?;
+
+            let total = totals.entry(currency).or_insert(Decimal::ZERO);
+            match direction {
+                DebitOrCredit::Debit => *total -= units,
+                DebitOrCredit::Credit => *total += units,
+            };
+            builder.units(units);
+            builder.currency(currency);
+            builder.direction(direction);
+
+            if let Some(description) = entry.description.as_ref() {
+                let description: String = description.try_evaluate(&ctx)?;
+                builder.description(description);
+            }
+
+            new_entries.push(builder.build().expect("Couldn't build entry"));
+        }
+
+        for (k, v) in totals {
+            if v != Decimal::ZERO {
+                return Err(TxTemplateError::UnbalancedTransaction(k, v));
+            }
+        }
+
+        Ok(new_entries)
     }
 
     #[cfg(feature = "import")]

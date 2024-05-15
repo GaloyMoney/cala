@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use cala_types::tx_template::ParamDataType;
+use rust_decimal::Decimal;
+
+use cala_types::{primitives::Currency, tx_template::ParamDataType};
 use cel_interpreter::CelError;
 
 use crate::outbox::error::OutboxError;
@@ -23,4 +25,6 @@ pub enum TxTemplateError {
     NotFound,
     #[error("TxTemplateError - SerdeJson: {0}")]
     SerdeJson(#[from] serde_json::Error),
+    #[error("TxTemplateError - UnbalancedTransaction: currency {0} amount {1}")]
+    UnbalancedTransaction(Currency, Decimal),
 }

@@ -132,11 +132,10 @@ async fn post_transaction() -> anyhow::Result<()> {
     params.insert("recipient", recipient_account.id());
     params.insert("external_id", external_id.clone());
 
-    let tx_template_values = cala
-        .post_transaction(TransactionId::new(), &tx_code, Some(params))
+    cala.post_transaction(TransactionId::new(), &tx_code, Some(params))
         .await
         .unwrap();
-    assert!(tx_template_values.code == tx_code);
+    // assert!(tx_template_values.code == tx_code);
     // let transactions = ledger
     //     .transactions()
     //     .list_by_external_ids(vec![external_id.clone()])

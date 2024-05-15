@@ -84,7 +84,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub struct NewTransaction {
+pub(crate) struct NewTransaction {
     #[builder(setter(into))]
     pub(super) id: TransactionId,
     #[builder(setter(into))]
