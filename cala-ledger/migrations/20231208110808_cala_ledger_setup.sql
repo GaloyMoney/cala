@@ -96,8 +96,12 @@ CREATE TABLE cala_transaction_events (
 CREATE TABLE cala_entries (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   id UUID NOT NULL,
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  UNIQUE(data_source_id, id),
+  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
 );
 
 CREATE TABLE cala_entry_events (
@@ -109,6 +113,31 @@ CREATE TABLE cala_entry_events (
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id, sequence),
   FOREIGN KEY (data_source_id, id) REFERENCES cala_entries(data_source_id, id)
+);
+
+CREATE TABLE cala_balances (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
+  currency VARCHAR NOT NULL,
+  latest_version INT NOT NULL,
+  current_values JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, journal_id, account_id, currency),
+  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+);
+
+CREATE TABLE cala_balance_history (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
+  currency VARCHAR NOT NULL,
+  version INT NOT NULL,
+  values JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, journal_id, account_id, currency, version),
+  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_balances(data_source_id, journal_id, account_id, currency)
 );
 
 CREATE TABLE cala_outbox_events (
