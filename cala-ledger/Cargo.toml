@@ -19,6 +19,7 @@ cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-t
 cala-tracing = { path = "../cala-tracing", features = ["grpc"] }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
 
+cached = { workspace = true }
 chrono = { workspace = true }
 derive_builder = { workspace = true }
 sqlx = { workspace = true }

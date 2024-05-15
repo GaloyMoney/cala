@@ -23,7 +23,7 @@ async fn post_transaction() -> anyhow::Result<()> {
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
 
-    let _journal = cala.journals().create(new_journal).await.unwrap();
+    let journal = cala.journals().create(new_journal).await.unwrap();
     let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
     let new_account = NewAccount::builder()
         .id(uuid::Uuid::new_v4())
@@ -31,7 +31,7 @@ async fn post_transaction() -> anyhow::Result<()> {
         .code(code)
         .build()
         .unwrap();
-    let _sender_account = cala.accounts().create(new_account).await.unwrap();
+    let sender_account = cala.accounts().create(new_account).await.unwrap();
     let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
     let new_account = NewAccount::builder()
         .id(uuid::Uuid::new_v4())
@@ -39,7 +39,7 @@ async fn post_transaction() -> anyhow::Result<()> {
         .code(code)
         .build()
         .unwrap();
-    let _recipient_account = cala.accounts().create(new_account).await.unwrap();
+    let recipient_account = cala.accounts().create(new_account).await.unwrap();
 
     let params = vec![
         NewParamDefinition::builder()
@@ -125,17 +125,18 @@ async fn post_transaction() -> anyhow::Result<()> {
         .unwrap();
     cala.tx_templates().create(new_template).await.unwrap();
 
-    let _external_id = uuid::Uuid::new_v4().to_string();
-    // let mut params = TxParams::new();
-    // params.insert("journal_id", journal_id);
-    // params.insert("sender", sender_account_id);
-    // params.insert("recipient", recipient_account_id);
-    // params.insert("external_id", external_id.clone());
+    let external_id = uuid::Uuid::new_v4().to_string();
+    let mut params = TxParams::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("external_id", external_id.clone());
 
-    // ledger
-    //     .post_transaction(TransactionId::new(), &tx_code, Some(params))
-    //     .await
-    //     .unwrap();
+    let tx_template_values = cala
+        .post_transaction(TransactionId::new(), &tx_code, Some(params))
+        .await
+        .unwrap();
+    assert!(tx_template_values.code == tx_code);
     // let transactions = ledger
     //     .transactions()
     //     .list_by_external_ids(vec![external_id.clone()])

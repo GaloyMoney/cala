@@ -1,10 +1,12 @@
 mod cel_context;
 mod entity;
 mod repo;
+mod tx_params;
 
 pub mod error;
 
 use sqlx::PgPool;
+use std::sync::Arc;
 use tracing::instrument;
 
 #[cfg(feature = "import")]
@@ -14,6 +16,7 @@ use crate::{entity::*, outbox::*, primitives::DataSource};
 pub use entity::*;
 use error::*;
 use repo::*;
+pub use tx_params::*;
 
 #[derive(Clone)]
 pub struct TxTemplates {
@@ -45,6 +48,13 @@ impl TxTemplates {
             .persist_events(tx, tx_template.events.last_persisted(n_new_events))
             .await?;
         Ok(tx_template)
+    }
+
+    pub(crate) async fn find_latest_version_by_code(
+        &self,
+        code: &str,
+    ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
+        self.repo.find_latest_version(code).await
     }
 
     #[cfg(feature = "import")]

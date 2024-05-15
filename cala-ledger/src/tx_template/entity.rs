@@ -21,6 +21,16 @@ pub enum TxTemplateEvent {
     },
 }
 
+impl TxTemplateEvent {
+    pub fn into_values(self) -> TxTemplateValues {
+        match self {
+            #[cfg(feature = "import")]
+            TxTemplateEvent::Imported { values, .. } => values,
+            TxTemplateEvent::Initialized { values } => values,
+        }
+    }
+}
+
 impl EntityEvent for TxTemplateEvent {
     type EntityId = TxTemplateId;
     fn event_table_name() -> &'static str {
