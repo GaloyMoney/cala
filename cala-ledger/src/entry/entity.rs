@@ -133,3 +133,35 @@ impl NewEntry {
         )
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_builds() {
+        let mut builder = NewEntry::builder();
+        let currency = "USD".parse::<Currency>().unwrap();
+        let entry_id = EntryId::new();
+        builder
+            .id(entry_id)
+            .transaction_id(TransactionId::new())
+            .account_id(AccountId::new())
+            .journal_id(JournalId::new())
+            .layer(Layer::Settled)
+            .entry_type("ENTRY_TYPE")
+            .units(rust_decimal::Decimal::from(1))
+            .currency(currency)
+            .direction(DebitOrCredit::Debit);
+        let new_entry = builder.build().unwrap();
+        assert_eq!(new_entry.id, entry_id);
+    }
+
+    #[test]
+    fn fails_when_missing_required_fields() {
+        let mut builder = NewEntry::builder();
+        builder.id(EntryId::new());
+        let new_entry = builder.build();
+        assert!(new_entry.is_err());
+    }
+}
