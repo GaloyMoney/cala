@@ -108,21 +108,6 @@ jobs:
       - name: repo
       run:
         path: pipeline-tasks/ci/tasks/update-repo.sh
-  - task: publish-to-crates
-    config:
-      image_resource: #@ rust_task_image_config()
-      platform: linux
-      inputs:
-      - name: version
-      - name: pipeline-tasks
-      - name: repo
-      params:
-        CRATES_API_TOKEN: #@ data.values.crates_api_token
-      caches:
-      - path: cargo-home
-      - path: cargo-target-dir
-      run:
-        path: pipeline-tasks/ci/tasks/publish-to-crates.sh
   - in_parallel:
     - task: build-osx-release
       privileged: true
@@ -169,6 +154,21 @@ jobs:
           OUT: x86_64-unknown-linux-musl
         run:
           path: pipeline-tasks/ci/tasks/build-release.sh
+  - task: publish-to-crates
+    config:
+      image_resource: #@ rust_task_image_config()
+      platform: linux
+      inputs:
+      - name: version
+      - name: pipeline-tasks
+      - name: repo
+      params:
+        CRATES_API_TOKEN: #@ data.values.crates_api_token
+      caches:
+      - path: cargo-home
+      - path: cargo-target-dir
+      run:
+        path: pipeline-tasks/ci/tasks/publish-to-crates.sh
   - put: repo
     params:
       tag: artifacts/gh-release-tag
