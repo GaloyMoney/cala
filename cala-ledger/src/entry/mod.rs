@@ -2,7 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -28,8 +28,24 @@ impl Entries {
         }
     }
 
+    pub(crate) async fn create_all(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        entries: Vec<NewEntry>,
+    ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
+        let entries = self.repo.create_all(entries, tx).await?;
+        let events = entries
+            .iter()
+            .map(|values| OutboxEventPayload::EntryCreated {
+                source: DataSource::Local,
+                entry: values.clone(),
+            })
+            .collect();
+        Ok((entries, events))
+    }
+
     #[cfg(feature = "import")]
-    pub async fn sync_entry_creation(
+    pub(crate) async fn sync_entry_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,

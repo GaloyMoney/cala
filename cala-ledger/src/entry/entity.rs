@@ -114,7 +114,22 @@ impl NewEntry {
         NewEntryBuilder::default()
     }
 
-    #[allow(dead_code)]
+    pub(super) fn to_values(&self) -> EntryValues {
+        EntryValues {
+            id: self.id,
+            transaction_id: self.transaction_id,
+            journal_id: self.journal_id,
+            account_id: self.account_id,
+            entry_type: self.entry_type.clone(),
+            sequence: self.sequence,
+            layer: self.layer,
+            units: self.units,
+            currency: self.currency,
+            direction: self.direction.clone(),
+            description: self.description.clone(),
+        }
+    }
+
     pub(super) fn initial_events(self) -> EntityEvents<EntryEvent> {
         EntityEvents::init(
             self.id,

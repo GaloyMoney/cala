@@ -101,9 +101,8 @@ CREATE TABLE cala_entries (
   transaction_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
-  UNIQUE(data_source_id, transaction_id, sequence_in_transaction),
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
   FOREIGN KEY (data_source_id, transaction_id) REFERENCES cala_transactions(data_source_id, id)
 );
 

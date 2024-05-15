@@ -125,15 +125,16 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
-        // let entries = self
-        //     .entries
-        //     .create_all(&mut tx, prepared_tx.entries)
-        //     .await?;
+        let _ = self
+            .transactions
+            .create_in_tx(&mut tx, prepared_tx.transaction)
+            .await?;
+        let _ = self
+            .entries
+            .create_all(&mut tx, prepared_tx.entries)
+            .await?;
+        tx.commit().await?;
         Ok(())
-        // let (journal_id, tx_id) = self
-        //     .transactions
-        //     .create_in_tx(&mut tx, prepared_tx.transaction)
-        //     .await?;
         // {
         //     let ids: Vec<(AccountId, &Currency)> = entries
         //         .iter()
