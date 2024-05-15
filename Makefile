@@ -44,3 +44,9 @@ sdl:
 
 test-in-ci: start-deps setup-db
 	cargo nextest run --verbose --locked
+
+build-x86_64-unknown-linux-musl-release:
+	SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target x86_64-unknown-linux-musl
+
+build-x86_64-apple-darwin-release:
+	bin/osxcross-compile.sh
