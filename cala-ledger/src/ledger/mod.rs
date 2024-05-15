@@ -109,10 +109,10 @@ impl CalaLedger {
             .await
     }
 
-    #[instrument(name = "cala_ledger.post_transaction", skip(self, _tx))]
+    #[instrument(name = "cala_ledger.post_transaction", skip(self, tx))]
     pub async fn post_transaction_in_tx(
         &self,
-        mut _tx: Transaction<'_, Postgres>,
+        mut tx: Transaction<'_, Postgres>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,

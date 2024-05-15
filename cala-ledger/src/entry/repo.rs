@@ -6,19 +6,19 @@ use crate::primitives::DataSourceId;
 use crate::primitives::{AccountId, EntryId, JournalId};
 
 #[derive(Debug, Clone)]
-pub(super) struct EntryRepo {
+pub(crate) struct EntryRepo {
     _pool: PgPool,
 }
 
 impl EntryRepo {
-    pub fn new(pool: &PgPool) -> Self {
+    pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
             _pool: pool.clone(),
         }
     }
 
     #[cfg(feature = "import")]
-    pub async fn import(
+    pub(super) async fn import(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,

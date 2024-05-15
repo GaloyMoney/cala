@@ -3,11 +3,11 @@ pub mod error;
 mod entity;
 mod repo;
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{outbox::*, primitives::DataSource};
+use crate::{entity::EntityUpdate, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -27,6 +27,18 @@ impl Transactions {
             outbox,
             _pool: pool.clone(),
         }
+    }
+
+    pub(crate) async fn create_in_tx(
+        &self,
+        tx: &mut DbTransaction<'_, Postgres>,
+        new_transaction: NewTransaction,
+    ) -> Result<Transaction, TransactionError> {
+        let EntityUpdate {
+            entity: transaction,
+            ..
+        } = self.repo.create_in_tx(tx, new_transaction).await?;
+        Ok(transaction)
     }
 
     #[cfg(feature = "import")]

@@ -23,7 +23,6 @@ impl TransactionRepo {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn create_in_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, Postgres>,
