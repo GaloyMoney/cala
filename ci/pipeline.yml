@@ -64,6 +64,7 @@ groups:
   - bats-tests
   - build-edge-image
   - release
+  - release-docker
 
 jobs:
 - #@ rust_check_code()
@@ -198,6 +199,61 @@ jobs:
     params:
       file: version/version
 
+- name: release-docker
+  serial: true
+  plan:
+  - in_parallel:
+    - get: repo
+      passed:
+      - release
+    - get: version
+      passed:
+      - release
+      trigger: true
+    - get: pipeline-tasks
+  - task: prepare-docker-build
+    config:
+      platform: linux
+      image_resource: #@ rust_task_image_config()
+      inputs:
+      - name: pipeline-tasks
+      - name: version
+      - name: repo
+      outputs:
+      - name: repo
+      run:
+        path: pipeline-tasks/ci/tasks/prep-docker-build-env.sh
+  - task: build
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: gcr.io/kaniko-project/executor
+          tag: debug
+      inputs:
+      - name: repo
+      outputs:
+      - name: image
+      run:
+        path: /bin/sh
+        args:
+        - -exc
+        - |
+          /kaniko/executor \
+            --dockerfile=repo/Dockerfile.release \
+            --context=repo \
+            $(awk -F= '{print "--build-arg="$1"="$2}' repo/.env) \
+            --use-new-run \
+            --single-snapshot \
+            --cache=false \
+            --no-push \
+            --tar-path=image/image.tar
+  - put: latest-image
+    params:
+      image: image/image.tar
+      additional_tags: version/version
+
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
@@ -205,6 +261,13 @@ resources:
 - #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
+- name: latest-image
+  type: registry-image
+  source:
+    tag: latest
+    username: #@ data.values.docker_registry_user
+    password: #@ data.values.docker_registry_password
+    repository: #@ public_docker_registry() + "/" + data.values.gh_repository
 - name: nix-host
   type: pool
   source:
