@@ -2,7 +2,7 @@ use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use cel_interpreter::{CelResult, CelValue};
+use cel_interpreter::{CelResult, CelType, CelValue, ResultCoersionError};
 
 crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
@@ -23,6 +23,22 @@ pub enum DebitOrCredit {
 impl Default for DebitOrCredit {
     fn default() -> Self {
         Self::Credit
+    }
+}
+
+impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
+    type Error = ResultCoersionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        match val {
+            CelValue::String(v) if v.as_ref() == "DEBIT" => Ok(DebitOrCredit::Debit),
+            CelValue::String(v) if v.as_ref() == "CREDIT" => Ok(DebitOrCredit::Credit),
+            v => Err(ResultCoersionError::BadExternalTypeCoersion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "DebitOrCredit",
+            )),
+        }
     }
 }
 
@@ -55,14 +71,18 @@ pub enum ParseLayerError {
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Layer {
-    type Error = ParseLayerError;
+    type Error = ResultCoersionError;
 
-    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
             CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
             CelValue::String(v) if v.as_ref() == "ENCUMBERED" => Ok(Layer::Encumbered),
-            v => Err(ParseLayerError::UnknownLayer(format!("{v:?}"))),
+            v => Err(ResultCoersionError::BadExternalTypeCoersion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "Layer",
+            )),
         }
     }
 }
@@ -175,12 +195,23 @@ impl From<Currency> for &'static str {
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Currency {
-    type Error = ParseCurrencyError;
+    type Error = ResultCoersionError;
 
-    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
-            CelValue::String(v) => v.as_ref().parse(),
-            v => Err(ParseCurrencyError::UnknownCurrency(format!("{v:?}"))),
+            CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|e| {
+                ResultCoersionError::ExternalTypeCoersionError(
+                    format!("{expr:?}"),
+                    format!("{v:?}"),
+                    "Currency",
+                    format!("{e:?}"),
+                )
+            }),
+            v => Err(ResultCoersionError::BadExternalTypeCoersion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "Currency",
+            )),
         }
     }
 }
