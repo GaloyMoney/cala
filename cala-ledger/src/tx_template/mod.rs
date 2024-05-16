@@ -182,7 +182,7 @@ impl TxTemplates {
             .import(&mut tx, recorded_at, origin, &mut tx_template)
             .await?;
         self.outbox
-            .persist_events(tx, tx_template.events.last_persisted(1))
+            .persist_events_at(tx, tx_template.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

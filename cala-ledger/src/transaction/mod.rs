@@ -62,7 +62,7 @@ impl Transactions {
             .import(&mut tx, recorded_at, origin, &mut transaction)
             .await?;
         self.outbox
-            .persist_events(tx, transaction.events.last_persisted(1))
+            .persist_events_at(tx, transaction.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }
