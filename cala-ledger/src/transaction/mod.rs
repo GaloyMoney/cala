@@ -33,12 +33,18 @@ impl Transactions {
         &self,
         tx: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
-    ) -> Result<Transaction, TransactionError> {
+    ) -> Result<(Transaction, OutboxEventPayload), TransactionError> {
         let EntityUpdate {
             entity: transaction,
             ..
         } = self.repo.create_in_tx(tx, new_transaction).await?;
-        Ok(transaction)
+        let event = transaction
+            .events
+            .last_persisted(1)
+            .next()
+            .expect("should have event")
+            .into();
+        Ok((transaction, event))
     }
 
     #[cfg(feature = "import")]

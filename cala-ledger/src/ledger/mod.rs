@@ -129,15 +129,16 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
-        let transaction = self
+        let (transaction, tx_event) = self
             .transactions
             .create_in_tx(&mut tx, prepared_tx.transaction)
             .await?;
-        let (entries, _events) = self
+        let (entries, entry_events) = self
             .entries
             .create_all(&mut tx, prepared_tx.entries)
             .await?;
-        self.balances
+        let balance_events = self
+            .balances
             .update_balances(
                 tx.begin().await?,
                 transaction.created_at(),
@@ -145,10 +146,14 @@ impl CalaLedger {
                 entries,
             )
             .await?;
-        // update balances
-        // go back to transactions to get event?
-        // ship all events to outbox
-        tx.commit().await?;
+        self.outbox
+            .persist_events(
+                tx,
+                std::iter::once(tx_event)
+                    .chain(entry_events)
+                    .chain(balance_events),
+            )
+            .await?;
         Ok(())
     }
 
