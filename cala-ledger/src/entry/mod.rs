@@ -2,7 +2,9 @@ mod entity;
 pub mod error;
 mod repo;
 
-use sqlx::PgPool;
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
+use sqlx::{PgPool, Postgres, Transaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -28,17 +30,36 @@ impl Entries {
         }
     }
 
+    pub(crate) async fn create_all(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        entries: Vec<NewEntry>,
+    ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
+        let entries = self.repo.create_all(tx, entries).await?;
+        let events = entries
+            .iter()
+            .map(|values| OutboxEventPayload::EntryCreated {
+                source: DataSource::Local,
+                entry: values.clone(),
+            })
+            .collect();
+        Ok((entries, events))
+    }
+
     #[cfg(feature = "import")]
-    pub async fn sync_entry_creation(
+    pub(crate) async fn sync_entry_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
         let mut entry = Entry::import(origin, values);
-        self.repo.import(&mut tx, origin, &mut entry).await?;
+        self.repo
+            .import(&mut tx, recorded_at, origin, &mut entry)
+            .await?;
         self.outbox
-            .persist_events(tx, entry.events.last_persisted(1))
+            .persist_events_at(tx, entry.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

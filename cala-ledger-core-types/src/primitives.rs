@@ -2,7 +2,7 @@ use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use cel_interpreter::{CelResult, CelValue};
+use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
 
 crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
@@ -26,6 +26,22 @@ impl Default for DebitOrCredit {
     }
 }
 
+impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        match val {
+            CelValue::String(v) if v.as_ref() == "DEBIT" => Ok(DebitOrCredit::Debit),
+            CelValue::String(v) if v.as_ref() == "CREDIT" => Ok(DebitOrCredit::Credit),
+            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "DebitOrCredit",
+            )),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -40,7 +56,7 @@ impl Default for Status {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
 #[sqlx(type_name = "Layer", rename_all = "snake_case")]
 pub enum Layer {
     Settled,
@@ -55,14 +71,18 @@ pub enum ParseLayerError {
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Layer {
-    type Error = ParseLayerError;
+    type Error = ResultCoercionError;
 
-    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
             CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
             CelValue::String(v) if v.as_ref() == "ENCUMBERED" => Ok(Layer::Encumbered),
-            v => Err(ParseLayerError::UnknownLayer(format!("{v:?}"))),
+            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "Layer",
+            )),
         }
     }
 }
@@ -175,12 +195,23 @@ impl From<Currency> for &'static str {
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Currency {
-    type Error = ParseCurrencyError;
+    type Error = ResultCoercionError;
 
-    fn try_from(CelResult { val, .. }: CelResult) -> Result<Self, Self::Error> {
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
-            CelValue::String(v) => v.as_ref().parse(),
-            v => Err(ParseCurrencyError::UnknownCurrency(format!("{v:?}"))),
+            CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|e| {
+                ResultCoercionError::ExternalTypeCoercionError(
+                    format!("{expr:?}"),
+                    format!("{v:?}"),
+                    "Currency",
+                    format!("{e:?}"),
+                )
+            }),
+            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&v),
+                "Currency",
+            )),
         }
     }
 }

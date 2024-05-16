@@ -98,10 +98,12 @@ CREATE TABLE cala_entries (
   id UUID NOT NULL,
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
+  transaction_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
+  FOREIGN KEY (data_source_id, transaction_id) REFERENCES cala_transactions(data_source_id, id)
 );
 
 CREATE TABLE cala_entry_events (
@@ -115,13 +117,12 @@ CREATE TABLE cala_entry_events (
   FOREIGN KEY (data_source_id, id) REFERENCES cala_entries(data_source_id, id)
 );
 
-CREATE TABLE cala_balances (
+CREATE TABLE cala_current_balances (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
-  current_values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, journal_id, account_id, currency),
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
@@ -137,14 +138,15 @@ CREATE TABLE cala_balance_history (
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, journal_id, account_id, currency, version),
-  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_balances(data_source_id, journal_id, account_id, currency)
+  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency)
 );
 
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,
   payload JSONB,
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE FUNCTION notify_cala_outbox_events() RETURNS TRIGGER AS $$

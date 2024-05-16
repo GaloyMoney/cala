@@ -32,6 +32,14 @@ pub struct Transaction {
     pub(super) events: EntityEvents<TransactionEvent>,
 }
 
+impl Transaction {
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .entity_first_persisted_at
+            .expect("No persisted events")
+    }
+}
+
 impl Entity for Transaction {
     type Event = TransactionEvent;
 }
@@ -51,6 +59,10 @@ impl Transaction {
 
     pub fn id(&self) -> TransactionId {
         self.values.id
+    }
+
+    pub fn journal_id(&self) -> JournalId {
+        self.values.journal_id
     }
 
     pub fn values(&self) -> &TransactionValues {
@@ -84,7 +96,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub struct NewTransaction {
+pub(crate) struct NewTransaction {
     #[builder(setter(into))]
     pub(super) id: TransactionId,
     #[builder(setter(into))]
@@ -98,7 +110,7 @@ pub struct NewTransaction {
     pub(super) external_id: Option<String>,
     #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,
-    #[builder(setter(custom), default)]
+    #[builder(setter(into), default)]
     pub(super) metadata: Option<serde_json::Value>,
 }
 
@@ -124,16 +136,6 @@ impl NewTransaction {
                 },
             }],
         )
-    }
-}
-
-impl NewTransactionBuilder {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
     }
 }
 
@@ -169,7 +171,6 @@ mod tests {
             .tx_template_id(uuid::Uuid::new_v4())
             .effective(chrono::NaiveDate::default())
             .metadata(json!({"foo": "bar"}))
-            .unwrap()
             .build()
             .unwrap();
         assert_eq!(new_transaction.metadata, Some(json!({"foo": "bar"})));

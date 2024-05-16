@@ -1,13 +1,12 @@
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres};
 
 use cala_types::primitives::*;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{
-    entity::*,
-    primitives::{DataSource, TransactionId},
-};
+use crate::{entity::*, primitives::TransactionId};
 
 use super::{entity::*, error::*};
 
@@ -23,7 +22,6 @@ impl TransactionRepo {
         }
     }
 
-    #[allow(dead_code)]
     pub async fn create_in_tx(
         &self,
         tx: &mut sqlx::Transaction<'_, Postgres>,
@@ -39,7 +37,7 @@ impl TransactionRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_transaction.initial_events();
-        let n_new_events = events.persist(tx, DataSource::Local).await?;
+        let n_new_events = events.persist(tx).await?;
         let transaction = Transaction::try_from(events)?;
         Ok(EntityUpdate {
             entity: transaction,
@@ -51,20 +49,25 @@ impl TransactionRepo {
     pub async fn import(
         &self,
         tx: &mut sqlx::Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         transaction: &mut Transaction,
     ) -> Result<(), TransactionError> {
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id, created_at)
+            VALUES ($1, $2, $3, $4, $5)"#,
             origin as DataSourceId,
             transaction.values().id as TransactionId,
             transaction.values().journal_id as JournalId,
             transaction.values().external_id,
+            recorded_at
         )
         .execute(&mut **tx)
         .await?;
-        transaction.events.persist(tx, origin).await?;
+        transaction
+            .events
+            .persisted_at(tx, origin, recorded_at)
+            .await?;
         Ok(())
     }
 }

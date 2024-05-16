@@ -8,6 +8,7 @@ mod event {
     pub use cala_types::primitives::OutboxEventId;
 }
 
+use chrono::{DateTime, Utc};
 use sqlx::{postgres::PgListener, PgPool, Postgres, Transaction};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -52,12 +53,22 @@ impl Outbox {
 
     pub(crate) async fn persist_events(
         &self,
-        mut tx: Transaction<'_, Postgres>,
+        tx: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) -> Result<(), OutboxError> {
+        self.persist_events_at(tx, events, None).await
+    }
+
+    pub(crate) async fn persist_events_at(
+        &self,
+        mut tx: Transaction<'_, Postgres>,
+        events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
+        recorded_at: impl Into<Option<DateTime<Utc>>>,
+    ) -> Result<(), OutboxError> {
+        let recorded_at = recorded_at.into();
         let events = self
             .repo
-            .persist_events(&mut tx, events.into_iter().map(Into::into))
+            .persist_events(&mut tx, recorded_at, events.into_iter().map(Into::into))
             .await?;
         tx.commit().await?;
 

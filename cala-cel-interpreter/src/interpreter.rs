@@ -18,15 +18,15 @@ pub struct CelExpression {
 }
 
 impl CelExpression {
-    pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = E>, E: From<CelError>>(
+    pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = ResultCoercionError>>(
         &'a self,
         ctx: &CelContext,
-    ) -> Result<T, E> {
+    ) -> Result<T, CelError> {
         let res = self.evaluate(ctx)?;
-        T::try_from(CelResult {
+        Ok(T::try_from(CelResult {
             expr: &self.expr,
             val: res,
-        })
+        })?)
     }
 
     pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelError> {

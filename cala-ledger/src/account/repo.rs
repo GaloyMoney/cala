@@ -1,3 +1,5 @@
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use cala_types::primitives::Tag;
@@ -5,7 +7,7 @@ use cala_types::primitives::Tag;
 use super::{cursor::*, entity::*, error::*};
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::DataSource, query::*};
+use crate::{entity::*, query::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountRepo {
@@ -35,7 +37,7 @@ impl AccountRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_account.initial_events();
-        let n_new_events = events.persist(tx, DataSource::Local).await?;
+        let n_new_events = events.persist(tx).await?;
         let account = Account::try_from(events)?;
         Ok(EntityUpdate {
             entity: account,
@@ -87,22 +89,24 @@ impl AccountRepo {
     pub async fn import(
         &self,
         tx: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, tags)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, tags, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
-            &account.values().tags as &Vec<Tag>
+            &account.values().tags as &Vec<Tag>,
+            recorded_at
         )
         .execute(&mut **tx)
         .await?;
-        account.events.persist(tx, origin).await?;
+        account.events.persisted_at(tx, origin, recorded_at).await?;
         Ok(())
     }
 }

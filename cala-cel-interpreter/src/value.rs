@@ -258,59 +258,63 @@ impl TryFrom<&CelValue> for Arc<String> {
 }
 
 impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::Date(d) = val {
             Ok(d)
         } else {
-            Err(CelError::EvaluationError(
+            Err(ResultCoercionError::BadCoreTypeCoercion(
                 format!("{expr:?}"),
-                Box::new(CelError::BadType(CelType::Date, CelType::from(&val))),
+                CelType::from(&val),
+                CelType::Date,
             ))
         }
     }
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Uuid {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::Uuid(id) = val {
             Ok(id)
         } else {
-            Err(CelError::EvaluationError(
+            Err(ResultCoercionError::BadCoreTypeCoercion(
                 format!("{expr:?}"),
-                Box::new(CelError::BadType(CelType::Uuid, CelType::from(&val))),
+                CelType::from(&val),
+                CelType::Uuid,
             ))
         }
     }
 }
 
 impl<'a> TryFrom<CelResult<'a>> for String {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::String(s) = val {
             Ok(s.to_string())
         } else {
-            Err(CelError::EvaluationError(
+            Err(ResultCoercionError::BadCoreTypeCoercion(
                 format!("{expr:?}"),
-                Box::new(CelError::BadType(CelType::String, CelType::from(&val))),
+                CelType::from(&val),
+                CelType::String,
             ))
         }
     }
 }
 
 impl<'a> TryFrom<CelResult<'a>> for Decimal {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::Decimal(n) => Ok(n),
-            _ => Err(CelError::EvaluationError(
+            _ => Err(ResultCoercionError::BadCoreTypeCoercion(
                 format!("{expr:?}"),
-                Box::new(CelError::BadType(CelType::Decimal, CelType::from(&val))),
+                CelType::from(&val),
+                CelType::Decimal,
             )),
         }
     }
@@ -328,19 +332,23 @@ impl From<&CelKey> for CelType {
 }
 
 impl TryFrom<&CelKey> for String {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(v: &CelKey) -> Result<Self, Self::Error> {
         if let CelKey::String(s) = v {
             Ok(s.to_string())
         } else {
-            Err(CelError::BadType(CelType::String, CelType::from(v)))
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{v:?}"),
+                CelType::from(v),
+                CelType::String,
+            ))
         }
     }
 }
 
 impl<'a> TryFrom<CelResult<'a>> for serde_json::Value {
-    type Error = CelError;
+    type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         use serde_json::*;

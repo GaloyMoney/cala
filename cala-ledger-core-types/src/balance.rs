@@ -5,11 +5,14 @@ use serde::{Deserialize, Serialize};
 use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BalanceValues {
+pub struct BalanceSnapshot {
     pub journal_id: JournalId,
     pub account_id: AccountId,
-    pub entry_id: EntryId,
     pub currency: Currency,
+    pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+    pub entry_id: EntryId,
     pub settled_dr_balance: Decimal,
     pub settled_cr_balance: Decimal,
     pub settled_entry_id: EntryId,

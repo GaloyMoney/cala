@@ -3,11 +3,13 @@ pub mod error;
 mod entity;
 mod repo;
 
-use sqlx::PgPool;
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
+use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{outbox::*, primitives::DataSource};
+use crate::{entity::EntityUpdate, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -29,17 +31,38 @@ impl Transactions {
         }
     }
 
+    pub(crate) async fn create_in_tx(
+        &self,
+        tx: &mut DbTransaction<'_, Postgres>,
+        new_transaction: NewTransaction,
+    ) -> Result<(Transaction, OutboxEventPayload), TransactionError> {
+        let EntityUpdate {
+            entity: transaction,
+            ..
+        } = self.repo.create_in_tx(tx, new_transaction).await?;
+        let event = transaction
+            .events
+            .last_persisted(1)
+            .next()
+            .expect("should have event")
+            .into();
+        Ok((transaction, event))
+    }
+
     #[cfg(feature = "import")]
     pub async fn sync_transaction_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
         let mut transaction = Transaction::import(origin, values);
-        self.repo.import(&mut tx, origin, &mut transaction).await?;
+        self.repo
+            .import(&mut tx, recorded_at, origin, &mut transaction)
+            .await?;
         self.outbox
-            .persist_events(tx, transaction.events.last_persisted(1))
+            .persist_events_at(tx, transaction.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

@@ -10,6 +10,7 @@ pub struct EntryValues {
     pub journal_id: JournalId,
     pub account_id: AccountId,
     pub entry_type: String,
+    pub sequence: u32,
     pub layer: Layer,
     pub units: Decimal,
     pub currency: Currency,

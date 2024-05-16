@@ -84,7 +84,7 @@ impl TryFrom<EntityEvents<EntryEvent>> for Entry {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub struct NewEntry {
+pub(crate) struct NewEntry {
     #[builder(setter(into))]
     pub id: EntryId,
     #[builder(setter(into))]
@@ -95,6 +95,8 @@ pub struct NewEntry {
     pub(super) account_id: AccountId,
     #[builder(setter(into))]
     pub(super) entry_type: String,
+    #[builder(setter(into))]
+    pub(super) sequence: u32,
     #[builder(default)]
     pub(super) layer: Layer,
     #[builder(setter(into))]
@@ -112,7 +114,22 @@ impl NewEntry {
         NewEntryBuilder::default()
     }
 
-    #[allow(dead_code)]
+    pub(super) fn to_values(&self) -> EntryValues {
+        EntryValues {
+            id: self.id,
+            transaction_id: self.transaction_id,
+            journal_id: self.journal_id,
+            account_id: self.account_id,
+            entry_type: self.entry_type.clone(),
+            sequence: self.sequence,
+            layer: self.layer,
+            units: self.units,
+            currency: self.currency,
+            direction: self.direction,
+            description: self.description.clone(),
+        }
+    }
+
     pub(super) fn initial_events(self) -> EntityEvents<EntryEvent> {
         EntityEvents::init(
             self.id,
@@ -123,6 +140,7 @@ impl NewEntry {
                     journal_id: self.journal_id,
                     account_id: self.account_id,
                     entry_type: self.entry_type,
+                    sequence: self.sequence,
                     layer: self.layer,
                     units: self.units,
                     currency: self.currency,
@@ -150,6 +168,7 @@ mod tests {
             .journal_id(JournalId::new())
             .layer(Layer::Settled)
             .entry_type("ENTRY_TYPE")
+            .sequence(1u32)
             .units(rust_decimal::Decimal::from(1))
             .currency(currency)
             .direction(DebitOrCredit::Debit);
