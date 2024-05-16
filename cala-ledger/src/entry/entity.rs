@@ -125,7 +125,7 @@ impl NewEntry {
             layer: self.layer,
             units: self.units,
             currency: self.currency,
-            direction: self.direction.clone(),
+            direction: self.direction,
             description: self.description.clone(),
         }
     }
