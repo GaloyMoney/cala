@@ -43,11 +43,6 @@ e2e: clean-deps start-deps build
 sdl:
 	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
 
-integration-tests-in-container:
-	cd cala-ledger && DATABASE_URL="postgres://user:password@server-pg:5432/pg" cargo sqlx migrate run
-	cd cala-server && DATABASE_URL="postgres://user:password@server-pg:5432/pg" cargo sqlx migrate run --ignore-missing
-	cargo nextest run --verbose --locked
-
 test-in-ci: start-deps setup-db
 	cargo nextest run --verbose --locked
 

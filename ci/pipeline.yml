@@ -70,7 +70,7 @@ groups:
 
 jobs:
 - #@ rust_check_code()
-- #@ test_on_docker_host("integration-tests")
+- #@ on_nix_host("integration-tests", "make test-in-ci")
 - #@ on_nix_host("bats-tests", "make e2e")
 - #@ build_edge_image()
 
@@ -293,7 +293,6 @@ resources:
 - #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
-- #@ docker_host_pool()
 - name: latest-image
   type: registry-image
   source:

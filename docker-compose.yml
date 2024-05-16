@@ -1,15 +1,5 @@
 version: "3"
 services:
-  integration-tests:
-    image: us.gcr.io/galoy-org/rust-concourse
-    depends_on:
-      - integration-deps
-    command: [ "make", "integration-tests-in-container" ]
-    working_dir: /repo
-    volumes:
-      - ./:/repo
-      - cargo-cache:/usr/local/cargo
-      - cargo-target:/usr/local/cargo-target
   integration-deps:
     image: busybox
     depends_on:
@@ -52,7 +42,3 @@ services:
       - HONEYCOMB_API_KEY=${HONEYCOMB_API_KEY}
     volumes:
       - ./dev/otel-agent-config.yaml:/etc/otel-agent-config.yaml
-
-volumes:
-  cargo-cache:
-  cargo-target:
