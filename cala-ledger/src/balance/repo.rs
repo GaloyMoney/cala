@@ -2,6 +2,8 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
 use super::error::BalanceError;
+#[cfg(feature = "import")]
+use cala_types::primitives::DataSourceId;
 use cala_types::{
     balance::BalanceSnapshot,
     primitives::{AccountId, Currency, JournalId},
@@ -162,6 +164,80 @@ impl BalanceRepo {
                 .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
         });
         query_builder.build().execute(&mut **tx).await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import_balance(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        balance: &BalanceSnapshot,
+    ) -> Result<(), BalanceError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_current_balances
+            (data_source_id, journal_id, account_id, currency, latest_version, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            origin as DataSourceId,
+            balance.journal_id as JournalId,
+            balance.account_id as AccountId,
+            balance.currency.code(),
+            balance.version as i32,
+            balance.created_at
+        )
+        .execute(&mut **tx)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO cala_balance_history
+            (data_source_id, journal_id, account_id, currency, version, values, recorded_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            origin as DataSourceId,
+            balance.journal_id as JournalId,
+            balance.account_id as AccountId,
+            balance.currency.code(),
+            balance.version as i32,
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            balance.created_at
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import_balance_update(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        balance: &BalanceSnapshot,
+    ) -> Result<(), BalanceError> {
+        sqlx::query!(
+            r#"
+            UPDATE cala_current_balances
+            SET latest_version = $1
+            WHERE data_source_id = $2 AND journal_id = $3 AND account_id = $4 AND currency = $5 AND latest_version = $1 - 1"#,
+            balance.version as i32,
+            origin as DataSourceId,
+            balance.journal_id as JournalId,
+            balance.account_id as AccountId,
+            balance.currency.code(),
+        )
+        .execute(&mut **tx)
+        .await?;
+        sqlx::query!(
+            r#"INSERT INTO cala_balance_history
+            (data_source_id, journal_id, account_id, currency, version, values, recorded_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            origin as DataSourceId,
+            balance.journal_id as JournalId,
+            balance.account_id as AccountId,
+            balance.currency.code(),
+            balance.version as i32,
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            balance.modified_at,
+        )
+        .execute(&mut **tx)
+        .await?;
         Ok(())
     }
 }

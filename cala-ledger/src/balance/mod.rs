@@ -19,7 +19,7 @@ use repo::*;
 #[derive(Clone)]
 pub struct Balances {
     repo: BalanceRepo,
-    _outbox: Outbox,
+    outbox: Outbox,
     _pool: PgPool,
 }
 
@@ -27,7 +27,7 @@ impl Balances {
     pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
         Self {
             repo: BalanceRepo::new(pool),
-            _outbox: outbox,
+            outbox,
             _pool: pool.clone(),
         }
     }
@@ -176,5 +176,51 @@ impl Balances {
             }
         }
         snapshot
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_balance_creation(
+        &self,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        balance: BalanceSnapshot,
+    ) -> Result<(), BalanceError> {
+        self.repo.import_balance(&mut tx, origin, &balance).await?;
+        let recorded_at = balance.created_at;
+        self.outbox
+            .persist_events_at(
+                tx,
+                std::iter::once(OutboxEventPayload::BalanceCreated {
+                    source: DataSource::Remote { id: origin },
+                    balance,
+                }),
+                recorded_at,
+            )
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_balance_update(
+        &self,
+        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        origin: DataSourceId,
+        balance: BalanceSnapshot,
+    ) -> Result<(), BalanceError> {
+        self.repo
+            .import_balance_update(&mut tx, origin, &balance)
+            .await?;
+        let recorded_at = balance.modified_at;
+        self.outbox
+            .persist_events_at(
+                tx,
+                std::iter::once(OutboxEventPayload::BalanceUpdated {
+                    source: DataSource::Remote { id: origin },
+                    balance,
+                }),
+                recorded_at,
+            )
+            .await?;
+        Ok(())
     }
 }

@@ -201,7 +201,16 @@ impl CalaLedger {
                     .sync_entry_creation(tx, event.recorded_at, origin, entry)
                     .await?
             }
-            _ => (),
+            BalanceCreated { balance, .. } => {
+                self.balances
+                    .sync_balance_creation(tx, origin, balance)
+                    .await?
+            }
+            BalanceUpdated { balance, .. } => {
+                self.balances
+                    .sync_balance_update(tx, origin, balance)
+                    .await?
+            }
         }
         Ok(())
     }
