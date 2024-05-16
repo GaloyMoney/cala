@@ -1,9 +1,11 @@
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{entity::*, error::*};
+use crate::entity::*;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::DataSource};
 
 #[derive(Debug, Clone)]
 pub(super) struct JournalRepo {
@@ -33,7 +35,7 @@ impl JournalRepo {
         .execute(&mut **tx)
         .await?;
         let mut events = new_journal.initial_events();
-        let n_new_events = events.persist(tx, DataSource::Local).await?;
+        let n_new_events = events.persist(tx).await?;
         let journal = Journal::try_from(events)?;
         Ok(EntityUpdate {
             entity: journal,
@@ -45,20 +47,22 @@ impl JournalRepo {
     pub async fn import(
         &self,
         tx: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
         sqlx::query!(
-            r#"INSERT INTO cala_journals (data_source_id, id, name, external_id)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_journals (data_source_id, id, name, external_id, created_at)
+            VALUES ($1, $2, $3, $4, $5)"#,
             origin as DataSourceId,
             journal.values().id as JournalId,
             journal.values().name,
             journal.values().external_id,
+            recorded_at
         )
         .execute(&mut **tx)
         .await?;
-        journal.events.persist(tx, origin).await?;
+        journal.events.persisted_at(tx, origin, recorded_at).await?;
         Ok(())
     }
 }

@@ -1,13 +1,12 @@
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use tracing::instrument;
 
 use super::{entity::*, error::*};
+use crate::entity::EntityEvents;
 #[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{
-    entity::EntityEvents,
-    primitives::{AccountId, EntryId, JournalId},
-};
+use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId};
 
 #[derive(Debug, Clone)]
 pub(crate) struct EntryRepo {
@@ -53,20 +52,22 @@ impl EntryRepo {
     pub(super) async fn import(
         &self,
         tx: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         entry: &mut Entry,
     ) -> Result<(), EntryError> {
         sqlx::query!(
-            r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, created_at)
+            VALUES ($1, $2, $3, $4, $5)"#,
             origin as DataSourceId,
             entry.values().id as EntryId,
             entry.values().journal_id as JournalId,
             entry.values().account_id as AccountId,
+            recorded_at,
         )
         .execute(&mut **tx)
         .await?;
-        entry.events.persist(tx, origin).await?;
+        entry.events.persisted_at(tx, origin, recorded_at).await?;
         Ok(())
     }
 }

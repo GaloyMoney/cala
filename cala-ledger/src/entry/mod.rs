@@ -2,6 +2,8 @@ mod entity;
 pub mod error;
 mod repo;
 
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
 #[cfg(feature = "import")]
@@ -48,11 +50,14 @@ impl Entries {
     pub(crate) async fn sync_entry_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
         let mut entry = Entry::import(origin, values);
-        self.repo.import(&mut tx, origin, &mut entry).await?;
+        self.repo
+            .import(&mut tx, recorded_at, origin, &mut entry)
+            .await?;
         self.outbox
             .persist_events(tx, entry.events.last_persisted(1))
             .await?;

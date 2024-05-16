@@ -3,6 +3,8 @@ pub mod error;
 mod entity;
 mod repo;
 
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 
 #[cfg(feature = "import")]
@@ -51,11 +53,14 @@ impl Transactions {
     pub async fn sync_transaction_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
         let mut transaction = Transaction::import(origin, values);
-        self.repo.import(&mut tx, origin, &mut transaction).await?;
+        self.repo
+            .import(&mut tx, recorded_at, origin, &mut transaction)
+            .await?;
         self.outbox
             .persist_events(tx, transaction.events.last_persisted(1))
             .await?;

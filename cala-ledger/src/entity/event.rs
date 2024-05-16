@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::Row;
 
@@ -57,7 +58,24 @@ where
     pub async fn persist(
         &mut self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ) -> Result<usize, sqlx::Error> {
+        self.persist_inner(tx, None, None).await
+    }
+
+    pub async fn persisted_at(
+        &mut self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        data_source: DataSourceId,
+        recorded_at: DateTime<Utc>,
+    ) -> Result<usize, sqlx::Error> {
+        self.persist_inner(tx, data_source, Some(recorded_at)).await
+    }
+
+    async fn persist_inner(
+        &mut self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         data_source: impl Into<Option<DataSourceId>>,
+        recorded_at: Option<DateTime<Utc>>,
     ) -> Result<usize, sqlx::Error> {
         let uuid: uuid::Uuid = self.entity_id.into();
         let source_id = data_source.into();
@@ -67,9 +85,10 @@ where
         }
 
         let mut query_builder = sqlx::QueryBuilder::new(format!(
-            "INSERT INTO {} ({}id, sequence, event_type, event)",
+            "INSERT INTO {} ({}id, sequence, event_type, event{})",
             <T as EntityEvent>::event_table_name(),
             source_id.map(|_| "data_source_id, ").unwrap_or(""),
+            recorded_at.map(|_| ", recorded_at").unwrap_or(""),
         ));
 
         let sequence = self.persisted_events.len() + 1;
@@ -90,6 +109,9 @@ where
                 builder.push_bind((sequence + offset) as i32);
                 builder.push_bind(event_type);
                 builder.push_bind(event_json);
+                if let Some(recorded_at) = recorded_at {
+                    builder.push_bind(recorded_at);
+                }
             },
         );
         query_builder.push("RETURNING recorded_at");

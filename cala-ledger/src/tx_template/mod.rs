@@ -6,16 +6,17 @@ mod tx_params;
 pub mod error;
 
 use chrono::NaiveDate;
+#[cfg(feature = "import")]
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 use uuid::Uuid;
 
-#[cfg(feature = "import")]
-use crate::primitives::*;
 use crate::{
-    entity::*, entry::NewEntry, outbox::*, primitives::DataSource, transaction::NewTransaction,
+    entity::*, entry::NewEntry, outbox::*, primitives::DataSource, primitives::*,
+    transaction::NewTransaction,
 };
 
 pub use entity::*;
@@ -172,11 +173,14 @@ impl TxTemplates {
     pub async fn sync_tx_template_creation(
         &self,
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TxTemplateValues,
     ) -> Result<(), TxTemplateError> {
         let mut tx_template = TxTemplate::import(origin, values);
-        self.repo.import(&mut tx, origin, &mut tx_template).await?;
+        self.repo
+            .import(&mut tx, recorded_at, origin, &mut tx_template)
+            .await?;
         self.outbox
             .persist_events(tx, tx_template.events.last_persisted(1))
             .await?;

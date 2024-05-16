@@ -3,6 +3,7 @@ pub mod error;
 
 use sqlx::{Acquire, PgPool, Postgres, Transaction as DbTransaction};
 use std::sync::{Arc, Mutex};
+pub use tracing::instrument;
 
 pub use config::*;
 use error::*;
@@ -21,7 +22,6 @@ use crate::{
 mod import_deps {
     pub use crate::primitives::DataSourceId;
     pub use cala_types::outbox::OutboxEvent;
-    pub use tracing::instrument;
 }
 #[cfg(feature = "import")]
 use import_deps::*;
@@ -178,26 +178,28 @@ impl CalaLedger {
             Empty => (),
             AccountCreated { account, .. } => {
                 self.accounts
-                    .sync_account_creation(tx, origin, account)
+                    .sync_account_creation(tx, event.recorded_at, origin, account)
                     .await?
             }
             JournalCreated { journal, .. } => {
                 self.journals
-                    .sync_journal_creation(tx, origin, journal)
+                    .sync_journal_creation(tx, event.recorded_at, origin, journal)
                     .await?
             }
             TransactionCreated { transaction, .. } => {
                 self.transactions
-                    .sync_transaction_creation(tx, origin, transaction)
+                    .sync_transaction_creation(tx, event.recorded_at, origin, transaction)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {
                 self.tx_templates
-                    .sync_tx_template_creation(tx, origin, tx_template)
+                    .sync_tx_template_creation(tx, event.recorded_at, origin, tx_template)
                     .await?
             }
             EntryCreated { entry, .. } => {
-                self.entries.sync_entry_creation(tx, origin, entry).await?
+                self.entries
+                    .sync_entry_creation(tx, event.recorded_at, origin, entry)
+                    .await?
             }
             _ => (),
         }

@@ -29,7 +29,7 @@ impl Jobs {
         .execute(&mut **tx)
         .await?;
         let mut events = new_job.initial_events();
-        events.persist(tx, None).await?;
+        events.persist(tx).await?;
         let job = Job::try_from(events)?;
         Ok(job)
     }
