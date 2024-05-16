@@ -4,13 +4,13 @@ use thiserror::Error;
 use crate::cel_type::*;
 
 #[derive(Error, Debug)]
-pub enum ResultCoersionError {
+pub enum ResultCoercionError {
     #[error("Error evaluating expression '{0}' - Could not coerce {1:?} into {2:?}")]
-    BadCoreTypeCoersion(String, CelType, CelType),
+    BadCoreTypeCoercion(String, CelType, CelType),
     #[error("Error evaluating expression '{0}' - Could not coerce {1:?} into {2:?}")]
-    BadExternalTypeCoersion(String, CelType, &'static str),
+    BadExternalTypeCoercion(String, CelType, &'static str),
     #[error("Error evaluating expression '{0}' - Could not coerce {1:?} into {2:?} - Reason: {3}")]
-    ExternalTypeCoersionError(String, String, &'static str, String),
+    ExternalTypeCoercionError(String, String, &'static str, String),
 }
 
 #[derive(Error, Debug)]
@@ -39,7 +39,7 @@ pub enum CelError {
     Unexpected(String),
 
     #[error("CelError - {0}")]
-    ResultCoersionError(#[from] ResultCoersionError),
+    ResultCoercionError(#[from] ResultCoercionError),
 
     #[error("Error evaluating cell expression '{0}' - {1}")]
     EvaluationError(String, Box<Self>),

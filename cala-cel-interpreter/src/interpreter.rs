@@ -18,7 +18,7 @@ pub struct CelExpression {
 }
 
 impl CelExpression {
-    pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = ResultCoersionError>>(
+    pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = ResultCoercionError>>(
         &'a self,
         ctx: &CelContext,
     ) -> Result<T, CelError> {
