@@ -10,4 +10,6 @@ pub enum BalanceError {
     OutboxError(#[from] OutboxError),
     #[error("TransactionError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
+    #[error("BalanceError - OptimisticLockingError")]
+    OptimisticLockingError,
 }

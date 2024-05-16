@@ -33,7 +33,7 @@ impl Entries {
         tx: &mut Transaction<'_, Postgres>,
         entries: Vec<NewEntry>,
     ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
-        let entries = self.repo.create_all(entries, tx).await?;
+        let entries = self.repo.create_all(tx, entries).await?;
         let events = entries
             .iter()
             .map(|values| OutboxEventPayload::EntryCreated {

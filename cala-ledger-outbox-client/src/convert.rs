@@ -1,5 +1,6 @@
 use cala_types::{
-    account::*, entry::*, journal::*, outbox::*, primitives::*, transaction::*, tx_template::*,
+    account::*, balance::*, entry::*, journal::*, outbox::*, primitives::*, transaction::*,
+    tx_template::*,
 };
 use cel_interpreter::CelExpression;
 
@@ -75,6 +76,24 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 source: data_source_id.parse()?,
                 entry: EntryValues::try_from(
                     entry.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
+            proto::cala_ledger_event::Payload::BalanceCreated(proto::BalanceCreated {
+                data_source_id,
+                balance,
+            }) => BalanceCreated {
+                source: data_source_id.parse()?,
+                balance: BalanceSnapshot::try_from(
+                    balance.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
+            proto::cala_ledger_event::Payload::BalanceUpdated(proto::BalanceUpdated {
+                data_source_id,
+                balance,
+            }) => BalanceUpdated {
+                source: data_source_id.parse()?,
+                balance: BalanceSnapshot::try_from(
+                    balance.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
 
@@ -322,9 +341,69 @@ impl TryFrom<proto::Entry> for EntryValues {
             sequence,
             layer: proto::Layer::try_from(layer).map(Layer::from)?,
             direction: proto::DebitOrCredit::try_from(direction).map(DebitOrCredit::from)?,
-            units: rust_decimal::Decimal::try_from(units)?,
+            units: units.parse()?,
             currency: currency.parse::<Currency>()?,
             description: description.map(String::from),
+        };
+        Ok(res)
+    }
+}
+
+impl TryFrom<proto::Balance> for BalanceSnapshot {
+    type Error = CalaLedgerOutboxClientError;
+    fn try_from(
+        proto::Balance {
+            journal_id,
+            account_id,
+            currency,
+            version,
+            created_at,
+            modified_at,
+            entry_id,
+            settled_dr_balance,
+            settled_cr_balance,
+            settled_entry_id,
+            settled_modified_at,
+            pending_dr_balance,
+            pending_cr_balance,
+            pending_entry_id,
+            pending_modified_at,
+            encumbered_dr_balance,
+            encumbered_cr_balance,
+            encumbered_entry_id,
+            encumbered_modified_at,
+        }: proto::Balance,
+    ) -> Result<Self, Self::Error> {
+        let res = Self {
+            journal_id: journal_id.parse()?,
+            account_id: account_id.parse()?,
+            currency: currency.parse()?,
+            version,
+            created_at: created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            entry_id: entry_id.parse()?,
+            settled_dr_balance: settled_dr_balance.parse()?,
+            settled_cr_balance: settled_cr_balance.parse()?,
+            settled_entry_id: settled_entry_id.parse()?,
+            settled_modified_at: settled_modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            pending_dr_balance: pending_dr_balance.parse()?,
+            pending_cr_balance: pending_cr_balance.parse()?,
+            pending_entry_id: pending_entry_id.parse()?,
+            pending_modified_at: pending_modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            encumbered_dr_balance: encumbered_dr_balance.parse()?,
+            encumbered_cr_balance: encumbered_cr_balance.parse()?,
+            encumbered_entry_id: encumbered_entry_id.parse()?,
+            encumbered_modified_at: encumbered_modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
         };
         Ok(res)
     }

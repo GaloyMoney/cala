@@ -6,11 +6,13 @@ use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BalanceSnapshot {
-    pub version: u32,
     pub journal_id: JournalId,
     pub account_id: AccountId,
-    pub entry_id: EntryId,
     pub currency: Currency,
+    pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+    pub entry_id: EntryId,
     pub settled_dr_balance: Decimal,
     pub settled_cr_balance: Decimal,
     pub settled_entry_id: EntryId,

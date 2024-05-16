@@ -24,6 +24,8 @@ message CalaLedgerEvent {
     TxTemplateCreated tx_template_created = 7;
     TransactionCreated transaction_created = 8;
     EntryCreated entry_created = 9;
+    BalanceCreated balance_created = 10;
+    BalanceUpdated balance_updated = 11;
   }
 }
 
@@ -154,8 +156,40 @@ message Entry {
   string entry_type = 5;
   uint32 sequence = 6;
   Layer layer = 7;
-  double units = 8;
+  string units = 8;
   string currency = 9;
   DebitOrCredit direction = 10;
   optional string description = 11;
+}
+
+message BalanceCreated {
+  string data_source_id = 1;
+  Balance balance = 2;
+}
+
+message BalanceUpdated {
+  string data_source_id = 1;
+  Balance balance = 2;
+}
+
+message Balance {
+  string journal_id = 1;
+  string account_id = 2;
+  string currency = 3;
+  uint32 version = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp modified_at = 6;
+  string entry_id = 7;
+  string settled_dr_balance = 8;
+  string settled_cr_balance = 9;
+  string settled_entry_id = 10;
+  google.protobuf.Timestamp settled_modified_at = 11;
+  string pending_dr_balance = 12;
+  string pending_cr_balance = 13;
+  string pending_entry_id = 14;
+  google.protobuf.Timestamp pending_modified_at = 15;
+  string encumbered_dr_balance = 16;
+  string encumbered_cr_balance = 17;
+  string encumbered_entry_id = 18;
+  google.protobuf.Timestamp encumbered_modified_at = 19;
 }

@@ -138,55 +138,18 @@ impl CalaLedger {
             .create_all(&mut tx, prepared_tx.entries)
             .await?;
         self.balances
-            .update_balances(tx.begin().await?, transaction.journal_id(), entries)
+            .update_balances(
+                tx.begin().await?,
+                transaction.created_at(),
+                transaction.journal_id(),
+                entries,
+            )
             .await?;
         // update balances
         // go back to transactions to get event?
         // ship all events to outbox
         tx.commit().await?;
         Ok(())
-        // {
-        //     let ids: Vec<(AccountId, &Currency)> = entries
-        //         .iter()
-        //         .map(|entry| (entry.account_id, &entry.currency))
-        //         .collect();
-        //     let mut balance_tx = tx.begin().await?;
-
-        //     let mut balances = self
-        //         .balances
-        //         .find_for_update(journal_id, ids.clone(), &mut balance_tx)
-        //         .await?;
-        //     let mut latest_balances: HashMap<(AccountId, &Currency), BalanceDetails> =
-        //         HashMap::new();
-        //     let mut new_balances = Vec::new();
-        //     for entry in entries.iter() {
-        //         let balance = match (
-        //             latest_balances.remove(&(entry.account_id, &entry.currency)),
-        //             balances.remove(&(entry.account_id, entry.currency)),
-        //         ) {
-        //             (Some(latest), _) => {
-        //                 new_balances.push(latest.clone());
-        //                 latest
-        //             }
-        //             (_, Some(balance)) => balance,
-        //             _ => {
-        //                 latest_balances.insert(
-        //                     (entry.account_id, &entry.currency),
-        //                     BalanceDetails::init(journal_id, entry),
-        //                 );
-        //                 continue;
-        //             }
-        //         };
-        //         latest_balances.insert((entry.account_id, &entry.currency), balance.update(entry));
-        //     }
-        //     new_balances.extend(latest_balances.into_values());
-
-        //     self.balances
-        //         .update_balances(journal_id, new_balances, &mut balance_tx)
-        //         .await?;
-        //     balance_tx.commit().await?;
-        // }
-        // tx.commit().await?;
     }
 
     pub async fn register_outbox_listener(
@@ -231,6 +194,7 @@ impl CalaLedger {
             EntryCreated { entry, .. } => {
                 self.entries.sync_entry_creation(tx, origin, entry).await?
             }
+            _ => (),
         }
         Ok(())
     }

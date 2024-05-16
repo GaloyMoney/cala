@@ -1,5 +1,7 @@
 use rust_decimal::prelude::ToPrimitive;
 
+use cala_types::balance::BalanceSnapshot;
+
 use crate::primitives::*;
 
 use crate::{
@@ -56,6 +58,18 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                 proto::cala_ledger_event::Payload::EntryCreated(proto::EntryCreated {
                     data_source_id: source.to_string(),
                     entry: Some(proto::Entry::from(entry)),
+                })
+            }
+            OutboxEventPayload::BalanceCreated { source, balance } => {
+                proto::cala_ledger_event::Payload::BalanceCreated(proto::BalanceCreated {
+                    data_source_id: source.to_string(),
+                    balance: Some(proto::Balance::from(balance)),
+                })
+            }
+            OutboxEventPayload::BalanceUpdated { source, balance } => {
+                proto::cala_ledger_event::Payload::BalanceUpdated(proto::BalanceUpdated {
+                    data_source_id: source.to_string(),
+                    balance: Some(proto::Balance::from(balance)),
                 })
             }
             OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
@@ -310,8 +324,56 @@ impl From<EntryValues> for proto::Entry {
             layer: layer.into(),
             direction: direction.into(),
             currency: currency.to_string(),
-            units,
+            units: units.to_string(),
             description: description.map(String::from),
+        }
+    }
+}
+
+impl From<BalanceSnapshot> for proto::Balance {
+    fn from(
+        BalanceSnapshot {
+            journal_id,
+            account_id,
+            currency,
+            version,
+            created_at,
+            modified_at,
+            entry_id,
+            settled_dr_balance,
+            settled_cr_balance,
+            settled_entry_id,
+            settled_modified_at,
+            pending_dr_balance,
+            pending_cr_balance,
+            pending_entry_id,
+            pending_modified_at,
+            encumbered_dr_balance,
+            encumbered_cr_balance,
+            encumbered_entry_id,
+            encumbered_modified_at,
+        }: BalanceSnapshot,
+    ) -> Self {
+        proto::Balance {
+            journal_id: journal_id.to_string(),
+            account_id: account_id.to_string(),
+            currency: currency.to_string(),
+            version,
+            created_at: Some(created_at.into()),
+            modified_at: Some(modified_at.into()),
+            entry_id: entry_id.to_string(),
+            settled_dr_balance: settled_dr_balance.to_string(),
+            settled_cr_balance: settled_cr_balance.to_string(),
+            settled_entry_id: settled_entry_id.to_string(),
+            settled_modified_at: Some(settled_modified_at.into()),
+            pending_dr_balance: pending_dr_balance.to_string(),
+            pending_cr_balance: pending_cr_balance.to_string(),
+            pending_entry_id: pending_entry_id.to_string(),
+            pending_modified_at: Some(pending_modified_at.into()),
+            encumbered_dr_balance: encumbered_dr_balance.to_string(),
+            encumbered_cr_balance: encumbered_cr_balance.to_string(),
+            encumbered_entry_id: encumbered_entry_id.to_string(),
+            encumbered_modified_at: Some(encumbered_modified_at.into()),
         }
     }
 }

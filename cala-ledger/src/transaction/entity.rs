@@ -32,6 +32,14 @@ pub struct Transaction {
     pub(super) events: EntityEvents<TransactionEvent>,
 }
 
+impl Transaction {
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .entity_first_persisted_at
+            .expect("No persisted events")
+    }
+}
+
 impl Entity for Transaction {
     type Event = TransactionEvent;
 }

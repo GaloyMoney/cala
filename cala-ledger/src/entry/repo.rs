@@ -28,8 +28,8 @@ impl EntryRepo {
     )]
     pub(crate) async fn create_all(
         &self,
-        entries: Vec<NewEntry>,
         tx: &mut Transaction<'_, Postgres>,
+        entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
             r#"INSERT INTO cala_entries
