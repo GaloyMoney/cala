@@ -1,5 +1,15 @@
 version: "3"
 services:
+  integration-tests:
+    image: us.gcr.io/galoy-org/rust-concourse
+    depends_on:
+      - integration-deps
+    command: [ "make", "integration-tests-in-container" ]
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+      - cargo-cache:/usr/local/cargo
+      - cargo-target:/usr/local/cargo-target
   integration-deps:
     image: busybox
     depends_on:

@@ -58,9 +58,10 @@ plan:
 #@ end
 
 groups:
-- name: rust
+- name: cala
   jobs:
   - check-code
+  - integration-tests
   - bats-tests
   - build-edge-image
   - release
@@ -69,6 +70,7 @@ groups:
 
 jobs:
 - #@ rust_check_code()
+- #@ test_on_docker_host("integration-tests")
 - #@ on_nix_host("bats-tests", "make e2e")
 - #@ build_edge_image()
 
@@ -78,8 +80,9 @@ jobs:
   - in_parallel:
     - get: repo
       passed:
-      - bats-tests
       - check-code
+      - integration-tests
+      - bats-tests
     - get: pipeline-tasks
     - get: version
   - task: prep-release
@@ -290,6 +293,7 @@ resources:
 - #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
+- #@ docker_host_pool()
 - name: latest-image
   type: registry-image
   source:
