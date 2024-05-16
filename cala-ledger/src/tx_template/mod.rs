@@ -142,7 +142,7 @@ impl TxTemplates {
             let currency: Currency = entry.currency.try_evaluate(&ctx)?;
             let direction: DebitOrCredit = entry.direction.try_evaluate(&ctx)?;
 
-            let total = totals.entry(currency).or_insert(Decimal::ZERO);
+            let total = totals.entry((currency, layer)).or_insert(Decimal::ZERO);
             match direction {
                 DebitOrCredit::Debit => *total -= units,
                 DebitOrCredit::Credit => *total += units,
@@ -159,9 +159,9 @@ impl TxTemplates {
             new_entries.push(builder.build().expect("Couldn't build entry"));
         }
 
-        for (k, v) in totals {
+        for ((c, l), v) in totals {
             if v != Decimal::ZERO {
-                return Err(TxTemplateError::UnbalancedTransaction(k, v));
+                return Err(TxTemplateError::UnbalancedTransaction(c, l, v));
             }
         }
 

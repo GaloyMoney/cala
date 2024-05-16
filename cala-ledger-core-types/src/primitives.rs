@@ -56,7 +56,7 @@ impl Default for Status {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
 #[sqlx(type_name = "Layer", rename_all = "snake_case")]
 pub enum Layer {
     Settled,
