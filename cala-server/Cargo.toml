@@ -1,7 +1,12 @@
 [package]
 name = "cala-server"
-version = "0.1.0"
+description = "Server to sync other cala deployments"
+repository = "https://github.com/GaloyMoney/cala"
+version = "0.1.0-dev"
 edition = "2021"
+license = "MIT"
+categories = ["server", "sync"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
