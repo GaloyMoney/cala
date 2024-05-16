@@ -3,6 +3,7 @@ pub mod error;
 
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
+use tokio::{select, sync::oneshot};
 
 pub use config::*;
 use error::*;
@@ -35,6 +36,8 @@ pub struct CalaLedger {
     outbox: Outbox,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
+    abort_sender: Arc<Mutex<Option<oneshot::Sender<()>>>>,
+    abort_receiver: Arc<Mutex<Option<oneshot::Receiver<()>>>>,
 }
 
 impl CalaLedger {
@@ -64,6 +67,8 @@ impl CalaLedger {
             outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
         }
 
+        let (abort_sender, abort_receiver) = oneshot::channel::<()>();
+
         let accounts = Accounts::new(&pool, outbox.clone());
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
@@ -77,6 +82,8 @@ impl CalaLedger {
             transactions,
             entries,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
+            abort_sender: Arc::new(Mutex::new(Some(abort_sender))),
+            abort_receiver: Arc::new(Mutex::new(Some(abort_receiver))),
             _pool: pool,
         })
     }
@@ -144,17 +151,36 @@ impl CalaLedger {
     }
 
     pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
-        let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
-        if let Some(handle) = handle {
-            return handle.await.expect("Couldn't await outbox handle");
+        let mut handle = match self.outbox_handle.lock().expect("poisened mutex").take() {
+            Some(handle) => handle,
+            None => return Ok(()),
+        };
+
+
+        let abort_receiver = match self.abort_receiver.lock().expect("poisened mutex").take() {
+            Some(abort_receiver) => abort_receiver,
+            None => return Ok(()),
+        };
+
+        select! {
+            result = (&mut handle) => {
+                result.expect("Couldn't await outbox handle")
+            },
+
+            _ = abort_receiver => {
+                handle.abort();
+                Ok(())
+            },
         }
-        Ok(())
     }
 
-    pub fn shutdown_outbox(&mut self) -> Result<(), LedgerError> {
-        if let Some(handle) = self.outbox_handle.lock().expect("poisened mutex").take() {
-            handle.abort();
-        }
+    pub fn shutdown_outbox(&self) -> Result<(), LedgerError> {
+        let abort_sender = match self.abort_sender.lock().expect("poisened mutex").take() {
+            Some(abort_sender) => abort_sender,
+            None => return Ok(()),
+        };
+
+        let _ = abort_sender.send(());
         Ok(())
     }
 
