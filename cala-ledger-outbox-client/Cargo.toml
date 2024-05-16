@@ -8,8 +8,8 @@ edition = "2021"
 fail-on-warnings = []
 
 [dependencies]
-cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
+cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.1.0-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.1.0-dev" }
 
 futures = { workspace = true }
 uuid = { workspace = true }

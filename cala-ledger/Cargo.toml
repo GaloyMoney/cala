@@ -15,9 +15,9 @@ fail-on-warnings = []
 import = []
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.1.0-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.1.0-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["grpc"] }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
 
 cached = { workspace = true }
 chrono = { workspace = true }

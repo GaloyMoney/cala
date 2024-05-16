@@ -6,11 +6,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.1.0-dev" }
+cala-ledger = { path = "../cala-ledger", features = ["import"], package = "cala-ledger", version = "0.1.0-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.1.0-dev" }
+cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.1.0-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"] }
-cala-ledger = { path = "../cala-ledger", features = ["import"]}
-cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
