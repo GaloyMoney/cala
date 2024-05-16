@@ -1,7 +1,7 @@
 pub mod config;
 pub mod error;
 
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Acquire, PgPool, Postgres, Transaction as DbTransaction};
 use std::sync::{Arc, Mutex};
 
 pub use config::*;
@@ -9,6 +9,7 @@ use error::*;
 
 use crate::{
     account::Accounts,
+    balance::Balances,
     entry::Entries,
     journal::Journals,
     outbox::{server, EventSequence, Outbox, OutboxListener},
@@ -33,6 +34,7 @@ pub struct CalaLedger {
     transactions: Transactions,
     tx_templates: TxTemplates,
     entries: Entries,
+    balances: Balances,
     outbox: Outbox,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
@@ -70,6 +72,7 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, outbox.clone());
+        let balances = Balances::new(&pool, outbox.clone());
         Ok(Self {
             accounts,
             journals,
@@ -77,6 +80,7 @@ impl CalaLedger {
             outbox,
             transactions,
             entries,
+            balances,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             pool,
         })
@@ -112,7 +116,7 @@ impl CalaLedger {
     #[instrument(name = "cala_ledger.post_transaction", skip(self, tx))]
     pub async fn post_transaction_in_tx(
         &self,
-        mut tx: Transaction<'_, Postgres>,
+        mut tx: DbTransaction<'_, Postgres>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
@@ -125,14 +129,20 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
-        let _ = self
+        let transaction = self
             .transactions
             .create_in_tx(&mut tx, prepared_tx.transaction)
             .await?;
-        let _ = self
+        let (entries, _events) = self
             .entries
             .create_all(&mut tx, prepared_tx.entries)
             .await?;
+        self.balances
+            .update_balances(tx.begin().await?, transaction.journal_id(), entries)
+            .await?;
+        // update balances
+        // go back to transactions to get event?
+        // ship all events to outbox
         tx.commit().await?;
         Ok(())
         // {

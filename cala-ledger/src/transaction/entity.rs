@@ -53,6 +53,10 @@ impl Transaction {
         self.values.id
     }
 
+    pub fn journal_id(&self) -> JournalId {
+        self.values.journal_id
+    }
+
     pub fn values(&self) -> &TransactionValues {
         &self.values
     }
