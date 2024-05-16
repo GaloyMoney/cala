@@ -19,9 +19,6 @@ $(cat CHANGELOG.md)
 EOF
 mv new_change_log.md CHANGELOG.md
 
-sed -i'' "0,/version/{s/version.*/version = \"${VERSION}\"/}" Cargo.toml
-sed -i'' "/^name = \"cala/,/version/{s/version.*/version = \"${VERSION}\"/}" ./Cargo.lock
-
 git status
 git add .
 
