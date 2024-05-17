@@ -7,7 +7,6 @@ CREATE TABLE cala_accounts (
   id UUID NOT NULL,
   code VARCHAR NOT NULL,
   name VARCHAR NOT NULL,
-  tags VARCHAR[] NOT NULL,
   external_id VARCHAR,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
@@ -15,7 +14,6 @@ CREATE TABLE cala_accounts (
 );
 CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
 CREATE UNIQUE INDEX idx_cala_accounts_data_source_id_external_id ON cala_accounts (data_source_id, external_id) WHERE external_id IS NOT NULL;
-CREATE INDEX idx_cala_accounts_tags ON cala_accounts USING GIN (tags);
 
 
 CREATE TABLE cala_account_events (

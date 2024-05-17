@@ -9,14 +9,12 @@ export interface NewAccount {
   name: string
   externalId?: string
   description?: string
-  tags?: Array<string>
   metadata?: any
 }
 export interface AccountValues {
   id: string
   code: string
   name: string
-  tags: Array<string>
   externalId?: string
   description?: string
   metadata?: any

@@ -2,8 +2,6 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
-use cala_types::primitives::Tag;
-
 use super::{cursor::*, entity::*, error::*};
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -26,13 +24,12 @@ impl AccountRepo {
     ) -> Result<EntityUpdate<Account>, AccountError> {
         let id = new_account.id;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id, tags)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_accounts (id, code, name, external_id)
+            VALUES ($1, $2, $3, $4)"#,
             id as AccountId,
             new_account.code,
             new_account.name,
             new_account.external_id,
-            &new_account.tags as &Vec<Tag>
         )
         .execute(&mut **tx)
         .await?;
@@ -94,14 +91,13 @@ impl AccountRepo {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, tags, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
-            &account.values().tags as &Vec<Tag>,
             recorded_at
         )
         .execute(&mut **tx)

@@ -102,12 +102,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .code(input.code)
             .normal_balance_type(input.normal_balance_type.into())
             .status(input.status.into());
-        let tags = input
-            .tags
-            .into_iter()
-            .map(cala_ledger::Tag::try_from)
-            .collect::<Result<Vec<_>, cala_ledger::ParseTagError>>()?;
-        builder.tags(tags);
 
         if let Some(external_id) = input.external_id {
             builder.external_id(external_id);

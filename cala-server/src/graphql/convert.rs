@@ -57,12 +57,6 @@ impl ToGlobalId for crate::primitives::JobId {
     }
 }
 
-impl From<cala_ledger::Tag> for TAG {
-    fn from(tag: cala_ledger::Tag) -> Self {
-        TAG::from(tag.into_inner())
-    }
-}
-
 impl From<cala_ledger::account::AccountValues> for Account {
     fn from(values: cala_ledger::account::AccountValues) -> Self {
         Self {
@@ -74,7 +68,6 @@ impl From<cala_ledger::account::AccountValues> for Account {
             status: Status::from(values.status),
             external_id: values.external_id,
             description: values.description,
-            tags: values.tags.into_iter().map(TAG::from).collect(),
             metadata: values.metadata.map(JSON::from),
         }
     }
@@ -210,14 +203,6 @@ impl From<JobByNameCursor> for crate::job::JobByNameCursor {
             name: cursor.name,
             id: cursor.id,
         }
-    }
-}
-
-impl TryFrom<TAG> for cala_ledger::Tag {
-    type Error = cala_ledger::ParseTagError;
-
-    fn try_from(tag: TAG) -> Result<Self, Self::Error> {
-        tag.as_ref().parse()
     }
 }
 

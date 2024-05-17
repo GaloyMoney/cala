@@ -7,7 +7,6 @@ type Account {
 	status: Status!
 	externalId: String
 	description: String
-	tags: [TAG!]!
 	metadata: JSON
 }
 
@@ -34,7 +33,6 @@ input AccountCreateInput {
 	normalBalanceType: DebitOrCredit! = CREDIT
 	description: String
 	status: Status! = ACTIVE
-	tags: [TAG!]! = []
 	metadata: JSON
 }
 
@@ -210,8 +208,6 @@ enum Status {
 	LOCKED
 }
 
-
-scalar TAG
 
 type TxInput {
 	effective: Expression!

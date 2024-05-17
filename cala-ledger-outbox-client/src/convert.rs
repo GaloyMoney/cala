@@ -119,11 +119,6 @@ impl TryFrom<proto::Account> for AccountValues {
             normal_balance_type,
             status,
             description: account.description,
-            tags: account
-                .tags
-                .into_iter()
-                .map(|tag| tag.parse())
-                .collect::<Result<Vec<Tag>, _>>()?,
             metadata,
         };
         Ok(res)

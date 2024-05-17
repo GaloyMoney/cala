@@ -57,9 +57,8 @@ message Account {
   DebitOrCredit normal_balance_type = 4;
   Status status = 5;
   optional string external_id = 6;
-  repeated string tags = 7;
-  optional string description = 8;
-  optional google.protobuf.Struct metadata = 9;
+  optional string description = 7;
+  optional google.protobuf.Struct metadata = 8;
 }
 
 message JournalCreated {

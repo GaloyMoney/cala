@@ -99,8 +99,6 @@ pub struct NewAccount {
     pub(super) description: Option<String>,
     #[builder(default)]
     pub(super) status: Status,
-    #[builder(default)]
-    pub(super) tags: Vec<Tag>,
     #[builder(setter(custom), default)]
     pub(super) metadata: Option<serde_json::Value>,
 }
@@ -122,7 +120,6 @@ impl NewAccount {
                     normal_balance_type: self.normal_balance_type,
                     status: self.status,
                     description: self.description,
-                    tags: self.tags,
                     metadata: self.metadata,
                 },
             }],
