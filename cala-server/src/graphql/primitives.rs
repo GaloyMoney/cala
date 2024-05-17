@@ -110,36 +110,12 @@ impl From<Expression> for String {
     }
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
 pub struct Date(NaiveDate);
-
+scalar!(Date);
 impl From<NaiveDate> for Date {
-    fn from(date: NaiveDate) -> Self {
-        Date(date)
-    }
-}
-
-impl From<Date> for NaiveDate {
-    fn from(wrapper: Date) -> Self {
-        wrapper.0
-    }
-}
-
-#[Scalar(name = "Date")]
-impl ScalarType for Date {
-    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
-        let date_str = match &value {
-            async_graphql::Value::String(s) => s,
-            _ => return Err(async_graphql::InputValueError::expected_type(value)),
-        };
-
-        NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-            .map(Date)
-            .map_err(|_| {
-                async_graphql::InputValueError::custom("Invalid date format, expected YYYY-MM-DD")
-            })
-    }
-
-    fn to_value(&self) -> async_graphql::Value {
-        async_graphql::Value::String(self.0.format("%Y-%m-%d").to_string())
+    fn from(value: NaiveDate) -> Self {
+        Self(value)
     }
 }
