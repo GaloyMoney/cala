@@ -13,7 +13,6 @@ pub(super) struct Account {
     pub status: Status,
     pub external_id: Option<String>,
     pub description: Option<String>,
-    pub tags: Vec<TAG>,
     pub metadata: Option<JSON>,
 }
 
@@ -53,8 +52,6 @@ pub(super) struct AccountCreateInput {
     pub description: Option<String>,
     #[graphql(default)]
     pub status: Status,
-    #[graphql(default)]
-    pub tags: Vec<TAG>,
     pub metadata: Option<JSON>,
 }
 

@@ -93,7 +93,6 @@ impl From<AccountValues> for proto::Account {
             normal_balance_type,
             status,
             description,
-            tags,
             metadata,
             ..
         }: AccountValues,
@@ -108,7 +107,6 @@ impl From<AccountValues> for proto::Account {
             normal_balance_type: normal_balance_type as i32,
             status: status as i32,
             description,
-            tags: tags.into_iter().map(|tag| tag.into_inner()).collect(),
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),

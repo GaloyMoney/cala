@@ -62,22 +62,6 @@ impl<T: Into<uuid::Uuid>> From<T> for UUID {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct TAG(String);
-scalar!(TAG);
-impl From<String> for TAG {
-    fn from(tag: String) -> Self {
-        Self(tag)
-    }
-}
-
-impl AsRef<str> for TAG {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
 impl From<UUID> for cala_ledger::AccountId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::AccountId::from(uuid.0)

@@ -11,7 +11,6 @@ pub struct NewAccount {
   pub name: String,
   pub external_id: Option<String>,
   pub description: Option<String>,
-  pub tags: Option<Vec<String>>,
   pub metadata: Option<serde_json::Value>,
 }
 
@@ -71,15 +70,6 @@ impl CalaAccounts {
 
     if let Some(description) = new_account.description {
       new.description(description);
-    }
-
-    if let Some(tags) = new_account.tags {
-      let tags = tags
-        .into_iter()
-        .map(|tag| tag.parse())
-        .collect::<Result<Vec<cala_ledger::Tag>, _>>()
-        .map_err(crate::generic_napi_error)?;
-      new.tags(tags);
     }
 
     if let Some(metadata) = new_account.metadata {
