@@ -14,6 +14,8 @@ pub enum AccountError {
     CouldNotFindByExternalId(String),
     #[error("AccountError - external_id already exists")]
     ExternalIdAlreadyExists,
+    #[error("AccountError - code already exists")]
+    CodeAlreadyExists,
 }
 
 impl From<sqlx::Error> for AccountError {
@@ -22,6 +24,8 @@ impl From<sqlx::Error> for AccountError {
             if let Some(constraint) = err.constraint() {
                 if constraint.contains("external_id") {
                     return Self::ExternalIdAlreadyExists;
+                } else if constraint.contains("code") {
+                    return Self::CodeAlreadyExists;
                 }
             }
         }

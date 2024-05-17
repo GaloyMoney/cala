@@ -249,11 +249,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: TransactionInput,
     ) -> Result<PostTransactionPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let params = if let Some(params) = input.params {
-            Some(cala_ledger::tx_template::TxParams::from(params))
-        } else {
-            None
-        };
+        let params = input.params.map(cala_ledger::tx_template::TxParams::from);
         let transaction = app
             .ledger()
             .post_transaction(input.transaction_id.into(), &input.tx_template_code, params)
