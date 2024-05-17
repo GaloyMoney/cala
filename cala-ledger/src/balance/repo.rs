@@ -3,7 +3,7 @@ use tracing::instrument;
 
 use super::error::BalanceError;
 #[cfg(feature = "import")]
-use cala_types::primitives::DataSourceId;
+use cala_types::primitives::{DataSourceId, EntryId};
 use cala_types::{
     balance::BalanceSnapshot,
     primitives::{AccountId, Currency, JournalId},
@@ -119,31 +119,28 @@ impl BalanceRepo {
         }
         if !to_update.is_empty() {
             let expected_updates = to_update.len();
-            let mut query_builder =
-                QueryBuilder::new(r#"UPDATE cala_current_balances SET latest_version = CASE"#);
-            let mut bind_numbers = HashMap::new();
-            let mut next_bind_number = 1;
-            for ((account_id, currency), version) in to_update {
-                bind_numbers.insert((account_id, currency), next_bind_number);
-                next_bind_number += 3;
-                query_builder.push(" WHEN account_id = ");
-                query_builder.push_bind(account_id);
-                query_builder.push(" AND currency = ");
-                query_builder.push_bind(currency.code());
-                query_builder.push(" THEN ");
-                query_builder.push_bind(*version as i32);
-            }
-            query_builder.push(" END WHERE data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = ");
-            query_builder.push_bind(journal_id);
-            query_builder.push(" AND (account_id, currency, version) IN");
-            query_builder.push_tuples(
-                previous_versions,
+            let mut query_builder = QueryBuilder::new("WITH new_balances AS (SELECT * FROM (");
+            query_builder.push_values(
+                to_update,
                 |mut builder, ((account_id, currency), version)| {
-                    let n = bind_numbers.remove(&(account_id, currency)).unwrap();
-                    builder.push(format!("${}, ${}", n, n + 1));
-                    builder.push_bind(version as i32);
+                    builder.push_bind(account_id);
+                    builder.push_bind(currency.code());
+                    builder.push_bind(*version as i32);
+                    builder.push_bind(
+                        previous_versions
+                            .remove(&(account_id, currency))
+                            .expect("previous version missing") as i32,
+                    );
                 },
             );
+            query_builder.push(r#") AS v(account_id, currency, version, previous_version) )"#);
+            query_builder
+                .push(r#" UPDATE cala_current_balances c SET latest_version = n.version
+                          FROM new_balances n
+                          WHERE n.account_id = c.account_id
+                            AND n.currency = c.currency
+                            AND data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = "#);
+            query_builder.push_bind(journal_id);
             let result = query_builder.build().execute(&mut **tx).await?;
             if result.rows_affected() != (expected_updates as u64) {
                 return Err(BalanceError::OptimisticLockingError);
@@ -152,7 +149,7 @@ impl BalanceRepo {
 
         let mut query_builder = QueryBuilder::new(
             r#"INSERT INTO cala_balance_history (
-                 journal_id, account_id, currency, version, values)
+                 journal_id, account_id, currency, version, latest_entry_id, values)
             "#,
         );
         query_builder.push_values(new_balances, |mut builder, b| {
@@ -160,6 +157,7 @@ impl BalanceRepo {
             builder.push_bind(b.account_id);
             builder.push_bind(b.currency.code());
             builder.push_bind(b.version as i32);
+            builder.push_bind(b.entry_id);
             builder
                 .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
         });
@@ -189,13 +187,14 @@ impl BalanceRepo {
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
-            (data_source_id, journal_id, account_id, currency, version, values, recorded_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            (data_source_id, journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
             origin as DataSourceId,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
             balance.version as i32,
+            balance.entry_id as EntryId,
             serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
             balance.created_at
         )

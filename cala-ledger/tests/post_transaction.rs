@@ -136,5 +136,16 @@ async fn post_transaction() -> anyhow::Result<()> {
         .await
         .unwrap();
 
+    // Run it again to test balance updates
+    let external_id = uuid::Uuid::new_v4().to_string();
+    let mut params = TxParams::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("external_id", external_id.clone());
+    cala.post_transaction(TransactionId::new(), &tx_code, Some(params))
+        .await
+        .unwrap();
+
     Ok(())
 }

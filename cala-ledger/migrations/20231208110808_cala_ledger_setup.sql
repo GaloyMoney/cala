@@ -131,12 +131,14 @@ CREATE TABLE cala_balance_history (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
+  latest_entry_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, journal_id, account_id, currency, version),
-  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency)
+  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency),
+  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
 );
 
 CREATE TABLE cala_outbox_events (
