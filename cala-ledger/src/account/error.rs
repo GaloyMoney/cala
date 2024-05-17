@@ -10,4 +10,6 @@ pub enum AccountError {
     OutboxError(#[from] OutboxError),
     #[error("AccountError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
+    #[error("AccountError - NotFound: external id '{0}' not found")]
+    CouldNotFindByExternalId(String),
 }

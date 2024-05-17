@@ -68,6 +68,11 @@ impl ToGlobalId for cala_ledger::TransactionId {
     }
 }
 
+impl From<cala_ledger::account::Account> for Account {
+    fn from(account: cala_ledger::account::Account) -> Self {
+        Self::from(account.into_values())
+    }
+}
 impl From<cala_ledger::account::AccountValues> for Account {
     fn from(values: cala_ledger::account::AccountValues) -> Self {
         Self {

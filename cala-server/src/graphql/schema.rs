@@ -8,6 +8,20 @@ pub struct Query;
 
 #[Object]
 impl Query {
+    async fn account_by_external_id(
+        &self,
+        ctx: &Context<'_>,
+        external_id: String,
+    ) -> async_graphql::Result<Account> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        Ok(app
+            .ledger()
+            .accounts()
+            .find_by_external_id(external_id)
+            .await
+            .map(Account::from)?)
+    }
+
     async fn accounts(
         &self,
         ctx: &Context<'_>,

@@ -42,6 +42,29 @@ impl AccountRepo {
         })
     }
 
+    pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts a
+            JOIN cala_account_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.external_id = $1"#,
+            external_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(account) => Ok(account),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(AccountError::CouldNotFindByExternalId(external_id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub async fn list(
         &self,
         query: PaginatedQueryArgs<AccountByNameCursor>,
