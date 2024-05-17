@@ -11,7 +11,7 @@ pub enum JobError {
     #[error("JobError - InvalidPollInterval: {0}")]
     InvalidPollInterval(String),
     #[error("JobError - InvalidJobType: expected '{0}' but initializer was '{1}'")]
-    JobTypeMissmatch(JobType, JobType),
+    JobTypeMismatch(JobType, JobType),
     #[error("JobError - JobInitError: {0}")]
     JobInitError(String),
     #[error("JobError - BadConfig: {0}")]
