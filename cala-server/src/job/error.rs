@@ -10,8 +10,8 @@ pub enum JobError {
     EntityError(#[from] cala_ledger::entity::EntityError),
     #[error("JobError - InvalidPollInterval: {0}")]
     InvalidPollInterval(String),
-    #[error("JobError - InvalidJobType: {0}")]
-    InvalidJobType(JobType),
+    #[error("JobError - InvalidJobType: expected '{0}' but initializer was '{1}'")]
+    JobTypeMissmatch(JobType, JobType),
     #[error("JobError - JobInitError: {0}")]
     JobInitError(String),
     #[error("JobError - BadConfig: {0}")]

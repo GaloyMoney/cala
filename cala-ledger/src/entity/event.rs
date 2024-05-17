@@ -10,8 +10,8 @@ pub struct GenericEvent {
     pub id: uuid::Uuid,
     pub sequence: i32,
     pub event: serde_json::Value,
-    pub entity_created_at: chrono::DateTime<chrono::Utc>,
-    pub event_recorded_at: chrono::DateTime<chrono::Utc>,
+    pub entity_created_at: DateTime<Utc>,
+    pub event_recorded_at: DateTime<Utc>,
 }
 
 pub trait EntityEvent: DeserializeOwned + Serialize {
