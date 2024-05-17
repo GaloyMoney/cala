@@ -2,7 +2,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 use opentelemetry::{global, KeyValue};
-use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     resource::{EnvResourceDetector, OsResourceDetector, ProcessResourceDetector},
@@ -20,34 +19,25 @@ use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TracingConfig {
-    host: String,
-    port: u16,
     service_name: String,
+    #[serde(default)]
     pub service_instance_id: String,
 }
 
 impl Default for TracingConfig {
     fn default() -> Self {
         Self {
-            host: "localhost".to_string(),
-            port: 4317,
-            service_name: "cala-dev".to_string(),
-            service_instance_id: "cala-dev".to_string(),
+            service_name: "lava-dev".to_string(),
+            service_instance_id: "lava-dev".to_string(),
         }
     }
 }
 
 pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
-    let tracing_endpoint = format!("http://{}:{}", config.host, config.port);
-    println!("Sending traces to {tracing_endpoint}");
     global::set_text_map_propagator(TraceContextPropagator::new());
     let tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
-        .with_exporter(
-            opentelemetry_otlp::new_exporter()
-                .tonic()
-                .with_endpoint(tracing_endpoint),
-        )
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
         .with_trace_config(trace::config().with_resource(telemetry_resource(&config)))
         .install_batch(opentelemetry_sdk::runtime::Tokio)?;
     let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
@@ -76,8 +66,8 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
     )
     .merge(&Resource::new(vec![
         KeyValue::new(SERVICE_NAME, config.service_name.clone()),
-        KeyValue::new(SERVICE_NAMESPACE, "cala"),
         KeyValue::new(SERVICE_INSTANCE_ID, config.service_instance_id.clone()),
+        KeyValue::new(SERVICE_NAMESPACE, "lava"),
     ]))
 }
 

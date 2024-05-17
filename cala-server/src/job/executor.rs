@@ -42,7 +42,7 @@ impl JobExecutor {
         job: &Job,
     ) -> Result<(), JobError> {
         if job.job_type != I::job_type() {
-            return Err(JobError::JobTypeMssmatch(
+            return Err(JobError::JobTypeMismatch(
                 job.job_type.clone(),
                 I::job_type(),
             ));
