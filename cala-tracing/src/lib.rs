@@ -8,7 +8,9 @@ use opentelemetry_sdk::{
     resource::{EnvResourceDetector, OsResourceDetector, ProcessResourceDetector},
     trace, Resource,
 };
-use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_NAMESPACE};
+use opentelemetry_semantic_conventions::resource::{
+    SERVICE_INSTANCE_ID, SERVICE_NAME, SERVICE_NAMESPACE,
+};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -21,6 +23,7 @@ pub struct TracingConfig {
     host: String,
     port: u16,
     service_name: String,
+    pub service_instance_id: String,
 }
 
 impl Default for TracingConfig {
@@ -29,6 +32,7 @@ impl Default for TracingConfig {
             host: "localhost".to_string(),
             port: 4317,
             service_name: "cala-dev".to_string(),
+            service_instance_id: "cala-dev".to_string(),
         }
     }
 }
@@ -72,7 +76,8 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
     )
     .merge(&Resource::new(vec![
         KeyValue::new(SERVICE_NAME, config.service_name.clone()),
-        KeyValue::new(SERVICE_NAMESPACE, "galoy"),
+        KeyValue::new(SERVICE_NAMESPACE, "cala"),
+        KeyValue::new(SERVICE_INSTANCE_ID, config.service_instance_id.clone()),
     ]))
 }
 
