@@ -34,7 +34,7 @@ impl Config {
             serde_yaml::from_str(&config_file).context("Couldn't parse config file")?;
         config.db.pg_con = db_con;
         if let Some(server_id) = server_id {
-            config.app.job_execution.server_id.clone_from(server_id);
+            config.app.job_execution.server_id.clone_from(&server_id);
             config.tracing.service_instance_id = server_id;
         }
 
