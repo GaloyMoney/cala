@@ -2,10 +2,7 @@ use thiserror::Error;
 
 use rust_decimal::Decimal;
 
-use cala_types::{
-    primitives::{Currency, Layer},
-    tx_template::ParamDataType,
-};
+use cala_types::primitives::{Currency, Layer};
 use cel_interpreter::CelError;
 
 use crate::outbox::error::OutboxError;
@@ -18,8 +15,8 @@ pub enum TxTemplateError {
     OutboxError(#[from] OutboxError),
     #[error("TxTemplateError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
-    #[error("TxTemplateError - TxParamTypeMismatch: expected {0:?}")]
-    TxParamTypeMismatch(ParamDataType),
+    #[error("TxTemplateError - TxParamTypeMismatch: {0}")]
+    TxParamTypeMismatch(String),
     #[error("SqlxLedgerError - TooManyParameters")]
     TooManyParameters,
     #[error("TxTemplateError - CelError: {0}")]
