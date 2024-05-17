@@ -5,11 +5,26 @@ use crate::outbox::error::OutboxError;
 #[derive(Error, Debug)]
 pub enum AccountError {
     #[error("AccountError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
     #[error("{0}")]
     OutboxError(#[from] OutboxError),
     #[error("AccountError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
     #[error("AccountError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
+    #[error("AccountError - external_id already exists")]
+    ExternalIdAlreadyExists,
+}
+
+impl From<sqlx::Error> for AccountError {
+    fn from(error: sqlx::Error) -> Self {
+        if let Some(err) = error.as_database_error() {
+            if let Some(constraint) = err.constraint() {
+                if constraint.contains("external_id") {
+                    return Self::ExternalIdAlreadyExists;
+                }
+            }
+        }
+        Self::Sqlx(error)
+    }
 }
