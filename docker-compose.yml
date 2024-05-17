@@ -7,7 +7,7 @@ services:
     - examples-pg
     - otel-agent
   server-pg:
-    image: postgres:14.1
+    image: postgres:15.5
     ports:
     - "5432:5432"
     environment:
@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
   examples-pg:
-    image: postgres:14.1
+    image: postgres:15.5
     ports:
     - "5433:5432"
     environment:
