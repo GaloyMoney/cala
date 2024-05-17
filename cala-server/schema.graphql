@@ -65,6 +65,8 @@ type CalaOutboxImportJobCreatePayload {
 	job: Job!
 }
 
+scalar Date
+
 enum DebitOrCredit {
 	DEBIT
 	CREDIT
@@ -149,6 +151,7 @@ type Mutation {
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
+	postTransaction(input: TransactionInput!): PostTransactionPayload!
 }
 
 """
@@ -198,6 +201,10 @@ input ParamDefinitionInput {
 	description: String
 }
 
+type PostTransactionPayload {
+	transaction: Transaction!
+}
+
 type Query {
 	accounts(first: Int!, after: String): AccountConnection!
 	jobs(first: Int!, after: String): JobConnection!
@@ -208,6 +215,24 @@ enum Status {
 	LOCKED
 }
 
+
+type Transaction {
+	id: ID!
+	transactionId: UUID!
+	txTemplateId: UUID!
+	journalId: UUID!
+	effective: Date!
+	correlationId: String!
+	externalId: String
+	description: String
+	metadata: JSON
+}
+
+input TransactionInput {
+	transactionId: UUID!
+	txTemplateCode: String!
+	params: JSON
+}
 
 type TxInput {
 	effective: Expression!

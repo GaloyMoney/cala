@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 use async_graphql::*;
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
@@ -35,6 +36,12 @@ scalar!(JSON);
 impl From<serde_json::Value> for JSON {
     fn from(value: serde_json::Value) -> Self {
         Self(value)
+    }
+}
+
+impl JSON {
+    pub fn into_inner(self) -> serde_json::Value {
+        self.0
     }
 }
 
@@ -80,6 +87,12 @@ impl From<UUID> for cala_ledger::TxTemplateId {
     }
 }
 
+impl From<UUID> for cala_ledger::TransactionId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::TransactionId::from(uuid.0)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Expression(String);
@@ -94,5 +107,39 @@ impl From<cel_interpreter::CelExpression> for Expression {
 impl From<Expression> for String {
     fn from(expr: Expression) -> Self {
         expr.0
+    }
+}
+
+pub struct Date(NaiveDate);
+
+impl From<NaiveDate> for Date {
+    fn from(date: NaiveDate) -> Self {
+        Date(date)
+    }
+}
+
+impl From<Date> for NaiveDate {
+    fn from(wrapper: Date) -> Self {
+        wrapper.0
+    }
+}
+
+#[Scalar(name = "Date")]
+impl ScalarType for Date {
+    fn parse(value: async_graphql::Value) -> async_graphql::InputValueResult<Self> {
+        let date_str = match &value {
+            async_graphql::Value::String(s) => s,
+            _ => return Err(async_graphql::InputValueError::expected_type(value)),
+        };
+
+        NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+            .map(Date)
+            .map_err(|_| {
+                async_graphql::InputValueError::custom("Invalid date format, expected YYYY-MM-DD")
+            })
+    }
+
+    fn to_value(&self) -> async_graphql::Value {
+        async_graphql::Value::String(self.0.format("%Y-%m-%d").to_string())
     }
 }
