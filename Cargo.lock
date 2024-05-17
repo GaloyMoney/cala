@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.1.0"
+version = "0.1.0-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -709,7 +709,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-outbox-client"
-version = "0.1.0"
+version = "0.1.0-dev"
 dependencies = [
  "cala-cel-interpreter",
  "cala-ledger-core-types",
@@ -730,7 +730,7 @@ dependencies = [
 
 [[package]]
 name = "cala-server"
-version = "0.1.0"
+version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
