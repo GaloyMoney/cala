@@ -1,4 +1,4 @@
-use super::{account::*, job::*, journal::*, primitives::*, tx_template::*};
+use super::{account::*, job::*, journal::*, primitives::*, transaction::*, tx_template::*};
 
 trait ToGlobalId {
     fn to_global_id(&self) -> async_graphql::types::ID;
@@ -51,6 +51,17 @@ impl ToGlobalId for crate::primitives::JobId {
         use base64::{engine::general_purpose, Engine as _};
         let id = format!(
             "job:{}",
+            general_purpose::STANDARD_NO_PAD.encode(self.to_string())
+        );
+        async_graphql::types::ID::from(id)
+    }
+}
+
+impl ToGlobalId for cala_ledger::TransactionId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        use base64::{engine::general_purpose, Engine as _};
+        let id = format!(
+            "transaction:{}",
             general_purpose::STANDARD_NO_PAD.encode(self.to_string())
         );
         async_graphql::types::ID::from(id)
@@ -164,6 +175,22 @@ impl From<cala_ledger::tx_template::ParamDefinition> for ParamDefinition {
     }
 }
 
+impl From<cala_ledger::transaction::TransactionValues> for Transaction {
+    fn from(values: cala_ledger::transaction::TransactionValues) -> Self {
+        Self {
+            id: values.id.to_global_id(),
+            transaction_id: UUID::from(values.id),
+            tx_template_id: UUID::from(values.tx_template_id),
+            journal_id: UUID::from(values.journal_id),
+            effective: Date::from(values.effective),
+            correlation_id: values.correlation_id,
+            external_id: values.external_id,
+            description: values.description,
+            metadata: values.metadata.map(JSON::from),
+        }
+    }
+}
+
 impl From<cala_ledger::journal::JournalValues> for JournalCreatePayload {
     fn from(value: cala_ledger::journal::JournalValues) -> Self {
         JournalCreatePayload {
@@ -188,6 +215,14 @@ impl From<cala_types::tx_template::TxTemplateValues> for TxTemplateCreatePayload
     }
 }
 
+impl From<cala_types::transaction::TransactionValues> for PostTransactionPayload {
+    fn from(value: cala_types::transaction::TransactionValues) -> Self {
+        Self {
+            transaction: Transaction::from(value),
+        }
+    }
+}
+
 impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
     fn from(values: &cala_ledger::account::AccountValues) -> Self {
         Self {
@@ -203,6 +238,20 @@ impl From<JobByNameCursor> for crate::job::JobByNameCursor {
             name: cursor.name,
             id: cursor.id,
         }
+    }
+}
+
+impl From<JSON> for cala_ledger::tx_template::TxParams {
+    fn from(json: JSON) -> Self {
+        let mut map = Self::default();
+
+        let inner = json.into_inner();
+        if let Some(object) = inner.as_object() {
+            for (k, v) in object {
+                map.insert(k.clone(), v.clone());
+            }
+        }
+        map
     }
 }
 

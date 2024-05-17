@@ -1,7 +1,7 @@
 use async_graphql::{types::connection::*, *};
 use cala_ledger::tx_template::NewParamDefinition;
 
-use super::{account::*, job::*, journal::*, tx_template::*};
+use super::{account::*, job::*, journal::*, transaction::*, tx_template::*};
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
@@ -227,5 +227,23 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let tx_template = app.ledger().tx_templates().create(new_tx_template).await?;
 
         Ok(tx_template.into_values().into())
+    }
+
+    async fn post_transaction(
+        &self,
+        ctx: &Context<'_>,
+        input: TransactionInput,
+    ) -> Result<PostTransactionPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let params = if let Some(params) = input.params {
+            Some(cala_ledger::tx_template::TxParams::from(params))
+        } else {
+            None
+        };
+        let transaction = app
+            .ledger()
+            .post_transaction(input.transaction_id.into(), &input.tx_template_code, params)
+            .await?;
+        Ok(transaction.into_values().into())
     }
 }

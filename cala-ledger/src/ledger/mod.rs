@@ -15,7 +15,7 @@ use crate::{
     journal::Journals,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
-    transaction::Transactions,
+    transaction::{Transaction, Transactions},
     tx_template::{TxParams, TxTemplates},
 };
 #[cfg(feature = "import")]
@@ -107,7 +107,7 @@ impl CalaLedger {
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
-    ) -> Result<(), LedgerError> {
+    ) -> Result<Transaction, LedgerError> {
         let tx = self.pool.begin().await?;
         self.post_transaction_in_tx(tx, tx_id, tx_template_code, params)
             .await
@@ -120,7 +120,7 @@ impl CalaLedger {
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
-    ) -> Result<(), LedgerError> {
+    ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates
             .prepare_transaction(
@@ -154,7 +154,7 @@ impl CalaLedger {
                     .chain(balance_events),
             )
             .await?;
-        Ok(())
+        Ok(transaction)
     }
 
     pub async fn register_outbox_listener(

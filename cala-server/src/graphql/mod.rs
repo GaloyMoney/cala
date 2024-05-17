@@ -5,6 +5,7 @@ mod journal;
 mod primitives;
 mod schema;
 mod timestamp;
+mod transaction;
 mod tx_template;
 
 use async_graphql::*;

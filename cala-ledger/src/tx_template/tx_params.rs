@@ -2,7 +2,7 @@ use cel_interpreter::{CelContext, CelMap, CelValue};
 use std::collections::HashMap;
 
 use super::error::TxTemplateError;
-use cala_types::tx_template::{ParamDataType, ParamDefinition};
+use cala_types::tx_template::ParamDefinition;
 
 #[derive(Debug)]
 pub struct TxParams {
@@ -29,13 +29,12 @@ impl TxParams {
             let mut cel_map = CelMap::new();
             for d in defs {
                 if let Some(v) = self.values.remove(&d.name) {
-                    match ParamDataType::try_from(&v) {
-                        Ok(t) if t == d.r#type => {
-                            cel_map.insert(d.name.clone(), v);
-                            continue;
-                        }
-                        _ => return Err(TxTemplateError::TxParamTypeMismatch(d.r#type.clone())),
-                    }
+                    cel_map.insert(
+                        d.name.clone(),
+                        d.r#type
+                            .coerce_value(v)
+                            .map_err(TxTemplateError::TxParamTypeMismatch)?,
+                    );
                 }
                 if let Some(expr) = d.default.as_ref() {
                     cel_map.insert(d.name.clone(), expr.evaluate(&ctx)?);
