@@ -1,7 +1,9 @@
 use async_graphql::{types::connection::*, *};
-use cala_ledger::tx_template::NewParamDefinition;
+use cala_ledger::{primitives::*, tx_template::NewParamDefinition};
 
-use super::{account::*, job::*, journal::*, transaction::*, tx_template::*};
+use super::{
+    account::*, balance::*, job::*, journal::*, primitives::*, transaction::*, tx_template::*,
+};
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
@@ -57,12 +59,32 @@ impl Query {
         .await
     }
 
+    async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        journal_id: UUID,
+        account_id: UUID,
+        currency: CurrencyCode,
+    ) -> async_graphql::Result<Balance> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let balance = app
+            .ledger()
+            .balances()
+            .find_latest(
+                JournalId::from(journal_id),
+                AccountId::from(account_id),
+                Currency::from(currency),
+            )
+            .await?;
+        Ok(Balance::from(balance))
+    }
+
     async fn jobs(
         &self,
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         query(
             after,

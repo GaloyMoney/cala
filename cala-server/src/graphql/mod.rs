@@ -1,4 +1,5 @@
 mod account;
+mod balance;
 mod convert;
 mod job;
 mod journal;

@@ -22,6 +22,43 @@ impl BalanceRepo {
         }
     }
 
+    pub async fn find_latest(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+    ) -> Result<BalanceSnapshot, BalanceError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT h.values
+            FROM cala_balance_history h
+            JOIN cala_current_balances c
+            ON h.data_source_id = c.data_source_id
+            AND h.journal_id = c.journal_id
+            AND h.account_id = c.account_id
+            AND h.currency = c.currency
+            AND h.version = c.latest_version
+            WHERE c.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND c.journal_id = $1
+            AND c.account_id = $2
+            AND c.currency = $3
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency.code(),
+        )
+        .fetch_optional(&self._pool)
+        .await?;
+
+        if let Some(row) = row {
+            let snapshot: BalanceSnapshot =
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            Ok(snapshot)
+        } else {
+            Err(BalanceError::NotFound(journal_id, account_id, currency))
+        }
+    }
+
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.find_for_update",

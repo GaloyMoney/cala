@@ -6,7 +6,8 @@ use rust_decimal::Decimal;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 
-use cala_types::{balance::BalanceSnapshot, entry::EntryValues, primitives::*};
+pub use cala_types::balance::BalanceSnapshot;
+use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
     outbox::*,
@@ -30,6 +31,17 @@ impl Balances {
             outbox,
             _pool: pool.clone(),
         }
+    }
+
+    pub async fn find_latest(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+    ) -> Result<BalanceSnapshot, BalanceError> {
+        self.repo
+            .find_latest(journal_id, account_id, currency)
+            .await
     }
 
     pub(crate) async fn update_balances(

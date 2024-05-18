@@ -1,7 +1,7 @@
 use async_graphql::{types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
-use super::primitives::*;
+use super::{convert::ToGlobalId, primitives::*};
 
 #[derive(SimpleObject)]
 pub struct Job {
@@ -38,5 +38,40 @@ impl CursorType for JobByNameCursor {
             .map_err(|e| e.to_string())?;
         let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
         serde_json::from_str(&json).map_err(|e| e.to_string())
+    }
+}
+
+impl ToGlobalId for crate::primitives::JobId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        async_graphql::types::ID::from(format!("job:{self}"))
+    }
+}
+
+impl From<JobByNameCursor> for crate::job::JobByNameCursor {
+    fn from(cursor: JobByNameCursor) -> Self {
+        Self {
+            name: cursor.name,
+            id: cursor.id,
+        }
+    }
+}
+
+impl From<&crate::job::Job> for JobByNameCursor {
+    fn from(job: &crate::job::Job) -> Self {
+        Self {
+            name: job.name.clone(),
+            id: job.id,
+        }
+    }
+}
+
+impl From<crate::job::Job> for Job {
+    fn from(job: crate::job::Job) -> Self {
+        Self {
+            id: job.id.to_global_id(),
+            job_id: UUID::from(job.id),
+            name: job.name,
+            description: job.description,
+        }
     }
 }

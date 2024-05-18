@@ -1,7 +1,7 @@
 use async_graphql::{types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
-use super::primitives::*;
+use super::{convert::ToGlobalId, primitives::*};
 
 #[derive(SimpleObject)]
 pub(super) struct Account {
@@ -58,4 +58,49 @@ pub(super) struct AccountCreateInput {
 #[derive(SimpleObject)]
 pub(super) struct AccountCreatePayload {
     pub account: Account,
+}
+
+impl ToGlobalId for cala_ledger::AccountId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        async_graphql::types::ID::from("account:{self}")
+    }
+}
+
+impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
+    fn from(values: &cala_ledger::account::AccountValues) -> Self {
+        Self {
+            name: values.name.clone(),
+            id: values.id,
+        }
+    }
+}
+
+impl From<AccountByNameCursor> for cala_ledger::account::AccountByNameCursor {
+    fn from(cursor: AccountByNameCursor) -> Self {
+        Self {
+            name: cursor.name,
+            id: cursor.id,
+        }
+    }
+}
+
+impl From<cala_ledger::account::Account> for Account {
+    fn from(account: cala_ledger::account::Account) -> Self {
+        Self::from(account.into_values())
+    }
+}
+impl From<cala_ledger::account::AccountValues> for Account {
+    fn from(values: cala_ledger::account::AccountValues) -> Self {
+        Self {
+            id: values.id.to_global_id(),
+            account_id: UUID::from(values.id),
+            code: values.code,
+            name: values.name,
+            normal_balance_type: DebitOrCredit::from(values.normal_balance_type),
+            status: Status::from(values.status),
+            external_id: values.external_id,
+            description: values.description,
+            metadata: values.metadata.map(JSON::from),
+        }
+    }
 }

@@ -119,3 +119,28 @@ impl From<NaiveDate> for Date {
         Self(value)
     }
 }
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CurrencyCode(cala_types::primitives::Currency);
+scalar!(CurrencyCode);
+impl From<CurrencyCode> for cala_types::primitives::Currency {
+    fn from(code: CurrencyCode) -> Self {
+        code.0
+    }
+}
+impl From<cala_types::primitives::Currency> for CurrencyCode {
+    fn from(code: cala_types::primitives::Currency) -> Self {
+        Self(code)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Decimal(rust_decimal::Decimal);
+scalar!(Decimal);
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Int(u32);
+scalar!(Int);
