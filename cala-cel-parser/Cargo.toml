@@ -5,7 +5,7 @@ repository = "https://github.com/GaloyMoney/cala"
 version = "0.1.0-dev"
 authors = ["Justin Carter <justin@galoy.io>"]
 edition = "2021"
-license = "MIT"
+license = "Apache-2.0"
 categories = ["parsing", "cel"]
 
 [features]
