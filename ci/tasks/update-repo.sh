@@ -34,7 +34,7 @@ sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" 
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-ledger-outbox-client\", version = .*/cala-ledger-outbox-client\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 
-cargo update --offline
+cargo update --workspace
 
 git status
 git add .
