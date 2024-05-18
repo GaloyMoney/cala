@@ -8,6 +8,7 @@ CREATE TABLE cala_accounts (
   code VARCHAR NOT NULL,
   name VARCHAR NOT NULL,
   external_id VARCHAR,
+  normal_balance_type DebitOrCredit NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   UNIQUE(data_source_id, code)
