@@ -20,11 +20,10 @@ impl Loader<BalanceId> for LedgerDataLoader {
         &self,
         keys: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, Self::Error> {
-        Ok(self
-            .ledger
+        self.ledger
             .balances()
             .find_all(keys)
             .await
-            .map_err(Arc::new)?)
+            .map_err(Arc::new)
     }
 }
