@@ -12,6 +12,8 @@ crate::entity_id! { TxTemplateId }
 crate::entity_id! { TransactionId }
 crate::entity_id! { EntryId }
 
+pub type BalanceId = (JournalId, AccountId, Currency);
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]

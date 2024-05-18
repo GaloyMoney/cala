@@ -98,6 +98,10 @@ impl CalaLedger {
         &self.tx_templates
     }
 
+    pub fn balances(&self) -> &Balances {
+        &self.balances
+    }
+
     pub fn transactions(&self) -> &Transactions {
         &self.transactions
     }

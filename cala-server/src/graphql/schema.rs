@@ -1,7 +1,14 @@
-use async_graphql::{types::connection::*, *};
-use cala_ledger::tx_template::NewParamDefinition;
+use async_graphql::{dataloader::*, types::connection::*, *};
+use cala_ledger::{
+    balance::{error::BalanceError, AccountBalance},
+    primitives::*,
+    tx_template::NewParamDefinition,
+};
 
-use super::{account::*, job::*, journal::*, transaction::*, tx_template::*};
+use super::{
+    account::*, balance::*, job::*, journal::*, loader::*, primitives::*, transaction::*,
+    tx_template::*,
+};
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
 pub struct Query;
@@ -57,12 +64,32 @@ impl Query {
         .await
     }
 
+    async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        journal_id: UUID,
+        account_id: UUID,
+        currency: CurrencyCode,
+    ) -> async_graphql::Result<Balance> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let journal_id = JournalId::from(journal_id);
+        let account_id = AccountId::from(account_id);
+        let currency = Currency::from(currency);
+        let balance: Option<AccountBalance> =
+            loader.load_one((journal_id, account_id, currency)).await?;
+        if let Some(balance) = balance {
+            Ok(Balance::from(balance))
+        } else {
+            Err(BalanceError::NotFound(journal_id, account_id, currency).into())
+        }
+    }
+
     async fn jobs(
         &self,
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
+    ) -> async_graphql::Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         query(
             after,

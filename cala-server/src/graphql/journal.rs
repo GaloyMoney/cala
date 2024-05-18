@@ -1,6 +1,6 @@
 use async_graphql::*;
 
-use super::primitives::*;
+use super::{convert::ToGlobalId, primitives::*};
 
 #[derive(InputObject)]
 pub struct JournalCreateInput {
@@ -25,4 +25,23 @@ pub struct Journal {
 #[derive(SimpleObject)]
 pub struct JournalCreatePayload {
     pub journal: Journal,
+}
+
+impl ToGlobalId for cala_ledger::JournalId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        async_graphql::types::ID::from(format!("journal:{self}"))
+    }
+}
+
+impl From<cala_ledger::journal::JournalValues> for Journal {
+    fn from(value: cala_ledger::journal::JournalValues) -> Self {
+        Self {
+            id: value.id.to_global_id(),
+            journal_id: UUID::from(value.id),
+            name: value.name,
+            external_id: value.external_id,
+            status: Status::from(value.status),
+            description: value.description,
+        }
+    }
 }

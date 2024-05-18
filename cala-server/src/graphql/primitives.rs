@@ -58,7 +58,7 @@ pub enum ParamDataType {
     Json,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
 scalar!(UUID);
@@ -116,6 +116,31 @@ pub struct Date(NaiveDate);
 scalar!(Date);
 impl From<NaiveDate> for Date {
     fn from(value: NaiveDate) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct CurrencyCode(cala_types::primitives::Currency);
+scalar!(CurrencyCode);
+impl From<CurrencyCode> for cala_types::primitives::Currency {
+    fn from(code: CurrencyCode) -> Self {
+        code.0
+    }
+}
+impl From<cala_types::primitives::Currency> for CurrencyCode {
+    fn from(code: cala_types::primitives::Currency) -> Self {
+        Self(code)
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Decimal(rust_decimal::Decimal);
+scalar!(Decimal);
+impl From<rust_decimal::Decimal> for Decimal {
+    fn from(value: rust_decimal::Decimal) -> Self {
         Self(value)
     }
 }

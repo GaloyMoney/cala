@@ -5,7 +5,7 @@ use sqlx::{PgPool, Postgres, Transaction};
 use super::{cursor::*, entity::*, error::*};
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, query::*};
+use crate::{entity::*, primitives::DebitOrCredit, query::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountRepo {
@@ -24,12 +24,13 @@ impl AccountRepo {
     ) -> Result<EntityUpdate<Account>, AccountError> {
         let id = new_account.id;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type)
+            VALUES ($1, $2, $3, $4, $5)"#,
             id as AccountId,
             new_account.code,
             new_account.name,
             new_account.external_id,
+            new_account.normal_balance_type as DebitOrCredit,
         )
         .execute(&mut **tx)
         .await?;
@@ -114,13 +115,14 @@ impl AccountRepo {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
+            account.values().normal_balance_type as DebitOrCredit,
             recorded_at
         )
         .execute(&mut **tx)
