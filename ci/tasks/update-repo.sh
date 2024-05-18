@@ -34,12 +34,7 @@ sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" 
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-ledger-outbox-client\", version = .*/cala-ledger-outbox-client\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 
-sed -i'' "s/[[package]]\nname = \"cala-cel-interpreter\"\nversion = .*/[[package]]\nname = \"cala-cel-interpreter\"\nversion = \"${VERSION}\"/" Cargo.lock
-sed -i'' "s/[[package]]\nname = \"cala-cel-parser\"\nversion = .*/[[package]]\nname = \"cala-cel-parser\"\nversion = \"${VERSION}\"/" Cargo.lock
-sed -i'' "s/[[package]]\nname = \"cala-ledger\"\nversion = .*/[[package]]\nname = \"cala-ledger\"\nversion = \"${VERSION}\"/" Cargo.lock
-sed -i'' "s/[[package]]\nname = \"cala-ledger-core-types\"\nversion = .*/[[package]]\nname = \"cala-ledger-core-types\"\nversion = \"${VERSION}\"/" Cargo.lock
-sed -i'' "s/[[package]]\nname = \"cala-ledger-outbox-client\"\nversion = .*/[[package]]\nname = \"cala-ledger-outbox-client\"\nversion = \"${VERSION}\"/" Cargo.lock
-sed -i'' "s/[[package]]\nname = \"cala-server\"\nversion = .*/[[package]]\nname = \"cala-server\"\nversion = \"${VERSION}\"/" Cargo.lock
+cargo update --offline
 
 git status
 git add .
