@@ -29,10 +29,12 @@ sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger-outbox-client/Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
+sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-ledger-outbox-client\", version = .*/cala-ledger-outbox-client\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
+sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 
 cargo update --workspace
 

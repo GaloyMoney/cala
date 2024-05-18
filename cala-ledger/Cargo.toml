@@ -17,7 +17,7 @@ import = []
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.1.0-dev" }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.1.0-dev" }
-cala-tracing = { path = "../cala-tracing", features = ["grpc"] }
+cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.1.0-dev" }
 
 cached = { workspace = true }
 chrono = { workspace = true }
