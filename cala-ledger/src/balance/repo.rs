@@ -2,7 +2,7 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
-use cala_types::primitives::DebitOrCredit;
+use cala_types::primitives::{BalanceId, DebitOrCredit};
 #[cfg(feature = "import")]
 use cala_types::primitives::{DataSourceId, EntryId};
 use cala_types::{
@@ -13,17 +13,15 @@ use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl BalanceRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
     }
 
-    pub async fn find_latest(
+    pub async fn find(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
@@ -51,7 +49,7 @@ impl BalanceRepo {
             account_id as AccountId,
             currency.code(),
         )
-        .fetch_optional(&self._pool)
+        .fetch_optional(&self.pool)
         .await?;
 
         if let Some(row) = row {
@@ -66,6 +64,50 @@ impl BalanceRepo {
         }
     }
 
+    pub(super) async fn find_all(
+        &self,
+        ids: &[BalanceId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        let mut query_builder = QueryBuilder::new(
+            r#"
+            SELECT h.values, a.normal_balance_type
+            FROM cala_balance_history h
+            JOIN cala_current_balances c
+            ON h.data_source_id = c.data_source_id
+            AND h.journal_id = c.journal_id
+            AND h.account_id = c.account_id
+            AND h.currency = c.currency
+            AND h.version = c.latest_version
+            JOIN cala_accounts a
+            ON c.data_source_id = a.data_source_id
+            AND c.account_id = a.id
+            WHERE c.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND (c.journal_id, c.account_id, c.currency) IN"#,
+        );
+        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
+            builder.push_bind(journal_id);
+            builder.push_bind(account_id);
+            builder.push_bind(currency.code());
+        });
+        let query = query_builder.build();
+        let rows = query.fetch_all(&self.pool).await?;
+        let mut ret = HashMap::new();
+        for row in rows {
+            let values: serde_json::Value = row.get("values");
+            let details: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let normal_balance_type: DebitOrCredit = row.get("normal_balance_type");
+            ret.insert(
+                (details.journal_id, details.account_id, details.currency),
+                AccountBalance {
+                    details,
+                    balance_type: normal_balance_type,
+                },
+            );
+        }
+        Ok(ret)
+    }
+
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.find_for_update",
@@ -77,7 +119,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
     ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {
-        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
+        let mut query_builder = QueryBuilder::new(
             r#"
           SELECT h.values
           FROM cala_balance_history h
@@ -106,7 +148,7 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let values = row.get::<serde_json::Value, _>("values");
+            let values: serde_json::Value = row.get("values");
             let snapshot: BalanceSnapshot =
                 serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
             ret.insert((snapshot.account_id, snapshot.currency), snapshot);

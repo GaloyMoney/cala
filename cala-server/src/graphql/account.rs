@@ -1,9 +1,15 @@
-use async_graphql::{types::connection::*, *};
+use async_graphql::{dataloader::*, types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
-use super::{convert::ToGlobalId, primitives::*};
+use cala_ledger::{
+    balance::{error::BalanceError, *},
+    primitives::{AccountId, Currency, JournalId},
+};
+
+use super::{balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*};
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub(super) struct Account {
     pub id: ID,
     pub account_id: UUID,
@@ -14,6 +20,28 @@ pub(super) struct Account {
     pub external_id: Option<String>,
     pub description: Option<String>,
     pub metadata: Option<JSON>,
+}
+
+#[ComplexObject]
+impl Account {
+    async fn balance(
+        &self,
+        ctx: &Context<'_>,
+        journal_id: UUID,
+        currency: CurrencyCode,
+    ) -> async_graphql::Result<Balance> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let journal_id = JournalId::from(journal_id);
+        let account_id = AccountId::from(self.account_id);
+        let currency = Currency::from(currency);
+        let balance: Option<AccountBalance> =
+            loader.load_one((journal_id, account_id, currency)).await?;
+        if let Some(balance) = balance {
+            Ok(Balance::from(balance))
+        } else {
+            Err(BalanceError::NotFound(journal_id, account_id, currency).into())
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

@@ -148,9 +148,20 @@ async fn post_transaction() -> anyhow::Result<()> {
         .unwrap();
     let recipient_balance = cala
         .balances()
-        .find_latest(journal.id(), recipient_account.id(), "BTC".parse().unwrap())
+        .find(journal.id(), recipient_account.id(), "BTC".parse().unwrap())
         .await?;
     assert_eq!(recipient_balance.settled(), Decimal::from(1290 * 2));
+    let all_balances = cala
+        .balances()
+        .find_all(&[
+            (journal.id(), recipient_account.id(), "BTC".parse().unwrap()),
+            (journal.id(), sender_account.id(), "BTC".parse().unwrap()),
+        ])
+        .await?;
+    let sender_balance = all_balances
+        .get(&(journal.id(), sender_account.id(), "BTC".parse().unwrap()))
+        .unwrap();
+    assert_eq!(sender_balance.settled(), Decimal::from(-1 * 1290 * 2));
 
     Ok(())
 }

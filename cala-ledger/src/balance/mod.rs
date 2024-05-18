@@ -35,15 +35,20 @@ impl Balances {
         }
     }
 
-    pub async fn find_latest(
+    pub async fn find(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        self.repo
-            .find_latest(journal_id, account_id, currency)
-            .await
+        self.repo.find(journal_id, account_id, currency).await
+    }
+
+    pub async fn find_all(
+        &self,
+        ids: &[BalanceId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all(ids).await
     }
 
     pub(crate) async fn update_balances(

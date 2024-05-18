@@ -8,6 +8,7 @@ type Account {
 	externalId: String
 	description: String
 	metadata: JSON
+	balance(journalId: UUID!, currency: CurrencyCode!): Balance!
 }
 
 type AccountConnection {
