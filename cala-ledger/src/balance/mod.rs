@@ -1,3 +1,4 @@
+mod account_balance;
 pub mod error;
 mod repo;
 
@@ -14,6 +15,7 @@ use crate::{
     primitives::{DataSource, JournalId},
 };
 
+pub use account_balance::*;
 use error::BalanceError;
 use repo::*;
 
@@ -38,7 +40,7 @@ impl Balances {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<BalanceSnapshot, BalanceError> {
+    ) -> Result<AccountBalance, BalanceError> {
         self.repo
             .find_latest(journal_id, account_id, currency)
             .await

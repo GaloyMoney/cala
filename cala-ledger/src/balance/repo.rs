@@ -1,7 +1,8 @@
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
-use super::error::BalanceError;
+use super::{account_balance::AccountBalance, error::BalanceError};
+use cala_types::primitives::DebitOrCredit;
 #[cfg(feature = "import")]
 use cala_types::primitives::{DataSourceId, EntryId};
 use cala_types::{
@@ -27,10 +28,10 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<BalanceSnapshot, BalanceError> {
+    ) -> Result<AccountBalance, BalanceError> {
         let row = sqlx::query!(
             r#"
-            SELECT h.values
+            SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
             JOIN cala_current_balances c
             ON h.data_source_id = c.data_source_id
@@ -38,6 +39,9 @@ impl BalanceRepo {
             AND h.account_id = c.account_id
             AND h.currency = c.currency
             AND h.version = c.latest_version
+            JOIN cala_accounts a
+            ON c.data_source_id = a.data_source_id
+            AND c.account_id = a.id
             WHERE c.data_source_id = '00000000-0000-0000-0000-000000000000'
             AND c.journal_id = $1
             AND c.account_id = $2
@@ -51,9 +55,12 @@ impl BalanceRepo {
         .await?;
 
         if let Some(row) = row {
-            let snapshot: BalanceSnapshot =
+            let details: BalanceSnapshot =
                 serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            Ok(snapshot)
+            Ok(AccountBalance {
+                balance_type: row.normal_balance_type,
+                details,
+            })
         } else {
             Err(BalanceError::NotFound(journal_id, account_id, currency))
         }

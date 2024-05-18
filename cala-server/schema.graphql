@@ -54,6 +54,25 @@ type AccountEdge {
 	cursor: String!
 }
 
+type Balance {
+	id: ID!
+	journalId: UUID!
+	accountId: UUID!
+	entryId: UUID!
+	currency: CurrencyCode!
+	settled: BalanceAmount!
+	pending: BalanceAmount!
+	encumbrance: BalanceAmount!
+	version: Int!
+}
+
+type BalanceAmount {
+	drBalance: Money!
+	crBalance: Money!
+	normalBalance: Money!
+	entryId: UUID!
+}
+
 
 input CalaOutboxImportJobCreateInput {
 	name: String!
@@ -65,12 +84,16 @@ type CalaOutboxImportJobCreatePayload {
 	job: Job!
 }
 
+scalar CurrencyCode
+
 scalar Date
 
 enum DebitOrCredit {
 	DEBIT
 	CREDIT
 }
+
+scalar Decimal
 
 type EntryInput {
 	entryType: Expression!
@@ -146,6 +169,11 @@ type JournalCreatePayload {
 	journal: Journal!
 }
 
+type Money {
+	units: Decimal!
+	currency: CurrencyCode!
+}
+
 type Mutation {
 	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
@@ -208,6 +236,7 @@ type PostTransactionPayload {
 type Query {
 	accountByExternalId(externalId: String!): Account!
 	accounts(first: Int!, after: String): AccountConnection!
+	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance!
 	jobs(first: Int!, after: String): JobConnection!
 }
 

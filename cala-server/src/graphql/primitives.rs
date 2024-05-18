@@ -139,8 +139,8 @@ impl From<cala_types::primitives::Currency> for CurrencyCode {
 #[serde(transparent)]
 pub struct Decimal(rust_decimal::Decimal);
 scalar!(Decimal);
-
-#[derive(Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct Int(u32);
-scalar!(Int);
+impl From<rust_decimal::Decimal> for Decimal {
+    fn from(value: rust_decimal::Decimal) -> Self {
+        Self(value)
+    }
+}
