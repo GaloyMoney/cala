@@ -82,6 +82,7 @@ jobs:
       passed:
       - check-code
       - integration-tests
+      - bats-tests
     - get: pipeline-tasks
     - get: version
   - task: prep-release
