@@ -3,7 +3,7 @@ FROM alpine:latest as load
 ARG VERSION
 ENV VERSION ${VERSION}
 RUN mkdir cala-home && mkdir cala && cd cala \
-  && wget https://github.com/GaloyMoney/cala/releases/download/${VERSION}/cala-x86_64-unknown-linux-musl-${VERSION}.tar.gz -O cala.tar.gz \
+  && wget https://github.com/GaloyMoney/cala/releases/download/${VERSION}/cala-server-x86_64-unknown-linux-musl-${VERSION}.tar.gz -O cala.tar.gz \
   && tar --strip-components=1 -xf cala.tar.gz \
   && mv cala-server /usr/local/bin && cd ../ && rm -rf ./cala
 
