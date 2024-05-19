@@ -90,7 +90,7 @@ pub(super) struct AccountCreatePayload {
 
 impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from("account:{self}")
+        async_graphql::types::ID::from(format!("account:{}", self))
     }
 }
 
