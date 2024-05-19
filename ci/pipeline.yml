@@ -82,7 +82,6 @@ jobs:
       passed:
       - check-code
       - integration-tests
-      - bats-tests
     - get: pipeline-tasks
     - get: version
   - task: prep-release
@@ -269,7 +268,7 @@ jobs:
       passed: [release]
   - task: set-dev-version
     config:
-      image_resource: #@ release_task_image_config()
+      image_resource: #@ rust_task_image_config()
       platform: linux
       inputs:
       - name: version

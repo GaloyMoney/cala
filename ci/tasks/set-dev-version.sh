@@ -21,6 +21,8 @@ sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VER
 sed -i'' "s/cala-ledger-outbox-client\", version = .*/cala-ledger-outbox-client\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 
+cargo update --workspace
+
 if [[ -z $(git config --global user.email) ]]; then
   git config --global user.email "bot@galoy.io"
 fi
