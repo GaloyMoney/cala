@@ -1,3 +1,10 @@
+# [cala release v0.1.1](https://github.com/GaloyMoney/cala/releases/tag/0.1.1)
+
+
+### Miscellaneous Tasks
+
+- Add symlink to proto to include proto files in crate
+
 # [cala release v0.1.0](https://github.com/GaloyMoney/cala/releases/tag/0.1.0)
 
 
@@ -133,5 +140,3 @@
 - Improve bats idempotency (#42)
 - Complete assertion in example (#40)
 - Bats boilerplate (#17)
-
-
