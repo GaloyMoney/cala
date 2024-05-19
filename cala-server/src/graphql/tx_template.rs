@@ -90,7 +90,7 @@ pub(super) struct TxTemplateCreatePayload {
 
 impl ToGlobalId for cala_ledger::TxTemplateId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("tx_template:{self}"))
+        async_graphql::types::ID::from(format!("tx_template:{}", self))
     }
 }
 

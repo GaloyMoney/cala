@@ -43,7 +43,7 @@ impl CursorType for JobByNameCursor {
 
 impl ToGlobalId for crate::primitives::JobId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("job:{self}"))
+        async_graphql::types::ID::from(format!("job:{}", self))
     }
 }
 
