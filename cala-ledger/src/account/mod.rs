@@ -56,9 +56,9 @@ impl Accounts {
 
     pub async fn find_all(
         &self,
-        account_id: &[AccountId],
+        account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
-        self.repo.find_all(account_id).await
+        self.repo.find_all(account_ids).await
     }
 
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {

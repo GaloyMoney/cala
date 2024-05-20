@@ -7,6 +7,8 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 
+use std::collections::HashMap;
+
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::{entity::*, outbox::*, primitives::DataSource};
@@ -44,6 +46,13 @@ impl Journals {
             .persist_events(tx, journal.events.last_persisted(n_new_events))
             .await?;
         Ok(journal)
+    }
+
+    pub async fn find_all(
+        &self,
+        journal_ids: &[JournalId],
+    ) -> Result<HashMap<JournalId, JournalValues>, JournalError> {
+        self.repo.find_all(journal_ids).await
     }
 
     #[cfg(feature = "import")]

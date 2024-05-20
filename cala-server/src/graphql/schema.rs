@@ -1,6 +1,7 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{
-    account::AccountValues, balance::AccountBalance, primitives::*, tx_template::NewParamDefinition,
+    account::AccountValues, balance::AccountBalance, journal::JournalValues, primitives::*,
+    tx_template::NewParamDefinition,
 };
 
 use super::{
@@ -75,6 +76,17 @@ impl Query {
             },
         )
         .await
+    }
+
+    async fn journal(
+        &self,
+        ctx: &Context<'_>,
+        journal_id: UUID,
+    ) -> async_graphql::Result<Option<Journal>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let journal_id = JournalId::from(journal_id);
+        let journal: Option<JournalValues> = loader.load_one(journal_id).await?;
+        Ok(journal.map(Journal::from))
     }
 
     async fn balance(
