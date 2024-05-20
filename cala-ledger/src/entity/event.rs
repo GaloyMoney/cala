@@ -5,7 +5,7 @@ use sqlx::Row;
 use super::error::EntityError;
 use crate::primitives::DataSourceId;
 
-#[derive(sqlx::Type)]
+#[derive(sqlx::Type, sqlx::FromRow)]
 pub struct GenericEvent {
     pub id: uuid::Uuid,
     pub sequence: i32,

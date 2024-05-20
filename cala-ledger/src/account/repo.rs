@@ -87,7 +87,7 @@ impl AccountRepo {
             builder.push_bind(account_id);
         });
         query_builder.push(r#"ORDER BY a.id, e.sequence"#);
-        let query = query_builder.build_query_scalar::<GenericEvent>();
+        let query = query_builder.build_query_as::<GenericEvent>();
         let rows = query.fetch_all(&self.pool).await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?
