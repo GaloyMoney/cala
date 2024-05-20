@@ -1,0 +1,12 @@
+query account($accountId: UUID!, $journalId: UUID!, $currency: CurrencyCode!) {
+  account(accountId: $accountId) {
+    name
+    balance(journalId: $journalId, currency: $currency) {
+      settled {
+        normalBalance {
+          units
+        }
+      }
+    }
+  }
+}

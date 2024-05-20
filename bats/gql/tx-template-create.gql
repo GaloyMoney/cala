@@ -1,0 +1,8 @@
+mutation txTemplateCreate($input: TxTemplateCreateInput!) {
+  txTemplateCreate(input: $input) {
+    txTemplate {
+      txTemplateId
+      code
+    }
+  }
+}
