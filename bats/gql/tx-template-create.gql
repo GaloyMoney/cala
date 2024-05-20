@@ -1,8 +1,95 @@
-mutation txTemplateCreate($input: TxTemplateCreateInput!) {
-  txTemplateCreate(input: $input) {
-    txTemplate {
+mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depositTemplateCode: String!, $withdrawalTemplateId: UUID!, $withdrawalTemplateCode: String!, $journalId: Expression!, $assetAccountId: Expression!) {
+  depositTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $depositTemplateId
+      code: $depositTemplateCode
+      description: "An ACH credit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Deposit account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+        }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
+      }
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
+        }
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
+        }
+      ]
+    }
+  ) {
+    txTemplate{
       txTemplateId
-      code
+    }
+  }
+
+  withdrawalTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $withdrawalTemplateId
+      code: $withdrawalTemplateCode
+      description: "An ACH debit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Withdraw account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+        }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
+      }
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
+        }
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
+        }
+      ]
+    }
+  ) {
+    txTemplate{
+      txTemplateId
     }
   }
 }

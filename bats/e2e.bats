@@ -1,6 +1,5 @@
 #!/usr/bin/env bats
 
-load "operations"
 load "helpers"
 
 setup_file() {
@@ -9,81 +8,95 @@ setup_file() {
 
 teardown_file() {
   stop_server
-  stop_rust_example
 }
 
-@test "cala: journal create" {
+@test "cala: post transaction and verify balance update" {
+  journal_id=$(random_uuid)
   variables=$(
     jq -n \
+    --arg journal_id "$journal_id" \
     '{
         "input": {
-          "journalId": "822cb59f-ce51-4837-8391-2af3b7a5fc51",
+          "journalId": $journal_id,
           "name": "General Ledger",
-          "description": "Primary journal for Lava."
+          "description": "Primary journal."
         }
-      }
-    '
+    }'
   )
   exec_graphql 'journal-create' "$variables"
-  journal_id=$(graphql_output '.data.journalCreate.journal.journalId')
-  [[ $journal_id == "822cb59f-ce51-4837-8391-2af3b7a5fc51" ]] || exit 1
-}
-
-@test "cala: account create" {
+  output=$(graphql_output '.data.journalCreate.journal.journalId')
+  [[ $output ]] || exit 1
+  
+  # create accounts
+  
+  liability_account_id=$(random_uuid)
   variables=$(
     jq -n \
+    --arg liability_account_id "$liability_account_id" \
     '{
       "input": {
-        "accountId": "1fd1dd3e-33fe-4ef5-9d58-676ef8d306b5",
+        "accountId": $liability_account_id,
         "name": "Alice - Checking",
-        "code": "ALICE.CHECKING",
+        "code": ("ALICE.CHECKING-" + $liability_account_id),
         "description": "Alice checking account",
         "normalBalanceType": "CREDIT"
       }
     }'
   )
   exec_graphql 'account-create' "$variables"
-  account_id=$(graphql_output '.data.accountCreate.account.accountId')
-  [[ $account_id == "1fd1dd3e-33fe-4ef5-9d58-676ef8d306b5" ]] || exit 1
+  output=$(graphql_output '.data.accountCreate.account.accountId')
+  [[ $output ]] || exit 1
 
+  asset_account_id=$(random_uuid)
   variables=$(
     jq -n \
+    --arg asset_account_id "$asset_account_id" \
     '{
       "input": {
-        "accountId": "78551b96-9c34-46f9-8d5f-c86e4459fcd7",
+        "accountId": $asset_account_id,
         "name": "Assets",
-        "code": "ASSET",
-        "description": "Lava assets (e.g. cash deposits)",
+        "code": ("ASSET-"+ $asset_account_id),
+        "description": "Assets (e.g. cash deposits)",
         "normalBalanceType": "DEBIT"
       }
     }'
   )
   exec_graphql 'account-create' "$variables"
-  asset_account_id=$(graphql_output '.data.accountCreate.account.accountId')
-  [[ $asset_account_id == "78551b96-9c34-46f9-8d5f-c86e4459fcd7" ]] || exit 1
-}
+  output=$(graphql_output '.data.accountCreate.account.accountId')
+  [[ $output ]] || exit 1
 
-@test "cala: transaction template create" {
-  create_deposit_tx_template
-  deposit_tx_template_id=$(graphql_output '.data.txTemplateCreate.txTemplate.txTemplateId')
-  [[ $deposit_tx_template_id == "15f3f5da-034e-40c1-aaff-ab6d01bd44af" ]] || exit 1
+  # create tx templates
+  deposit_template_id=$(random_uuid)
+  withdrawal_template_id=$(random_uuid)
+  variables=$(jq -n \
+  --arg depositTemplateId "$deposit_template_id" \
+  --arg withdrawalTemplateId "$withdrawal_template_id" \
+  --arg assetAccountId "$asset_account_id" \
+  --arg journalId "$journal_id" \
+  '{
+    "depositTemplateId": $depositTemplateId,
+    "depositTemplateCode": ("DEPOSIT-" + $depositTemplateId),
+    "withdrawalTemplateId": $withdrawalTemplateId,
+    "withdrawalTemplateCode": ("withdrawal-" + $withdrawalTemplateId),
+    "assetAccountId": ("uuid(\u0027" + $assetAccountId + "\u0027)"),
+    "journalId": ("uuid(\u0027" + $journalId + "\u0027)")
+  }')
 
-  create_withdraw_tx_template
-  withdraw_tx_template_id=$(graphql_output '.data.txTemplateCreate.txTemplate.txTemplateId')
-  [[ $withdraw_tx_template_id == "fab492ae-2fe4-4fcd-9bf7-cf06eb5f796b" ]] || exit 1
-}
+  exec_graphql 'tx-template-create' "$variables"
 
-@test "cala: post transaction" {
-  transaction_id="42847c7f-1972-4448-91b7-652c378760f4"
+  # post transaction
+  transaction_id=$(random_uuid)
   variables=$(
     jq -n \
     --arg transaction_id "$transaction_id" \
+    --arg account_id "$liability_account_id" \
+    --arg depositTemplateId "$deposit_template_id" \
     '{
       "input": {
         "transactionId": $transaction_id,
-        "txTemplateCode": "ACH_CREDIT",
+        "txTemplateCode": ("DEPOSIT-" + $depositTemplateId),
         "params": {
-          "account": "1fd1dd3e-33fe-4ef5-9d58-676ef8d306b5",
+          "account": $account_id,
           "amount": "9.53",
           "effective": "2022-09-21"
         }
@@ -93,19 +106,18 @@ teardown_file() {
   exec_graphql 'post-transaction' "$variables"
   correlation_id=$(graphql_output '.data.postTransaction.transaction.correlationId')
   [[ $correlation_id == $transaction_id  ]] || exit 1
-}
 
-@test "cala: balance for account" {
-  variables=$(
-    jq -n \
-      '{
-        "accountId": "1fd1dd3e-33fe-4ef5-9d58-676ef8d306b5",
-        "journalId": "822cb59f-ce51-4837-8391-2af3b7a5fc51",
-        "currency": "USD",
-      }'
+  # check balance
+  variables=$(jq -n \
+    --arg journalId "$journal_id" \
+    --arg accountId "$liability_account_id" \
+    '{
+      "accountId": $accountId,
+      "journalId": $journalId,
+      "currency": "USD"
+    }'
   )
-  exec_graphql 'account' "$variables"
+  exec_graphql 'account-with-balance' "$variables"
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
 }
-
