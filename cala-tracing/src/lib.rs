@@ -27,8 +27,8 @@ pub struct TracingConfig {
 impl Default for TracingConfig {
     fn default() -> Self {
         Self {
-            service_name: "lava-dev".to_string(),
-            service_instance_id: "lava-dev".to_string(),
+            service_name: "cala-dev".to_string(),
+            service_instance_id: "cala-dev".to_string(),
         }
     }
 }
