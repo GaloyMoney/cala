@@ -61,6 +61,14 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
+    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self), err)]
+    pub async fn find_all(
+        &self,
+        tx_template_ids: &[TxTemplateId],
+    ) -> Result<HashMap<TxTemplateId, TxTemplateValues>, TxTemplateError> {
+        self.repo.find_all(tx_template_ids).await
+    }
+
     #[instrument(
         level = "trace",
         name = "cala_ledger.tx_template.prepare_transaction",

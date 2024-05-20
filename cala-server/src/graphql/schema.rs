@@ -1,7 +1,7 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{
     account::AccountValues, balance::AccountBalance, journal::JournalValues, primitives::*,
-    tx_template::NewParamDefinition,
+    tx_template::NewParamDefinition, tx_template::TxTemplateValues,
 };
 
 use super::{
@@ -14,14 +14,9 @@ pub struct Query;
 
 #[Object]
 impl Query {
-    async fn account(
-        &self,
-        ctx: &Context<'_>,
-        account_id: UUID,
-    ) -> async_graphql::Result<Option<Account>> {
+    async fn account(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Account>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let account_id = AccountId::from(account_id);
-        let account: Option<AccountValues> = loader.load_one(account_id).await?;
+        let account: Option<AccountValues> = loader.load_one(AccountId::from(id)).await?;
         Ok(account.map(Account::from))
     }
 
@@ -78,14 +73,9 @@ impl Query {
         .await
     }
 
-    async fn journal(
-        &self,
-        ctx: &Context<'_>,
-        journal_id: UUID,
-    ) -> async_graphql::Result<Option<Journal>> {
+    async fn journal(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Journal>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let journal_id = JournalId::from(journal_id);
-        let journal: Option<JournalValues> = loader.load_one(journal_id).await?;
+        let journal: Option<JournalValues> = loader.load_one(JournalId::from(id)).await?;
         Ok(journal.map(Journal::from))
     }
 
@@ -103,6 +93,16 @@ impl Query {
         let balance: Option<AccountBalance> =
             loader.load_one((journal_id, account_id, currency)).await?;
         Ok(balance.map(Balance::from))
+    }
+
+    async fn tx_template(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<TxTemplate>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let tx_template: Option<TxTemplateValues> = loader.load_one(TxTemplateId::from(id)).await?;
+        Ok(tx_template.map(TxTemplate::from))
     }
 
     async fn jobs(

@@ -235,11 +235,12 @@ type PostTransactionPayload {
 }
 
 type Query {
-	account(accountId: UUID!): Account
+	account(id: UUID!): Account
 	accountByExternalId(externalId: String!): Account
 	accounts(first: Int!, after: String): AccountConnection!
-	journal(journalId: UUID!): Journal
+	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
+	txTemplate(id: UUID!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!
 }
 
