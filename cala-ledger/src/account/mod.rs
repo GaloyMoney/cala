@@ -54,6 +54,7 @@ impl Accounts {
         self.repo.find(account_id).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.find_all", skip(self), err)]
     pub async fn find_all(
         &self,
         account_ids: &[AccountId],

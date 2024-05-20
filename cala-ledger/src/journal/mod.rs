@@ -48,6 +48,7 @@ impl Journals {
         Ok(journal)
     }
 
+    #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
     pub async fn find_all(
         &self,
         journal_ids: &[JournalId],
