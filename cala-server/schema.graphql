@@ -235,7 +235,8 @@ type PostTransactionPayload {
 }
 
 type Query {
-	accountByExternalId(externalId: String!): Account!
+	account(accountId: UUID!): Account
+	accountByExternalId(externalId: String!): Account
 	accounts(first: Int!, after: String): AccountConnection!
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
 	jobs(first: Int!, after: String): JobConnection!

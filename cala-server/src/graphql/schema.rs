@@ -1,5 +1,7 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
-use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
+use cala_ledger::{
+    account::AccountValues, balance::AccountBalance, primitives::*, tx_template::NewParamDefinition,
+};
 
 use super::{
     account::*, balance::*, job::*, journal::*, loader::*, primitives::*, transaction::*,
@@ -11,18 +13,33 @@ pub struct Query;
 
 #[Object]
 impl Query {
+    async fn account(
+        &self,
+        ctx: &Context<'_>,
+        account_id: UUID,
+    ) -> async_graphql::Result<Option<Account>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let account_id = AccountId::from(account_id);
+        let account: Option<AccountValues> = loader.load_one(account_id).await?;
+        Ok(account.map(Account::from))
+    }
+
     async fn account_by_external_id(
         &self,
         ctx: &Context<'_>,
         external_id: String,
-    ) -> async_graphql::Result<Account> {
+    ) -> async_graphql::Result<Option<Account>> {
         let app = ctx.data_unchecked::<CalaApp>();
-        Ok(app
+        match app
             .ledger()
             .accounts()
             .find_by_external_id(external_id)
             .await
-            .map(Account::from)?)
+        {
+            Ok(account) => Ok(Some(account.into_values().into())),
+            Err(cala_ledger::account::error::AccountError::CouldNotFindByExternalId(_)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
     async fn accounts(

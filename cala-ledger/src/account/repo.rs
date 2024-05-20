@@ -1,6 +1,8 @@
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+
+use std::collections::HashMap;
 
 use super::{cursor::*, entity::*, error::*};
 #[cfg(feature = "import")]
@@ -43,6 +45,59 @@ impl AccountRepo {
         })
     }
 
+    pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts a
+            JOIN cala_account_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id = $1"#,
+            account_id as AccountId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(account) => Ok(account),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(AccountError::CouldNotFindById(account_id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub(super) async fn find_all(
+        &self,
+        ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
+        let mut query_builder = QueryBuilder::new(
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts a
+            JOIN cala_account_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id IN"#,
+        );
+        query_builder.push_tuples(ids, |mut builder, account_id| {
+            builder.push_bind(account_id);
+        });
+        query_builder.push(r#"ORDER BY a.id, e.sequence"#);
+        let query = query_builder.build_query_scalar::<GenericEvent>();
+        let rows = query.fetch_all(&self.pool).await?;
+        let n = rows.len();
+        let ret = EntityEvents::load_n(rows, n)?
+            .0
+            .into_iter()
+            .map(|account: Account| (account.values().id, account.into_values()))
+            .collect();
+        Ok(ret)
+    }
+
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
         let rows = sqlx::query_as!(
             GenericEvent,
@@ -52,7 +107,8 @@ impl AccountRepo {
             JOIN cala_account_events e
             ON a.data_source_id = e.data_source_id
             AND a.id = e.id
-            WHERE a.external_id = $1"#,
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.external_id = $1"#,
             external_id
         )
         .fetch_all(&self.pool)

@@ -9,6 +9,8 @@ use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 
+use std::collections::HashMap;
+
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
@@ -46,6 +48,17 @@ impl Accounts {
             .persist_events(tx, account.events.last_persisted(n_new_events))
             .await?;
         Ok(account)
+    }
+
+    pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
+        self.repo.find(account_id).await
+    }
+
+    pub async fn find_all(
+        &self,
+        account_id: &[AccountId],
+    ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
+        self.repo.find_all(account_id).await
     }
 
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {

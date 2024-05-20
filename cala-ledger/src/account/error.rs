@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::outbox::error::OutboxError;
+use crate::{outbox::error::OutboxError, primitives::AccountId};
 
 #[derive(Error, Debug)]
 pub enum AccountError {
@@ -10,6 +10,8 @@ pub enum AccountError {
     OutboxError(#[from] OutboxError),
     #[error("AccountError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
+    #[error("AccountError - NotFound: id '{0}' not found")]
+    CouldNotFindById(AccountId),
     #[error("AccountError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
     #[error("AccountError - external_id already exists")]
