@@ -128,3 +128,10 @@ retry() {
   false
 }
 
+random_uuid() {
+  if [[ -e /proc/sys/kernel/random/uuid ]]; then
+    cat /proc/sys/kernel/random/uuid
+  else
+    uuidgen
+  fi
+}
