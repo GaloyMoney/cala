@@ -1,3 +1,13 @@
+# [cala release v0.1.2](https://github.com/GaloyMoney/cala/releases/tag/0.1.2)
+
+
+### Miscellaneous Tasks
+
+- No need for sqlx::Type
+- Add FromRow to GenericEvent
+- Make account / balance optional
+- Return Option for queries
+
 # [cala release v0.1.1](https://github.com/GaloyMoney/cala/releases/tag/0.1.1)
 
 
