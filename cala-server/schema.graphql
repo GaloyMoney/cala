@@ -8,7 +8,7 @@ type Account {
 	externalId: String
 	description: String
 	metadata: JSON
-	balance(journalId: UUID!, currency: CurrencyCode!): Balance!
+	balance(journalId: UUID!, currency: CurrencyCode!): Balance
 }
 
 type AccountConnection {
@@ -237,7 +237,7 @@ type PostTransactionPayload {
 type Query {
 	accountByExternalId(externalId: String!): Account!
 	accounts(first: Int!, after: String): AccountConnection!
-	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance!
+	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
 	jobs(first: Int!, after: String): JobConnection!
 }
 

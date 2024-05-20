@@ -1,9 +1,5 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
-use cala_ledger::{
-    balance::{error::BalanceError, AccountBalance},
-    primitives::*,
-    tx_template::NewParamDefinition,
-};
+use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
 
 use super::{
     account::*, balance::*, job::*, journal::*, loader::*, primitives::*, transaction::*,
@@ -70,18 +66,14 @@ impl Query {
         journal_id: UUID,
         account_id: UUID,
         currency: CurrencyCode,
-    ) -> async_graphql::Result<Balance> {
+    ) -> async_graphql::Result<Option<Balance>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
         let journal_id = JournalId::from(journal_id);
         let account_id = AccountId::from(account_id);
         let currency = Currency::from(currency);
         let balance: Option<AccountBalance> =
             loader.load_one((journal_id, account_id, currency)).await?;
-        if let Some(balance) = balance {
-            Ok(Balance::from(balance))
-        } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency).into())
-        }
+        Ok(balance.map(Balance::from))
     }
 
     async fn jobs(

@@ -2,7 +2,7 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
-    balance::{error::BalanceError, *},
+    balance::*,
     primitives::{AccountId, Currency, JournalId},
 };
 
@@ -29,18 +29,14 @@ impl Account {
         ctx: &Context<'_>,
         journal_id: UUID,
         currency: CurrencyCode,
-    ) -> async_graphql::Result<Balance> {
+    ) -> async_graphql::Result<Option<Balance>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
         let journal_id = JournalId::from(journal_id);
         let account_id = AccountId::from(self.account_id);
         let currency = Currency::from(currency);
         let balance: Option<AccountBalance> =
             loader.load_one((journal_id, account_id, currency)).await?;
-        if let Some(balance) = balance {
-            Ok(Balance::from(balance))
-        } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency).into())
-        }
+        Ok(balance.map(Balance::from))
     }
 }
 
