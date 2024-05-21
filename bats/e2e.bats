@@ -19,7 +19,6 @@ teardown_file() {
         "input": {
           "journalId": $journal_id,
           "name": "General Ledger",
-          "description": "Primary journal."
         }
     }'
   )
@@ -38,7 +37,6 @@ teardown_file() {
         "accountId": $liability_account_id,
         "name": "Alice - Checking",
         "code": ("ALICE.CHECKING-" + $liability_account_id),
-        "description": "Alice checking account",
         "normalBalanceType": "CREDIT"
       }
     }'
@@ -56,7 +54,6 @@ teardown_file() {
         "accountId": $asset_account_id,
         "name": "Assets",
         "code": ("ASSET-"+ $asset_account_id),
-        "description": "Assets (e.g. cash deposits)",
         "normalBalanceType": "DEBIT"
       }
     }'
@@ -119,5 +116,6 @@ teardown_file() {
   )
   exec_graphql 'account-with-balance' "$variables"
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
+  echo $balance
   [[ $balance == "9.53" ]] || exit 1
 }
