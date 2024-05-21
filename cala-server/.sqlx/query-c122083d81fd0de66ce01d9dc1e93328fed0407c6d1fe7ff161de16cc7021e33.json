@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO cala_tx_templates (data_source_id, id, code)\n            VALUES ($1, $2, $3)",
+  "query": "INSERT INTO cala_transactions (id, journal_id, external_id)\n            VALUES ($1, $2, $3)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -12,5 +12,5 @@
     },
     "nullable": []
   },
-  "hash": "39272667b5a60a1895af2ee4e16b0d85712ca254880686b50c9261d2246ed98b"
+  "hash": "c122083d81fd0de66ce01d9dc1e93328fed0407c6d1fe7ff161de16cc7021e33"
 }

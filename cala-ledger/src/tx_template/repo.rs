@@ -73,6 +73,30 @@ impl TxTemplateRepo {
         Ok(ret)
     }
 
+    pub(super) async fn find_by_code(&self, code: String) -> Result<TxTemplate, TxTemplateError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_tx_templates a
+            JOIN cala_tx_template_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.code = $1"#,
+            code
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(tx_template) => Ok(tx_template),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(TxTemplateError::CouldNotFindByCode(code))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
     pub async fn find_latest_version(
         &self,
         code: &str,

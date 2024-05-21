@@ -69,6 +69,10 @@ impl TxTemplates {
         self.repo.find_all(tx_template_ids).await
     }
 
+    pub async fn find_by_code(&self, code: String) -> Result<TxTemplate, TxTemplateError> {
+        self.repo.find_by_code(code).await
+    }
+
     #[instrument(
         level = "trace",
         name = "cala_ledger.tx_template.prepare_transaction",

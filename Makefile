@@ -43,6 +43,10 @@ e2e: clean-deps start-deps build
 sdl:
 	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
 
+sqlx-prepare:
+	cd cala-ledger && cargo sqlx prepare -- --all-features
+	cd cala-server && cargo sqlx prepare -- --all-features
+
 test-in-ci: start-deps setup-db
 	cargo nextest run --verbose --locked
 
