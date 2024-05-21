@@ -17,7 +17,6 @@ pub struct Journal {
     pub journal_id: UUID,
     pub version: u32,
     pub name: String,
-    pub external_id: Option<String>,
     pub status: Status,
     pub description: Option<String>,
 }
@@ -40,7 +39,6 @@ impl From<cala_ledger::journal::JournalValues> for Journal {
             journal_id: UUID::from(value.id),
             version: value.version,
             name: value.name,
-            external_id: value.external_id,
             status: Status::from(value.status),
             description: value.description,
         }

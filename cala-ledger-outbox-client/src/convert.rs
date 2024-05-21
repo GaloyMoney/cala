@@ -290,6 +290,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
     fn try_from(
         proto::Transaction {
             id,
+            version,
             journal_id,
             tx_template_id,
             effective,
@@ -301,6 +302,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
     ) -> Result<Self, Self::Error> {
         let res = Self {
             id: id.parse()?,
+            version,
             journal_id: journal_id.parse()?,
             tx_template_id: tx_template_id.parse()?,
             effective: effective.parse()?,

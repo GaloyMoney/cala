@@ -1,0 +1,333 @@
+type Account {
+	id: ID!
+	accountId: UUID!
+	version: Int!
+	code: String!
+	name: String!
+	normalBalanceType: DebitOrCredit!
+	status: Status!
+	externalId: String
+	description: String
+	metadata: JSON
+	balance(journalId: UUID!, currency: CurrencyCode!): Balance
+}
+
+type AccountConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AccountEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Account!]!
+}
+
+input AccountCreateInput {
+	accountId: UUID!
+	externalId: String
+	code: String!
+	name: String!
+	normalBalanceType: DebitOrCredit! = CREDIT
+	description: String
+	status: Status! = ACTIVE
+	metadata: JSON
+}
+
+type AccountCreatePayload {
+	account: Account!
+}
+
+"""
+An edge in a connection.
+"""
+type AccountEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Account!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Balance {
+	id: ID!
+	journalId: UUID!
+	accountId: UUID!
+	entryId: UUID!
+	currency: CurrencyCode!
+	settled: BalanceAmount!
+	pending: BalanceAmount!
+	encumbrance: BalanceAmount!
+	version: Int!
+}
+
+type BalanceAmount {
+	drBalance: Money!
+	crBalance: Money!
+	normalBalance: Money!
+	entryId: UUID!
+}
+
+
+input CalaOutboxImportJobCreateInput {
+	name: String!
+	description: String
+	endpoint: String!
+}
+
+type CalaOutboxImportJobCreatePayload {
+	job: Job!
+}
+
+scalar CurrencyCode
+
+scalar Date
+
+enum DebitOrCredit {
+	DEBIT
+	CREDIT
+}
+
+scalar Decimal
+
+type EntryInput {
+	entryType: Expression!
+	accountId: Expression!
+	layer: Expression!
+	direction: Expression!
+	units: Expression!
+	currency: Expression!
+	description: Expression
+}
+
+scalar Expression
+
+
+
+
+scalar JSON
+
+type Job {
+	id: ID!
+	jobId: UUID!
+	name: String!
+	description: String
+}
+
+type JobConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [JobEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Job!]!
+}
+
+"""
+An edge in a connection.
+"""
+type JobEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Job!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+type Journal {
+	id: ID!
+	journalId: UUID!
+	version: Int!
+	name: String!
+	status: Status!
+	description: String
+}
+
+input JournalCreateInput {
+	journalId: UUID!
+	name: String!
+	status: Status! = ACTIVE
+	description: String
+}
+
+type JournalCreatePayload {
+	journal: Journal!
+}
+
+type Money {
+	units: Decimal!
+	currency: CurrencyCode!
+}
+
+type Mutation {
+	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
+	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
+	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
+	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
+	postTransaction(input: TransactionInput!): PostTransactionPayload!
+}
+
+"""
+Information about pagination in a connection
+"""
+type PageInfo {
+	"""
+	When paginating backwards, are there more items?
+	"""
+	hasPreviousPage: Boolean!
+	"""
+	When paginating forwards, are there more items?
+	"""
+	hasNextPage: Boolean!
+	"""
+	When paginating backwards, the cursor to continue.
+	"""
+	startCursor: String
+	"""
+	When paginating forwards, the cursor to continue.
+	"""
+	endCursor: String
+}
+
+enum ParamDataType {
+	STRING
+	INTEGER
+	DECIMAL
+	BOOLEAN
+	UUID
+	DATE
+	TIMESTAMP
+	JSON
+}
+
+type ParamDefinition {
+	name: String!
+	type: ParamDataType!
+	default: Expression
+	description: String
+}
+
+input ParamDefinitionInput {
+	name: String!
+	type: ParamDataType!
+	default: Expression
+	description: String
+}
+
+type PostTransactionPayload {
+	transaction: Transaction!
+}
+
+type Query {
+	account(id: UUID!): Account
+	accountByExternalId(externalId: String!): Account
+	accounts(first: Int!, after: String): AccountConnection!
+	journal(id: UUID!): Journal
+	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
+	txTemplate(id: UUID!): TxTemplate
+	jobs(first: Int!, after: String): JobConnection!
+}
+
+enum Status {
+	ACTIVE
+	LOCKED
+}
+
+
+type Transaction {
+	id: ID!
+	transactionId: UUID!
+	version: Int!
+	txTemplateId: UUID!
+	journalId: UUID!
+	effective: Date!
+	correlationId: String!
+	externalId: String
+	description: String
+	metadata: JSON
+}
+
+input TransactionInput {
+	transactionId: UUID!
+	txTemplateCode: String!
+	params: JSON
+}
+
+type TxInput {
+	effective: Expression!
+	journalId: Expression!
+	correlationId: Expression
+	externalId: Expression
+	description: Expression
+	metadata: Expression
+}
+
+type TxTemplate {
+	id: ID!
+	txTemplateId: UUID!
+	version: Int!
+	code: String!
+	params: [ParamDefinition!]
+	txInput: TxInput!
+	entries: [EntryInput!]!
+	description: String
+	metadata: JSON
+}
+
+input TxTemplateCreateInput {
+	txTemplateId: UUID!
+	code: String!
+	params: [ParamDefinitionInput!]
+	txInput: TxTemplateTxInput!
+	entries: [TxTemplateEntryInput!]!
+	description: String
+	metadata: JSON
+}
+
+type TxTemplateCreatePayload {
+	txTemplate: TxTemplate!
+}
+
+input TxTemplateEntryInput {
+	entryType: Expression!
+	accountId: Expression!
+	layer: Expression!
+	direction: Expression!
+	units: Expression!
+	currency: Expression!
+	description: Expression
+}
+
+input TxTemplateTxInput {
+	effective: Expression!
+	journalId: Expression!
+	correlationId: Expression
+	externalId: Expression
+	description: Expression
+	metadata: Expression
+}
+
+scalar UUID
+
+directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+schema {
+	query: Query
+	mutation: Mutation
+}

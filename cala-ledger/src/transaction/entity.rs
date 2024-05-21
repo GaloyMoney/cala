@@ -126,6 +126,7 @@ impl NewTransaction {
             [TransactionEvent::Initialized {
                 values: TransactionValues {
                     id: self.id,
+                    version: 1,
                     journal_id: self.journal_id,
                     tx_template_id: self.tx_template_id,
                     effective: self.effective,

@@ -13,6 +13,7 @@ pub struct TransactionInput {
 pub struct Transaction {
     pub id: ID,
     pub transaction_id: UUID,
+    pub version: u32,
     pub tx_template_id: UUID,
     pub journal_id: UUID,
     pub effective: Date,
@@ -43,6 +44,7 @@ impl From<cala_ledger::transaction::TransactionValues> for Transaction {
         Self {
             id: values.id.to_global_id(),
             transaction_id: UUID::from(values.id),
+            version: values.version,
             tx_template_id: UUID::from(values.tx_template_id),
             journal_id: UUID::from(values.journal_id),
             effective: Date::from(values.effective),

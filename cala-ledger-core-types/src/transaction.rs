@@ -5,6 +5,7 @@ use super::primitives::*;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TransactionValues {
     pub id: TransactionId,
+    pub version: u32,
     pub journal_id: JournalId,
     pub tx_template_id: TxTemplateId,
     pub effective: chrono::NaiveDate,
