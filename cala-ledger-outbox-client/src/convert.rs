@@ -165,6 +165,7 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
     fn try_from(
         proto::TxTemplate {
             id,
+            version,
             code,
             params,
             tx_input,
@@ -186,6 +187,7 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
 
         let res = Self {
             id: id.parse()?,
+            version,
             code,
             params: Some(params),
             tx_input,

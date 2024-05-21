@@ -6,6 +6,7 @@ use super::primitives::*;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxTemplateValues {
     pub id: TxTemplateId,
+    pub version: u32,
     pub code: String,
     pub params: Option<Vec<ParamDefinition>>,
     pub tx_input: TxInput,

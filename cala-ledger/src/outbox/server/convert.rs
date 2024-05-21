@@ -158,6 +158,7 @@ impl From<TxTemplateValues> for proto::TxTemplate {
     fn from(
         TxTemplateValues {
             id,
+            version,
             code,
             params,
             tx_input,
@@ -173,6 +174,7 @@ impl From<TxTemplateValues> for proto::TxTemplate {
             .collect();
         proto::TxTemplate {
             id: id.to_string(),
+            version,
             code,
             params,
             tx_input: Some(tx_input.into()),

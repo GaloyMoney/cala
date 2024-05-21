@@ -122,6 +122,7 @@ impl NewTxTemplate {
             [TxTemplateEvent::Initialized {
                 values: TxTemplateValues {
                     id: self.id,
+                    version: 1,
                     code: self.code,
                     description: self.description,
                     params: self

@@ -6,6 +6,7 @@ use super::{convert::ToGlobalId, primitives::*};
 pub(super) struct TxTemplate {
     pub id: ID,
     pub tx_template_id: UUID,
+    pub version: u32,
     pub code: String,
     pub params: Option<Vec<ParamDefinition>>,
     pub tx_input: TxInput,
@@ -103,6 +104,7 @@ impl From<cala_ledger::tx_template::TxTemplateValues> for TxTemplate {
             .map(|params| params.into_iter().map(ParamDefinition::from).collect());
         Self {
             id: value.id.to_global_id(),
+            version: value.version,
             tx_template_id: UUID::from(value.id),
             code: value.code,
             tx_input,

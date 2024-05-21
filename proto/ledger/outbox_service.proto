@@ -81,12 +81,13 @@ message TxTemplateCreated {
 
 message TxTemplate {
   string id = 1;
-  string code = 2;
-  repeated ParamDefinition params = 3;
-  TxInput tx_input = 4;
-  repeated EntryInput entries = 5;
-  optional string description = 6;
-  optional google.protobuf.Struct metadata = 7;
+  uint32 version = 2;
+  string code = 3;
+  repeated ParamDefinition params = 4;
+  TxInput tx_input = 5;
+  repeated EntryInput entries = 6;
+  optional string description = 7;
+  optional google.protobuf.Struct metadata = 8;
 }
 
 message EntryInput {
