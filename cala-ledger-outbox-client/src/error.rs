@@ -22,5 +22,5 @@ pub enum CalaLedgerOutboxClientError {
     #[error("CalaLedgerOutboxError - DecimalError: {0}")]
     DecimalError(#[from] rust_decimal::Error),
     #[error("CalaLedgerOutboxError - ParseCurrencyError: {0}")]
-    ParseCurrencyError(#[from] cala_types::primitives::ParseCurrencyError),
+    ParseCurrencyError(#[from] cala_types::primitives::UnknownCurrency),
 }

@@ -66,12 +66,6 @@ pub enum Layer {
     Encumbered,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum ParseLayerError {
-    #[error("CalaCoreTypeError - UnknownLayer: {0:?}")]
-    UnknownLayer(String),
-}
-
 impl<'a> TryFrom<CelResult<'a>> for Layer {
     type Error = ResultCoercionError;
 
@@ -131,27 +125,25 @@ impl PartialEq for Currency {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum ParseCurrencyError {
-    #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
-    UnknownCurrency(String),
-}
+#[error("Couldn't parse '{0}' as a Currency")]
+pub struct UnknownCurrency(String);
 
 impl std::str::FromStr for Currency {
-    type Err = ParseCurrencyError;
+    type Err = UnknownCurrency;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match iso::find(s) {
             Some(c) => Ok(Currency::Iso(c)),
             _ => match crypto::find(s) {
                 Some(c) => Ok(Currency::Crypto(c)),
-                _ => Err(ParseCurrencyError::UnknownCurrency(s.to_string())),
+                _ => Err(UnknownCurrency(s.to_string())),
             },
         }
     }
 }
 
 impl TryFrom<String> for Currency {
-    type Error = ParseCurrencyError;
+    type Error = UnknownCurrency;
 
     fn try_from(s: String) -> Result<Self, Self::Error> {
         s.parse()
