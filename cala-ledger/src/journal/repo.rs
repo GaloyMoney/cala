@@ -26,11 +26,10 @@ impl JournalRepo {
     ) -> Result<EntityUpdate<Journal>, JournalError> {
         let id = new_journal.id;
         sqlx::query!(
-            r#"INSERT INTO cala_journals (id, name, external_id)
-            VALUES ($1, $2, $3)"#,
+            r#"INSERT INTO cala_journals (id, name)
+            VALUES ($1, $2)"#,
             id as JournalId,
             new_journal.name,
-            new_journal.external_id,
         )
         .execute(&mut **tx)
         .await?;
@@ -81,12 +80,11 @@ impl JournalRepo {
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
         sqlx::query!(
-            r#"INSERT INTO cala_journals (data_source_id, id, name, external_id, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_journals (data_source_id, id, name, created_at)
+            VALUES ($1, $2, $3, $4)"#,
             origin as DataSourceId,
             journal.values().id as JournalId,
             journal.values().name,
-            journal.values().external_id,
             recorded_at
         )
         .execute(&mut **tx)

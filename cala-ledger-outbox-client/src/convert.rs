@@ -133,9 +133,9 @@ impl TryFrom<proto::Journal> for JournalValues {
         let status = proto::Status::try_from(journal.status).map(Status::from)?;
         let res = Self {
             id: journal.id.parse()?,
+            version: journal.version,
             name: journal.name,
             status,
-            external_id: journal.external_id,
             description: journal.description,
         };
         Ok(res)

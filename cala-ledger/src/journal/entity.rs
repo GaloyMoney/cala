@@ -92,8 +92,6 @@ pub struct NewJournal {
     #[builder(default)]
     pub(super) status: Status,
     #[builder(setter(strip_option, into), default)]
-    pub(super) external_id: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,
 }
 
@@ -108,9 +106,9 @@ impl NewJournal {
             [JournalEvent::Initialized {
                 values: JournalValues {
                     id: self.id,
+                    version: 1,
                     name: self.name,
                     status: self.status,
-                    external_id: self.external_id,
                     description: self.description,
                 },
             }],

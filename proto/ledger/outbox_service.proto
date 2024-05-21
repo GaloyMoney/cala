@@ -69,9 +69,9 @@ message JournalCreated {
 
 message Journal {
   string id = 1;
-  string name = 2;
-  Status status = 3;
-  optional string external_id = 4;
+  uint32 version = 2;
+  string name = 3;
+  Status status = 4;
   optional string description = 5;
 }
 

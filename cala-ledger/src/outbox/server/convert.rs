@@ -119,19 +119,18 @@ impl From<JournalValues> for proto::Journal {
     fn from(
         JournalValues {
             id,
+            version,
             name,
             status,
-            external_id,
             description,
-            ..
         }: JournalValues,
     ) -> Self {
         let status: proto::Status = status.into();
         proto::Journal {
             id: id.to_string(),
+            version,
             name,
             status: status as i32,
-            external_id,
             description,
         }
     }
