@@ -87,6 +87,7 @@ impl From<AccountValues> for proto::Account {
     fn from(
         AccountValues {
             id,
+            version,
             code,
             name,
             external_id,
@@ -94,13 +95,13 @@ impl From<AccountValues> for proto::Account {
             status,
             description,
             metadata,
-            ..
         }: AccountValues,
     ) -> Self {
         let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
         let status: proto::Status = status.into();
         proto::Account {
             id: id.to_string(),
+            version,
             code,
             name,
             external_id,
@@ -118,19 +119,18 @@ impl From<JournalValues> for proto::Journal {
     fn from(
         JournalValues {
             id,
+            version,
             name,
             status,
-            external_id,
             description,
-            ..
         }: JournalValues,
     ) -> Self {
         let status: proto::Status = status.into();
         proto::Journal {
             id: id.to_string(),
+            version,
             name,
             status: status as i32,
-            external_id,
             description,
         }
     }
@@ -271,6 +271,7 @@ impl From<TransactionValues> for proto::Transaction {
     fn from(
         TransactionValues {
             id,
+            version,
             journal_id,
             tx_template_id,
             correlation_id,
@@ -282,6 +283,7 @@ impl From<TransactionValues> for proto::Transaction {
     ) -> Self {
         proto::Transaction {
             id: id.to_string(),
+            version,
             journal_id: journal_id.to_string(),
             tx_template_id: tx_template_id.to_string(),
             correlation_id,

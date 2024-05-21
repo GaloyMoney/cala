@@ -13,6 +13,7 @@ use super::{balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, pri
 pub(super) struct Account {
     pub id: ID,
     pub account_id: UUID,
+    pub version: u32,
     pub code: String,
     pub name: String,
     pub normal_balance_type: DebitOrCredit,
@@ -118,6 +119,7 @@ impl From<cala_ledger::account::AccountValues> for Account {
         Self {
             id: values.id.to_global_id(),
             account_id: UUID::from(values.id),
+            version: values.version,
             code: values.code,
             name: values.name,
             normal_balance_type: DebitOrCredit::from(values.normal_balance_type),

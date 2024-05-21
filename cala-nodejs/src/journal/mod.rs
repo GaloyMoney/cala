@@ -51,9 +51,6 @@ impl CalaJournals {
     };
     let mut new = cala_ledger::journal::NewJournal::builder();
     new.id(id).name(new_journal.name);
-    if let Some(external_id) = new_journal.external_id {
-      new.external_id(external_id);
-    }
     if let Some(description) = new_journal.description {
       new.description(description);
     }

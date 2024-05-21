@@ -113,6 +113,7 @@ impl TryFrom<proto::Account> for AccountValues {
         let status = proto::Status::try_from(account.status).map(Status::from)?;
         let res = Self {
             id: account.id.parse()?,
+            version: account.version,
             code: account.code,
             name: account.name,
             external_id: account.external_id,
@@ -132,9 +133,9 @@ impl TryFrom<proto::Journal> for JournalValues {
         let status = proto::Status::try_from(journal.status).map(Status::from)?;
         let res = Self {
             id: journal.id.parse()?,
+            version: journal.version,
             name: journal.name,
             status,
-            external_id: journal.external_id,
             description: journal.description,
         };
         Ok(res)
@@ -289,6 +290,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
     fn try_from(
         proto::Transaction {
             id,
+            version,
             journal_id,
             tx_template_id,
             effective,
@@ -300,6 +302,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
     ) -> Result<Self, Self::Error> {
         let res = Self {
             id: id.parse()?,
+            version,
             journal_id: journal_id.parse()?,
             tx_template_id: tx_template_id.parse()?,
             effective: effective.parse()?,

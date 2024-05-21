@@ -187,9 +187,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut builder = cala_ledger::journal::NewJournal::builder();
         builder.id(input.journal_id).name(input.name);
-        if let Some(external_id) = input.external_id {
-            builder.external_id(external_id);
-        }
         if let Some(description) = input.description {
             builder.description(description);
         }

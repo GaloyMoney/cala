@@ -114,6 +114,7 @@ impl NewAccount {
             [AccountEvent::Initialized {
                 values: AccountValues {
                     id: self.id,
+                    version: 1,
                     code: self.code,
                     name: self.name,
                     external_id: self.external_id,
