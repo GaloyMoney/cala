@@ -183,7 +183,9 @@ impl JobExecutor {
         let pool = pool.clone();
         let handle = tokio::spawn(async move {
             let current_job = CurrentJob::new(id, pool, job_state);
-            let _ = runner.run(current_job).await;
+            if let Err(e) = runner.run(current_job).await {
+                eprintln!("Job {} errored: {:?}", id, e);
+            }
             all_jobs.write().await.remove(&id);
         });
         running_jobs

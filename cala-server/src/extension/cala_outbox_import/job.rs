@@ -60,17 +60,27 @@ impl JobRunner for CalaOutboxImportJob {
             .state::<CalaOutboxImportJobState>()?
             .unwrap_or_default();
         let mut stream = client.subscribe(Some(state.last_synced)).await?;
-        while let Some(Ok(message)) = stream.next().await {
-            let mut tx = current_job.pool().begin().await?;
-            state.last_synced = message.sequence;
-            current_job.update_state(&mut tx, &state).await?;
-            self.ledger
-                .sync_outbox_event(
-                    tx,
-                    DataSourceId::from(uuid::Uuid::from(current_job.id())),
-                    message,
-                )
-                .await?;
+        loop {
+            match stream.next().await {
+                Some(Ok(message)) => {
+                    let mut tx = current_job.pool().begin().await?;
+                    state.last_synced = message.sequence;
+                    current_job.update_state(&mut tx, &state).await?;
+                    self.ledger
+                        .sync_outbox_event(
+                            tx,
+                            DataSourceId::from(uuid::Uuid::from(current_job.id())),
+                            message,
+                        )
+                        .await?;
+                }
+                Some(Err(err)) => {
+                    return Err(Box::new(err));
+                }
+                None => {
+                    break;
+                }
+            }
         }
         Ok(())
     }
