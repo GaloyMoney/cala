@@ -113,6 +113,7 @@ impl TryFrom<proto::Account> for AccountValues {
         let status = proto::Status::try_from(account.status).map(Status::from)?;
         let res = Self {
             id: account.id.parse()?,
+            version: account.version,
             code: account.code,
             name: account.name,
             external_id: account.external_id,

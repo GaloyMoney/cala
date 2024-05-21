@@ -87,6 +87,7 @@ impl From<AccountValues> for proto::Account {
     fn from(
         AccountValues {
             id,
+            version,
             code,
             name,
             external_id,
@@ -94,13 +95,13 @@ impl From<AccountValues> for proto::Account {
             status,
             description,
             metadata,
-            ..
         }: AccountValues,
     ) -> Self {
         let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
         let status: proto::Status = status.into();
         proto::Account {
             id: id.to_string(),
+            version,
             code,
             name,
             external_id,

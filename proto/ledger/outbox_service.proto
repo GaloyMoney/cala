@@ -52,13 +52,14 @@ message AccountCreated {
 
 message Account {
   string id = 1;
-  string code = 2;
-  string name = 3;
-  DebitOrCredit normal_balance_type = 4;
-  Status status = 5;
-  optional string external_id = 6;
-  optional string description = 7;
-  optional google.protobuf.Struct metadata = 8;
+  uint32 version = 2;
+  string code = 3;
+  string name = 4;
+  DebitOrCredit normal_balance_type = 5;
+  Status status = 6;
+  optional string external_id = 7;
+  optional string description = 8;
+  optional google.protobuf.Struct metadata = 9;
 }
 
 message JournalCreated {
