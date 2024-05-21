@@ -241,6 +241,7 @@ type Query {
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
 	txTemplate(id: UUID!): TxTemplate
+	txTemplateByCode(code: String!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!
 }
 

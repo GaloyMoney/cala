@@ -105,6 +105,21 @@ impl Query {
         Ok(tx_template.map(TxTemplate::from))
     }
 
+    async fn tx_template_by_code(
+        &self,
+        ctx: &Context<'_>,
+        code: String,
+    ) -> async_graphql::Result<Option<TxTemplate>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        match app.ledger().tx_templates().find_by_code(code).await {
+            Ok(tx_template) => Ok(Some(tx_template.into_values().into())),
+            Err(cala_ledger::tx_template::error::TxTemplateError::CouldNotFindByCode(_)) => {
+                Ok(None)
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
     async fn jobs(
         &self,
         ctx: &Context<'_>,

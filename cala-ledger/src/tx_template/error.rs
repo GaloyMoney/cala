@@ -27,4 +27,6 @@ pub enum TxTemplateError {
     SerdeJson(#[from] serde_json::Error),
     #[error("TxTemplateError - UnbalancedTransaction: currency {0}, layer {1:?}, amount {2}")]
     UnbalancedTransaction(Currency, Layer, Decimal),
+    #[error("TxTemplateError - NotFound: code '{0}' not found")]
+    CouldNotFindByCode(String),
 }
