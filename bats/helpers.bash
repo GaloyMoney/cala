@@ -130,8 +130,8 @@ retry() {
 
 random_uuid() {
   if [[ -e /proc/sys/kernel/random/uuid ]]; then
-    cat /proc/sys/kernel/random/uuid
+    cat /proc/sys/kernel/random/uuid | tr '[:upper:]' '[:lower:]'
   else
-    uuidgen
+    uuidgen | tr '[:upper:]' '[:lower:]'
   fi
 }
