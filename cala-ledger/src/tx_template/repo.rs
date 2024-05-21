@@ -89,7 +89,7 @@ impl TxTemplateRepo {
         .fetch_all(&self.pool)
         .await?;
         match EntityEvents::load_first(rows) {
-            Ok(account) => Ok(account),
+            Ok(tx_template) => Ok(tx_template),
             Err(EntityError::NoEntityEventsPresent) => {
                 Err(TxTemplateError::CouldNotFindByCode(code))
             }
