@@ -1,3 +1,35 @@
+# [cala release v0.1.3](https://github.com/GaloyMoney/cala/releases/tag/0.1.3)
+
+
+### Bug Fixes
+
+- Fmt
+- Query correct table in journals.find_all
+
+### Features
+
+- Add tx template find-by-code query (#71)
+
+### Miscellaneous Tasks
+
+- Output job errors
+- Gen lowercase uuid in bats helpers
+- Add version to account (#70)
+- Add version to TxTemplate
+- Fix e2e test (#69)
+- Bump prost from 0.12.4 to 0.12.6 (#66)
+- Bump napi-derive from 2.16.4 to 2.16.5 (#67)
+- Bump thiserror from 1.0.60 to 1.0.61 (#68)
+- Bump anyhow from 1.0.83 to 1.0.86 (#65)
+- Expose tx_template query
+- Fix default TracingConfig
+- More instrumentation
+- Add journal lookup
+
+### Testing
+
+- Initial e2e test setup (#63)
+
 # [cala release v0.1.2](https://github.com/GaloyMoney/cala/releases/tag/0.1.2)
 
 
