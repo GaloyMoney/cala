@@ -74,10 +74,10 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            {
-              label: 'Demo',
-              to: '/docs/intro',
-            },
+            //{
+            //  label: 'Demo',
+            //  to: '/docs/intro',
+            //},
           ],
         },
         {
@@ -109,13 +109,19 @@ const config: Config = {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
     },
+    liveCodeBlock: {
+      /**
+       * The position of the live playground, above or under the editor
+       * Possible values: "top" | "bottom"
+       */
+      playgroundPosition: 'bottom',
+    },
   } satisfies Preset.ThemeConfig,
 
   markdown: {
     mermaid: true,
   },
-  themes: ['@docusaurus/theme-mermaid'],
-
+  themes: ['@docusaurus/theme-live-codeblock','@docusaurus/theme-mermaid'],
 };
 
 export default config;
