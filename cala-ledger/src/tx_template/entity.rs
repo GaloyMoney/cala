@@ -1,12 +1,13 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
+use terrors::OneOf;
 
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 use cel_interpreter::CelExpression;
 
-use crate::entity::*;
 #[cfg(feature = "import")]
 use crate::primitives::*;
+use crate::{entity::*, errors::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -39,7 +40,7 @@ impl EntityEvent for TxTemplateEvent {
 }
 
 #[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[builder(pattern = "owned", build_fn(error = "HydratingEntityError"))]
 pub struct TxTemplate {
     values: TxTemplateValues,
     pub(super) events: EntityEvents<TxTemplateEvent>,
@@ -76,7 +77,7 @@ impl TxTemplate {
 }
 
 impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
-    type Error = EntityError;
+    type Error = OneOf<(HydratingEntityError,)>;
 
     fn try_from(events: EntityEvents<TxTemplateEvent>) -> Result<Self, Self::Error> {
         let mut builder = TxTemplateBuilder::default();
@@ -91,7 +92,7 @@ impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
                 }
             }
         }
-        builder.events(events).build()
+        Ok(builder.events(events).build()?)
     }
 }
 

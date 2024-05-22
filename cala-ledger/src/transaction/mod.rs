@@ -1,5 +1,3 @@
-pub mod error;
-
 mod entity;
 mod repo;
 
@@ -9,10 +7,9 @@ use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::EntityUpdate, outbox::*, primitives::DataSource};
+use crate::{entity::EntityUpdate, errors::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
-use error::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -35,7 +32,7 @@ impl Transactions {
         &self,
         tx: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
-    ) -> Result<(Transaction, OutboxEventPayload), TransactionError> {
+    ) -> Result<(Transaction, OutboxEventPayload), OneOf<(UnexpectedDbError,)>> {
         let EntityUpdate {
             entity: transaction,
             ..
@@ -56,7 +53,7 @@ impl Transactions {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TransactionValues,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         let mut transaction = Transaction::import(origin, values);
         self.repo
             .import(&mut tx, recorded_at, origin, &mut transaction)

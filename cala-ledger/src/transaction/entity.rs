@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub use cala_types::{primitives::TransactionId, transaction::*};
 
-use crate::{entity::*, primitives::*};
+use crate::{entity::*, errors::*, primitives::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -26,7 +26,7 @@ impl EntityEvent for TransactionEvent {
 }
 
 #[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[builder(pattern = "owned", build_fn(error = "HydratingEntityError"))]
 pub struct Transaction {
     values: TransactionValues,
     pub(super) events: EntityEvents<TransactionEvent>,
@@ -75,7 +75,7 @@ impl Transaction {
 }
 
 impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
-    type Error = EntityError;
+    type Error = OneOf<(HydratingEntityError,)>;
 
     fn try_from(events: EntityEvents<TransactionEvent>) -> Result<Self, Self::Error> {
         let mut builder = TransactionBuilder::default();
@@ -90,7 +90,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
                 }
             }
         }
-        builder.events(events).build()
+        Ok(builder.events(events).build()?)
     }
 }
 

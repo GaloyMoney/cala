@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 pub use cala_types::{account::*, primitives::AccountId};
 
-use crate::{entity::*, primitives::*};
+use crate::{entity::*, errors::*, primitives::*};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -26,7 +26,7 @@ impl EntityEvent for AccountEvent {
 }
 
 #[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[builder(pattern = "owned", build_fn(error = "HydratingEntityError"))]
 pub struct Account {
     values: AccountValues,
     pub(super) events: EntityEvents<AccountEvent>,
@@ -63,7 +63,7 @@ impl Account {
 }
 
 impl TryFrom<EntityEvents<AccountEvent>> for Account {
-    type Error = EntityError;
+    type Error = OneOf<(HydratingEntityError,)>;
 
     fn try_from(events: EntityEvents<AccountEvent>) -> Result<Self, Self::Error> {
         let mut builder = AccountBuilder::default();
@@ -78,7 +78,7 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
                 }
             }
         }
-        builder.events(events).build()
+        Ok(builder.events(events).build()?)
     }
 }
 

@@ -1,7 +1,8 @@
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
-use super::{account_balance::AccountBalance, error::BalanceError};
+use std::collections::{HashMap, HashSet};
+
 use cala_types::primitives::{BalanceId, DebitOrCredit};
 #[cfg(feature = "import")]
 use cala_types::primitives::{DataSourceId, EntryId};
@@ -9,7 +10,9 @@ use cala_types::{
     balance::BalanceSnapshot,
     primitives::{AccountId, Currency, JournalId},
 };
-use std::collections::{HashMap, HashSet};
+
+use super::account_balance::AccountBalance;
+use crate::errors::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -26,7 +29,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<AccountBalance, OneOf<(EntityNotFound, UnexpectedDbError)>> {
         let row = sqlx::query!(
             r#"
             SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
@@ -50,24 +53,22 @@ impl BalanceRepo {
             currency.code(),
         )
         .fetch_optional(&self.pool)
-        .await?;
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
 
-        if let Some(row) = row {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            Ok(AccountBalance {
-                balance_type: row.normal_balance_type,
-                details,
-            })
-        } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency))
-        }
+        let row = row.ok_or_else(|| OneOf::new(EntityNotFound))?;
+        let details: BalanceSnapshot =
+            serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+        Ok(AccountBalance {
+            balance_type: row.normal_balance_type,
+            details,
+        })
     }
 
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, OneOf<(UnexpectedDbError,)>> {
         let mut query_builder = QueryBuilder::new(
             r#"
             SELECT h.values, a.normal_balance_type
@@ -90,7 +91,10 @@ impl BalanceRepo {
             builder.push_bind(currency.code());
         });
         let query = query_builder.build();
-        let rows = query.fetch_all(&self.pool).await?;
+        let rows = query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let mut ret = HashMap::new();
         for row in rows {
             let values: serde_json::Value = row.get("values");
@@ -118,7 +122,7 @@ impl BalanceRepo {
         tx: &mut Transaction<'a, Postgres>,
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
-    ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, OneOf<(UnexpectedDbError,)>> {
         let mut query_builder = QueryBuilder::new(
             r#"
           SELECT h.values
@@ -144,7 +148,10 @@ impl BalanceRepo {
         "#,
         );
         let query = query_builder.build();
-        let rows = query.fetch_all(&mut **tx).await?;
+        let rows = query
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(UnexpectedDbError)?;
 
         let mut ret = HashMap::new();
         for row in rows {
@@ -166,7 +173,7 @@ impl BalanceRepo {
         tx: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         new_balances: &[BalanceSnapshot],
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), OneOf<(OptimisticLockingError, UnexpectedDbError)>> {
         let mut to_insert = HashMap::new();
         let mut to_update = HashMap::new();
         let mut previous_versions = HashMap::new();
@@ -201,7 +208,11 @@ impl BalanceRepo {
                     builder.push_bind(**version as i32);
                 },
             );
-            query_builder.build().execute(&mut **tx).await?;
+            query_builder
+                .build()
+                .execute(&mut **tx)
+                .await
+                .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         }
         if !to_update.is_empty() {
             let expected_updates = to_update.len();
@@ -227,9 +238,13 @@ impl BalanceRepo {
                             AND n.currency = c.currency
                             AND data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = "#);
             query_builder.push_bind(journal_id);
-            let result = query_builder.build().execute(&mut **tx).await?;
+            let result = query_builder
+                .build()
+                .execute(&mut **tx)
+                .await
+                .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
             if result.rows_affected() != (expected_updates as u64) {
-                return Err(BalanceError::OptimisticLockingError);
+                return Err(OneOf::new(OptimisticLockingError));
             }
         }
 
@@ -247,7 +262,11 @@ impl BalanceRepo {
             builder
                 .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
         });
-        query_builder.build().execute(&mut **tx).await?;
+        query_builder
+            .build()
+            .execute(&mut **tx)
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         Ok(())
     }
 
@@ -257,7 +276,7 @@ impl BalanceRepo {
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
         balance: &BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
             (data_source_id, journal_id, account_id, currency, latest_version, created_at)
@@ -270,7 +289,8 @@ impl BalanceRepo {
             balance.created_at
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(UnexpectedDbError)?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
             (data_source_id, journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)
@@ -285,7 +305,7 @@ impl BalanceRepo {
             balance.created_at
         )
         .execute(&mut **tx)
-        .await?;
+        .await.map_err(UnexpectedDbError)?;
         Ok(())
     }
 
@@ -295,7 +315,7 @@ impl BalanceRepo {
         tx: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
         balance: &BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
@@ -308,7 +328,7 @@ impl BalanceRepo {
             balance.currency.code(),
         )
         .execute(&mut **tx)
-        .await?;
+        .await.map_err(UnexpectedDbError)?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
             (data_source_id, journal_id, account_id, currency, version, values, recorded_at)
@@ -322,7 +342,8 @@ impl BalanceRepo {
             balance.modified_at,
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(UnexpectedDbError)?;
         Ok(())
     }
 }

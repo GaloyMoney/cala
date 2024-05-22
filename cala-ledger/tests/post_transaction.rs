@@ -6,7 +6,7 @@ use cala_ledger::{account::*, journal::*, tx_template::*, *};
 use rand::distributions::{Alphanumeric, DistString};
 
 #[tokio::test]
-async fn post_transaction() -> anyhow::Result<()> {
+async fn post_transaction() -> Result<(), Box<dyn std::error::Error>> {
     let pool = helpers::init_pool().await?;
 
     let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
@@ -21,7 +21,7 @@ async fn post_transaction() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config).await.unwrap();
 
     let journal = cala.journals().create(new_journal).await.unwrap();
     let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);

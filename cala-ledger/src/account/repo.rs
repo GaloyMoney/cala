@@ -4,10 +4,10 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 
 use std::collections::HashMap;
 
-use super::{cursor::*, entity::*, error::*};
+use super::{cursor::*, entity::*};
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::DebitOrCredit, query::*};
+use crate::{entity::*, errors::*, primitives::DebitOrCredit, query::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountRepo {
@@ -23,7 +23,7 @@ impl AccountRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         new_account: NewAccount,
-    ) -> Result<EntityUpdate<Account>, AccountError> {
+    ) -> Result<EntityUpdate<Account>, OneOf<(ConstraintVioliation, UnexpectedDbError)>> {
         let id = new_account.id;
         sqlx::query!(
             r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type)
@@ -35,17 +35,21 @@ impl AccountRepo {
             new_account.normal_balance_type as DebitOrCredit,
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let mut events = new_account.initial_events();
-        let n_new_events = events.persist(tx).await?;
-        let account = Account::try_from(events)?;
+        let n_new_events = events.persist(tx).await.map_err(OneOf::broaden)?;
+        let account = Account::try_from(events).expect("Couldn't hydrate new entity");
         Ok(EntityUpdate {
             entity: account,
             n_new_events,
         })
     }
 
-    pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
+    pub async fn find(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Account, OneOf<(EntityNotFound, HydratingEntityError, UnexpectedDbError)>> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -59,20 +63,16 @@ impl AccountRepo {
             account_id as AccountId
         )
         .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(account) => Ok(account),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(AccountError::CouldNotFindById(account_id))
-            }
-            Err(e) => Err(e.into()),
-        }
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+        EntityEvents::load_first(rows).map_err(OneOf::broaden)
     }
 
     pub(super) async fn find_all(
         &self,
         ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
+    ) -> Result<HashMap<AccountId, AccountValues>, OneOf<(HydratingEntityError, UnexpectedDbError)>>
+    {
         let mut query_builder = QueryBuilder::new(
             r#"SELECT a.id, e.sequence, e.event,
                 a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
@@ -88,9 +88,13 @@ impl AccountRepo {
         });
         query_builder.push(r#"ORDER BY a.id, e.sequence"#);
         let query = query_builder.build_query_as::<GenericEvent>();
-        let rows = query.fetch_all(&self.pool).await?;
+        let rows = query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let n = rows.len();
-        let ret = EntityEvents::load_n(rows, n)?
+        let ret = EntityEvents::load_n(rows, n)
+            .map_err(OneOf::broaden)?
             .0
             .into_iter()
             .map(|account: Account| (account.values().id, account.into_values()))
@@ -98,7 +102,10 @@ impl AccountRepo {
         Ok(ret)
     }
 
-    pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<Account, OneOf<(EntityNotFound, HydratingEntityError, UnexpectedDbError)>> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -112,20 +119,18 @@ impl AccountRepo {
             external_id
         )
         .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(account) => Ok(account),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(AccountError::CouldNotFindByExternalId(external_id))
-            }
-            Err(e) => Err(e.into()),
-        }
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+        EntityEvents::load_first(rows).map_err(OneOf::broaden)
     }
 
     pub async fn list(
         &self,
         query: PaginatedQueryArgs<AccountByNameCursor>,
-    ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
+    ) -> Result<
+        PaginatedQueryRet<Account, AccountByNameCursor>,
+        OneOf<(HydratingEntityError, UnexpectedDbError)>,
+    > {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"
@@ -146,8 +151,10 @@ impl AccountRepo {
             query.first as i64 + 1
         )
         .fetch_all(&self.pool)
-        .await?;
-        let (entities, has_next_page) = EntityEvents::load_n::<Account>(rows, query.first)?;
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+        let (entities, has_next_page) =
+            EntityEvents::load_n::<Account>(rows, query.first).map_err(OneOf::broaden)?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
             end_cursor = Some(AccountByNameCursor {
@@ -169,7 +176,7 @@ impl AccountRepo {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         account: &mut Account,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
@@ -182,7 +189,7 @@ impl AccountRepo {
             recorded_at
         )
         .execute(&mut **tx)
-        .await?;
+        .await.map_err(UnexpectedDbError)?;
         account.events.persisted_at(tx, origin, recorded_at).await?;
         Ok(())
     }

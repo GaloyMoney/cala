@@ -1,5 +1,4 @@
 mod entity;
-pub mod error;
 mod repo;
 
 #[cfg(feature = "import")]
@@ -8,10 +7,9 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{outbox::*, primitives::DataSource};
+use crate::{errors::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
-use error::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -34,7 +32,7 @@ impl Entries {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         entries: Vec<NewEntry>,
-    ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
+    ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), OneOf<(UnexpectedDbError,)>> {
         let entries = self.repo.create_all(tx, entries).await?;
         let events = entries
             .iter()
@@ -53,7 +51,7 @@ impl Entries {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: EntryValues,
-    ) -> Result<(), EntryError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         let mut entry = Entry::import(origin, values);
         self.repo
             .import(&mut tx, recorded_at, origin, &mut entry)

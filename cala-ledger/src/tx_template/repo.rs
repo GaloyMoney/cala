@@ -2,14 +2,15 @@ use cached::proc_macro::cached;
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+use terrors::OneOf;
 
 use std::{collections::HashMap, sync::Arc};
 
-use crate::entity::*;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
+use crate::{entity::*, errors::*};
 
-use super::{entity::*, error::*};
+use super::entity::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct TxTemplateRepo {
@@ -25,7 +26,7 @@ impl TxTemplateRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         new_tx_template: NewTxTemplate,
-    ) -> Result<EntityUpdate<TxTemplate>, TxTemplateError> {
+    ) -> Result<EntityUpdate<TxTemplate>, OneOf<(UnexpectedDbError,)>> {
         let id = new_tx_template.id;
         sqlx::query!(
             r#"INSERT INTO cala_tx_templates (id, code)
@@ -34,10 +35,11 @@ impl TxTemplateRepo {
             new_tx_template.code,
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(UnexpectedDbError)?;
         let mut events = new_tx_template.initial_events();
         let n_new_events = events.persist(tx).await?;
-        let tx_template = TxTemplate::try_from(events)?;
+        let tx_template = TxTemplate::try_from(events).expect("Couldn't hydrate new entity");
         Ok(EntityUpdate {
             entity: tx_template,
             n_new_events,
@@ -47,7 +49,10 @@ impl TxTemplateRepo {
     pub(super) async fn find_all(
         &self,
         ids: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, TxTemplateValues>, TxTemplateError> {
+    ) -> Result<
+        HashMap<TxTemplateId, TxTemplateValues>,
+        OneOf<(HydratingEntityError, UnexpectedDbError)>,
+    > {
         let mut query_builder = QueryBuilder::new(
             r#"SELECT a.id, e.sequence, e.event,
                 a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
@@ -63,9 +68,13 @@ impl TxTemplateRepo {
         });
         query_builder.push(r#"ORDER BY a.id, e.sequence"#);
         let query = query_builder.build_query_as::<GenericEvent>();
-        let rows = query.fetch_all(&self.pool).await?;
+        let rows = query
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let n = rows.len();
-        let ret = EntityEvents::load_n(rows, n)?
+        let ret = EntityEvents::load_n(rows, n)
+            .map_err(OneOf::broaden)?
             .0
             .into_iter()
             .map(|tx_template: TxTemplate| (tx_template.values().id, tx_template.into_values()))
@@ -73,7 +82,10 @@ impl TxTemplateRepo {
         Ok(ret)
     }
 
-    pub(super) async fn find_by_code(&self, code: String) -> Result<TxTemplate, TxTemplateError> {
+    pub(super) async fn find_by_code(
+        &self,
+        code: String,
+    ) -> Result<TxTemplate, OneOf<(EntityNotFound, HydratingEntityError, UnexpectedDbError)>> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -87,20 +99,15 @@ impl TxTemplateRepo {
             code
         )
         .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(tx_template) => Ok(tx_template),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(TxTemplateError::CouldNotFindByCode(code))
-            }
-            Err(e) => Err(e.into()),
-        }
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+        Ok(EntityEvents::load_first(rows).map_err(OneOf::broaden)?)
     }
 
     pub async fn find_latest_version(
         &self,
         code: &str,
-    ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
+    ) -> Result<Arc<TxTemplateValues>, OneOf<(EntityNotFound, UnexpectedDbError)>> {
         let row = sqlx::query!(
             r#"
             SELECT t.id AS "id?: TxTemplateId", MAX(e.sequence) AS "version" 
@@ -111,13 +118,16 @@ impl TxTemplateRepo {
             code,
         )
         .fetch_optional(&self.pool)
-        .await?;
-        if let Some(row) = row {
-            if let (Some(id), Some(version)) = (row.id, row.version) {
-                return find_versioned_template_cached(&self.pool, id, version).await;
-            }
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+        if let Some((id, version)) = row.and_then(|row| {
+            row.id
+                .and_then(|id| row.version.map(|version| (id, version)))
+        }) {
+            find_versioned_template_cached(&self.pool, id, version).await
+        } else {
+            Err(OneOf::new(EntityNotFound))
         }
-        Err(TxTemplateError::NotFound)
     }
 
     #[cfg(feature = "import")]
@@ -127,7 +137,7 @@ impl TxTemplateRepo {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         tx_template: &mut TxTemplate,
-    ) -> Result<(), TxTemplateError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_tx_templates (data_source_id, id, code, created_at)
             VALUES ($1, $2, $3, $4)"#,
@@ -137,7 +147,8 @@ impl TxTemplateRepo {
             recorded_at
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         tx_template
             .events
             .persisted_at(tx, origin, recorded_at)
@@ -156,7 +167,7 @@ async fn find_versioned_template_cached(
     pool: &PgPool,
     id: TxTemplateId,
     version: i32,
-) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
+) -> Result<Arc<TxTemplateValues>, OneOf<(EntityNotFound, UnexpectedDbError)>> {
     let row = sqlx::query!(
         r#"
           SELECT event 
@@ -166,11 +177,10 @@ async fn find_versioned_template_cached(
         version,
     )
     .fetch_optional(pool)
-    .await?;
-    if let Some(row) = row {
-        let event: TxTemplateEvent = serde_json::from_value(row.event)?;
-        Ok(Arc::new(event.into_values()))
-    } else {
-        Err(TxTemplateError::NotFound)
-    }
+    .await
+    .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
+    let event = row.ok_or_else(|| OneOf::new(EntityNotFound))?.event;
+    let event: TxTemplateEvent =
+        serde_json::from_value(event).expect("Could not deserialize event");
+    Ok(Arc::new(event.into_values()))
 }

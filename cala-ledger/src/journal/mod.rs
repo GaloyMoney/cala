@@ -1,5 +1,4 @@
 mod entity;
-pub mod error;
 mod repo;
 
 #[cfg(feature = "import")]
@@ -11,10 +10,9 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource};
+use crate::{entity::*, errors::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
-use error::*;
 use repo::*;
 
 /// Service for working with `Journal` entities.
@@ -35,8 +33,11 @@ impl Journals {
     }
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
-    pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
-        let mut tx = self.pool.begin().await?;
+    pub async fn create(
+        &self,
+        new_journal: NewJournal,
+    ) -> Result<Journal, OneOf<(UnexpectedDbError,)>> {
+        let mut tx = self.pool.begin().await.map_err(UnexpectedDbError)?;
         let EntityUpdate {
             entity: journal,
             n_new_events,
@@ -52,7 +53,8 @@ impl Journals {
     pub async fn find_all(
         &self,
         journal_ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, JournalValues>, JournalError> {
+    ) -> Result<HashMap<JournalId, JournalValues>, OneOf<(HydratingEntityError, UnexpectedDbError)>>
+    {
         self.repo.find_all(journal_ids).await
     }
 
@@ -63,7 +65,7 @@ impl Journals {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: JournalValues,
-    ) -> Result<(), JournalError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         let mut journal = Journal::import(origin, values);
         self.repo
             .import(&mut tx, recorded_at, origin, &mut journal)

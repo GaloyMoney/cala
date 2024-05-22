@@ -2,9 +2,10 @@ use futures::{FutureExt, Stream};
 use tokio::{sync::broadcast, task::JoinHandle};
 use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
+use crate::errors::*;
 use std::{collections::BTreeMap, pin::Pin, task::Poll};
 
-use super::{error::OutboxError, event::*, repo::*};
+use super::{event::*, repo::*};
 
 pub struct OutboxListener {
     repo: OutboxRepo,
@@ -13,7 +14,7 @@ pub struct OutboxListener {
     event_receiver: Pin<Box<BroadcastStream<OutboxEvent>>>,
     buffer_size: usize,
     cache: BTreeMap<EventSequence, OutboxEvent>,
-    next_page_handle: Option<JoinHandle<Result<Vec<OutboxEvent>, OutboxError>>>,
+    next_page_handle: Option<JoinHandle<Result<Vec<OutboxEvent>, UnexpectedDbError>>>,
 }
 
 impl OutboxListener {

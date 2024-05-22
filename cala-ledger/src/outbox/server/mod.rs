@@ -1,7 +1,6 @@
 #![allow(clippy::blocks_in_conditions)]
 mod config;
 mod convert;
-pub mod error;
 
 #[allow(clippy::all)]
 pub mod proto {
@@ -15,7 +14,6 @@ use tracing::instrument;
 
 use super::{EventSequence, Outbox};
 pub use config::*;
-use error::*;
 
 pub struct OutboxServer {
     outbox: Outbox,
@@ -39,7 +37,8 @@ impl OutboxService for OutboxServer {
         let outbox_listener = self
             .outbox
             .register_listener(after_sequence.map(EventSequence::from))
-            .await?;
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(Response::new(Box::pin(
             outbox_listener
                 .map(|event| Ok(proto::CalaLedgerEvent::from(event)))
@@ -51,7 +50,7 @@ impl OutboxService for OutboxServer {
 pub(crate) async fn start(
     server_config: OutboxServerConfig,
     outbox: Outbox,
-) -> Result<(), OutboxServerError> {
+) -> Result<(), tonic::transport::Error> {
     let outbox_service = OutboxServer { outbox };
     Server::builder()
         .add_service(outbox_service_server::OutboxServiceServer::new(

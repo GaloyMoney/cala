@@ -2,8 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::Row;
 
-use super::error::EntityError;
-use crate::primitives::DataSourceId;
+use crate::{errors::*, primitives::DataSourceId};
 
 #[derive(sqlx::FromRow)]
 pub struct GenericEvent {
@@ -22,7 +21,9 @@ pub trait EntityEvent: DeserializeOwned + Serialize {
         Self: Sized;
 }
 
-pub trait Entity: TryFrom<EntityEvents<<Self as Entity>::Event>, Error = EntityError> {
+pub trait Entity:
+    TryFrom<EntityEvents<<Self as Entity>::Event>, Error = OneOf<(HydratingEntityError,)>>
+{
     type Event: EntityEvent;
 }
 
@@ -58,7 +59,7 @@ where
     pub async fn persist(
         &mut self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    ) -> Result<usize, sqlx::Error> {
+    ) -> Result<usize, OneOf<(UnexpectedDbError,)>> {
         self.persist_inner(tx, None, None).await
     }
 
@@ -67,7 +68,7 @@ where
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         data_source: DataSourceId,
         recorded_at: DateTime<Utc>,
-    ) -> Result<usize, sqlx::Error> {
+    ) -> Result<usize, OneOf<(UnexpectedDbError,)>> {
         self.persist_inner(tx, data_source, Some(recorded_at)).await
     }
 
@@ -76,7 +77,7 @@ where
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         data_source: impl Into<Option<DataSourceId>>,
         recorded_at: Option<DateTime<Utc>>,
-    ) -> Result<usize, sqlx::Error> {
+    ) -> Result<usize, OneOf<(UnexpectedDbError,)>> {
         let uuid: uuid::Uuid = self.entity_id.into();
         let source_id = data_source.into();
 
@@ -117,7 +118,10 @@ where
         query_builder.push("RETURNING recorded_at");
         let query = query_builder.build();
 
-        let rows = query.fetch_all(&mut **tx).await?;
+        let rows = query
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(UnexpectedDbError)?;
 
         let recorded_at: chrono::DateTime<chrono::Utc> = rows
             .last()
@@ -137,7 +141,7 @@ where
     pub async fn batch_persist(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         entities: impl IntoIterator<Item = Self>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         let mut query_builder = sqlx::QueryBuilder::new(format!(
             "INSERT INTO {} (id, sequence, event_type, event)",
             <T as EntityEvent>::event_table_name(),
@@ -168,14 +172,14 @@ where
         );
 
         let query = query_builder.build();
-        query.execute(&mut **tx).await?;
+        query.execute(&mut **tx).await.map_err(UnexpectedDbError)?;
 
         Ok(())
     }
 
     pub fn load_first<E: Entity<Event = T>>(
         events: impl IntoIterator<Item = GenericEvent>,
-    ) -> Result<E, EntityError> {
+    ) -> Result<E, OneOf<(EntityNotFound, HydratingEntityError)>> {
         let mut current_id = None;
         let mut current = None;
         for e in events {
@@ -198,16 +202,16 @@ where
                 .push(serde_json::from_value(e.event).expect("Could not deserialize event"));
         }
         if let Some(current) = current {
-            E::try_from(current)
+            E::try_from(current).map_err(OneOf::broaden)
         } else {
-            Err(EntityError::NoEntityEventsPresent)
+            Err(OneOf::broaden(EntityNotFound.into()))
         }
     }
 
     pub fn load_n<E: Entity<Event = T>>(
         events: impl IntoIterator<Item = GenericEvent>,
         n: usize,
-    ) -> Result<(Vec<E>, bool), EntityError> {
+    ) -> Result<(Vec<E>, bool), OneOf<(HydratingEntityError,)>> {
         let mut ret: Vec<E> = Vec::new();
         let mut current_id = None;
         let mut current = None;
@@ -277,6 +281,7 @@ mod tests {
             "dummy_events"
         }
     }
+    #[derive(Debug)]
     struct DummyEntity {
         name: String,
     }
@@ -284,7 +289,8 @@ mod tests {
         type Event = DummyEvent;
     }
     impl TryFrom<EntityEvents<DummyEvent>> for DummyEntity {
-        type Error = EntityError;
+        type Error = OneOf<(HydratingEntityError,)>;
+
         fn try_from(events: EntityEvents<DummyEvent>) -> Result<Self, Self::Error> {
             let name = events
                 .into_iter()
@@ -301,7 +307,8 @@ mod tests {
     fn load_zero_events() {
         let generic_events = vec![];
         let res = EntityEvents::load_first::<DummyEntity>(generic_events);
-        assert!(matches!(res, Err(EntityError::NoEntityEventsPresent)));
+        let err = res.unwrap_err();
+        assert!(matches!(err.to_enum(), terrors::E2::A(EntityNotFound)));
     }
 
     #[test]

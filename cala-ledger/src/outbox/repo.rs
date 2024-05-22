@@ -1,7 +1,8 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
-use super::{error::*, event::*};
+use super::event::*;
+use crate::errors::*;
 
 #[derive(Clone)]
 pub(super) struct OutboxRepo {
@@ -13,11 +14,14 @@ impl OutboxRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn highest_known_sequence(&self) -> Result<EventSequence, OutboxError> {
+    pub async fn highest_known_sequence(
+        &self,
+    ) -> Result<EventSequence, OneOf<(UnexpectedDbError,)>> {
         let row =
             sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max!" FROM cala_outbox_events"#)
                 .fetch_one(&self.pool)
-                .await?;
+                .await
+                .map_err(UnexpectedDbError)?;
         Ok(EventSequence::from(row.max as u64))
     }
 
@@ -26,7 +30,7 @@ impl OutboxRepo {
         tx: &mut Transaction<'_, Postgres>,
         recorded_at: Option<DateTime<Utc>>,
         events: impl Iterator<Item = OutboxEventPayload>,
-    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+    ) -> Result<Vec<OutboxEvent>, OneOf<(UnexpectedDbError,)>> {
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(format!(
             "WITH new_events AS (INSERT INTO cala_outbox_events (payload{})",
             recorded_at.map(|_| ", recorded_at").unwrap_or("")
@@ -45,7 +49,10 @@ impl OutboxRepo {
                ORDER BY sequence"#,
         );
         let query = query_builder.build();
-        let rows = query.fetch_all(&mut **tx).await?;
+        let rows = query
+            .fetch_all(&mut **tx)
+            .await
+            .map_err(UnexpectedDbError)?;
         let events = rows
             .into_iter()
             .zip(payloads.into_iter())
@@ -63,7 +70,7 @@ impl OutboxRepo {
         &self,
         from_sequence: EventSequence,
         buffer_size: usize,
-    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+    ) -> Result<Vec<OutboxEvent>, UnexpectedDbError> {
         let rows = sqlx::query!(
             r#"
             WITH max_sequence AS (
@@ -89,7 +96,8 @@ impl OutboxRepo {
             buffer_size as i64,
         )
         .fetch_all(&self.pool)
-        .await?;
+        .await
+        .map_err(UnexpectedDbError)?;
         let mut events = Vec::new();
         let mut empty_ids = Vec::new();
         for row in rows {
@@ -120,7 +128,8 @@ impl OutboxRepo {
                 &empty_ids as &[EventSequence]
             )
             .fetch_all(&self.pool)
-            .await?;
+            .await
+            .map_err(UnexpectedDbError)?;
             for row in rows {
                 events.push(OutboxEvent {
                     id: OutboxEventId::from(row.id),

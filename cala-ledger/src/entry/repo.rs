@@ -3,10 +3,10 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use tracing::instrument;
 
-use super::{entity::*, error::*};
-use crate::entity::EntityEvents;
+use super::entity::*;
 #[cfg(feature = "import")]
 use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId};
+use crate::{entity::EntityEvents, errors::*};
 
 #[derive(Debug, Clone)]
 pub(crate) struct EntryRepo {
@@ -29,7 +29,7 @@ impl EntryRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         entries: Vec<NewEntry>,
-    ) -> Result<Vec<EntryValues>, EntryError> {
+    ) -> Result<Vec<EntryValues>, OneOf<(UnexpectedDbError,)>> {
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
             r#"INSERT INTO cala_entries
                (id, journal_id, account_id, transaction_id)"#,
@@ -43,7 +43,7 @@ impl EntryRepo {
             builder.push_bind(entry.transaction_id);
         });
         let query = query_builder.build();
-        query.execute(&mut **tx).await?;
+        query.execute(&mut **tx).await.map_err(UnexpectedDbError)?;
         EntityEvents::batch_persist(tx, entries.into_iter().map(|n| n.initial_events())).await?;
         Ok(entry_values)
     }
@@ -55,7 +55,7 @@ impl EntryRepo {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         entry: &mut Entry,
-    ) -> Result<(), EntryError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, created_at)
             VALUES ($1, $2, $3, $4, $5)"#,
@@ -66,7 +66,8 @@ impl EntryRepo {
             recorded_at,
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(UnexpectedDbError)?;
         entry.events.persisted_at(tx, origin, recorded_at).await?;
         Ok(())
     }

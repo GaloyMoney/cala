@@ -1,7 +1,6 @@
 //! [Account] holds a balance in a [Journal](crate::journal::Journal)
 mod cursor;
 mod entity;
-pub mod error;
 mod repo;
 
 #[cfg(feature = "import")]
@@ -13,11 +12,10 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
+use crate::{entity::*, errors::*, outbox::*, primitives::DataSource, query::*};
 
 pub use cursor::*;
 pub use entity::*;
-use error::*;
 use repo::*;
 
 /// Service for working with `Account` entities.
@@ -38,19 +36,30 @@ impl Accounts {
     }
 
     #[instrument(name = "cala_ledger.accounts.create", skip(self))]
-    pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut tx = self.pool.begin().await?;
+    pub async fn create(
+        &self,
+        new_account: NewAccount,
+    ) -> Result<Account, OneOf<(ConstraintVioliation, UnexpectedDbError)>> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let EntityUpdate {
             entity: account,
             n_new_events,
         } = self.repo.create_in_tx(&mut tx, new_account).await?;
         self.outbox
             .persist_events(tx, account.events.last_persisted(n_new_events))
-            .await?;
+            .await
+            .map_err(OneOf::broaden)?;
         Ok(account)
     }
 
-    pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
+    pub async fn find(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Account, OneOf<(EntityNotFound, HydratingEntityError, UnexpectedDbError)>> {
         self.repo.find(account_id).await
     }
 
@@ -58,11 +67,15 @@ impl Accounts {
     pub async fn find_all(
         &self,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
+    ) -> Result<HashMap<AccountId, AccountValues>, OneOf<(HydratingEntityError, UnexpectedDbError)>>
+    {
         self.repo.find_all(account_ids).await
     }
 
-    pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<Account, OneOf<(EntityNotFound, HydratingEntityError, UnexpectedDbError)>> {
         self.repo.find_by_external_id(external_id).await
     }
 
@@ -70,7 +83,10 @@ impl Accounts {
     pub async fn list(
         &self,
         query: PaginatedQueryArgs<AccountByNameCursor>,
-    ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
+    ) -> Result<
+        PaginatedQueryRet<Account, AccountByNameCursor>,
+        OneOf<(HydratingEntityError, UnexpectedDbError)>,
+    > {
         self.repo.list(query).await
     }
 
@@ -81,7 +97,7 @@ impl Accounts {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: AccountValues,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         let mut account = Account::import(origin, values);
         self.repo
             .import(&mut tx, recorded_at, origin, &mut account)

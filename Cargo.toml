@@ -9,7 +9,7 @@ members = [
   "cala-nodejs",
   "cala-cel-parser",
   "cala-cel-interpreter",
-  "examples/rust",
+  "examples/rust", "test-anyhow",
 ]
 
 [workspace.dependencies]

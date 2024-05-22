@@ -1,5 +1,4 @@
 mod account_balance;
-pub mod error;
 mod repo;
 
 use chrono::{DateTime, Utc};
@@ -11,12 +10,12 @@ pub use cala_types::balance::BalanceSnapshot;
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
+    errors::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
 
 pub use account_balance::*;
-use error::BalanceError;
 use repo::*;
 
 #[derive(Clone)]
@@ -40,14 +39,14 @@ impl Balances {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<AccountBalance, OneOf<(EntityNotFound, UnexpectedDbError)>> {
         self.repo.find(journal_id, account_id, currency).await
     }
 
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, OneOf<(UnexpectedDbError,)>> {
         self.repo.find_all(ids).await
     }
 
@@ -57,17 +56,23 @@ impl Balances {
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
-    ) -> Result<Vec<OutboxEventPayload>, BalanceError> {
+    ) -> Result<Vec<OutboxEventPayload>, OneOf<(OptimisticLockingError, UnexpectedDbError)>> {
         let ids = entries
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
-        let current_balances = self.repo.find_for_update(&mut tx, journal_id, ids).await?;
+        let current_balances = self
+            .repo
+            .find_for_update(&mut tx, journal_id, ids)
+            .await
+            .map_err(OneOf::broaden)?;
         let new_balances = Self::new_snapshots(created_at, current_balances, entries);
         self.repo
             .insert_new_snapshots(&mut tx, journal_id, &new_balances)
             .await?;
-        tx.commit().await?;
+        tx.commit()
+            .await
+            .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         Ok(new_balances
             .into_iter()
             .map(|b| {
@@ -203,7 +208,7 @@ impl Balances {
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         balance: BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         self.repo.import_balance(&mut tx, origin, &balance).await?;
         let recorded_at = balance.created_at;
         self.outbox
@@ -225,7 +230,7 @@ impl Balances {
         mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         balance: BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         self.repo
             .import_balance_update(&mut tx, origin, &balance)
             .await?;

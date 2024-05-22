@@ -5,6 +5,7 @@ pub mod account;
 pub mod balance;
 pub mod entity;
 pub mod entry;
+pub mod errors;
 pub mod journal;
 pub mod migrate;
 pub mod transaction;

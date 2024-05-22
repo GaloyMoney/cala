@@ -6,9 +6,9 @@ use cala_types::primitives::*;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::TransactionId};
+use crate::{entity::*, errors::*, primitives::TransactionId};
 
-use super::{entity::*, error::*};
+use super::entity::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct TransactionRepo {
@@ -26,7 +26,7 @@ impl TransactionRepo {
         &self,
         tx: &mut sqlx::Transaction<'_, Postgres>,
         new_transaction: NewTransaction,
-    ) -> Result<EntityUpdate<Transaction>, TransactionError> {
+    ) -> Result<EntityUpdate<Transaction>, OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_transactions (id, journal_id, external_id)
             VALUES ($1, $2, $3)"#,
@@ -35,10 +35,11 @@ impl TransactionRepo {
             new_transaction.external_id
         )
         .execute(&mut **tx)
-        .await?;
+        .await
+        .map_err(|e| OneOf::new(UnexpectedDbError(e)))?;
         let mut events = new_transaction.initial_events();
         let n_new_events = events.persist(tx).await?;
-        let transaction = Transaction::try_from(events)?;
+        let transaction = Transaction::try_from(events).expect("Couldn't hydrate new entity");
         Ok(EntityUpdate {
             entity: transaction,
             n_new_events,
@@ -52,7 +53,7 @@ impl TransactionRepo {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         transaction: &mut Transaction,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), OneOf<(UnexpectedDbError,)>> {
         sqlx::query!(
             r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id, created_at)
             VALUES ($1, $2, $3, $4, $5)"#,
@@ -63,7 +64,7 @@ impl TransactionRepo {
             recorded_at
         )
         .execute(&mut **tx)
-        .await?;
+        .await.map_err(UnexpectedDbError)?;
         transaction
             .events
             .persisted_at(tx, origin, recorded_at)

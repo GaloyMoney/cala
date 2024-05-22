@@ -1,7 +1,7 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-use crate::{entity::*, primitives::*};
+use crate::{entity::*, errors::*, primitives::*};
 pub use cala_types::{journal::*, primitives::JournalId};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -25,7 +25,7 @@ impl EntityEvent for JournalEvent {
 }
 
 #[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[builder(pattern = "owned", build_fn(error = "HydratingEntityError"))]
 pub struct Journal {
     values: JournalValues,
     pub(super) events: EntityEvents<JournalEvent>,
@@ -62,7 +62,7 @@ impl Journal {
 }
 
 impl TryFrom<EntityEvents<JournalEvent>> for Journal {
-    type Error = EntityError;
+    type Error = OneOf<(HydratingEntityError,)>;
 
     fn try_from(events: EntityEvents<JournalEvent>) -> Result<Self, Self::Error> {
         let mut builder = JournalBuilder::default();
@@ -77,7 +77,7 @@ impl TryFrom<EntityEvents<JournalEvent>> for Journal {
                 }
             }
         }
-        builder.events(events).build()
+        Ok(builder.events(events).build()?)
     }
 }
 

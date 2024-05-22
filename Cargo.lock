@@ -3515,6 +3515,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5cf7ea47fef0cef7fcdeea0fe2585c66f4334c0d0250a8e77d01a8a46d89fd6"
 
 [[package]]
+name = "test-anyhow"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "terrors",
+ "thiserror",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
