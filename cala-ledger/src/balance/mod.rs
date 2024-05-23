@@ -6,6 +6,7 @@ use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sqlx::{PgPool, Postgres, Transaction};
 use std::collections::HashMap;
+use tracing::instrument;
 
 pub use cala_types::balance::BalanceSnapshot;
 use cala_types::{entry::EntryValues, primitives::*};
@@ -35,6 +36,7 @@ impl Balances {
         }
     }
 
+    #[instrument(name = "cala_ledger.balance.find", skip(self), err)]
     pub async fn find(
         &self,
         journal_id: JournalId,
@@ -44,6 +46,7 @@ impl Balances {
         self.repo.find(journal_id, account_id, currency).await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
