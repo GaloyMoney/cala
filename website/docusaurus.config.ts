@@ -8,10 +8,10 @@ const config: Config = {
   favicon: 'img/favicon.ico',
 
   // production url
-  url: 'https://galoymoney.github.io/',
+  url: 'https://cala.sh/',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/cala/',
+  baseUrl: '/',
 
   // GitHub pages deployment config.
   // If you aren't using GitHub pages, you don't need these.
@@ -32,6 +32,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
+          routeBasePath: '/', // This changes the base path from /docs
           editUrl: ({versionDocsDirPath, docPath}) => {
             return `https://github.com/GaloyMoney/cala/edit/main/${versionDocsDirPath}/${docPath}`;
           },
@@ -49,18 +50,12 @@ const config: Config = {
     // social card
     image: 'img/galoy.png',
     navbar: {
-      title: 'Cala',
+      title: 'Cala documentation',
       logo: {
         alt: 'Cala Logo',
         src: 'img/logo.svg',
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'demoSidebar',
-          position: 'left',
-          label: 'Demo',
-        },
         {
           href: 'https://github.com/GaloyMoney/cala',
           label: 'GitHub',

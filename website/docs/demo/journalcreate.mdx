@@ -1,0 +1,78 @@
+---
+id: journalcreate
+title: JournalCreate
+slug: /demo/journalcreate
+---
+
+# JournalCreate
+
+```jsx live
+function JournalCreate() {
+  const authToken = ''; // Set your auth token here if you have one
+  //const apiEndpoint = 'http://localhost:2252/graphql';
+  const apiEndpoint = 'http://localhost:8080/graphql';
+  const [response, setResponse] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const operation = `
+    mutation journalCreate($input: JournalCreateInput!) {
+      journalCreate(input: $input) {
+        journal {
+          journalId
+          name
+        }
+      }
+    }
+  `;
+
+  function randomUUID() {
+    return crypto.randomUUID().toLowerCase();
+  }
+
+  const journal_id = randomUUID();
+  const variables = {
+    input: {
+      journalId: journal_id,
+      name: 'Your Journal Name'
+    }
+  };
+
+  const runOp = async () => {
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+
+      const res = await fetch(apiEndpoint, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          query: operation,
+          variables
+        })
+      });
+      const result = await res.json();
+      if (result.errors) {
+        setErrorMessage(result.errors[0].message);
+      } else {
+        setResponse(result.data);
+      }
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={runOp}>Send the request</button>
+      <div style={{ marginTop: '10px' }}></div>
+      {errorMessage && <div style={{ color: 'red' }}>Error: {errorMessage}</div>}
+      {response && <div><strong>Response:</strong> <pre style={{ marginLeft: '10px' }}>{JSON.stringify(response, null, 2)}</pre></div>}
+    </div>
+  );
+}
+```
