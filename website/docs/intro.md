@@ -58,8 +58,8 @@ make start-deps
 cala-server --config ./bats/cala.yml
 ```
 
-## Live demo
-* continue on the [Demo tab](/demo/journalcreate)
+## GraphQL demo
+* continue on the [Demo start page](/demo/start)
 
 ## Cleanup
 ```

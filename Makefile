@@ -55,3 +55,11 @@ build-x86_64-unknown-linux-musl-release:
 
 build-x86_64-apple-darwin-release:
 	bin/osxcross-compile.sh
+
+run-proxy:
+	docker build -t cala-demo-nginx-proxy ./website/proxy/
+	docker run -d -p 8080:80 --name nginx-proxy cala-demo-nginx-proxy
+
+clean-proxy:
+	docker stop nginx-proxy
+	docker rm nginx-proxy
