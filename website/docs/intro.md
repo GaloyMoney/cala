@@ -59,7 +59,7 @@ cala-server --config ./bats/cala.yml
 ```
 
 ## Live demo
-* continue on the [Demo tab](/demo)
+* continue on the [Demo tab](/demo/journalcreate)
 
 ## Cleanup
 ```
