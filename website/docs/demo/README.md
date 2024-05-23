@@ -17,4 +17,4 @@ slug: /demo/start
 If both the cala-server and your nginx proxy is running can try the GraphQL functions in the live editor:
 
 
-* [Journalcreate](./journalcreate.mdx)
+* [Journalcreate](./journal-create.mdx)

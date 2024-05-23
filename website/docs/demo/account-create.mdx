@@ -1,0 +1,160 @@
+---
+id: account-create
+title: Create accounts
+slug: /demo/account-create
+---
+
+## Create a checking account
+
+```jsx live
+function AccountCreate() {
+  const apiEndpoint = "http://localhost:8080/graphql";
+  const [response, setResponse] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const operation = `
+    mutation accountCreate($input: AccountCreateInput!) {
+      accountCreate(input: $input) {
+        account {
+          accountId
+          name
+        }
+      }
+    }
+  `;
+
+  function randomUUID() {
+    return crypto.randomUUID().toLowerCase();
+  }
+
+  const liability_account_id = randomUUID();
+  const variables = {
+    input: {
+      accountId: liability_account_id,
+      name: "Alice - Checking",
+      code: `ALICE.CHECKING-${liability_account_id}`,
+      normalBalanceType: "CREDIT",
+    },
+  };
+
+  const runOp = async () => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+
+      const res = await fetch(apiEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: operation,
+          variables,
+        }),
+      });
+      const result = await res.json();
+      if (result.errors) {
+        setErrorMessage(result.errors[0].message);
+      } else {
+        setResponse(result.data);
+      }
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={runOp}>Send the request</button>
+      <div style={{ marginTop: "10px" }}></div>
+      {errorMessage && (
+        <div style={{ color: "red" }}>Error: {errorMessage}</div>
+      )}
+      {response && (
+        <div>
+          <strong>Response:</strong>{" "}
+          <pre style={{ marginLeft: "10px" }}>
+            {JSON.stringify(response, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
+
+## Create a debit account
+
+```jsx live
+function AccountCreate() {
+  const apiEndpoint = "http://localhost:8080/graphql";
+  const [response, setResponse] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const asset_account_id = "30e7eefb-b47c-4f14-b837-c3f936a7a31e";
+
+  const operation = `
+    mutation accountCreate($input: AccountCreateInput!) {
+      accountCreate(input: $input) {
+        account {
+          accountId
+          name
+        }
+      }
+    }
+  `;
+
+  const variables = {
+    input: {
+      accountId: asset_account_id,
+      name: "Assets",
+      code: `ASSET-${asset_account_id}`,
+      normalBalanceType: "DEBIT",
+    },
+  };
+
+  const runOp = async () => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+
+      const res = await fetch(apiEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: operation,
+          variables,
+        }),
+      });
+      const result = await res.json();
+      if (result.errors) {
+        setErrorMessage(result.errors[0].message);
+      } else {
+        setResponse(result.data);
+      }
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={runOp}>Send the request</button>
+      <div style={{ marginTop: "10px" }}></div>
+      {errorMessage && (
+        <div style={{ color: "red" }}>Error: {errorMessage}</div>
+      )}
+      {response && (
+        <div>
+          <strong>Response:</strong>{" "}
+          <pre style={{ marginLeft: "10px" }}>
+            {JSON.stringify(response, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
