@@ -60,6 +60,18 @@ impl Account {
     pub fn into_values(self) -> AccountValues {
         self.values
     }
+
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .entity_first_persisted_at
+            .expect("No events for account")
+    }
+
+    pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .latest_event_persisted_at
+            .expect("No events for account")
+    }
 }
 
 impl TryFrom<EntityEvents<AccountEvent>> for Account {

@@ -9,6 +9,8 @@ type Account {
 	externalId: String
 	description: String
 	metadata: JSON
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
 }
 
@@ -157,6 +159,8 @@ type Journal {
 	name: String!
 	status: Status!
 	description: String
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
 }
 
 input JournalCreateInput {
@@ -253,6 +257,8 @@ enum Status {
 }
 
 
+scalar Timestamp
+
 type Transaction {
 	id: ID!
 	transactionId: UUID!
@@ -264,6 +270,8 @@ type Transaction {
 	externalId: String
 	description: String
 	metadata: JSON
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
 }
 
 input TransactionInput {
@@ -291,6 +299,8 @@ type TxTemplate {
 	entries: [EntryInput!]!
 	description: String
 	metadata: JSON
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
 }
 
 input TxTemplateCreateInput {

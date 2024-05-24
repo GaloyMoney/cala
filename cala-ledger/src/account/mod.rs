@@ -55,10 +55,10 @@ impl Accounts {
     }
 
     #[instrument(name = "cala_ledger.accounts.find_all", skip(self), err)]
-    pub async fn find_all(
+    pub async fn find_all<T: From<Account>>(
         &self,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, AccountValues>, AccountError> {
+    ) -> Result<HashMap<AccountId, T>, AccountError> {
         self.repo.find_all(account_ids).await
     }
 

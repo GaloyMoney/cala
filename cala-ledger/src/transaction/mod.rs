@@ -61,10 +61,10 @@ impl Transactions {
     }
 
     #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
-    pub async fn find_all(
+    pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, TransactionValues>, TransactionError> {
+    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
         self.repo.find_all(transaction_ids).await
     }
 

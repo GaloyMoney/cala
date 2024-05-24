@@ -8,19 +8,21 @@ use cala_ledger::{
 
 use super::{balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*};
 
-#[derive(SimpleObject)]
+#[derive(Clone, SimpleObject)]
 #[graphql(complex)]
-pub(super) struct Account {
-    pub id: ID,
-    pub account_id: UUID,
-    pub version: u32,
-    pub code: String,
-    pub name: String,
-    pub normal_balance_type: DebitOrCredit,
-    pub status: Status,
-    pub external_id: Option<String>,
-    pub description: Option<String>,
-    pub metadata: Option<JSON>,
+pub struct Account {
+    id: ID,
+    account_id: UUID,
+    version: u32,
+    code: String,
+    name: String,
+    normal_balance_type: DebitOrCredit,
+    status: Status,
+    external_id: Option<String>,
+    description: Option<String>,
+    metadata: Option<JSON>,
+    created_at: Timestamp,
+    modified_at: Timestamp,
 }
 
 #[ComplexObject]
@@ -111,11 +113,9 @@ impl From<AccountByNameCursor> for cala_ledger::account::AccountByNameCursor {
 
 impl From<cala_ledger::account::Account> for Account {
     fn from(account: cala_ledger::account::Account) -> Self {
-        Self::from(account.into_values())
-    }
-}
-impl From<cala_ledger::account::AccountValues> for Account {
-    fn from(values: cala_ledger::account::AccountValues) -> Self {
+        let created_at = account.created_at();
+        let modified_at = account.modified_at();
+        let values = account.into_values();
         Self {
             id: values.id.to_global_id(),
             account_id: UUID::from(values.id),
@@ -127,6 +127,16 @@ impl From<cala_ledger::account::AccountValues> for Account {
             external_id: values.external_id,
             description: values.description,
             metadata: values.metadata.map(JSON::from),
+            created_at: created_at.into(),
+            modified_at: modified_at.into(),
+        }
+    }
+}
+
+impl From<cala_ledger::account::Account> for AccountCreatePayload {
+    fn from(value: cala_ledger::account::Account) -> Self {
+        Self {
+            account: Account::from(value),
         }
     }
 }

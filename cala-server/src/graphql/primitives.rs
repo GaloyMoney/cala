@@ -29,7 +29,7 @@ impl Default for Status {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JSON(serde_json::Value);
 scalar!(JSON);
@@ -42,6 +42,16 @@ impl From<serde_json::Value> for JSON {
 impl JSON {
     pub fn into_inner(self) -> serde_json::Value {
         self.0
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct Timestamp(chrono::DateTime<chrono::Utc>);
+scalar!(Timestamp);
+impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
+    fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
+        Self(value)
     }
 }
 
@@ -93,7 +103,7 @@ impl From<UUID> for cala_ledger::TransactionId {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Expression(String);
 scalar!(Expression);
@@ -110,7 +120,7 @@ impl From<Expression> for String {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Date(NaiveDate);
 scalar!(Date);

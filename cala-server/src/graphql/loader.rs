@@ -2,13 +2,16 @@ use async_graphql::dataloader::Loader;
 
 use std::{collections::HashMap, sync::Arc};
 
+use super::{
+    account::Account, journal::Journal, transaction::Transaction, tx_template::TxTemplate,
+};
 use cala_ledger::{
     account::{error::AccountError, *},
     balance::{error::BalanceError, *},
     journal::{error::JournalError, *},
     primitives::*,
-    transaction::{error::TransactionError, *},
-    tx_template::{error::TxTemplateError, *},
+    transaction::error::TransactionError,
+    tx_template::error::TxTemplateError,
     *,
 };
 
@@ -33,13 +36,10 @@ impl Loader<BalanceId> for LedgerDataLoader {
 }
 
 impl Loader<AccountId> for LedgerDataLoader {
-    type Value = AccountValues;
+    type Value = Account;
     type Error = Arc<AccountError>;
 
-    async fn load(
-        &self,
-        keys: &[AccountId],
-    ) -> Result<HashMap<AccountId, AccountValues>, Self::Error> {
+    async fn load(&self, keys: &[AccountId]) -> Result<HashMap<AccountId, Account>, Self::Error> {
         self.ledger
             .accounts()
             .find_all(keys)
@@ -49,13 +49,10 @@ impl Loader<AccountId> for LedgerDataLoader {
 }
 
 impl Loader<JournalId> for LedgerDataLoader {
-    type Value = JournalValues;
+    type Value = Journal;
     type Error = Arc<JournalError>;
 
-    async fn load(
-        &self,
-        keys: &[JournalId],
-    ) -> Result<HashMap<JournalId, JournalValues>, Self::Error> {
+    async fn load(&self, keys: &[JournalId]) -> Result<HashMap<JournalId, Journal>, Self::Error> {
         self.ledger
             .journals()
             .find_all(keys)
@@ -65,13 +62,13 @@ impl Loader<JournalId> for LedgerDataLoader {
 }
 
 impl Loader<TransactionId> for LedgerDataLoader {
-    type Value = TransactionValues;
+    type Value = Transaction;
     type Error = Arc<TransactionError>;
 
     async fn load(
         &self,
         keys: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, TransactionValues>, Self::Error> {
+    ) -> Result<HashMap<TransactionId, Transaction>, Self::Error> {
         self.ledger
             .transactions()
             .find_all(keys)
@@ -81,13 +78,13 @@ impl Loader<TransactionId> for LedgerDataLoader {
 }
 
 impl Loader<TxTemplateId> for LedgerDataLoader {
-    type Value = TxTemplateValues;
+    type Value = TxTemplate;
     type Error = Arc<TxTemplateError>;
 
     async fn load(
         &self,
         keys: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, TxTemplateValues>, Self::Error> {
+    ) -> Result<HashMap<TxTemplateId, TxTemplate>, Self::Error> {
         self.ledger
             .tx_templates()
             .find_all(keys)

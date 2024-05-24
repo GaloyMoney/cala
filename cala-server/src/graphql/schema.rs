@@ -1,8 +1,5 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
-use cala_ledger::{
-    account::AccountValues, balance::AccountBalance, journal::JournalValues, primitives::*,
-    transaction::TransactionValues, tx_template::NewParamDefinition, tx_template::TxTemplateValues,
-};
+use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
 
 use super::{
     account::*, balance::*, job::*, journal::*, loader::*, primitives::*, transaction::*,
@@ -16,8 +13,7 @@ pub struct Query;
 impl Query {
     async fn account(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Account>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let account: Option<AccountValues> = loader.load_one(AccountId::from(id)).await?;
-        Ok(account.map(Account::from))
+        Ok(loader.load_one(AccountId::from(id)).await?)
     }
 
     async fn account_by_external_id(
@@ -32,7 +28,7 @@ impl Query {
             .find_by_external_id(external_id)
             .await
         {
-            Ok(account) => Ok(Some(account.into_values().into())),
+            Ok(account) => Ok(Some(account.into())),
             Err(cala_ledger::account::error::AccountError::CouldNotFindByExternalId(_)) => Ok(None),
             Err(err) => Err(err.into()),
         }
@@ -65,7 +61,7 @@ impl Query {
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
                         let cursor = AccountByNameCursor::from(entity.values());
-                        Edge::new(cursor, Account::from(entity.into_values()))
+                        Edge::new(cursor, Account::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },
@@ -75,8 +71,7 @@ impl Query {
 
     async fn journal(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Journal>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let journal: Option<JournalValues> = loader.load_one(JournalId::from(id)).await?;
-        Ok(journal.map(Journal::from))
+        Ok(loader.load_one(JournalId::from(id)).await?)
     }
 
     async fn balance(
@@ -101,8 +96,7 @@ impl Query {
         id: UUID,
     ) -> async_graphql::Result<Option<Transaction>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let account: Option<TransactionValues> = loader.load_one(TransactionId::from(id)).await?;
-        Ok(account.map(Transaction::from))
+        Ok(loader.load_one(TransactionId::from(id)).await?)
     }
 
     async fn transaction_by_external_id(
@@ -117,7 +111,7 @@ impl Query {
             .find_by_external_id(external_id)
             .await
         {
-            Ok(transaction) => Ok(Some(transaction.into_values().into())),
+            Ok(transaction) => Ok(Some(transaction.into())),
             Err(cala_ledger::transaction::error::TransactionError::CouldNotFindByExternalId(_)) => {
                 Ok(None)
             }
@@ -131,8 +125,7 @@ impl Query {
         id: UUID,
     ) -> async_graphql::Result<Option<TxTemplate>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-        let tx_template: Option<TxTemplateValues> = loader.load_one(TxTemplateId::from(id)).await?;
-        Ok(tx_template.map(TxTemplate::from))
+        Ok(loader.load_one(TxTemplateId::from(id)).await?)
     }
 
     async fn tx_template_by_code(
@@ -142,7 +135,7 @@ impl Query {
     ) -> async_graphql::Result<Option<TxTemplate>> {
         let app = ctx.data_unchecked::<CalaApp>();
         match app.ledger().tx_templates().find_by_code(code).await {
-            Ok(tx_template) => Ok(Some(tx_template.into_values().into())),
+            Ok(tx_template) => Ok(Some(tx_template.into())),
             Err(cala_ledger::tx_template::error::TxTemplateError::CouldNotFindByCode(_)) => {
                 Ok(None)
             }
@@ -221,7 +214,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
         let account = app.ledger().accounts().create(builder.build()?).await?;
 
-        Ok(account.into_values().into())
+        Ok(account.into())
     }
 
     async fn journal_create(
@@ -237,7 +230,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
         let journal = app.ledger().journals().create(builder.build()?).await?;
 
-        Ok(journal.into_values().into())
+        Ok(journal.into())
     }
 
     async fn tx_template_create(
@@ -330,7 +323,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let new_tx_template = new_tx_template_builder.build()?;
         let tx_template = app.ledger().tx_templates().create(new_tx_template).await?;
 
-        Ok(tx_template.into_values().into())
+        Ok(tx_template.into())
     }
 
     async fn post_transaction(
@@ -344,6 +337,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .post_transaction(input.transaction_id.into(), &input.tx_template_code, params)
             .await?;
-        Ok(transaction.into_values().into())
+        Ok(transaction.into())
     }
 }
