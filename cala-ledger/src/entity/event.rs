@@ -28,7 +28,7 @@ pub trait Entity: TryFrom<EntityEvents<<Self as Entity>::Event>, Error = EntityE
 
 pub struct EntityEvents<T: EntityEvent> {
     pub entity_first_persisted_at: Option<chrono::DateTime<chrono::Utc>>,
-    latest_event_persisted_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub latest_event_persisted_at: Option<chrono::DateTime<chrono::Utc>>,
     entity_id: <T as EntityEvent>::EntityId,
     persisted_events: Vec<T>,
     new_events: Vec<T>,

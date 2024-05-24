@@ -42,10 +42,10 @@ impl JournalRepo {
         })
     }
 
-    pub(super) async fn find_all(
+    pub(super) async fn find_all<T: From<Journal>>(
         &self,
         ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, JournalValues>, JournalError> {
+    ) -> Result<HashMap<JournalId, T>, JournalError> {
         let mut query_builder = QueryBuilder::new(
             r#"SELECT j.id, e.sequence, e.event,
                 j.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
@@ -66,7 +66,7 @@ impl JournalRepo {
         let ret = EntityEvents::load_n(rows, n)?
             .0
             .into_iter()
-            .map(|account: Journal| (account.values().id, account.into_values()))
+            .map(|journal: Journal| (journal.values().id, T::from(journal)))
             .collect();
         Ok(ret)
     }

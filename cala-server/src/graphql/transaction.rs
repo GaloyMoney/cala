@@ -9,18 +9,20 @@ pub struct TransactionInput {
     pub params: Option<JSON>,
 }
 
-#[derive(SimpleObject)]
+#[derive(Clone, SimpleObject)]
 pub struct Transaction {
-    pub id: ID,
-    pub transaction_id: UUID,
-    pub version: u32,
-    pub tx_template_id: UUID,
-    pub journal_id: UUID,
-    pub effective: Date,
-    pub correlation_id: String,
-    pub external_id: Option<String>,
-    pub description: Option<String>,
-    pub metadata: Option<JSON>,
+    id: ID,
+    transaction_id: UUID,
+    version: u32,
+    tx_template_id: UUID,
+    journal_id: UUID,
+    effective: Date,
+    correlation_id: String,
+    external_id: Option<String>,
+    description: Option<String>,
+    metadata: Option<JSON>,
+    created_at: Timestamp,
+    modified_at: Timestamp,
 }
 
 #[derive(SimpleObject)]
@@ -39,8 +41,11 @@ impl ToGlobalId for cala_ledger::TransactionId {
     }
 }
 
-impl From<cala_ledger::transaction::TransactionValues> for Transaction {
-    fn from(values: cala_ledger::transaction::TransactionValues) -> Self {
+impl From<cala_ledger::transaction::Transaction> for Transaction {
+    fn from(entity: cala_ledger::transaction::Transaction) -> Self {
+        let created_at = entity.created_at();
+        let modified_at = entity.modified_at();
+        let values = entity.into_values();
         Self {
             id: values.id.to_global_id(),
             transaction_id: UUID::from(values.id),
@@ -52,6 +57,16 @@ impl From<cala_ledger::transaction::TransactionValues> for Transaction {
             external_id: values.external_id,
             description: values.description,
             metadata: values.metadata.map(JSON::from),
+            created_at: Timestamp::from(created_at),
+            modified_at: Timestamp::from(modified_at),
+        }
+    }
+}
+
+impl From<cala_ledger::transaction::Transaction> for PostTransactionPayload {
+    fn from(value: cala_ledger::transaction::Transaction) -> Self {
+        Self {
+            transaction: Transaction::from(value),
         }
     }
 }

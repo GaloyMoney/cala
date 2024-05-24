@@ -49,10 +49,10 @@ impl Journals {
     }
 
     #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
-    pub async fn find_all(
+    pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, JournalValues>, JournalError> {
+    ) -> Result<HashMap<JournalId, T>, JournalError> {
         self.repo.find_all(journal_ids).await
     }
 

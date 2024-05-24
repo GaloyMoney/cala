@@ -44,10 +44,10 @@ impl TxTemplateRepo {
         })
     }
 
-    pub(super) async fn find_all(
+    pub(super) async fn find_all<T: From<TxTemplate>>(
         &self,
         ids: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, TxTemplateValues>, TxTemplateError> {
+    ) -> Result<HashMap<TxTemplateId, T>, TxTemplateError> {
         let mut query_builder = QueryBuilder::new(
             r#"SELECT a.id, e.sequence, e.event,
                 a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
@@ -68,7 +68,7 @@ impl TxTemplateRepo {
         let ret = EntityEvents::load_n(rows, n)?
             .0
             .into_iter()
-            .map(|tx_template: TxTemplate| (tx_template.values().id, tx_template.into_values()))
+            .map(|tx_template: TxTemplate| (tx_template.values().id, T::from(tx_template)))
             .collect();
         Ok(ret)
     }

@@ -2,46 +2,48 @@ use async_graphql::*;
 
 use super::{convert::ToGlobalId, primitives::*};
 
-#[derive(SimpleObject)]
-pub(super) struct TxTemplate {
-    pub id: ID,
-    pub tx_template_id: UUID,
-    pub version: u32,
-    pub code: String,
-    pub params: Option<Vec<ParamDefinition>>,
-    pub tx_input: TxInput,
-    pub entries: Vec<EntryInput>,
-    pub description: Option<String>,
-    pub metadata: Option<JSON>,
+#[derive(Clone, SimpleObject)]
+pub struct TxTemplate {
+    id: ID,
+    tx_template_id: UUID,
+    version: u32,
+    code: String,
+    params: Option<Vec<ParamDefinition>>,
+    tx_input: TxInput,
+    entries: Vec<EntryInput>,
+    description: Option<String>,
+    metadata: Option<JSON>,
+    created_at: Timestamp,
+    modified_at: Timestamp,
 }
 
-#[derive(SimpleObject)]
+#[derive(Clone, SimpleObject)]
 pub(super) struct ParamDefinition {
-    pub name: String,
-    pub r#type: ParamDataType,
-    pub default: Option<Expression>,
-    pub description: Option<String>,
+    name: String,
+    r#type: ParamDataType,
+    default: Option<Expression>,
+    description: Option<String>,
 }
 
-#[derive(SimpleObject)]
+#[derive(Clone, SimpleObject)]
 pub(super) struct EntryInput {
-    pub entry_type: Expression,
-    pub account_id: Expression,
-    pub layer: Expression,
-    pub direction: Expression,
-    pub units: Expression,
-    pub currency: Expression,
-    pub description: Option<Expression>,
+    entry_type: Expression,
+    account_id: Expression,
+    layer: Expression,
+    direction: Expression,
+    units: Expression,
+    currency: Expression,
+    description: Option<Expression>,
 }
 
-#[derive(SimpleObject)]
+#[derive(Clone, SimpleObject)]
 pub(super) struct TxInput {
-    pub effective: Expression,
-    pub journal_id: Expression,
-    pub correlation_id: Option<Expression>,
-    pub external_id: Option<Expression>,
-    pub description: Option<Expression>,
-    pub metadata: Option<Expression>,
+    effective: Expression,
+    journal_id: Expression,
+    correlation_id: Option<Expression>,
+    external_id: Option<Expression>,
+    description: Option<Expression>,
+    metadata: Option<Expression>,
 }
 
 #[derive(InputObject)]
@@ -95,23 +97,28 @@ impl ToGlobalId for cala_ledger::TxTemplateId {
     }
 }
 
-impl From<cala_ledger::tx_template::TxTemplateValues> for TxTemplate {
-    fn from(value: cala_ledger::tx_template::TxTemplateValues) -> Self {
-        let tx_input = TxInput::from(value.tx_input);
-        let entries = value.entries.into_iter().map(EntryInput::from).collect();
-        let params = value
+impl From<cala_ledger::tx_template::TxTemplate> for TxTemplate {
+    fn from(entity: cala_ledger::tx_template::TxTemplate) -> Self {
+        let created_at = entity.created_at();
+        let modified_at = entity.modified_at();
+        let values = entity.into_values();
+        let tx_input = TxInput::from(values.tx_input);
+        let entries = values.entries.into_iter().map(EntryInput::from).collect();
+        let params = values
             .params
             .map(|params| params.into_iter().map(ParamDefinition::from).collect());
         Self {
-            id: value.id.to_global_id(),
-            version: value.version,
-            tx_template_id: UUID::from(value.id),
-            code: value.code,
+            id: values.id.to_global_id(),
+            version: values.version,
+            tx_template_id: UUID::from(values.id),
+            code: values.code,
             tx_input,
             entries,
             params,
-            description: value.description,
-            metadata: value.metadata.map(JSON::from),
+            description: values.description,
+            metadata: values.metadata.map(JSON::from),
+            created_at: Timestamp::from(created_at),
+            modified_at: Timestamp::from(modified_at),
         }
     }
 }
@@ -170,6 +177,14 @@ impl From<cala_ledger::tx_template::ParamDefinition> for ParamDefinition {
             r#type: ParamDataType::from(value.r#type),
             default,
             description: value.description,
+        }
+    }
+}
+
+impl From<cala_ledger::tx_template::TxTemplate> for TxTemplateCreatePayload {
+    fn from(entity: cala_ledger::tx_template::TxTemplate) -> Self {
+        Self {
+            tx_template: TxTemplate::from(entity),
         }
     }
 }
