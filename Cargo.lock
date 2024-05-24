@@ -633,8 +633,10 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 name = "cala-cel-interpreter"
 version = "0.1.4-dev"
 dependencies = [
+ "anyhow",
  "cala-cel-parser",
  "chrono",
+ "lazy_static",
  "rust_decimal",
  "serde",
  "serde_json",

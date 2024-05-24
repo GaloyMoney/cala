@@ -5,8 +5,6 @@ use cel_parser::{
     parser::ExpressionParser,
 };
 
-use std::sync::Arc;
-
 use crate::{cel_type::*, context::*, error::*, value::*};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -46,6 +44,7 @@ impl std::fmt::Display for CelExpression {
     }
 }
 
+#[derive(Debug)]
 enum EvalType<'a> {
     Value(CelValue),
     ContextItem(&'a ContextItem),
@@ -125,7 +124,7 @@ fn evaluate_expression_inner<'a>(
             }
             Ok(EvalType::Value(CelValue::from(map)))
         }
-        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup(Arc::clone(name))?)),
+        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup(name)?)),
         Literal(val) => Ok(EvalType::Value(CelValue::from(val))),
         Arithmetic(op, left, right) => {
             let left = evaluate_expression(left, ctx)?;
@@ -150,15 +149,18 @@ fn evaluate_expression_inner<'a>(
 }
 
 fn evaluate_member<'a>(
-    target: EvalType,
+    target: EvalType<'a>,
     member: &ast::Member,
-    ctx: &CelContext,
+    ctx: &'a CelContext,
 ) -> Result<EvalType<'a>, CelError> {
     use ast::Member::*;
     match member {
         Attribute(name) => match target {
             EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
                 Ok(EvalType::Value(map.get(name)))
+            }
+            EvalType::ContextItem(ContextItem::Package(p)) => {
+                Ok(EvalType::ContextItem(p.lookup(name)?))
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -169,6 +171,9 @@ fn evaluate_member<'a>(
                     args.push(evaluate_expression(e, ctx)?.try_value()?)
                 }
                 Ok(EvalType::Value(f(args)?))
+            }
+            EvalType::ContextItem(ContextItem::Package(p)) => {
+                evaluate_member(EvalType::ContextItem(p.package_self()?), member, ctx)
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -383,12 +388,32 @@ mod tests {
     }
 
     #[test]
-    fn function() {
+    fn to_level_function() {
         let expression = "date('2022-10-10')".parse::<CelExpression>().unwrap();
         let context = CelContext::new();
         assert_eq!(
             expression.evaluate(&context).unwrap(),
             CelValue::Date(NaiveDate::parse_from_str("2022-10-10", "%Y-%m-%d").unwrap())
         );
+    }
+
+    #[test]
+    fn cast_function() {
+        let expression = "decimal('1')".parse::<CelExpression>().unwrap();
+        let context = CelContext::new();
+        assert_eq!(
+            expression.evaluate(&context).unwrap(),
+            CelValue::Decimal(1.into())
+        );
+    }
+
+    #[test]
+    fn package_function() -> anyhow::Result<()> {
+        let expression = "decimal.Add(decimal('1'), decimal('2'))"
+            .parse::<CelExpression>()
+            .unwrap();
+        let context = CelContext::new();
+        assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(3.into()));
+        Ok(())
     }
 }
