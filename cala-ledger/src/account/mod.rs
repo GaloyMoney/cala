@@ -62,6 +62,7 @@ impl Accounts {
         self.repo.find_all(account_ids).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
         self.repo.find_by_external_id(external_id).await
     }

@@ -95,6 +95,32 @@ impl Query {
         Ok(balance.map(Balance::from))
     }
 
+    // async fn transaction(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Account>> {
+    //     let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+    //     let account: Option<AccountValues> = loader.load_one(AccountId::from(id)).await?;
+    //     Ok(account.map(Account::from))
+    // }
+
+    async fn transaction_by_external_id(
+        &self,
+        ctx: &Context<'_>,
+        external_id: String,
+    ) -> async_graphql::Result<Option<Transaction>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        match app
+            .ledger()
+            .transactions()
+            .find_by_external_id(external_id)
+            .await
+        {
+            Ok(transaction) => Ok(Some(transaction.into_values().into())),
+            Err(cala_ledger::transaction::error::TransactionError::CouldNotFindByExternalId(_)) => {
+                Ok(None)
+            }
+            Err(err) => Err(err.into()),
+        }
+    }
+
     async fn tx_template(
         &self,
         ctx: &Context<'_>,

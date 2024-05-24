@@ -12,14 +12,12 @@ use super::{entity::*, error::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct TransactionRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl TransactionRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
     }
 
     pub async fn create_in_tx(
@@ -43,6 +41,33 @@ impl TransactionRepo {
             entity: transaction,
             n_new_events,
         })
+    }
+
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<Transaction, TransactionError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_transactions a
+            JOIN cala_transaction_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.external_id = $1"#,
+            external_id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(transaction) => Ok(transaction),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(TransactionError::CouldNotFindByExternalId(external_id))
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[cfg(feature = "import")]

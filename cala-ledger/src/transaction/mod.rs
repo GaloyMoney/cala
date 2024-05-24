@@ -6,6 +6,7 @@ mod repo;
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
+use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -47,6 +48,14 @@ impl Transactions {
             .expect("should have event")
             .into();
         Ok((transaction, event))
+    }
+
+    #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<Transaction, TransactionError> {
+        self.repo.find_by_external_id(external_id).await
     }
 
     #[cfg(feature = "import")]

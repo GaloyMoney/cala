@@ -10,4 +10,6 @@ pub enum TransactionError {
     OutboxError(#[from] OutboxError),
     #[error("TransactionError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
+    #[error("TransactionError - NotFound: external id '{0}' not found")]
+    CouldNotFindByExternalId(String),
 }
