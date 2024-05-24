@@ -86,12 +86,18 @@ impl TxTemplates {
     ) -> Result<PreparedTransaction, TxTemplateError> {
         let tmpl = self.repo.find_latest_version(code).await?;
 
-        let mut tx_builder = NewTransaction::builder();
-        tx_builder.id(tx_id).tx_template_id(tmpl.id);
-
         let ctx = params.into_context(tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.tx_input.journal_id.try_evaluate(&ctx)?;
+
+        let entries = self.prep_entries(&tmpl, tx_id, JournalId::from(journal_id), &ctx)?;
+
+        let mut tx_builder = NewTransaction::builder();
+        tx_builder
+            .id(tx_id)
+            .tx_template_id(tmpl.id)
+            .entry_ids(entries.iter().map(|e| e.id).collect());
+
         tx_builder.journal_id(journal_id);
 
         let effective: NaiveDate = tmpl.tx_input.effective.try_evaluate(&ctx)?;
@@ -118,7 +124,6 @@ impl TxTemplates {
         }
 
         let tx = tx_builder.build().expect("tx_build should succeed");
-        let entries = self.prep_entries(&tmpl, tx_id, JournalId::from(journal_id), ctx)?;
 
         Ok(PreparedTransaction {
             transaction: tx,
@@ -131,7 +136,7 @@ impl TxTemplates {
         tmpl: &TxTemplateValues,
         transaction_id: TransactionId,
         journal_id: JournalId,
-        ctx: cel_interpreter::CelContext,
+        ctx: &cel_interpreter::CelContext,
     ) -> Result<Vec<NewEntry>, TxTemplateError> {
         let mut new_entries = Vec::new();
         let mut totals = HashMap::new();

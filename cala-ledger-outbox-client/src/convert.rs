@@ -293,6 +293,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             version,
             journal_id,
             tx_template_id,
+            entry_ids,
             effective,
             correlation_id,
             external_id,
@@ -305,6 +306,10 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             version,
             journal_id: journal_id.parse()?,
             tx_template_id: tx_template_id.parse()?,
+            entry_ids: entry_ids
+                .into_iter()
+                .map(|id| id.parse())
+                .collect::<Result<_, _>>()?,
             effective: effective.parse()?,
             correlation_id,
             external_id,

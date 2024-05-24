@@ -138,11 +138,12 @@ message Transaction {
   uint32 version = 2;
   string journal_id = 3;
   string tx_template_id = 4;
+  repeated string entry_ids = 7;
   string effective = 5;
   string correlation_id = 6;
-  optional string external_id = 7;
-  optional string description = 8;
-  optional google.protobuf.Struct metadata = 9;
+  optional string external_id = 8;
+  optional string description = 9;
+  optional google.protobuf.Struct metadata = 10;
 }
 
 message EntryCreated {

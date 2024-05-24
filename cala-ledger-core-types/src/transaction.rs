@@ -8,6 +8,7 @@ pub struct TransactionValues {
     pub version: u32,
     pub journal_id: JournalId,
     pub tx_template_id: TxTemplateId,
+    pub entry_ids: Vec<EntryId>,
     pub effective: chrono::NaiveDate,
     pub correlation_id: String,
     pub external_id: Option<String>,

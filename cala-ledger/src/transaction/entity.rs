@@ -116,6 +116,7 @@ pub(crate) struct NewTransaction {
     pub(super) description: Option<String>,
     #[builder(setter(into), default)]
     pub(super) metadata: Option<serde_json::Value>,
+    pub(super) entry_ids: Vec<EntryId>,
 }
 
 impl NewTransaction {
@@ -138,6 +139,7 @@ impl NewTransaction {
                     external_id: self.external_id,
                     description: self.description,
                     metadata: self.metadata,
+                    entry_ids: self.entry_ids,
                 },
             }],
         )
@@ -154,6 +156,7 @@ mod tests {
             .id(uuid::Uuid::new_v4())
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
+            .entry_ids(vec![EntryId::new()])
             .effective(chrono::NaiveDate::default())
             .build()
             .unwrap();
@@ -176,6 +179,7 @@ mod tests {
             .tx_template_id(uuid::Uuid::new_v4())
             .effective(chrono::NaiveDate::default())
             .metadata(json!({"foo": "bar"}))
+            .entry_ids(vec![EntryId::new()])
             .build()
             .unwrap();
         assert_eq!(new_transaction.metadata, Some(json!({"foo": "bar"})));

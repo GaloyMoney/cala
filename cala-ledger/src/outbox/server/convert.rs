@@ -279,6 +279,7 @@ impl From<TransactionValues> for proto::Transaction {
             effective,
             description,
             metadata,
+            entry_ids,
         }: TransactionValues,
     ) -> Self {
         proto::Transaction {
@@ -286,6 +287,7 @@ impl From<TransactionValues> for proto::Transaction {
             version,
             journal_id: journal_id.to_string(),
             tx_template_id: tx_template_id.to_string(),
+            entry_ids: entry_ids.into_iter().map(|id| id.to_string()).collect(),
             correlation_id,
             external_id,
             effective: effective.to_string(),
