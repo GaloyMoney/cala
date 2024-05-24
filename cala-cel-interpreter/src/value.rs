@@ -257,6 +257,18 @@ impl TryFrom<&CelValue> for Arc<String> {
     }
 }
 
+impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
+    type Error = CelError;
+
+    fn try_from(v: &'a CelValue) -> Result<Self, Self::Error> {
+        if let CelValue::Decimal(d) = v {
+            Ok(d)
+        } else {
+            Err(CelError::BadType(CelType::Decimal, CelType::from(v)))
+        }
+    }
+}
+
 impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     type Error = ResultCoercionError;
 
