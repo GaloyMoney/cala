@@ -8,6 +8,8 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 use tracing::instrument;
 
+use std::collections::HashMap;
+
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::{entity::EntityUpdate, outbox::*, primitives::DataSource};
@@ -56,6 +58,14 @@ impl Transactions {
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
         self.repo.find_by_external_id(external_id).await
+    }
+
+    #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
+    pub async fn find_all(
+        &self,
+        transaction_ids: &[TransactionId],
+    ) -> Result<HashMap<TransactionId, TransactionValues>, TransactionError> {
+        self.repo.find_all(transaction_ids).await
     }
 
     #[cfg(feature = "import")]

@@ -1,7 +1,7 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{
     account::AccountValues, balance::AccountBalance, journal::JournalValues, primitives::*,
-    tx_template::NewParamDefinition, tx_template::TxTemplateValues,
+    transaction::TransactionValues, tx_template::NewParamDefinition, tx_template::TxTemplateValues,
 };
 
 use super::{
@@ -95,11 +95,15 @@ impl Query {
         Ok(balance.map(Balance::from))
     }
 
-    // async fn transaction(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Account>> {
-    //     let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
-    //     let account: Option<AccountValues> = loader.load_one(AccountId::from(id)).await?;
-    //     Ok(account.map(Account::from))
-    // }
+    async fn transaction(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<Transaction>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let account: Option<TransactionValues> = loader.load_one(TransactionId::from(id)).await?;
+        Ok(account.map(Transaction::from))
+    }
 
     async fn transaction_by_external_id(
         &self,

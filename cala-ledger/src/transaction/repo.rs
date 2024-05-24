@@ -1,6 +1,8 @@
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres};
+use sqlx::{PgPool, Postgres, QueryBuilder, Transaction as DbTransaction};
+
+use std::collections::HashMap;
 
 use cala_types::primitives::*;
 
@@ -22,7 +24,7 @@ impl TransactionRepo {
 
     pub async fn create_in_tx(
         &self,
-        tx: &mut sqlx::Transaction<'_, Postgres>,
+        tx: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
     ) -> Result<EntityUpdate<Transaction>, TransactionError> {
         sqlx::query!(
@@ -41,6 +43,35 @@ impl TransactionRepo {
             entity: transaction,
             n_new_events,
         })
+    }
+
+    pub(super) async fn find_all(
+        &self,
+        ids: &[TransactionId],
+    ) -> Result<HashMap<TransactionId, TransactionValues>, TransactionError> {
+        let mut query_builder = QueryBuilder::new(
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_transactions a
+            JOIN cala_transaction_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id IN"#,
+        );
+        query_builder.push_tuples(ids, |mut builder, transaction_id| {
+            builder.push_bind(transaction_id);
+        });
+        query_builder.push(r#"ORDER BY a.id, e.sequence"#);
+        let query = query_builder.build_query_as::<GenericEvent>();
+        let rows = query.fetch_all(&self.pool).await?;
+        let n = rows.len();
+        let ret = EntityEvents::load_n(rows, n)?
+            .0
+            .into_iter()
+            .map(|transaction: Transaction| (transaction.values().id, transaction.into_values()))
+            .collect();
+        Ok(ret)
     }
 
     pub async fn find_by_external_id(
@@ -73,7 +104,7 @@ impl TransactionRepo {
     #[cfg(feature = "import")]
     pub async fn import(
         &self,
-        tx: &mut sqlx::Transaction<'_, Postgres>,
+        tx: &mut DbTransaction<'_, Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         transaction: &mut Transaction,

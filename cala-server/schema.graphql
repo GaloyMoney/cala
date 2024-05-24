@@ -240,6 +240,8 @@ type Query {
 	accounts(first: Int!, after: String): AccountConnection!
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
+	transaction(id: UUID!): Transaction
+	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!

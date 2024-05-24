@@ -7,6 +7,7 @@ use cala_ledger::{
     balance::{error::BalanceError, *},
     journal::{error::JournalError, *},
     primitives::*,
+    transaction::{error::TransactionError, *},
     tx_template::{error::TxTemplateError, *},
     *,
 };
@@ -57,6 +58,22 @@ impl Loader<JournalId> for LedgerDataLoader {
     ) -> Result<HashMap<JournalId, JournalValues>, Self::Error> {
         self.ledger
             .journals()
+            .find_all(keys)
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+impl Loader<TransactionId> for LedgerDataLoader {
+    type Value = TransactionValues;
+    type Error = Arc<TransactionError>;
+
+    async fn load(
+        &self,
+        keys: &[TransactionId],
+    ) -> Result<HashMap<TransactionId, TransactionValues>, Self::Error> {
+        self.ledger
+            .transactions()
             .find_all(keys)
             .await
             .map_err(Arc::new)
