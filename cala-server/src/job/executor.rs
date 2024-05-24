@@ -38,7 +38,7 @@ impl JobExecutor {
 
     pub async fn spawn_job<I: JobInitializer>(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         job: &Job,
     ) -> Result<(), JobError> {
         if job.job_type != I::job_type() {
@@ -57,7 +57,7 @@ impl JobExecutor {
         "#,
             job.id as JobId,
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         Ok(())
     }

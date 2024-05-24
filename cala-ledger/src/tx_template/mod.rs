@@ -184,17 +184,17 @@ impl TxTemplates {
     #[cfg(feature = "import")]
     pub async fn sync_tx_template_creation(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TxTemplateValues,
     ) -> Result<(), TxTemplateError> {
         let mut tx_template = TxTemplate::import(origin, values);
         self.repo
-            .import(&mut tx, recorded_at, origin, &mut tx_template)
+            .import(&mut db, recorded_at, origin, &mut tx_template)
             .await?;
         self.outbox
-            .persist_events_at(tx, tx_template.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, tx_template.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

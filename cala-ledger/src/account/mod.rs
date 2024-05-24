@@ -78,17 +78,17 @@ impl Accounts {
     #[cfg(feature = "import")]
     pub async fn sync_account_creation(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: AccountValues,
     ) -> Result<(), AccountError> {
         let mut account = Account::import(origin, values);
         self.repo
-            .import(&mut tx, recorded_at, origin, &mut account)
+            .import(&mut db, recorded_at, origin, &mut account)
             .await?;
         self.outbox
-            .persist_events_at(tx, account.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, account.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

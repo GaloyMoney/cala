@@ -23,7 +23,7 @@ impl TxTemplateRepo {
 
     pub async fn create_in_tx(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         new_tx_template: NewTxTemplate,
     ) -> Result<EntityUpdate<TxTemplate>, TxTemplateError> {
         let id = new_tx_template.id;
@@ -33,10 +33,10 @@ impl TxTemplateRepo {
             id as TxTemplateId,
             new_tx_template.code,
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         let mut events = new_tx_template.initial_events();
-        let n_new_events = events.persist(tx).await?;
+        let n_new_events = events.persist(db).await?;
         let tx_template = TxTemplate::try_from(events)?;
         Ok(EntityUpdate {
             entity: tx_template,
@@ -123,7 +123,7 @@ impl TxTemplateRepo {
     #[cfg(feature = "import")]
     pub async fn import(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         tx_template: &mut TxTemplate,
@@ -136,11 +136,11 @@ impl TxTemplateRepo {
             tx_template.values().code,
             recorded_at
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         tx_template
             .events
-            .persisted_at(tx, origin, recorded_at)
+            .persisted_at(db, origin, recorded_at)
             .await?;
         Ok(())
     }

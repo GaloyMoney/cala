@@ -23,11 +23,11 @@ impl EntryRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.entries.create_all",
-        skip(self, tx)
+        skip(self, db)
     )]
     pub(crate) async fn create_all(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
@@ -43,15 +43,15 @@ impl EntryRepo {
             builder.push_bind(entry.transaction_id);
         });
         let query = query_builder.build();
-        query.execute(&mut **tx).await?;
-        EntityEvents::batch_persist(tx, entries.into_iter().map(|n| n.initial_events())).await?;
+        query.execute(&mut **db).await?;
+        EntityEvents::batch_persist(db, entries.into_iter().map(|n| n.initial_events())).await?;
         Ok(entry_values)
     }
 
     #[cfg(feature = "import")]
     pub(super) async fn import(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         entry: &mut Entry,
@@ -65,9 +65,9 @@ impl EntryRepo {
             entry.values().account_id as AccountId,
             recorded_at,
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
-        entry.events.persisted_at(tx, origin, recorded_at).await?;
+        entry.events.persisted_at(db, origin, recorded_at).await?;
         Ok(())
     }
 }

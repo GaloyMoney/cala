@@ -111,11 +111,11 @@ impl BalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.find_for_update",
-        skip(self, tx)
+        skip(self, db)
     )]
     pub(super) async fn find_for_update<'a>(
         &self,
-        tx: &mut Transaction<'a, Postgres>,
+        db: &mut Transaction<'a, Postgres>,
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
     ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {
@@ -144,7 +144,7 @@ impl BalanceRepo {
         "#,
         );
         let query = query_builder.build();
-        let rows = query.fetch_all(&mut **tx).await?;
+        let rows = query.fetch_all(&mut **db).await?;
 
         let mut ret = HashMap::new();
         for row in rows {
@@ -159,11 +159,11 @@ impl BalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.insert_new_snapshots",
-        skip(self, tx)
+        skip(self, db)
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         new_balances: &[BalanceSnapshot],
     ) -> Result<(), BalanceError> {
@@ -201,7 +201,7 @@ impl BalanceRepo {
                     builder.push_bind(**version as i32);
                 },
             );
-            query_builder.build().execute(&mut **tx).await?;
+            query_builder.build().execute(&mut **db).await?;
         }
         if !to_update.is_empty() {
             let expected_updates = to_update.len();
@@ -227,7 +227,7 @@ impl BalanceRepo {
                             AND n.currency = c.currency
                             AND data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = "#);
             query_builder.push_bind(journal_id);
-            let result = query_builder.build().execute(&mut **tx).await?;
+            let result = query_builder.build().execute(&mut **db).await?;
             if result.rows_affected() != (expected_updates as u64) {
                 return Err(BalanceError::OptimisticLockingError);
             }
@@ -247,14 +247,14 @@ impl BalanceRepo {
             builder
                 .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
         });
-        query_builder.build().execute(&mut **tx).await?;
+        query_builder.build().execute(&mut **db).await?;
         Ok(())
     }
 
     #[cfg(feature = "import")]
     pub async fn import_balance(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
@@ -269,7 +269,7 @@ impl BalanceRepo {
             balance.version as i32,
             balance.created_at
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
@@ -284,7 +284,7 @@ impl BalanceRepo {
             serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
             balance.created_at
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         Ok(())
     }
@@ -292,7 +292,7 @@ impl BalanceRepo {
     #[cfg(feature = "import")]
     pub async fn import_balance_update(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         origin: DataSourceId,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
@@ -307,7 +307,7 @@ impl BalanceRepo {
             balance.account_id as AccountId,
             balance.currency.code(),
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
@@ -321,7 +321,7 @@ impl BalanceRepo {
             serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
             balance.modified_at,
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         Ok(())
     }

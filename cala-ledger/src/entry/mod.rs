@@ -32,10 +32,10 @@ impl Entries {
 
     pub(crate) async fn create_all(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         entries: Vec<NewEntry>,
     ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
-        let entries = self.repo.create_all(tx, entries).await?;
+        let entries = self.repo.create_all(db, entries).await?;
         let events = entries
             .iter()
             .map(|values| OutboxEventPayload::EntryCreated {
@@ -49,17 +49,17 @@ impl Entries {
     #[cfg(feature = "import")]
     pub(crate) async fn sync_entry_creation(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
         let mut entry = Entry::import(origin, values);
         self.repo
-            .import(&mut tx, recorded_at, origin, &mut entry)
+            .import(&mut db, recorded_at, origin, &mut entry)
             .await?;
         self.outbox
-            .persist_events_at(tx, entry.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, entry.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

@@ -29,7 +29,7 @@ impl CurrentJob {
 
     pub async fn update_state<T: Serialize>(
         &mut self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         state: T,
     ) -> Result<(), JobError> {
         let state_json = serde_json::to_value(state).map_err(JobError::CouldNotSerializeState)?;
@@ -42,7 +42,7 @@ impl CurrentJob {
             state_json,
             self.id as JobId
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         self.state_json = Some(state_json);
         Ok(())

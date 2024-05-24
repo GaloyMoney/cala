@@ -53,24 +53,24 @@ impl Outbox {
 
     pub(crate) async fn persist_events(
         &self,
-        tx: Transaction<'_, Postgres>,
+        db: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) -> Result<(), OutboxError> {
-        self.persist_events_at(tx, events, None).await
+        self.persist_events_at(db, events, None).await
     }
 
     pub(crate) async fn persist_events_at(
         &self,
-        mut tx: Transaction<'_, Postgres>,
+        mut db: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
         recorded_at: impl Into<Option<DateTime<Utc>>>,
     ) -> Result<(), OutboxError> {
         let recorded_at = recorded_at.into();
         let events = self
             .repo
-            .persist_events(&mut tx, recorded_at, events.into_iter().map(Into::into))
+            .persist_events(&mut db, recorded_at, events.into_iter().map(Into::into))
             .await?;
-        tx.commit().await?;
+        db.commit().await?;
 
         let mut new_highest_sequence = EventSequence::BEGIN;
         for event in events {

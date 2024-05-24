@@ -23,7 +23,7 @@ impl OutboxRepo {
 
     pub async fn persist_events(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         recorded_at: Option<DateTime<Utc>>,
         events: impl Iterator<Item = OutboxEventPayload>,
     ) -> Result<Vec<OutboxEvent>, OutboxError> {
@@ -45,7 +45,7 @@ impl OutboxRepo {
                ORDER BY sequence"#,
         );
         let query = query_builder.build();
-        let rows = query.fetch_all(&mut **tx).await?;
+        let rows = query.fetch_all(&mut **db).await?;
         let events = rows
             .into_iter()
             .zip(payloads.into_iter())

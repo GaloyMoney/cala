@@ -36,13 +36,13 @@ impl Transactions {
 
     pub(crate) async fn create_in_tx(
         &self,
-        tx: &mut DbTransaction<'_, Postgres>,
+        db: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
     ) -> Result<(Transaction, OutboxEventPayload), TransactionError> {
         let EntityUpdate {
             entity: transaction,
             ..
-        } = self.repo.create_in_tx(tx, new_transaction).await?;
+        } = self.repo.create_in_tx(db, new_transaction).await?;
         let event = transaction
             .events
             .last_persisted(1)
@@ -71,17 +71,17 @@ impl Transactions {
     #[cfg(feature = "import")]
     pub async fn sync_transaction_creation(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
         let mut transaction = Transaction::import(origin, values);
         self.repo
-            .import(&mut tx, recorded_at, origin, &mut transaction)
+            .import(&mut db, recorded_at, origin, &mut transaction)
             .await?;
         self.outbox
-            .persist_events_at(tx, transaction.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, transaction.events.last_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

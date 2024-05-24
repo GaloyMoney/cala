@@ -21,7 +21,7 @@ impl JournalRepo {
 
     pub async fn create_in_tx(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         new_journal: NewJournal,
     ) -> Result<EntityUpdate<Journal>, JournalError> {
         let id = new_journal.id;
@@ -31,10 +31,10 @@ impl JournalRepo {
             id as JournalId,
             new_journal.name,
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
         let mut events = new_journal.initial_events();
-        let n_new_events = events.persist(tx).await?;
+        let n_new_events = events.persist(db).await?;
         let journal = Journal::try_from(events)?;
         Ok(EntityUpdate {
             entity: journal,
@@ -74,7 +74,7 @@ impl JournalRepo {
     #[cfg(feature = "import")]
     pub async fn import(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         journal: &mut Journal,
@@ -87,9 +87,9 @@ impl JournalRepo {
             journal.values().name,
             recorded_at
         )
-        .execute(&mut **tx)
+        .execute(&mut **db)
         .await?;
-        journal.events.persisted_at(tx, origin, recorded_at).await?;
+        journal.events.persisted_at(db, origin, recorded_at).await?;
         Ok(())
     }
 }

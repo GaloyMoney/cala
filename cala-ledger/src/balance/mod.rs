@@ -56,7 +56,7 @@ impl Balances {
 
     pub(crate) async fn update_balances(
         &self,
-        mut tx: Transaction<'_, Postgres>,
+        mut db: Transaction<'_, Postgres>,
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
@@ -65,12 +65,12 @@ impl Balances {
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
-        let current_balances = self.repo.find_for_update(&mut tx, journal_id, ids).await?;
+        let current_balances = self.repo.find_for_update(&mut db, journal_id, ids).await?;
         let new_balances = Self::new_snapshots(created_at, current_balances, entries);
         self.repo
-            .insert_new_snapshots(&mut tx, journal_id, &new_balances)
+            .insert_new_snapshots(&mut db, journal_id, &new_balances)
             .await?;
-        tx.commit().await?;
+        db.commit().await?;
         Ok(new_balances
             .into_iter()
             .map(|b| {
@@ -203,15 +203,15 @@ impl Balances {
     #[cfg(feature = "import")]
     pub async fn sync_balance_creation(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
-        self.repo.import_balance(&mut tx, origin, &balance).await?;
+        self.repo.import_balance(&mut db, origin, &balance).await?;
         let recorded_at = balance.created_at;
         self.outbox
             .persist_events_at(
-                tx,
+                db,
                 std::iter::once(OutboxEventPayload::BalanceCreated {
                     source: DataSource::Remote { id: origin },
                     balance,
@@ -225,17 +225,17 @@ impl Balances {
     #[cfg(feature = "import")]
     pub async fn sync_balance_update(
         &self,
-        mut tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         self.repo
-            .import_balance_update(&mut tx, origin, &balance)
+            .import_balance_update(&mut db, origin, &balance)
             .await?;
         let recorded_at = balance.modified_at;
         self.outbox
             .persist_events_at(
-                tx,
+                db,
                 std::iter::once(OutboxEventPayload::BalanceUpdated {
                     source: DataSource::Remote { id: origin },
                     balance,

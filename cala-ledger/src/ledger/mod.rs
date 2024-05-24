@@ -117,10 +117,10 @@ impl CalaLedger {
             .await
     }
 
-    #[instrument(name = "cala_ledger.post_transaction", skip(self, tx))]
+    #[instrument(name = "cala_ledger.post_transaction", skip(self, db))]
     pub async fn post_transaction_in_tx(
         &self,
-        mut tx: DbTransaction<'_, Postgres>,
+        mut db: DbTransaction<'_, Postgres>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
@@ -135,16 +135,16 @@ impl CalaLedger {
             .await?;
         let (transaction, tx_event) = self
             .transactions
-            .create_in_tx(&mut tx, prepared_tx.transaction)
+            .create_in_tx(&mut db, prepared_tx.transaction)
             .await?;
         let (entries, entry_events) = self
             .entries
-            .create_all(&mut tx, prepared_tx.entries)
+            .create_all(&mut db, prepared_tx.entries)
             .await?;
         let balance_events = self
             .balances
             .update_balances(
-                tx.begin().await?,
+                db.begin().await?,
                 transaction.created_at(),
                 transaction.journal_id(),
                 entries,
@@ -152,7 +152,7 @@ impl CalaLedger {
             .await?;
         self.outbox
             .persist_events(
-                tx,
+                db,
                 std::iter::once(tx_event)
                     .chain(entry_events)
                     .chain(balance_events),
@@ -169,10 +169,10 @@ impl CalaLedger {
     }
 
     #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, tx))]
+    #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, db))]
     pub async fn sync_outbox_event(
         &self,
-        tx: sqlx::Transaction<'_, sqlx::Postgres>,
+        db: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
         event: OutboxEvent,
     ) -> Result<(), LedgerError> {
@@ -182,37 +182,37 @@ impl CalaLedger {
             Empty => (),
             AccountCreated { account, .. } => {
                 self.accounts
-                    .sync_account_creation(tx, event.recorded_at, origin, account)
+                    .sync_account_creation(db, event.recorded_at, origin, account)
                     .await?
             }
             JournalCreated { journal, .. } => {
                 self.journals
-                    .sync_journal_creation(tx, event.recorded_at, origin, journal)
+                    .sync_journal_creation(db, event.recorded_at, origin, journal)
                     .await?
             }
             TransactionCreated { transaction, .. } => {
                 self.transactions
-                    .sync_transaction_creation(tx, event.recorded_at, origin, transaction)
+                    .sync_transaction_creation(db, event.recorded_at, origin, transaction)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {
                 self.tx_templates
-                    .sync_tx_template_creation(tx, event.recorded_at, origin, tx_template)
+                    .sync_tx_template_creation(db, event.recorded_at, origin, tx_template)
                     .await?
             }
             EntryCreated { entry, .. } => {
                 self.entries
-                    .sync_entry_creation(tx, event.recorded_at, origin, entry)
+                    .sync_entry_creation(db, event.recorded_at, origin, entry)
                     .await?
             }
             BalanceCreated { balance, .. } => {
                 self.balances
-                    .sync_balance_creation(tx, origin, balance)
+                    .sync_balance_creation(db, origin, balance)
                     .await?
             }
             BalanceUpdated { balance, .. } => {
                 self.balances
-                    .sync_balance_update(tx, origin, balance)
+                    .sync_balance_update(db, origin, balance)
                     .await?
             }
         }
