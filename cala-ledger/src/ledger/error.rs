@@ -1,12 +1,9 @@
 use thiserror::Error;
 
 use crate::{
-    account::error::AccountError,
-    balance::error::BalanceError,
-    entry::error::EntryError,
-    journal::error::JournalError,
-    outbox::{error::OutboxError, server::error::OutboxServerError},
-    transaction::error::TransactionError,
+    account::error::AccountError, account_set::error::AccountSetError,
+    balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
+    outbox::server::error::OutboxServerError, transaction::error::TransactionError,
     tx_template::error::TxTemplateError,
 };
 
@@ -18,12 +15,12 @@ pub enum LedgerError {
     SqlxMigrate(#[from] sqlx::migrate::MigrateError),
     #[error("LedgerError - Config: {0}")]
     ConfigError(String),
-    #[error("LedgerError - Outbox: {0}")]
-    Outbox(#[from] OutboxError),
     #[error("LedgerError - OutboxServer: {0}")]
     OutboxServer(#[from] OutboxServerError),
     #[error("LedgerError - AccountError: {0}")]
     AccountError(#[from] AccountError),
+    #[error("LedgerError - AccountSetError: {0}")]
+    AccountSetError(#[from] AccountSetError),
     #[error("LedgerError - JournalError: {0}")]
     JournalError(#[from] JournalError),
     #[error("LedgerError - TxTemplateError: {0}")]

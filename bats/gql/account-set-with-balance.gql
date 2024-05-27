@@ -1,0 +1,12 @@
+query accountSetWithBalance($accountSetId: UUID!, $journalId: UUID!, $currency: CurrencyCode!) {
+  accountSet(id: $accountSetId) {
+    name
+    balance(journalId: $journalId, currency: $currency) {
+      settled {
+        normalBalance {
+          units
+        }
+      }
+    }
+  }
+}

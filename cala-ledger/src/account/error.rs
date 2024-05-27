@@ -1,13 +1,11 @@
 use thiserror::Error;
 
-use crate::{outbox::error::OutboxError, primitives::AccountId};
+use crate::primitives::AccountId;
 
 #[derive(Error, Debug)]
 pub enum AccountError {
     #[error("AccountError - Sqlx: {0}")]
     Sqlx(sqlx::Error),
-    #[error("{0}")]
-    OutboxError(#[from] OutboxError),
     #[error("AccountError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
     #[error("AccountError - NotFound: id '{0}' not found")]

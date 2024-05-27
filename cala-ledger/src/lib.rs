@@ -2,6 +2,8 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 pub mod account;
+pub mod account_set;
+pub mod atomic_operation;
 pub mod balance;
 pub mod entity;
 pub mod entry;

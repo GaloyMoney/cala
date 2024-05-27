@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource, query::*};
+use crate::{atomic_operation::*, outbox::*, primitives::DataSource, query::*};
 
 pub use cursor::*;
 pub use entity::*;
@@ -39,14 +39,19 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.create", skip(self))]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut tx = self.pool.begin().await?;
-        let EntityUpdate {
-            entity: account,
-            n_new_events,
-        } = self.repo.create_in_tx(&mut tx, new_account).await?;
-        self.outbox
-            .persist_events(tx, account.events.last_persisted(n_new_events))
-            .await?;
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let account = self.create_in_op(&mut op, new_account).await?;
+        op.commit().await?;
+        Ok(account)
+    }
+
+    pub async fn create_in_op<'a>(
+        &self,
+        op: &mut AtomicOperation<'a>,
+        new_account: NewAccount,
+    ) -> Result<Account, AccountError> {
+        let account = self.repo.create_in_tx(op.tx(), new_account).await?;
+        op.accumulate(account.events.last_persisted());
         Ok(account)
     }
 
@@ -88,7 +93,7 @@ impl Accounts {
             .import(&mut db, recorded_at, origin, &mut account)
             .await?;
         self.outbox
-            .persist_events_at(db, account.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, account.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

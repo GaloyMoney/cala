@@ -1,4 +1,3 @@
-pub mod error;
 mod listener;
 mod repo;
 pub mod server;
@@ -16,7 +15,6 @@ use std::sync::{
 };
 use tokio::sync::broadcast;
 
-use error::*;
 pub use event::*;
 pub use listener::*;
 use repo::*;
@@ -34,7 +32,7 @@ pub(crate) struct Outbox {
 }
 
 impl Outbox {
-    pub(crate) async fn init(pool: &PgPool) -> Result<Self, OutboxError> {
+    pub(crate) async fn init(pool: &PgPool) -> Result<Self, sqlx::Error> {
         let buffer_size = DEFAULT_BUFFER_SIZE;
         let (sender, recv) = broadcast::channel(buffer_size);
         let repo = OutboxRepo::new(pool);
@@ -55,7 +53,7 @@ impl Outbox {
         &self,
         db: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
-    ) -> Result<(), OutboxError> {
+    ) -> Result<(), sqlx::Error> {
         self.persist_events_at(db, events, None).await
     }
 
@@ -64,7 +62,7 @@ impl Outbox {
         mut db: Transaction<'_, Postgres>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
         recorded_at: impl Into<Option<DateTime<Utc>>>,
-    ) -> Result<(), OutboxError> {
+    ) -> Result<(), sqlx::Error> {
         let recorded_at = recorded_at.into();
         let events = self
             .repo
@@ -77,7 +75,7 @@ impl Outbox {
             new_highest_sequence = event.sequence;
             self.event_sender
                 .send(event)
-                .map_err(|_| OutboxError::SendEventError)?;
+                .expect("event receiver dropped");
         }
         self.highest_known_sequence
             .fetch_max(u64::from(new_highest_sequence), Ordering::AcqRel);
@@ -87,7 +85,7 @@ impl Outbox {
     pub async fn register_listener(
         &self,
         start_after: Option<EventSequence>,
-    ) -> Result<OutboxListener, OutboxError> {
+    ) -> Result<OutboxListener, sqlx::Error> {
         let sub = self.event_receiver.resubscribe();
         let latest_known = EventSequence::from(self.highest_known_sequence.load(Ordering::Relaxed));
         let start = start_after.unwrap_or(latest_known);
@@ -104,7 +102,7 @@ impl Outbox {
         pool: &PgPool,
         sender: broadcast::Sender<OutboxEvent>,
         highest_known_sequence: Arc<AtomicU64>,
-    ) -> Result<(), OutboxError> {
+    ) -> Result<(), sqlx::Error> {
         let mut listener = PgListener::connect_with(pool).await?;
         listener.listen("cala_outbox_events").await?;
         tokio::spawn(async move {

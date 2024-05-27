@@ -10,6 +10,8 @@ use error::*;
 
 use crate::{
     account::Accounts,
+    account_set::AccountSets,
+    atomic_operation::*,
     balance::Balances,
     entry::Entries,
     journal::Journals,
@@ -30,6 +32,7 @@ use import_deps::*;
 pub struct CalaLedger {
     pool: PgPool,
     accounts: Accounts,
+    account_sets: AccountSets,
     journals: Journals,
     transactions: Transactions,
     tx_templates: TxTemplates,
@@ -68,6 +71,7 @@ impl CalaLedger {
         }
 
         let accounts = Accounts::new(&pool, outbox.clone());
+        let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts);
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
@@ -75,6 +79,7 @@ impl CalaLedger {
         let balances = Balances::new(&pool, outbox.clone());
         Ok(Self {
             accounts,
+            account_sets,
             journals,
             tx_templates,
             outbox,
@@ -86,8 +91,16 @@ impl CalaLedger {
         })
     }
 
+    pub async fn start_atomic_operation(&self) -> Result<AtomicOperation<'_>, LedgerError> {
+        Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
+    }
+
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
+    }
+
+    pub fn account_sets(&self) -> &AccountSets {
+        &self.account_sets
     }
 
     pub fn journals(&self) -> &Journals {
@@ -183,6 +196,11 @@ impl CalaLedger {
             AccountCreated { account, .. } => {
                 self.accounts
                     .sync_account_creation(db, event.recorded_at, origin, account)
+                    .await?
+            }
+            AccountSetCreated { account_set, .. } => {
+                self.account_sets
+                    .sync_account_set_creation(db, event.recorded_at, origin, account_set)
                     .await?
             }
             JournalCreated { journal, .. } => {

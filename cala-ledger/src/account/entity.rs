@@ -113,6 +113,8 @@ pub struct NewAccount {
     pub(super) status: Status,
     #[builder(setter(custom), default)]
     pub(super) metadata: Option<serde_json::Value>,
+    #[builder(setter(custom), default)]
+    pub(super) is_account_set: bool,
 }
 
 impl NewAccount {
@@ -134,6 +136,9 @@ impl NewAccount {
                     status: self.status,
                     description: self.description,
                     metadata: self.metadata,
+                    config: AccountConfig {
+                        is_account_set: self.is_account_set,
+                    },
                 },
             }],
         )
@@ -147,6 +152,11 @@ impl NewAccountBuilder {
     ) -> Result<&mut Self, serde_json::Error> {
         self.metadata = Some(Some(serde_json::to_value(metadata)?));
         Ok(self)
+    }
+
+    pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {
+        self.is_account_set = Some(is_account_set);
+        self
     }
 }
 

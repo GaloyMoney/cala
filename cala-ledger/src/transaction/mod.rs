@@ -45,7 +45,7 @@ impl Transactions {
         } = self.repo.create_in_tx(db, new_transaction).await?;
         let event = transaction
             .events
-            .last_persisted(1)
+            .last_n_persisted(1)
             .next()
             .expect("should have event")
             .into();
@@ -81,7 +81,7 @@ impl Transactions {
             .import(&mut db, recorded_at, origin, &mut transaction)
             .await?;
         self.outbox
-            .persist_events_at(db, transaction.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, transaction.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

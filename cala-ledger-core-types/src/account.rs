@@ -13,4 +13,10 @@ pub struct AccountValues {
     pub external_id: Option<String>,
     pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
+    pub config: AccountConfig,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct AccountConfig {
+    pub is_account_set: bool,
 }

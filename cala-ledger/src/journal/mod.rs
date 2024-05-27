@@ -43,7 +43,7 @@ impl Journals {
         } = self.repo.create_in_tx(&mut tx, new_journal).await?;
 
         self.outbox
-            .persist_events(tx, journal.events.last_persisted(n_new_events))
+            .persist_events(tx, journal.events.last_n_persisted(n_new_events))
             .await?;
         Ok(journal)
     }
@@ -69,7 +69,7 @@ impl Journals {
             .import(&mut db, recorded_at, origin, &mut journal)
             .await?;
         self.outbox
-            .persist_events_at(db, journal.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, journal.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

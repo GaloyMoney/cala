@@ -56,7 +56,7 @@ impl TxTemplates {
             n_new_events,
         } = self.repo.create_in_tx(&mut tx, new_tx_template).await?;
         self.outbox
-            .persist_events(tx, tx_template.events.last_persisted(n_new_events))
+            .persist_events(tx, tx_template.events.last_n_persisted(n_new_events))
             .await?;
         Ok(tx_template)
     }
@@ -147,18 +147,18 @@ impl TxTemplates {
                 .transaction_id(transaction_id)
                 .journal_id(journal_id)
                 .sequence(zero_based_sequence as u32 + 1);
-            let account_id: Uuid = entry.account_id.try_evaluate(&ctx)?;
+            let account_id: Uuid = entry.account_id.try_evaluate(ctx)?;
             builder.account_id(account_id);
 
-            let entry_type: String = entry.entry_type.try_evaluate(&ctx)?;
+            let entry_type: String = entry.entry_type.try_evaluate(ctx)?;
             builder.entry_type(entry_type);
 
-            let layer: Layer = entry.layer.try_evaluate(&ctx)?;
+            let layer: Layer = entry.layer.try_evaluate(ctx)?;
             builder.layer(layer);
 
-            let units: Decimal = entry.units.try_evaluate(&ctx)?;
-            let currency: Currency = entry.currency.try_evaluate(&ctx)?;
-            let direction: DebitOrCredit = entry.direction.try_evaluate(&ctx)?;
+            let units: Decimal = entry.units.try_evaluate(ctx)?;
+            let currency: Currency = entry.currency.try_evaluate(ctx)?;
+            let direction: DebitOrCredit = entry.direction.try_evaluate(ctx)?;
 
             let total = totals.entry((currency, layer)).or_insert(Decimal::ZERO);
             match direction {
@@ -170,7 +170,7 @@ impl TxTemplates {
             builder.direction(direction);
 
             if let Some(description) = entry.description.as_ref() {
-                let description: String = description.try_evaluate(&ctx)?;
+                let description: String = description.try_evaluate(ctx)?;
                 builder.description(description);
             }
 
@@ -199,7 +199,7 @@ impl TxTemplates {
             .import(&mut db, recorded_at, origin, &mut tx_template)
             .await?;
         self.outbox
-            .persist_events_at(db, tx_template.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, tx_template.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

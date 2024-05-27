@@ -5,13 +5,11 @@ use cala_types::balance::BalanceSnapshot;
 use crate::primitives::*;
 
 use crate::{
-    account::AccountValues,
+    account::*,
+    account_set::AccountSetValues,
     entry::*,
     journal::JournalValues,
-    outbox::{
-        error::OutboxError,
-        event::{OutboxEvent, OutboxEventPayload},
-    },
+    outbox::event::{OutboxEvent, OutboxEventPayload},
     transaction::TransactionValues,
     tx_template::*,
 };
@@ -34,6 +32,13 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                     account: Some(proto::Account::from(account)),
                 })
             }
+            OutboxEventPayload::AccountSetCreated {
+                source,
+                account_set,
+            } => proto::cala_ledger_event::Payload::AccountSetCreated(proto::AccountSetCreated {
+                data_source_id: source.to_string(),
+                account_set: Some(proto::AccountSet::from(account_set)),
+            }),
             OutboxEventPayload::JournalCreated { source, journal } => {
                 proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
                     data_source_id: source.to_string(),
@@ -95,6 +100,7 @@ impl From<AccountValues> for proto::Account {
             status,
             description,
             metadata,
+            config,
         }: AccountValues,
     ) -> Self {
         let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
@@ -107,6 +113,42 @@ impl From<AccountValues> for proto::Account {
             external_id,
             normal_balance_type: normal_balance_type as i32,
             status: status as i32,
+            description,
+            metadata: metadata.map(|json| {
+                serde_json::from_value(json).expect("Could not transfer json -> struct")
+            }),
+            config: Some(proto::AccountConfig::from(config)),
+        }
+    }
+}
+
+impl From<AccountConfig> for proto::AccountConfig {
+    fn from(config: AccountConfig) -> Self {
+        proto::AccountConfig {
+            is_account_set: config.is_account_set,
+        }
+    }
+}
+
+impl From<AccountSetValues> for proto::AccountSet {
+    fn from(
+        AccountSetValues {
+            id,
+            version,
+            journal_id,
+            name,
+            normal_balance_type,
+            description,
+            metadata,
+        }: AccountSetValues,
+    ) -> Self {
+        let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
+        proto::AccountSet {
+            id: id.to_string(),
+            version,
+            journal_id: journal_id.to_string(),
+            name,
+            normal_balance_type: normal_balance_type as i32,
             description,
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
@@ -389,14 +431,5 @@ impl From<Layer> for proto::Layer {
             Layer::Pending => proto::Layer::Pending,
             Layer::Encumbered => proto::Layer::Encumbered,
         }
-    }
-}
-
-impl From<OutboxError> for tonic::Status {
-    fn from(err: OutboxError) -> Self {
-        // match err {
-        //     _ => tonic::Status::internal(err.to_string()),
-        // }
-        tonic::Status::internal(err.to_string())
     }
 }

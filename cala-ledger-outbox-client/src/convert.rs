@@ -1,6 +1,6 @@
 use cala_types::{
-    account::*, balance::*, entry::*, journal::*, outbox::*, primitives::*, transaction::*,
-    tx_template::*,
+    account::*, account_set::*, balance::*, entry::*, journal::*, outbox::*, primitives::*,
+    transaction::*, tx_template::*,
 };
 use cel_interpreter::CelExpression;
 
@@ -40,6 +40,15 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 source: data_source_id.parse()?,
                 account: AccountValues::try_from(
                     account.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+            },
+            proto::cala_ledger_event::Payload::AccountSetCreated(proto::AccountSetCreated {
+                data_source_id,
+                account_set,
+            }) => AccountSetCreated {
+                source: data_source_id.parse()?,
+                account_set: AccountSetValues::try_from(
+                    account_set.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
             proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
@@ -120,6 +129,39 @@ impl TryFrom<proto::Account> for AccountValues {
             normal_balance_type,
             status,
             description: account.description,
+            metadata,
+            config: AccountConfig::from(
+                account
+                    .config
+                    .ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            ),
+        };
+        Ok(res)
+    }
+}
+
+impl From<proto::AccountConfig> for AccountConfig {
+    fn from(config: proto::AccountConfig) -> Self {
+        Self {
+            is_account_set: config.is_account_set,
+        }
+    }
+}
+
+impl TryFrom<proto::AccountSet> for AccountSetValues {
+    type Error = CalaLedgerOutboxClientError;
+
+    fn try_from(account_set: proto::AccountSet) -> Result<Self, Self::Error> {
+        let metadata = account_set.metadata.map(serde_json::to_value).transpose()?;
+        let normal_balance_type = proto::DebitOrCredit::try_from(account_set.normal_balance_type)
+            .map(DebitOrCredit::from)?;
+        let res = Self {
+            id: account_set.id.parse()?,
+            version: account_set.version,
+            journal_id: account_set.journal_id.parse()?,
+            name: account_set.name,
+            normal_balance_type,
+            description: account_set.description,
             metadata,
         };
         Ok(res)

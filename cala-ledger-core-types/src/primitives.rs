@@ -6,6 +6,7 @@ use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
 
 crate::entity_id! { OutboxEventId }
 crate::entity_id! { AccountId }
+crate::entity_id! { AccountSetId }
 crate::entity_id! { JournalId }
 crate::entity_id! { DataSourceId }
 crate::entity_id! { TxTemplateId }
