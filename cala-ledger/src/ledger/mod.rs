@@ -91,7 +91,7 @@ impl CalaLedger {
         })
     }
 
-    pub async fn begin_operation(&self) -> Result<AtomicOperation<'_>, LedgerError> {
+    pub async fn begin_operation<'a>(&self) -> Result<AtomicOperation<'a>, LedgerError> {
         Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
     }
 

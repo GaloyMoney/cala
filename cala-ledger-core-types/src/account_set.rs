@@ -14,7 +14,7 @@ pub struct AccountSetValues {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type", content = "id")]
 pub enum AccountSetMember {
     Account(AccountId),
     // AccountSet(AccountSetId),

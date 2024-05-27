@@ -62,7 +62,6 @@ teardown_file() {
     }'
   )
   exec_graphql 'account-create' "$variables"
-  echo $(graphql_output)
   output=$(graphql_output '.data.accountCreate.account.accountId')
   [[ "$output" != "null" ]] || exit 1
 
