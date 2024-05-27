@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource};
+use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -36,15 +36,19 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
     pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
-        let mut tx = self.pool.begin().await?;
-        let EntityUpdate {
-            entity: journal,
-            n_new_events,
-        } = self.repo.create_in_tx(&mut tx, new_journal).await?;
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let journal = self.create_in_op(&mut op, new_journal).await?;
+        op.commit().await?;
+        Ok(journal)
+    }
 
-        self.outbox
-            .persist_events(tx, journal.events.last_n_persisted(n_new_events))
-            .await?;
+    pub async fn create_in_op<'a>(
+        &self,
+        op: &mut AtomicOperation<'a>,
+        new_journal: NewJournal,
+    ) -> Result<Journal, JournalError> {
+        let journal = self.repo.create_in_tx(op.tx(), new_journal).await?;
+        op.accumulate(journal.events.last_persisted());
         Ok(journal)
     }
 
