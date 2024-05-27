@@ -1,13 +1,11 @@
 use thiserror::Error;
 
-use crate::{outbox::error::OutboxError, primitives::AccountSetId};
+use crate::primitives::AccountSetId;
 
 #[derive(Error, Debug)]
 pub enum AccountSetError {
     #[error("AccountSetError - Sqlx: {0}")]
     Sqlx(#[from] sqlx::Error),
-    #[error("{0}")]
-    OutboxError(#[from] OutboxError),
     #[error("AccountSetError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
     #[error("AccountSetError - AccountError: {0}")]

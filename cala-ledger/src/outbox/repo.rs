@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
 
-use super::{error::*, event::*};
+use super::event::*;
 
 #[derive(Clone)]
 pub(super) struct OutboxRepo {
@@ -13,7 +13,7 @@ impl OutboxRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn highest_known_sequence(&self) -> Result<EventSequence, OutboxError> {
+    pub async fn highest_known_sequence(&self) -> Result<EventSequence, sqlx::Error> {
         let row =
             sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max!" FROM cala_outbox_events"#)
                 .fetch_one(&self.pool)
@@ -26,7 +26,7 @@ impl OutboxRepo {
         db: &mut Transaction<'_, Postgres>,
         recorded_at: Option<DateTime<Utc>>,
         events: impl Iterator<Item = OutboxEventPayload>,
-    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+    ) -> Result<Vec<OutboxEvent>, sqlx::Error> {
         let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(format!(
             "WITH new_events AS (INSERT INTO cala_outbox_events (payload{})",
             recorded_at.map(|_| ", recorded_at").unwrap_or("")
@@ -63,7 +63,7 @@ impl OutboxRepo {
         &self,
         from_sequence: EventSequence,
         buffer_size: usize,
-    ) -> Result<Vec<OutboxEvent>, OutboxError> {
+    ) -> Result<Vec<OutboxEvent>, sqlx::Error> {
         let rows = sqlx::query!(
             r#"
             WITH max_sequence AS (

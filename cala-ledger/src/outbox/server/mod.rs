@@ -39,7 +39,8 @@ impl OutboxService for OutboxServer {
         let outbox_listener = self
             .outbox
             .register_listener(after_sequence.map(EventSequence::from))
-            .await?;
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(Response::new(Box::pin(
             outbox_listener
                 .map(|event| Ok(proto::CalaLedgerEvent::from(event)))

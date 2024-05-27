@@ -9,10 +9,7 @@ use crate::{
     account_set::AccountSetValues,
     entry::*,
     journal::JournalValues,
-    outbox::{
-        error::OutboxError,
-        event::{OutboxEvent, OutboxEventPayload},
-    },
+    outbox::event::{OutboxEvent, OutboxEventPayload},
     transaction::TransactionValues,
     tx_template::*,
 };
@@ -434,14 +431,5 @@ impl From<Layer> for proto::Layer {
             Layer::Pending => proto::Layer::Pending,
             Layer::Encumbered => proto::Layer::Encumbered,
         }
-    }
-}
-
-impl From<OutboxError> for tonic::Status {
-    fn from(err: OutboxError) -> Self {
-        // match err {
-        //     _ => tonic::Status::internal(err.to_string()),
-        // }
-        tonic::Status::internal(err.to_string())
     }
 }

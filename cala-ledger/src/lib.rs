@@ -3,6 +3,7 @@
 
 pub mod account;
 pub mod account_set;
+pub mod atomic_operation;
 pub mod balance;
 pub mod entity;
 pub mod entry;
