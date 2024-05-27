@@ -36,7 +36,7 @@ impl Entries {
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let entries = self.repo.create_all(op.tx(), entries).await?;
-        op.accumulate_all(
+        op.accumulate(
             entries
                 .iter()
                 .map(|values| OutboxEventPayload::EntryCreated {
@@ -60,11 +60,7 @@ impl Entries {
             .import(&mut db, recorded_at, origin, &mut entry)
             .await?;
         self.outbox
-            .persist_events_at(
-                db,
-                std::iter::once(entry.events.last_persisted()),
-                recorded_at,
-            )
+            .persist_events_at(db, entry.events.last_persisted(), recorded_at)
             .await?;
         Ok(())
     }

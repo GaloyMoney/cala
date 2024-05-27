@@ -21,11 +21,7 @@ impl<'a> AtomicOperation<'a> {
         &mut self.tx
     }
 
-    pub(crate) fn accumulate(&mut self, event: impl Into<OutboxEventPayload>) {
-        self.accumulated_events.push(event.into())
-    }
-
-    pub(crate) fn accumulate_all(
+    pub(crate) fn accumulate(
         &mut self,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
     ) {

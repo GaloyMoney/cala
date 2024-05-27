@@ -73,7 +73,7 @@ impl Journals {
             .import(&mut db, recorded_at, origin, &mut journal)
             .await?;
         self.outbox
-            .persist_events_at(db, journal.events.last_n_persisted(1), recorded_at)
+            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
             .await?;
         Ok(())
     }

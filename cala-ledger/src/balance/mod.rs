@@ -73,7 +73,7 @@ impl Balances {
             .insert_new_snapshots(&mut db, journal_id, &new_balances)
             .await?;
         db.commit().await?;
-        op.accumulate_all(new_balances.into_iter().map(|balance| {
+        op.accumulate(new_balances.into_iter().map(|balance| {
             if balance.version == 1 {
                 OutboxEventPayload::BalanceCreated {
                     source: DataSource::Local,
