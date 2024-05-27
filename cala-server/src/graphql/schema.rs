@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
-type Op<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
+type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
 
 pub struct Query;
 
@@ -200,7 +200,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<Op>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account::NewAccount::builder();
@@ -245,7 +245,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountSetCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<Op>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::NewAccountSet::builder();
@@ -277,7 +277,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<Op>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::journal::NewJournal::builder();

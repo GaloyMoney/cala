@@ -10,7 +10,7 @@ teardown_file() {
   stop_server
 }
 
-@test "cala: check balance updates for an account set" {
+@test "account-set: check balance updates for an account set" {
   journal_id=$(random_uuid)
   variables=$(
     jq -n \

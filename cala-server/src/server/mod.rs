@@ -4,6 +4,7 @@ use async_graphql::*;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{routing::get, Extension, Router};
 use axum_extra::headers::HeaderMap;
+use cala_ledger::CalaLedger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -15,7 +16,8 @@ pub async fn run<M: MutationExtensionMarker>(
     config: ServerConfig,
     app: CalaApp,
 ) -> anyhow::Result<()> {
-    let schema = graphql::schema::<M>(Some(app.clone()));
+    let ledger = app.ledger().clone();
+    let schema = graphql::schema::<M>(Some(app));
 
     let app = Router::new()
         .route(
@@ -23,7 +25,7 @@ pub async fn run<M: MutationExtensionMarker>(
             get(playground).post(axum::routing::post(graphql_handler::<M>)),
         )
         .layer(Extension(schema))
-        .layer(Extension(app));
+        .layer(Extension(ledger));
 
     println!("Starting graphql server on port {}", config.port);
     let listener =
@@ -36,7 +38,7 @@ pub async fn run<M: MutationExtensionMarker>(
 pub async fn graphql_handler<M: MutationExtensionMarker>(
     headers: HeaderMap,
     schema: Extension<Schema<graphql::Query, graphql::CoreMutation<M>, EmptySubscription>>,
-    Extension(app): Extension<CalaApp>,
+    Extension(ledger): Extension<CalaLedger>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {
     cala_tracing::http::extract_tracing(&headers);
@@ -48,7 +50,7 @@ pub async fn graphql_handler<M: MutationExtensionMarker>(
             .iter()
             .any(|(_, o)| o.node.ty == async_graphql::parser::types::OperationType::Mutation)
         {
-            let operation = Arc::new(Mutex::new(match app.ledger().begin_operation().await {
+            let operation = Arc::new(Mutex::new(match ledger.begin_operation().await {
                 Err(e) => {
                     return async_graphql::Response::from_errors(vec![
                         async_graphql::ServerError::new(e.to_string(), None),
