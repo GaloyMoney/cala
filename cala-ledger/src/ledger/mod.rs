@@ -125,13 +125,18 @@ impl CalaLedger {
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
     ) -> Result<Transaction, LedgerError> {
-        self.post_transaction_in_tx(tx_id, tx_template_code, params)
-            .await
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let transaction = self
+            .post_transaction_in_op(&mut op, tx_id, tx_template_code, params)
+            .await?;
+        op.commit().await?;
+        Ok(transaction)
     }
 
-    #[instrument(name = "cala_ledger.post_transaction", skip(self))]
-    pub async fn post_transaction_in_tx(
+    #[instrument(name = "cala_ledger.post_transaction", skip(self, op))]
+    pub async fn post_transaction_in_op<'a>(
         &self,
+        op: &mut AtomicOperation<'a>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
@@ -144,24 +149,22 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
             .transactions
-            .create_in_op(&mut op, prepared_tx.transaction)
+            .create_in_op(op, prepared_tx.transaction)
             .await?;
         let entries = self
             .entries
-            .create_all_in_op(&mut op, prepared_tx.entries)
+            .create_all_in_op(op, prepared_tx.entries)
             .await?;
         self.balances
-            .update_balances(
-                &mut op,
+            .update_balances_in_op(
+                op,
                 transaction.created_at(),
                 transaction.journal_id(),
                 entries,
             )
             .await?;
-        op.commit().await?;
         Ok(transaction)
     }
 

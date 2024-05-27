@@ -55,7 +55,7 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
-    pub(crate) async fn update_balances<'a>(
+    pub(crate) async fn update_balances_in_op<'a>(
         &self,
         op: &mut AtomicOperation<'a>,
         created_at: DateTime<Utc>,
