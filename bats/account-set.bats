@@ -45,25 +45,26 @@ teardown_file() {
   output=$(graphql_output '.data.accountSetCreate.accountSet.accountSetId')
   [[ "$output" != "null" ]] || exit 1
 
-  # # create assets and liabilities accounts
-  # liability_account_id=$(random_uuid)
-  # variables=$(
-  #   jq -n \
-  #   --arg liability_account_id "$liability_account_id" \
-  #   --arg account_set_id "$account_set_id" \
-  #   '{
-  #     "input": {
-  #       "accountId": $liability_account_id,
-  #       "name": "Alice - Checking",
-  #       "code": ("ALICE.CHECKING-" + $liability_account_id),
-  #       "accountSetIds": [$account_set_id],
-  #       "normalBalanceType": "CREDIT"
-  #     }
-  #   }'
-  # )
-  # exec_graphql 'account-create' "$variables"
-  # output=$(graphql_output '.data.accountCreate.account.accountId')
-  # [[ "$output" != "null" ]] || exit 1
+  # create assets and liabilities accounts
+  liability_account_id=$(random_uuid)
+  variables=$(
+    jq -n \
+    --arg liability_account_id "$liability_account_id" \
+    --arg account_set_id "$account_set_id" \
+    '{
+      "input": {
+        "accountId": $liability_account_id,
+        "name": "Alice - Checking",
+        "code": ("ALICE.CHECKING-" + $liability_account_id),
+        "accountSetIds": [$account_set_id],
+        "normalBalanceType": "CREDIT"
+      }
+    }'
+  )
+  exec_graphql 'account-create' "$variables"
+  echo $(graphql_output)
+  output=$(graphql_output '.data.accountCreate.account.accountId')
+  [[ "$output" != "null" ]] || exit 1
 
   # asset_account_id=$(random_uuid)
   # variables=$(

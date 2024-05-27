@@ -5,7 +5,7 @@ mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
+use sqlx::PgPool;
 use tracing::instrument;
 
 #[cfg(feature = "import")]
@@ -65,16 +65,16 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    pub async fn add_to_account_set_in_tx(
+    pub async fn add_to_account_set_in_op(
         &self,
-        db: &mut DbTransaction<'_, Postgres>,
+        op: &mut AtomicOperation<'_>,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member: impl Into<AccountSetMember>,
     ) -> Result<AccountSet, AccountSetError> {
         let account_set = self.repo.find(account_set_id).await?;
-        let AccountSetMember::Account(account_id) = member;
+        let AccountSetMember::Account(account_id) = member.into();
         self.repo
-            .add_member_account(db, account_set_id, account_id)
+            .add_member_account(op.tx(), account_set_id, account_id)
             .await?;
         Ok(account_set)
     }
