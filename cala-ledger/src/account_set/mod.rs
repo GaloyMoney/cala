@@ -92,7 +92,7 @@ impl AccountSets {
             .import(&mut db, recorded_at, origin, &mut account_set)
             .await?;
         self.outbox
-            .persist_events_at(db, account_set.events.last_n_persisted(1), recorded_at)
+            .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
             .await?;
         Ok(())
     }

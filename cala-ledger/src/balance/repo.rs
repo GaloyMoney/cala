@@ -113,9 +113,9 @@ impl BalanceRepo {
         name = "cala_ledger.balances.find_for_update",
         skip(self, db)
     )]
-    pub(super) async fn find_for_update<'a>(
+    pub(super) async fn find_for_update(
         &self,
-        db: &mut Transaction<'a, Postgres>,
+        db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
     ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {

@@ -23,7 +23,7 @@ impl JournalRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         new_journal: NewJournal,
-    ) -> Result<EntityUpdate<Journal>, JournalError> {
+    ) -> Result<Journal, JournalError> {
         let id = new_journal.id;
         sqlx::query!(
             r#"INSERT INTO cala_journals (id, name)
@@ -34,12 +34,9 @@ impl JournalRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_journal.initial_events();
-        let n_new_events = events.persist(db).await?;
+        events.persist(db).await?;
         let journal = Journal::try_from(events)?;
-        Ok(EntityUpdate {
-            entity: journal,
-            n_new_events,
-        })
+        Ok(journal)
     }
 
     pub(super) async fn find_all<T: From<Journal>>(

@@ -4,11 +4,11 @@ mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{outbox::*, primitives::DataSource};
+use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -30,20 +30,21 @@ impl Entries {
         }
     }
 
-    pub(crate) async fn create_all(
+    pub(crate) async fn create_all_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut AtomicOperation<'_>,
         entries: Vec<NewEntry>,
-    ) -> Result<(Vec<EntryValues>, Vec<OutboxEventPayload>), EntryError> {
-        let entries = self.repo.create_all(db, entries).await?;
-        let events = entries
-            .iter()
-            .map(|values| OutboxEventPayload::EntryCreated {
-                source: DataSource::Local,
-                entry: values.clone(),
-            })
-            .collect();
-        Ok((entries, events))
+    ) -> Result<Vec<EntryValues>, EntryError> {
+        let entries = self.repo.create_all(op.tx(), entries).await?;
+        op.accumulate(
+            entries
+                .iter()
+                .map(|values| OutboxEventPayload::EntryCreated {
+                    source: DataSource::Local,
+                    entry: values.clone(),
+                }),
+        );
+        Ok(entries)
     }
 
     #[cfg(feature = "import")]
@@ -59,7 +60,7 @@ impl Entries {
             .import(&mut db, recorded_at, origin, &mut entry)
             .await?;
         self.outbox
-            .persist_events_at(db, entry.events.last_n_persisted(1), recorded_at)
+            .persist_events_at(db, entry.events.last_persisted(), recorded_at)
             .await?;
         Ok(())
     }

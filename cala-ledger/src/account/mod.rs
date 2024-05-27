@@ -45,9 +45,9 @@ impl Accounts {
         Ok(account)
     }
 
-    pub async fn create_in_op<'a>(
+    pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let account = self.repo.create_in_tx(op.tx(), new_account).await?;
@@ -93,7 +93,7 @@ impl Accounts {
             .import(&mut db, recorded_at, origin, &mut account)
             .await?;
         self.outbox
-            .persist_events_at(db, account.events.last_n_persisted(1), recorded_at)
+            .persist_events_at(db, account.events.last_persisted(), recorded_at)
             .await?;
         Ok(())
     }

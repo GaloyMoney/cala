@@ -25,7 +25,7 @@ impl TxTemplateRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         new_tx_template: NewTxTemplate,
-    ) -> Result<EntityUpdate<TxTemplate>, TxTemplateError> {
+    ) -> Result<TxTemplate, TxTemplateError> {
         let id = new_tx_template.id;
         sqlx::query!(
             r#"INSERT INTO cala_tx_templates (id, code)
@@ -36,12 +36,9 @@ impl TxTemplateRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_tx_template.initial_events();
-        let n_new_events = events.persist(db).await?;
+        events.persist(db).await?;
         let tx_template = TxTemplate::try_from(events)?;
-        Ok(EntityUpdate {
-            entity: tx_template,
-            n_new_events,
-        })
+        Ok(tx_template)
     }
 
     pub(super) async fn find_all<T: From<TxTemplate>>(
