@@ -78,7 +78,6 @@ teardown_file() {
     "assetAccountId": ("uuid(\u0027" + $assetAccountId + "\u0027)"),
     "journalId": ("uuid(\u0027" + $journalId + "\u0027)")
   }')
-
   exec_graphql 'tx-template-create' "$variables"
 
   # post transaction
@@ -116,6 +115,5 @@ teardown_file() {
   )
   exec_graphql 'account-with-balance' "$variables"
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
-  echo $balance
   [[ $balance == "9.53" ]] || exit 1
 }
