@@ -1,0 +1,20 @@
+mutation journalCreate($id: UUID!, $anotherId: UUID!) {
+  first: journalCreate(input: {
+    journalId: $id
+    name: "Multi-Test 1"
+  }) {
+    journal {
+      journalId
+      name
+    }
+  }
+  second: journalCreate(input: {
+    journalId: $anotherId
+    name: "Multi-Test 2"
+  }) {
+    journal {
+      journalId
+      name
+    }
+  }
+}

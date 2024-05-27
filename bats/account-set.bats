@@ -10,7 +10,7 @@ teardown_file() {
   stop_server
 }
 
-@test "cala: check balance updates for an account set" {
+@test "account-set: check balance updates for an account set" {
   journal_id=$(random_uuid)
   variables=$(
     jq -n \
@@ -62,7 +62,6 @@ teardown_file() {
     }'
   )
   exec_graphql 'account-create' "$variables"
-  echo $(graphql_output)
   output=$(graphql_output '.data.accountCreate.account.accountId')
   [[ "$output" != "null" ]] || exit 1
 

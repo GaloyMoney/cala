@@ -1,11 +1,15 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use super::{
     account::*, account_set::*, balance::*, job::*, journal::*, loader::*, primitives::*,
     transaction::*, tx_template::*,
 };
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
+
+type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
 
 pub struct Query;
 
@@ -195,7 +199,10 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: AccountCreateInput,
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let mut op = app.ledger().begin_operation().await?;
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let mut builder = cala_ledger::account::NewAccount::builder();
         builder
             .id(input.account_id)
@@ -228,8 +235,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             }
         }
 
-        op.commit().await?;
-
         Ok(account.into())
     }
 
@@ -239,6 +244,10 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: AccountSetCreateInput,
     ) -> Result<AccountSetCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::NewAccountSet::builder();
         builder
             .id(input.account_set_id)
@@ -252,7 +261,11 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if let Some(metadata) = input.metadata {
             builder.metadata(metadata)?;
         }
-        let account_set = app.ledger().account_sets().create(builder.build()?).await?;
+        let account_set = app
+            .ledger()
+            .account_sets()
+            .create_in_op(&mut op, builder.build()?)
+            .await?;
 
         Ok(account_set.into())
     }
@@ -263,12 +276,20 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: JournalCreateInput,
     ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let mut builder = cala_ledger::journal::NewJournal::builder();
         builder.id(input.journal_id).name(input.name);
         if let Some(description) = input.description {
             builder.description(description);
         }
-        let journal = app.ledger().journals().create(builder.build()?).await?;
+        let journal = app
+            .ledger()
+            .journals()
+            .create_in_op(&mut op, builder.build()?)
+            .await?;
 
         Ok(journal.into())
     }

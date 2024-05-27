@@ -15,6 +15,7 @@ pub mod tx_template;
 mod ledger;
 pub mod outbox;
 
+pub use atomic_operation::*;
 pub use ledger::*;
 
 pub mod primitives {
