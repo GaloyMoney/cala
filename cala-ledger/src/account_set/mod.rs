@@ -1,10 +1,11 @@
 mod entity;
 pub mod error;
+mod member;
 mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 use tracing::instrument;
 
 #[cfg(feature = "import")]
@@ -13,6 +14,7 @@ use crate::{account::*, entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
+pub use member::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -60,6 +62,20 @@ impl AccountSets {
             .into();
         self.outbox
             .persist_events(db, std::iter::once(event).chain(std::iter::once(set_event)))
+            .await?;
+        Ok(account_set)
+    }
+
+    pub async fn add_to_account_set_in_tx(
+        &self,
+        db: &mut DbTransaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        member: AccountSetMember,
+    ) -> Result<AccountSet, AccountSetError> {
+        let account_set = self.repo.find(account_set_id).await?;
+        let AccountSetMember::Account(account_id) = member;
+        self.repo
+            .add_member_account(db, account_set_id, account_id)
             .await?;
         Ok(account_set)
     }

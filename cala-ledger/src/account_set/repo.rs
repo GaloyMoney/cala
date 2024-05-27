@@ -4,20 +4,18 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::EntityUpdate, primitives::JournalId};
+use crate::{entity::*, primitives::AccountId, primitives::JournalId};
 
 use super::{entity::*, error::*};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountSetRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl AccountSetRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
     }
 
     pub async fn create_in_tx(
@@ -41,6 +39,47 @@ impl AccountSetRepo {
             entity: account_set,
             n_new_events,
         })
+    }
+
+    pub async fn add_member_account(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        account_id: AccountId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, account_id)
+            VALUES ($1, $2)"#,
+            account_set_id as AccountSetId,
+            account_id as AccountId,
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_account_sets a
+            JOIN cala_account_set_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id = $1"#,
+            account_set_id as AccountSetId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(account_set) => Ok(account_set),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(AccountSetError::CouldNotFindById(account_set_id))
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     #[cfg(feature = "import")]

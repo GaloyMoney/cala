@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::outbox::error::OutboxError;
+use crate::{outbox::error::OutboxError, primitives::AccountSetId};
 
 #[derive(Error, Debug)]
 pub enum AccountSetError {
@@ -10,6 +10,8 @@ pub enum AccountSetError {
     OutboxError(#[from] OutboxError),
     #[error("AccountSetError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
-    #[error("AccountError - AccountError: {0}")]
+    #[error("AccountSetError - AccountError: {0}")]
     AccountError(#[from] crate::account::error::AccountError),
+    #[error("AccountSetError - NotFound: id '{0}' not found")]
+    CouldNotFindById(AccountSetId),
 }

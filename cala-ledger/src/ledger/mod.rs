@@ -90,6 +90,10 @@ impl CalaLedger {
         })
     }
 
+    pub async fn start_db_tx(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, LedgerError> {
+        Ok(self.pool.begin().await?)
+    }
+
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
     }

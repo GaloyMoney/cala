@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_account_set_member_accounts (account_set_id, account_id)\n            VALUES ($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "afd2cd67429391f766aae90830a0e72a4e00cd36fc8e4b93c77fb45cd7f7c65d"
+}
