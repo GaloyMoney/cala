@@ -15,7 +15,10 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use crate::{
-    entity::*, entry::NewEntry, outbox::*, primitives::DataSource, primitives::*,
+    atomic_operation::*,
+    entry::NewEntry,
+    outbox::*,
+    primitives::{DataSource, *},
     transaction::NewTransaction,
 };
 
@@ -50,14 +53,19 @@ impl TxTemplates {
         &self,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let mut tx = self.pool.begin().await?;
-        let EntityUpdate {
-            entity: tx_template,
-            n_new_events,
-        } = self.repo.create_in_tx(&mut tx, new_tx_template).await?;
-        self.outbox
-            .persist_events(tx, tx_template.events.last_n_persisted(n_new_events))
-            .await?;
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
+        op.commit().await?;
+        Ok(tx_template)
+    }
+
+    pub async fn create_in_op<'a>(
+        &self,
+        op: &mut AtomicOperation<'a>,
+        new_tx_template: NewTxTemplate,
+    ) -> Result<TxTemplate, TxTemplateError> {
+        let tx_template = self.repo.create_in_tx(op.tx(), new_tx_template).await?;
+        op.accumulate(tx_template.events.last_persisted());
         Ok(tx_template)
     }
 
