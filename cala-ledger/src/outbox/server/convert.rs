@@ -5,7 +5,7 @@ use cala_types::balance::BalanceSnapshot;
 use crate::primitives::*;
 
 use crate::{
-    account::AccountValues,
+    account::*,
     account_set::AccountSetValues,
     entry::*,
     journal::JournalValues,
@@ -103,6 +103,7 @@ impl From<AccountValues> for proto::Account {
             status,
             description,
             metadata,
+            config,
         }: AccountValues,
     ) -> Self {
         let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
@@ -119,6 +120,15 @@ impl From<AccountValues> for proto::Account {
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),
+            config: Some(proto::AccountConfig::from(config)),
+        }
+    }
+}
+
+impl From<AccountConfig> for proto::AccountConfig {
+    fn from(config: AccountConfig) -> Self {
+        proto::AccountConfig {
+            is_account_set: config.is_account_set,
         }
     }
 }

@@ -130,8 +130,21 @@ impl TryFrom<proto::Account> for AccountValues {
             status,
             description: account.description,
             metadata,
+            config: AccountConfig::from(
+                account
+                    .config
+                    .ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            ),
         };
         Ok(res)
+    }
+}
+
+impl From<proto::AccountConfig> for AccountConfig {
+    fn from(config: proto::AccountConfig) -> Self {
+        Self {
+            is_account_set: config.is_account_set,
+        }
     }
 }
 

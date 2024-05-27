@@ -9,7 +9,7 @@ use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, outbox::*, primitives::DataSource};
+use crate::{account::*, entity::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -18,30 +18,50 @@ use repo::*;
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
+    accounts: Accounts,
     outbox: Outbox,
     pool: PgPool,
 }
 
 impl AccountSets {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox, accounts: &Accounts) -> Self {
         Self {
             repo: AccountSetRepo::new(pool),
             outbox,
+            accounts: accounts.clone(),
             pool: pool.clone(),
         }
     }
 
-    #[instrument(name = "cala_ledger.accounts.create", skip(self))]
-    pub async fn create(&self, new_account: NewAccountSet) -> Result<AccountSet, AccountSetError> {
-        let mut tx = self.pool.begin().await?;
+    #[instrument(name = "cala_ledger.account_sets.create", skip(self))]
+    pub async fn create(
+        &self,
+        new_account_set: NewAccountSet,
+    ) -> Result<AccountSet, AccountSetError> {
+        let mut db = self.pool.begin().await?;
+        let new_account = NewAccount::builder()
+            .id(uuid::Uuid::from(new_account_set.id))
+            .name(String::new())
+            .code(new_account_set.id.to_string())
+            .normal_balance_type(new_account_set.normal_balance_type)
+            .is_account_set(true)
+            .build()
+            .expect("Failed to build account");
+        let event = self.accounts.create_for_set(&mut db, new_account).await?;
         let EntityUpdate {
-            entity: account,
-            n_new_events,
-        } = self.repo.create_in_tx(&mut tx, new_account).await?;
+            entity: account_set,
+            ..
+        } = self.repo.create_in_tx(&mut db, new_account_set).await?;
+        let set_event = account_set
+            .events
+            .last_persisted(1)
+            .next()
+            .expect("should have event")
+            .into();
         self.outbox
-            .persist_events(tx, account.events.last_persisted(n_new_events))
+            .persist_events(db, std::iter::once(event).chain(std::iter::once(set_event)))
             .await?;
-        Ok(account)
+        Ok(account_set)
     }
 
     #[cfg(feature = "import")]

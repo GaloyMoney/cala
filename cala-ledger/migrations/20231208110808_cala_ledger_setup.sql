@@ -28,6 +28,28 @@ CREATE TABLE cala_account_events (
   FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id)
 );
 
+CREATE TABLE cala_account_sets (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  name VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id)
+);
+CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
+
+
+CREATE TABLE cala_account_set_events (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id, sequence),
+  FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id),
+  FOREIGN KEY (data_source_id, id) REFERENCES cala_account_sets(data_source_id, id)
+);
+
 CREATE TABLE cala_journals (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   id UUID NOT NULL,
@@ -138,27 +160,6 @@ CREATE TABLE cala_balance_history (
   UNIQUE(data_source_id, journal_id, account_id, currency, version),
   FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency),
   FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
-);
-
-CREATE TABLE cala_account_sets (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
-  name VARCHAR NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
-);
-CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
-
-
-CREATE TABLE cala_account_set_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
-  sequence INT NOT NULL,
-  event_type VARCHAR NOT NULL,
-  event JSONB NOT NULL,
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id)
 );
 
 CREATE TABLE cala_outbox_events (

@@ -10,4 +10,6 @@ pub enum AccountSetError {
     OutboxError(#[from] OutboxError),
     #[error("AccountSetEror - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
+    #[error("AccountEror - AccountError: {0}")]
+    AccountError(#[from] crate::account::error::AccountError),
 }

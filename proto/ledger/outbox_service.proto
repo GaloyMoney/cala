@@ -61,6 +61,11 @@ message Account {
   optional string external_id = 7;
   optional string description = 8;
   optional google.protobuf.Struct metadata = 9;
+  AccountConfig config = 10;
+}
+
+message AccountConfig {
+  bool is_account_set = 1;
 }
 
 message AccountSetCreated {

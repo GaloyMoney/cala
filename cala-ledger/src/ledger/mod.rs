@@ -70,7 +70,7 @@ impl CalaLedger {
         }
 
         let accounts = Accounts::new(&pool, outbox.clone());
-        let account_sets = AccountSets::new(&pool, outbox.clone());
+        let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts);
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());

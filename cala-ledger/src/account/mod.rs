@@ -6,7 +6,7 @@ mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 use tracing::instrument;
 
 use std::collections::HashMap;
@@ -48,6 +48,24 @@ impl Accounts {
             .persist_events(tx, account.events.last_persisted(n_new_events))
             .await?;
         Ok(account)
+    }
+
+    #[instrument(name = "cala_ledger.accounts.create", skip(self))]
+    pub(crate) async fn create_for_set(
+        &self,
+        db: &mut DbTransaction<'_, Postgres>,
+        new_account: NewAccount,
+    ) -> Result<OutboxEventPayload, AccountError> {
+        let EntityUpdate {
+            entity: account, ..
+        } = self.repo.create_in_tx(db, new_account).await?;
+        let event = account
+            .events
+            .last_persisted(1)
+            .next()
+            .expect("should have event")
+            .into();
+        Ok(event)
     }
 
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
