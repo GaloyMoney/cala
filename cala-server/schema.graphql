@@ -58,6 +58,32 @@ type AccountEdge {
 	cursor: String!
 }
 
+type AccountSet {
+	id: ID!
+	accountSetId: UUID!
+	version: Int!
+	journalId: UUID!
+	name: String!
+	normalBalanceType: DebitOrCredit!
+	description: String
+	metadata: JSON
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
+	balance(currency: CurrencyCode!): Balance
+}
+
+input AccountSetCreateInput {
+	accountSetId: UUID!
+	name: String!
+	normalBalanceType: DebitOrCredit! = CREDIT
+	description: String
+	metadata: JSON
+}
+
+type AccountSetCreatePayload {
+	accountSet: AccountSet!
+}
+
 type Balance {
 	id: ID!
 	journalId: UUID!
@@ -182,6 +208,7 @@ type Money {
 type Mutation {
 	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
+	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	postTransaction(input: TransactionInput!): PostTransactionPayload!

@@ -4,6 +4,7 @@
 mod id;
 
 pub mod account;
+pub mod account_set;
 pub mod balance;
 pub mod entry;
 pub mod journal;

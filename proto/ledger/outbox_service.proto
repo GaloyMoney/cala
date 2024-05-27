@@ -20,12 +20,13 @@ message CalaLedgerEvent {
   oneof payload {
     bool empty = 4;
     AccountCreated account_created = 5;
-    JournalCreated journal_created = 6;
-    TxTemplateCreated tx_template_created = 7;
-    TransactionCreated transaction_created = 8;
-    EntryCreated entry_created = 9;
-    BalanceCreated balance_created = 10;
-    BalanceUpdated balance_updated = 11;
+    AccountSetCreated account_set_created = 6;
+    JournalCreated journal_created = 7;
+    TxTemplateCreated tx_template_created = 8;
+    TransactionCreated transaction_created = 9;
+    EntryCreated entry_created = 10;
+    BalanceCreated balance_created = 11;
+    BalanceUpdated balance_updated = 12;
   }
 }
 
@@ -60,6 +61,21 @@ message Account {
   optional string external_id = 7;
   optional string description = 8;
   optional google.protobuf.Struct metadata = 9;
+}
+
+message AccountSetCreated {
+  string data_source_id = 1;
+  AccountSet account_set = 2;
+}
+
+message AccountSet {
+  string id = 1;
+  uint32 version = 2;
+  string journal_id = 3;
+  string name = 4;
+  DebitOrCredit normal_balance_type = 5;
+  optional string description = 6;
+  optional google.protobuf.Struct metadata = 7;
 }
 
 message JournalCreated {

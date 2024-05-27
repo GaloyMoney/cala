@@ -2,8 +2,8 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
 
 use super::{
-    account::*, balance::*, job::*, journal::*, loader::*, primitives::*, transaction::*,
-    tx_template::*,
+    account::*, account_set::*, balance::*, job::*, journal::*, loader::*, primitives::*,
+    transaction::*, tx_template::*,
 };
 use crate::{app::CalaApp, extension::MutationExtensionMarker};
 
@@ -215,6 +215,29 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account = app.ledger().accounts().create(builder.build()?).await?;
 
         Ok(account.into())
+    }
+
+    async fn account_set_create(
+        &self,
+        ctx: &Context<'_>,
+        input: AccountSetCreateInput,
+    ) -> Result<AccountSetCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut builder = cala_ledger::account_set::NewAccountSet::builder();
+        builder
+            .id(input.account_set_id)
+            .name(input.name)
+            .normal_balance_type(input.normal_balance_type.into());
+
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+        if let Some(metadata) = input.metadata {
+            builder.metadata(metadata)?;
+        }
+        let account_set = app.ledger().account_sets().create(builder.build()?).await?;
+
+        Ok(account_set.into())
     }
 
     async fn journal_create(

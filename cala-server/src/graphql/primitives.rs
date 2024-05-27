@@ -85,6 +85,12 @@ impl From<UUID> for cala_ledger::AccountId {
     }
 }
 
+impl From<UUID> for cala_ledger::AccountSetId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::AccountSetId::from(uuid.0)
+    }
+}
+
 impl From<UUID> for cala_ledger::JournalId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::JournalId::from(uuid.0)

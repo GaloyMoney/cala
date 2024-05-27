@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    account::*, balance::*, entry::*, journal::*, primitives::*, transaction::*, tx_template::*,
+    account::*, account_set::*, balance::*, entry::*, journal::*, primitives::*, transaction::*,
+    tx_template::*,
 };
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -30,6 +31,10 @@ pub enum OutboxEventPayload {
     AccountCreated {
         source: DataSource,
         account: AccountValues,
+    },
+    AccountSetCreated {
+        source: DataSource,
+        account_set: AccountSetValues,
     },
     JournalCreated {
         source: DataSource,
