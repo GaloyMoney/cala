@@ -1,0 +1,86 @@
+---
+id: post-transaction
+title: Post a transaction
+slug: /demo/post-transaction
+---
+
+## Post a transaction
+
+```jsx live
+function AccountCreate() {
+  const apiEndpoint = "http://localhost:8080/graphql";
+  const [response, setResponse] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const operation = `
+    mutation accountCreate($input: AccountCreateInput!) {
+      accountCreate(input: $input) {
+        account {
+          accountId
+          name
+        }
+      }
+    }
+  `;
+
+  function randomUUID() {
+    return crypto.randomUUID().toLowerCase();
+  }
+
+  const transaction_id = randomUUID();
+  const variables = {
+    input: {
+      transactionId: transaction_id,
+      txTemplateCode: `DEPOSIT-${depositTemplateId}`,
+      params: {
+        account: account_id,
+        amount: "9.53",
+        effective: "2022-09-21"
+    },
+  };
+
+  const runOp = async () => {
+    try {
+      const headers = {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      };
+
+      const res = await fetch(apiEndpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          query: operation,
+          variables,
+        }),
+      });
+      const result = await res.json();
+      if (result.errors) {
+        setErrorMessage(result.errors[0].message);
+      } else {
+        setResponse(result.data);
+      }
+    } catch (error) {
+      setErrorMessage(error.message);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={runOp}>Send the request</button>
+      <div style={{ marginTop: "10px" }}></div>
+      {errorMessage && (
+        <div style={{ color: "red" }}>Error: {errorMessage}</div>
+      )}
+      {response && (
+        <div>
+          <strong>Response:</strong>{" "}
+          <pre style={{ marginLeft: "10px" }}>
+            {JSON.stringify(response, null, 2)}
+          </pre>
+        </div>
+      )}
+    </div>
+  );
+}
+```
