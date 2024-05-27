@@ -1,8 +1,0 @@
-query listAccounts() {
-  accounts(first: 10) {
-    nodes {
-      id
-      name
-    }
-  }
-}
