@@ -91,7 +91,7 @@ impl CalaLedger {
         })
     }
 
-    pub async fn start_atomic_operation(&self) -> Result<AtomicOperation<'_>, LedgerError> {
+    pub async fn begin_operation(&self) -> Result<AtomicOperation<'_>, LedgerError> {
         Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
     }
 
@@ -195,6 +195,21 @@ impl CalaLedger {
             AccountSetCreated { account_set, .. } => {
                 self.account_sets
                     .sync_account_set_creation(db, event.recorded_at, origin, account_set)
+                    .await?
+            }
+            AccountSetMemberCreated {
+                account_set_id,
+                member,
+                ..
+            } => {
+                self.account_sets
+                    .sync_account_set_member_creation(
+                        db,
+                        event.recorded_at,
+                        origin,
+                        account_set_id,
+                        member,
+                    )
                     .await?
             }
             JournalCreated { journal, .. } => {

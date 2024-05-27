@@ -51,6 +51,28 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     account_set.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::AccountSetMemberCreated(
+                proto::AccountSetMemberCreated {
+                    data_source_id,
+                    member,
+                },
+            ) => {
+                let member = member.ok_or(CalaLedgerOutboxClientError::MissingField)?;
+                AccountSetMemberCreated {
+                    source: data_source_id.parse()?,
+                    account_set_id: member.account_set_id.parse()?,
+                    member: match member
+                        .member
+                        .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                    {
+                        proto::account_set_member::Member::AccountId(account_id) => {
+                            cala_types::account_set::AccountSetMember::from(
+                                account_id.parse::<AccountId>()?,
+                            )
+                        }
+                    },
+                }
+            }
             proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
                 data_source_id,
                 journal,

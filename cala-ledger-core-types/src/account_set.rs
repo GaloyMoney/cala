@@ -12,3 +12,16 @@ pub struct AccountSetValues {
     pub metadata: Option<serde_json::Value>,
     pub normal_balance_type: DebitOrCredit,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AccountSetMember {
+    Account(AccountId),
+    // AccountSet(AccountSetId),
+}
+
+impl From<AccountId> for AccountSetMember {
+    fn from(account_id: AccountId) -> Self {
+        AccountSetMember::Account(account_id)
+    }
+}

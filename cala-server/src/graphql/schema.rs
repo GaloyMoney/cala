@@ -195,7 +195,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: AccountCreateInput,
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let mut atomic_operation = app.ledger().start_atomic_operation().await?;
+        let mut op = app.ledger().begin_operation().await?;
         let mut builder = cala_ledger::account::NewAccount::builder();
         builder
             .id(input.account_id)
@@ -216,23 +216,19 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account = app
             .ledger()
             .accounts()
-            .create_in_op(&mut &mut atomic_operation, builder.build()?)
+            .create_in_op(&mut op, builder.build()?)
             .await?;
 
         if let Some(account_set_ids) = input.account_set_ids {
             for id in account_set_ids {
                 app.ledger()
                     .account_sets()
-                    .add_to_account_set_in_op(
-                        &mut atomic_operation,
-                        AccountSetId::from(id),
-                        account.id(),
-                    )
+                    .add_to_account_set_in_op(&mut op, AccountSetId::from(id), account.id())
                     .await?;
             }
         }
 
-        atomic_operation.commit().await?;
+        op.commit().await?;
 
         Ok(account.into())
     }
