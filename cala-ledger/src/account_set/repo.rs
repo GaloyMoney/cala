@@ -22,7 +22,7 @@ impl AccountSetRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         new_account_set: NewAccountSet,
-    ) -> Result<EntityUpdate<AccountSet>, AccountSetError> {
+    ) -> Result<AccountSet, AccountSetError> {
         sqlx::query!(
             r#"INSERT INTO cala_account_sets (id, journal_id, name)
             VALUES ($1, $2, $3)"#,
@@ -33,12 +33,9 @@ impl AccountSetRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_account_set.initial_events();
-        let n_new_events = events.persist(db).await?;
+        events.persist(db).await?;
         let account_set = AccountSet::try_from(events)?;
-        Ok(EntityUpdate {
-            entity: account_set,
-            n_new_events,
-        })
+        Ok(account_set)
     }
 
     pub async fn add_member_account(

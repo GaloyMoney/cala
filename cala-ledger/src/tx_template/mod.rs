@@ -56,7 +56,7 @@ impl TxTemplates {
             n_new_events,
         } = self.repo.create_in_tx(&mut tx, new_tx_template).await?;
         self.outbox
-            .persist_events(tx, tx_template.events.last_persisted(n_new_events))
+            .persist_events(tx, tx_template.events.last_n_persisted(n_new_events))
             .await?;
         Ok(tx_template)
     }
@@ -199,7 +199,7 @@ impl TxTemplates {
             .import(&mut db, recorded_at, origin, &mut tx_template)
             .await?;
         self.outbox
-            .persist_events_at(db, tx_template.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, tx_template.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

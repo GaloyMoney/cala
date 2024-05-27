@@ -11,6 +11,7 @@ use error::*;
 use crate::{
     account::Accounts,
     account_set::AccountSets,
+    atomic_operation::*,
     balance::Balances,
     entry::Entries,
     journal::Journals,
@@ -90,8 +91,8 @@ impl CalaLedger {
         })
     }
 
-    pub async fn start_db_tx(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>, LedgerError> {
-        Ok(self.pool.begin().await?)
+    pub async fn start_atomic_operation(&self) -> Result<AtomicOperation<'_>, LedgerError> {
+        Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
     }
 
     pub fn accounts(&self) -> &Accounts {

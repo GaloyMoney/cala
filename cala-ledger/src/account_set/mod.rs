@@ -10,7 +10,7 @@ use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{account::*, entity::*, outbox::*, primitives::DataSource};
+use crate::{account::*, atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -34,13 +34,23 @@ impl AccountSets {
             pool: pool.clone(),
         }
     }
-
     #[instrument(name = "cala_ledger.account_sets.create", skip(self))]
     pub async fn create(
         &self,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut db = self.pool.begin().await?;
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let account_set = self.create_in_op(&mut op, new_account_set).await?;
+        op.commit().await?;
+        Ok(account_set)
+    }
+
+    #[instrument(name = "cala_ledger.account_sets.create", skip(self, op))]
+    pub async fn create_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        new_account_set: NewAccountSet,
+    ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
             .id(uuid::Uuid::from(new_account_set.id))
             .name(String::new())
@@ -49,20 +59,9 @@ impl AccountSets {
             .is_account_set(true)
             .build()
             .expect("Failed to build account");
-        let event = self.accounts.create_for_set(&mut db, new_account).await?;
-        let EntityUpdate {
-            entity: account_set,
-            ..
-        } = self.repo.create_in_tx(&mut db, new_account_set).await?;
-        let set_event = account_set
-            .events
-            .last_persisted(1)
-            .next()
-            .expect("should have event")
-            .into();
-        self.outbox
-            .persist_events(db, std::iter::once(event).chain(std::iter::once(set_event)))
-            .await?;
+        self.accounts.create_in_op(op, new_account).await?;
+        let account_set = self.repo.create_in_tx(op.tx(), new_account_set).await?;
+        op.accumulate(account_set.events.last_persisted());
         Ok(account_set)
     }
 
@@ -93,7 +92,7 @@ impl AccountSets {
             .import(&mut db, recorded_at, origin, &mut account_set)
             .await?;
         self.outbox
-            .persist_events_at(db, account_set.events.last_persisted(1), recorded_at)
+            .persist_events_at(db, account_set.events.last_n_persisted(1), recorded_at)
             .await?;
         Ok(())
     }

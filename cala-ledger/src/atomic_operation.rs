@@ -17,6 +17,14 @@ impl<'a> AtomicOperation<'a> {
         })
     }
 
+    pub(crate) fn tx(&mut self) -> &mut Transaction<'a, Postgres> {
+        &mut self.tx
+    }
+
+    pub(crate) fn accumulate(&mut self, event: impl Into<OutboxEventPayload>) {
+        self.accumulated_events.push(event.into())
+    }
+
     pub async fn commit(self) -> Result<(), sqlx::Error> {
         self.outbox
             .persist_events(self.tx, self.accumulated_events)

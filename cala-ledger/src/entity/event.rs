@@ -240,9 +240,13 @@ where
         Ok((ret, false))
     }
 
-    pub fn last_persisted(&self, n: usize) -> impl Iterator<Item = &T> {
+    pub fn last_n_persisted(&self, n: usize) -> impl Iterator<Item = &T> {
         let start = self.persisted_events.len() - n;
         self.persisted_events[start..].iter()
+    }
+
+    pub fn last_persisted(&self) -> &T {
+        self.persisted_events.last().expect("No persisted events")
     }
 
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = &T> {
