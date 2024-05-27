@@ -134,9 +134,9 @@ impl CalaLedger {
     }
 
     #[instrument(name = "cala_ledger.post_transaction", skip(self, op))]
-    pub async fn post_transaction_in_op<'a>(
+    pub async fn post_transaction_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,

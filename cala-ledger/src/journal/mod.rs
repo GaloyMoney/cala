@@ -42,9 +42,9 @@ impl Journals {
         Ok(journal)
     }
 
-    pub async fn create_in_op<'a>(
+    pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
         let journal = self.repo.create_in_tx(op.tx(), new_journal).await?;

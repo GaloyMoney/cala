@@ -30,20 +30,20 @@ impl Entries {
         }
     }
 
-    pub(crate) async fn create_all_in_op<'a>(
+    pub(crate) async fn create_all_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let entries = self.repo.create_all(op.tx(), entries).await?;
-        let events = entries
-            .iter()
-            .map(|values| OutboxEventPayload::EntryCreated {
-                source: DataSource::Local,
-                entry: values.clone(),
-            })
-            .collect::<Vec<_>>();
-        op.extend(events);
+        op.accumulate_all(
+            entries
+                .iter()
+                .map(|values| OutboxEventPayload::EntryCreated {
+                    source: DataSource::Local,
+                    entry: values.clone(),
+                }),
+        );
         Ok(entries)
     }
 
@@ -60,7 +60,11 @@ impl Entries {
             .import(&mut db, recorded_at, origin, &mut entry)
             .await?;
         self.outbox
-            .persist_events_at(db, entry.events.last_n_persisted(1), recorded_at)
+            .persist_events_at(
+                db,
+                std::iter::once(entry.events.last_persisted()),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }

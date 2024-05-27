@@ -59,9 +59,9 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    pub async fn create_in_op<'a>(
+    pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
         let tx_template = self.repo.create_in_tx(op.tx(), new_tx_template).await?;

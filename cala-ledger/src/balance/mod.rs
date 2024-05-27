@@ -55,9 +55,9 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
-    pub(crate) async fn update_balances_in_op<'a>(
+    pub(crate) async fn update_balances_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
@@ -73,23 +73,19 @@ impl Balances {
             .insert_new_snapshots(&mut db, journal_id, &new_balances)
             .await?;
         db.commit().await?;
-        let events = new_balances
-            .into_iter()
-            .map(|b| {
-                if b.version == 1 {
-                    OutboxEventPayload::BalanceCreated {
-                        source: DataSource::Local,
-                        balance: b,
-                    }
-                } else {
-                    OutboxEventPayload::BalanceUpdated {
-                        source: DataSource::Local,
-                        balance: b,
-                    }
+        op.accumulate_all(new_balances.into_iter().map(|balance| {
+            if balance.version == 1 {
+                OutboxEventPayload::BalanceCreated {
+                    source: DataSource::Local,
+                    balance,
                 }
-            })
-            .collect::<Vec<_>>();
-        op.extend(events);
+            } else {
+                OutboxEventPayload::BalanceUpdated {
+                    source: DataSource::Local,
+                    balance,
+                }
+            }
+        }));
         Ok(())
     }
 

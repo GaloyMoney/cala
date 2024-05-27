@@ -34,9 +34,9 @@ impl Transactions {
         }
     }
 
-    pub(crate) async fn create_in_op<'a>(
+    pub(crate) async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'a>,
+        op: &mut AtomicOperation<'_>,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_tx(op.tx(), new_transaction).await?;
