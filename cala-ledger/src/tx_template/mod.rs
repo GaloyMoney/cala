@@ -147,18 +147,18 @@ impl TxTemplates {
                 .transaction_id(transaction_id)
                 .journal_id(journal_id)
                 .sequence(zero_based_sequence as u32 + 1);
-            let account_id: Uuid = entry.account_id.try_evaluate(&ctx)?;
+            let account_id: Uuid = entry.account_id.try_evaluate(ctx)?;
             builder.account_id(account_id);
 
-            let entry_type: String = entry.entry_type.try_evaluate(&ctx)?;
+            let entry_type: String = entry.entry_type.try_evaluate(ctx)?;
             builder.entry_type(entry_type);
 
-            let layer: Layer = entry.layer.try_evaluate(&ctx)?;
+            let layer: Layer = entry.layer.try_evaluate(ctx)?;
             builder.layer(layer);
 
-            let units: Decimal = entry.units.try_evaluate(&ctx)?;
-            let currency: Currency = entry.currency.try_evaluate(&ctx)?;
-            let direction: DebitOrCredit = entry.direction.try_evaluate(&ctx)?;
+            let units: Decimal = entry.units.try_evaluate(ctx)?;
+            let currency: Currency = entry.currency.try_evaluate(ctx)?;
+            let direction: DebitOrCredit = entry.direction.try_evaluate(ctx)?;
 
             let total = totals.entry((currency, layer)).or_insert(Decimal::ZERO);
             match direction {
@@ -170,7 +170,7 @@ impl TxTemplates {
             builder.direction(direction);
 
             if let Some(description) = entry.description.as_ref() {
-                let description: String = description.try_evaluate(&ctx)?;
+                let description: String = description.try_evaluate(ctx)?;
                 builder.description(description);
             }
 
