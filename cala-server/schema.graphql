@@ -38,6 +38,7 @@ input AccountCreateInput {
 	description: String
 	status: Status! = ACTIVE
 	metadata: JSON
+	accountSetIds: [UUID!]
 }
 
 type AccountCreatePayload {

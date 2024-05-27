@@ -104,4 +104,25 @@ impl AccountSetRepo {
             .await?;
         Ok(())
     }
+
+    pub async fn import_member_account(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        account_id: AccountId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, account_id, created_at)
+            VALUES ($1, $2, $3, $4)"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId,
+            account_id as AccountId,
+            recorded_at
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
 }

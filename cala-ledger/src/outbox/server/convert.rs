@@ -6,7 +6,7 @@ use crate::primitives::*;
 
 use crate::{
     account::*,
-    account_set::AccountSetValues,
+    account_set::*,
     entry::*,
     journal::JournalValues,
     outbox::event::{OutboxEvent, OutboxEventPayload},
@@ -39,6 +39,23 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                 data_source_id: source.to_string(),
                 account_set: Some(proto::AccountSet::from(account_set)),
             }),
+            OutboxEventPayload::AccountSetMemberCreated {
+                source,
+                account_set_id,
+                member,
+            } => proto::cala_ledger_event::Payload::AccountSetMemberCreated(
+                proto::AccountSetMemberCreated {
+                    data_source_id: source.to_string(),
+                    member: Some(proto::AccountSetMember {
+                        account_set_id: account_set_id.to_string(),
+                        member: Some(match member {
+                            AccountSetMember::Account(account_id) => {
+                                proto::account_set_member::Member::AccountId(account_id.to_string())
+                            }
+                        }),
+                    }),
+                },
+            ),
             OutboxEventPayload::JournalCreated { source, journal } => {
                 proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
                     data_source_id: source.to_string(),

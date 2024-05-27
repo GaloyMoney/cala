@@ -80,6 +80,7 @@ pub(super) struct AccountCreateInput {
     #[graphql(default)]
     pub status: Status,
     pub metadata: Option<JSON>,
+    pub account_set_ids: Option<Vec<UUID>>,
 }
 
 #[derive(SimpleObject)]

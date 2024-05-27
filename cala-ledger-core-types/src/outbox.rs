@@ -36,6 +36,11 @@ pub enum OutboxEventPayload {
         source: DataSource,
         account_set: AccountSetValues,
     },
+    AccountSetMemberCreated {
+        source: DataSource,
+        account_set_id: AccountSetId,
+        member: AccountSetMember,
+    },
     JournalCreated {
         source: DataSource,
         journal: JournalValues,

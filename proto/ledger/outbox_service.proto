@@ -21,12 +21,13 @@ message CalaLedgerEvent {
     bool empty = 4;
     AccountCreated account_created = 5;
     AccountSetCreated account_set_created = 6;
-    JournalCreated journal_created = 7;
-    TxTemplateCreated tx_template_created = 8;
-    TransactionCreated transaction_created = 9;
-    EntryCreated entry_created = 10;
-    BalanceCreated balance_created = 11;
-    BalanceUpdated balance_updated = 12;
+    AccountSetMemberCreated account_set_member_created = 7;
+    JournalCreated journal_created = 8;
+    TxTemplateCreated tx_template_created = 9;
+    TransactionCreated transaction_created = 10;
+    EntryCreated entry_created = 11;
+    BalanceCreated balance_created = 12;
+    BalanceUpdated balance_updated = 13;
   }
 }
 
@@ -81,6 +82,18 @@ message AccountSet {
   DebitOrCredit normal_balance_type = 5;
   optional string description = 6;
   optional google.protobuf.Struct metadata = 7;
+}
+
+message AccountSetMemberCreated {
+  string data_source_id = 1;
+  AccountSetMember member = 2;
+}
+
+message AccountSetMember {
+  string account_set_id = 1;
+  oneof member {
+    string account_id = 2;
+  }
 }
 
 message JournalCreated {

@@ -1,11 +1,10 @@
 mod entity;
 pub mod error;
-mod member;
 mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
+use sqlx::PgPool;
 use tracing::instrument;
 
 #[cfg(feature = "import")]
@@ -14,7 +13,6 @@ use crate::{account::*, atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
-pub use member::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -65,17 +63,25 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    pub async fn add_to_account_set_in_tx(
+    pub async fn add_to_account_set_in_op(
         &self,
-        db: &mut DbTransaction<'_, Postgres>,
+        op: &mut AtomicOperation<'_>,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member: impl Into<AccountSetMember>,
     ) -> Result<AccountSet, AccountSetError> {
         let account_set = self.repo.find(account_set_id).await?;
+        let member = member.into();
         let AccountSetMember::Account(account_id) = member;
         self.repo
-            .add_member_account(db, account_set_id, account_id)
+            .add_member_account(op.tx(), account_set_id, account_id)
             .await?;
+        op.accumulate(std::iter::once(
+            OutboxEventPayload::AccountSetMemberCreated {
+                source: DataSource::Local,
+                account_set_id,
+                member,
+            },
+        ));
         Ok(account_set)
     }
 
@@ -93,6 +99,33 @@ impl AccountSets {
             .await?;
         self.outbox
             .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_account_set_member_creation(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        member: AccountSetMember,
+    ) -> Result<(), AccountSetError> {
+        let AccountSetMember::Account(account_id) = member;
+        self.repo
+            .import_member_account(&mut db, recorded_at, origin, account_set_id, account_id)
+            .await?;
+        self.outbox
+            .persist_events_at(
+                db,
+                std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
+                    source: DataSource::Remote { id: origin },
+                    account_set_id,
+                    member,
+                }),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }
