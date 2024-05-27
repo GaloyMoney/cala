@@ -26,7 +26,7 @@ impl TransactionRepo {
         &self,
         db: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
-    ) -> Result<EntityUpdate<Transaction>, TransactionError> {
+    ) -> Result<Transaction, TransactionError> {
         sqlx::query!(
             r#"INSERT INTO cala_transactions (id, journal_id, external_id)
             VALUES ($1, $2, $3)"#,
@@ -37,12 +37,9 @@ impl TransactionRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_transaction.initial_events();
-        let n_new_events = events.persist(db).await?;
+        events.persist(db).await?;
         let transaction = Transaction::try_from(events)?;
-        Ok(EntityUpdate {
-            entity: transaction,
-            n_new_events,
-        })
+        Ok(transaction)
     }
 
     pub(super) async fn find_all<T: From<Transaction>>(

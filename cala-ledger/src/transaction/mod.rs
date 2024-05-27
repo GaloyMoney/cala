@@ -5,14 +5,14 @@ mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
+use sqlx::PgPool;
 use tracing::instrument;
 
 use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::EntityUpdate, outbox::*, primitives::DataSource};
+use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -34,22 +34,14 @@ impl Transactions {
         }
     }
 
-    pub(crate) async fn create_in_tx(
+    pub(crate) async fn create_in_op<'a>(
         &self,
-        db: &mut DbTransaction<'_, Postgres>,
+        op: &mut AtomicOperation<'a>,
         new_transaction: NewTransaction,
-    ) -> Result<(Transaction, OutboxEventPayload), TransactionError> {
-        let EntityUpdate {
-            entity: transaction,
-            ..
-        } = self.repo.create_in_tx(db, new_transaction).await?;
-        let event = transaction
-            .events
-            .last_n_persisted(1)
-            .next()
-            .expect("should have event")
-            .into();
-        Ok((transaction, event))
+    ) -> Result<Transaction, TransactionError> {
+        let transaction = self.repo.create_in_tx(op.tx(), new_transaction).await?;
+        op.accumulate(transaction.events.last_persisted());
+        Ok(transaction)
     }
 
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]

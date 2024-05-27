@@ -4,7 +4,7 @@ mod repo;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Acquire, PgPool};
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -12,6 +12,7 @@ pub use cala_types::balance::BalanceSnapshot;
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
+    atomic_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
@@ -54,24 +55,25 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
-    pub(crate) async fn update_balances(
+    pub(crate) async fn update_balances<'a>(
         &self,
-        mut db: Transaction<'_, Postgres>,
+        op: &mut AtomicOperation<'a>,
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
-    ) -> Result<Vec<OutboxEventPayload>, BalanceError> {
+    ) -> Result<(), BalanceError> {
         let ids = entries
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
+        let mut db = op.tx().begin().await?;
         let current_balances = self.repo.find_for_update(&mut db, journal_id, ids).await?;
         let new_balances = Self::new_snapshots(created_at, current_balances, entries);
         self.repo
             .insert_new_snapshots(&mut db, journal_id, &new_balances)
             .await?;
         db.commit().await?;
-        Ok(new_balances
+        let events = new_balances
             .into_iter()
             .map(|b| {
                 if b.version == 1 {
@@ -86,7 +88,9 @@ impl Balances {
                     }
                 }
             })
-            .collect())
+            .collect::<Vec<_>>();
+        op.extend(events);
+        Ok(())
     }
 
     fn new_snapshots(

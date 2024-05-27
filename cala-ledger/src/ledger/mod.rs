@@ -1,7 +1,7 @@
 pub mod config;
 pub mod error;
 
-use sqlx::{Acquire, PgPool, Postgres, Transaction as DbTransaction};
+use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 pub use tracing::instrument;
 
@@ -125,15 +125,13 @@ impl CalaLedger {
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
     ) -> Result<Transaction, LedgerError> {
-        let tx = self.pool.begin().await?;
-        self.post_transaction_in_tx(tx, tx_id, tx_template_code, params)
+        self.post_transaction_in_tx(tx_id, tx_template_code, params)
             .await
     }
 
-    #[instrument(name = "cala_ledger.post_transaction", skip(self, db))]
+    #[instrument(name = "cala_ledger.post_transaction", skip(self))]
     pub async fn post_transaction_in_tx(
         &self,
-        mut db: DbTransaction<'_, Postgres>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: Option<impl Into<TxParams> + std::fmt::Debug>,
@@ -146,31 +144,24 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
-        let (transaction, tx_event) = self
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let transaction = self
             .transactions
-            .create_in_tx(&mut db, prepared_tx.transaction)
+            .create_in_op(&mut op, prepared_tx.transaction)
             .await?;
-        let (entries, entry_events) = self
+        let entries = self
             .entries
-            .create_all(&mut db, prepared_tx.entries)
+            .create_all_in_op(&mut op, prepared_tx.entries)
             .await?;
-        let balance_events = self
-            .balances
+        self.balances
             .update_balances(
-                db.begin().await?,
+                &mut op,
                 transaction.created_at(),
                 transaction.journal_id(),
                 entries,
             )
             .await?;
-        self.outbox
-            .persist_events(
-                db,
-                std::iter::once(tx_event)
-                    .chain(entry_events)
-                    .chain(balance_events),
-            )
-            .await?;
+        op.commit().await?;
         Ok(transaction)
     }
 
