@@ -119,3 +119,22 @@ teardown_file() {
   echo $balance
   [[ $balance == "9.53" ]] || exit 1
 }
+
+@test "cala: account set create" {
+  account_set_id=$(random_uuid)
+  variables=$(
+    jq -n \
+    --arg account_set_id "$account_set_id" \
+    '{
+      "input": {
+        "accountSetId": $account_set_id,
+        "name": "Account Set",
+        "normalBalanceType": "CREDIT"
+      }
+    }'
+  )
+  exec_graphql 'account-set-create' "$variables"
+  output=$(graphql_output '.data.accountSetCreate.accountSet.accountSetId')
+  [[ $output ]] || exit 1
+
+}

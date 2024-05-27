@@ -1,0 +1,8 @@
+mutation accountSetCreate($input: AccountSetCreateInput!) {
+  accountSetCreate(input: $input) {
+   accountSet{
+      accountSetId
+      name
+    }
+  }
+}
