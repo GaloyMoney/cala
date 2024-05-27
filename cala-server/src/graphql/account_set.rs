@@ -42,6 +42,7 @@ impl AccountSet {
 #[derive(InputObject)]
 pub(super) struct AccountSetCreateInput {
     pub account_set_id: UUID,
+    pub journal_id: UUID,
     pub name: String,
     #[graphql(default)]
     pub normal_balance_type: DebitOrCredit,

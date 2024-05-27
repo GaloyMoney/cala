@@ -2,9 +2,9 @@
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, Transaction};
 
-use crate::entity::EntityUpdate;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
+use crate::{entity::EntityUpdate, primitives::JournalId};
 
 use super::{entity::*, error::*};
 
@@ -25,11 +25,11 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         new_account_set: NewAccountSet,
     ) -> Result<EntityUpdate<AccountSet>, AccountSetError> {
-        let id = new_account_set.id;
         sqlx::query!(
-            r#"INSERT INTO cala_account_sets (id, name)
-            VALUES ($1, $2)"#,
-            id as AccountSetId,
+            r#"INSERT INTO cala_account_sets (id, journal_id, name)
+            VALUES ($1, $2, $3)"#,
+            new_account_set.id as AccountSetId,
+            new_account_set.journal_id as JournalId,
             new_account_set.name,
         )
         .execute(&mut **db)
@@ -52,10 +52,11 @@ impl AccountSetRepo {
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
-            r#"INSERT INTO cala_account_sets (data_source_id, id, name, created_at)
-            VALUES ($1, $2, $3, $4)"#,
+            r#"INSERT INTO cala_account_sets (data_source_id, id, journal_id, name, created_at)
+            VALUES ($1, $2, $3, $4, $5)"#,
             origin as DataSourceId,
             account_set.values().id as AccountSetId,
+            account_set.values().journal_id as JournalId,
             account_set.values().name,
             recorded_at
         )

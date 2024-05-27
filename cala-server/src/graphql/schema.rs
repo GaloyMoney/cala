@@ -226,6 +226,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let mut builder = cala_ledger::account_set::NewAccountSet::builder();
         builder
             .id(input.account_set_id)
+            .journal_id(input.journal_id)
             .name(input.name)
             .normal_balance_type(input.normal_balance_type.into());
 

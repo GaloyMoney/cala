@@ -74,6 +74,7 @@ type AccountSet {
 
 input AccountSetCreateInput {
 	accountSetId: UUID!
+	journalId: UUID!
 	name: String!
 	normalBalanceType: DebitOrCredit! = CREDIT
 	description: String
