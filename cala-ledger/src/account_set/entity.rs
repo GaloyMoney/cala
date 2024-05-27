@@ -21,7 +21,7 @@ pub enum AccountSetEvent {
 impl EntityEvent for AccountSetEvent {
     type EntityId = AccountSetId;
     fn event_table_name() -> &'static str {
-        "cala_account_events"
+        "cala_account_set_events"
     }
 }
 
