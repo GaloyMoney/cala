@@ -1,3 +1,16 @@
+# [cala release v0.1.6](https://github.com/GaloyMoney/cala/releases/tag/0.1.6)
+
+
+### Bug Fixes
+
+- Clippy
+
+### Refactor
+
+- Use async_graphql::parser::types prefix
+- Simplify match
+- Handle docs with multiple ops
+
 # [cala release v0.1.5](https://github.com/GaloyMoney/cala/releases/tag/0.1.5)
 
 
