@@ -3,10 +3,12 @@ use async_graphql::dataloader::Loader;
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-    account::Account, journal::Journal, transaction::Transaction, tx_template::TxTemplate,
+    account::Account, account_set::AccountSet, journal::Journal, transaction::Transaction,
+    tx_template::TxTemplate,
 };
 use cala_ledger::{
     account::{error::AccountError, *},
+    account_set::{error::AccountSetError, *},
     balance::{error::BalanceError, *},
     journal::{error::JournalError, *},
     primitives::*,
@@ -42,6 +44,22 @@ impl Loader<AccountId> for LedgerDataLoader {
     async fn load(&self, keys: &[AccountId]) -> Result<HashMap<AccountId, Account>, Self::Error> {
         self.ledger
             .accounts()
+            .find_all(keys)
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+impl Loader<AccountSetId> for LedgerDataLoader {
+    type Value = AccountSet;
+    type Error = Arc<AccountSetError>;
+
+    async fn load(
+        &self,
+        keys: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, AccountSet>, Self::Error> {
+        self.ledger
+            .account_sets()
             .find_all(keys)
             .await
             .map_err(Arc::new)

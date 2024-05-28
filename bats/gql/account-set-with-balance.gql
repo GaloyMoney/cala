@@ -1,7 +1,8 @@
-query accountSetWithBalance($accountSetId: UUID!, $journalId: UUID!, $currency: CurrencyCode!) {
+query accountSetWithBalance($accountSetId: UUID!, $currency: CurrencyCode!) {
   accountSet(id: $accountSetId) {
     name
-    balance(journalId: $journalId, currency: $currency) {
+    journalId
+    balance(currency: $currency) {
       settled {
         normalBalance {
           units

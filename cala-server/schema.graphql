@@ -271,6 +271,7 @@ type Query {
 	account(id: UUID!): Account
 	accountByExternalId(externalId: String!): Account
 	accounts(first: Int!, after: String): AccountConnection!
+	accountSet(id: UUID!): AccountSet
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
 	transaction(id: UUID!): Transaction

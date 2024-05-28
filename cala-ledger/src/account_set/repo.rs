@@ -1,6 +1,8 @@
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+
+use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -79,6 +81,35 @@ impl AccountSetRepo {
         }
     }
 
+    pub(super) async fn find_all<T: From<AccountSet>>(
+        &self,
+        ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
+        let mut query_builder = QueryBuilder::new(
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts a
+            JOIN cala_account_set_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id IN"#,
+        );
+        query_builder.push_tuples(ids, |mut builder, account_set_id| {
+            builder.push_bind(account_set_id);
+        });
+        query_builder.push(r#"ORDER BY a.id, e.sequence"#);
+        let query = query_builder.build_query_as::<GenericEvent>();
+        let rows = query.fetch_all(&self.pool).await?;
+        let n = rows.len();
+        let ret = EntityEvents::load_n(rows, n)?
+            .0
+            .into_iter()
+            .map(|account: AccountSet| (account.values().id, T::from(account)))
+            .collect();
+        Ok(ret)
+    }
+
     #[cfg(feature = "import")]
     pub async fn import(
         &self,
@@ -124,5 +155,35 @@ impl AccountSetRepo {
         .execute(&mut **db)
         .await?;
         Ok(())
+    }
+
+    pub async fn fetch_mappings(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"SELECT DISTINCT m.account_id AS "account_id: AccountId", m.account_set_id AS "account_set_id: AccountSetId"
+            FROM cala_account_set_member_accounts m
+            JOIN cala_account_sets s
+            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
+            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND s.journal_id = $1
+            AND m.account_id = ANY($2)"#,
+            journal_id as JournalId,
+            account_ids as &[AccountId]
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut mappings = HashMap::new();
+        for row in rows {
+            let account_id = row.account_id;
+            let account_set_id = row.account_set_id;
+            mappings
+                .entry(account_id)
+                .or_insert_with(Vec::new)
+                .push(account_set_id);
+        }
+        Ok(mappings)
     }
 }
