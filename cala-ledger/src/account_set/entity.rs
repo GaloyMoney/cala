@@ -46,7 +46,7 @@ impl AccountSet {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build account from events")
+        Self::try_from(events).expect("Failed to build account set from events")
     }
 
     pub fn id(&self) -> AccountSetId {
@@ -64,13 +64,13 @@ impl AccountSet {
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
             .entity_first_persisted_at
-            .expect("No events for account")
+            .expect("No events for account set")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
             .latest_event_persisted_at
-            .expect("No events for account")
+            .expect("No events for account set")
     }
 }
 
@@ -94,7 +94,7 @@ impl TryFrom<EntityEvents<AccountSetEvent>> for AccountSet {
     }
 }
 
-/// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
+/// Representation of a ***new*** ledger account set entity with required/optional properties and a builder.
 #[derive(Builder, Debug)]
 pub struct NewAccountSet {
     #[builder(setter(into))]
