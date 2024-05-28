@@ -83,26 +83,20 @@ async fn maybe_init_atomic_operation<'a>(
     req: &mut async_graphql::Request,
     ledger: &CalaLedger,
 ) -> Result<Option<Arc<Mutex<AtomicOperation<'a>>>>, cala_ledger::error::LedgerError> {
+    use async_graphql::parser::types::*;
+
     let operation_name = req
         .operation_name
         .as_ref()
         .map(|n| async_graphql::Name::new(n.clone()));
     if let Ok(query) = req.parsed_query() {
         let is_mutation = match (&query.operations, operation_name) {
-            (async_graphql::parser::types::DocumentOperations::Single(op), _) => {
-                op.node.ty == async_graphql::parser::types::OperationType::Mutation
+            (DocumentOperations::Single(op), _) => op.node.ty == OperationType::Mutation,
+            (DocumentOperations::Multiple(ops), _) if ops.len() == 1 => {
+                ops.values().next().expect("ops.next").node.ty == OperationType::Mutation
             }
-            (async_graphql::parser::types::DocumentOperations::Multiple(ops), _)
-                if ops.len() == 1 =>
-            {
-                ops.values().next().expect("ops.next").node.ty
-                    == async_graphql::parser::types::OperationType::Mutation
-            }
-            (async_graphql::parser::types::DocumentOperations::Multiple(ops), Some(name))
-                if ops.get(&name).is_some() =>
-            {
-                ops.get(&name).expect("ops.get").node.ty
-                    == async_graphql::parser::types::OperationType::Mutation
+            (DocumentOperations::Multiple(ops), Some(name)) if ops.get(&name).is_some() => {
+                ops.get(&name).expect("ops.get").node.ty == OperationType::Mutation
             }
             _ => false,
         };
