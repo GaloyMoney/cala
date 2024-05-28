@@ -97,24 +97,14 @@ async fn maybe_init_atomic_operation<'a>(
             (async_graphql::parser::types::DocumentOperations::Multiple(ops), _)
                 if ops.len() == 1 =>
             {
-                if ops.values().next().expect("ops.next").node.ty
+                ops.values().next().expect("ops.next").node.ty
                     == async_graphql::parser::types::OperationType::Mutation
-                {
-                    true
-                } else {
-                    false
-                }
             }
             (async_graphql::parser::types::DocumentOperations::Multiple(ops), Some(name))
                 if ops.get(&name).is_some() =>
             {
-                if ops.get(&name).expect("ops.get").node.ty
+                ops.get(&name).expect("ops.get").node.ty
                     == async_graphql::parser::types::OperationType::Mutation
-                {
-                    true
-                } else {
-                    false
-                }
             }
             _ => false,
         };
