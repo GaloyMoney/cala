@@ -1,3 +1,29 @@
+# [cala release v0.1.5](https://github.com/GaloyMoney/cala/releases/tag/0.1.5)
+
+
+### Features
+
+- Atomic mutations (#78)
+- Account set member (#76)
+- AccountSet (#74)
+- Transaction_by_external_id
+- Support CEL packages (#72)
+
+### Miscellaneous Tasks
+
+- Rename account -> account set in expect (#81)
+- Remove dummy output
+- Record account set balances (#80)
+- Expose created / modified (#73)
+- Add transaction(id)
+
+### Refactor
+
+- Atomic mutations for tx_template_create and post_transaction (#79)
+- Use atomic operation for creating entities (#77)
+- Add entry_ids to TransactionValues
+- Rename tx -> db
+
 # [cala release v0.1.4](https://github.com/GaloyMoney/cala/releases/tag/0.1.4)
 
 
