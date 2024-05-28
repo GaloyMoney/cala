@@ -120,8 +120,6 @@ teardown_file() {
     }'
   )
   exec_graphql 'post-transaction' "$variables"
-  echo "$(graphql_output)"
-  echo "HERE"
 
   variables=$(jq -n \
     --arg journalId "$journal_id" \
