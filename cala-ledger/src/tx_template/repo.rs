@@ -1,7 +1,7 @@
 use cached::proc_macro::cached;
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -45,22 +45,21 @@ impl TxTemplateRepo {
         &self,
         ids: &[TxTemplateId],
     ) -> Result<HashMap<TxTemplateId, T>, TxTemplateError> {
-        let mut query_builder = QueryBuilder::new(
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_tx_templates a
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT t.id, e.sequence, e.event,
+                t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_tx_templates t
             JOIN cala_tx_template_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.id IN"#,
-        );
-        query_builder.push_tuples(ids, |mut builder, tx_template_id| {
-            builder.push_bind(tx_template_id);
-        });
-        query_builder.push(r#"ORDER BY a.id, e.sequence"#);
-        let query = query_builder.build_query_as::<GenericEvent>();
-        let rows = query.fetch_all(&self.pool).await?;
+            ON t.data_source_id = e.data_source_id
+            AND t.id = e.id
+            WHERE t.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND t.id = ANY($1)
+            ORDER BY t.id, e.sequence"#,
+            ids as &[TxTemplateId]
+        )
+        .fetch_all(&self.pool)
+        .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?
             .0

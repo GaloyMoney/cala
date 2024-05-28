@@ -5,7 +5,7 @@ mod repo;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use sqlx::{Acquire, PgPool};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 pub use cala_types::balance::BalanceSnapshot;
@@ -61,18 +61,34 @@ impl Balances {
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
+        account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), BalanceError> {
-        let ids = entries
+        let mut ids: HashSet<_> = entries
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
+
+        for entry in entries.iter() {
+            if let Some(account_set_ids) = account_set_mappings.get(&entry.account_id) {
+                ids.extend(
+                    account_set_ids
+                        .iter()
+                        .map(|account_set_id| (AccountId::from(account_set_id), entry.currency)),
+                );
+            }
+        }
+
         let mut db = op.tx().begin().await?;
+
         let current_balances = self.repo.find_for_update(&mut db, journal_id, ids).await?;
-        let new_balances = Self::new_snapshots(created_at, current_balances, entries);
+        let new_balances =
+            Self::new_snapshots(created_at, current_balances, entries, account_set_mappings);
         self.repo
             .insert_new_snapshots(&mut db, journal_id, &new_balances)
             .await?;
+
         db.commit().await?;
+
         op.accumulate(new_balances.into_iter().map(|balance| {
             if balance.version == 1 {
                 OutboxEventPayload::BalanceCreated {
@@ -93,42 +109,56 @@ impl Balances {
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), BalanceSnapshot>,
         entries: Vec<EntryValues>,
+        mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
         let mut new_balances = Vec::new();
         for entry in entries.iter() {
-            let balance = match (
-                latest_balances.remove(&(entry.account_id, &entry.currency)),
-                current_balances.remove(&(entry.account_id, entry.currency)),
-            ) {
-                (Some(latest), _) => {
-                    new_balances.push(latest.clone());
-                    latest
-                }
-                (_, Some(balance)) => balance,
-                _ => {
-                    latest_balances.insert(
-                        (entry.account_id, &entry.currency),
-                        Self::new_snapshot(time, entry),
-                    );
-                    continue;
-                }
-            };
-            latest_balances.insert(
-                (entry.account_id, &entry.currency),
-                Self::update_snapshot(time, balance, entry),
-            );
+            let empty = Vec::new();
+            for account_id in mappings
+                .get(&entry.account_id)
+                .unwrap_or(&empty)
+                .iter()
+                .map(AccountId::from)
+                .chain(std::iter::once(entry.account_id))
+            {
+                let balance = match (
+                    latest_balances.remove(&(account_id, &entry.currency)),
+                    current_balances.remove(&(account_id, entry.currency)),
+                ) {
+                    (Some(latest), _) => {
+                        new_balances.push(latest.clone());
+                        latest
+                    }
+                    (_, Some(balance)) => balance,
+                    _ => {
+                        latest_balances.insert(
+                            (account_id, &entry.currency),
+                            Self::new_snapshot(time, account_id, entry),
+                        );
+                        continue;
+                    }
+                };
+                latest_balances.insert(
+                    (account_id, &entry.currency),
+                    Self::update_snapshot(time, balance, entry),
+                );
+            }
         }
         new_balances.extend(latest_balances.into_values());
         new_balances
     }
 
-    fn new_snapshot(time: DateTime<Utc>, entry: &EntryValues) -> BalanceSnapshot {
+    fn new_snapshot(
+        time: DateTime<Utc>,
+        account_id: AccountId,
+        entry: &EntryValues,
+    ) -> BalanceSnapshot {
         Self::update_snapshot(
             time,
             BalanceSnapshot {
                 journal_id: entry.journal_id,
-                account_id: entry.account_id,
+                account_id,
                 entry_id: entry.id,
                 currency: entry.currency,
                 settled_dr_balance: Decimal::ZERO,

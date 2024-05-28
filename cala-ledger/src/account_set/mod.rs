@@ -5,11 +5,17 @@ mod repo;
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use std::collections::HashMap;
 use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{account::*, atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{
+    account::*,
+    atomic_operation::*,
+    outbox::*,
+    primitives::{DataSource, JournalId},
+};
 
 pub use entity::*;
 use error::*;
@@ -83,6 +89,22 @@ impl AccountSets {
             },
         ));
         Ok(account_set)
+    }
+
+    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self), err)]
+    pub async fn find_all<T: From<AccountSet>>(
+        &self,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
+        self.repo.find_all(account_set_ids).await
+    }
+
+    pub(crate) async fn fetch_mappings(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        self.repo.fetch_mappings(journal_id, account_ids).await
     }
 
     #[cfg(feature = "import")]

@@ -73,6 +73,15 @@ impl Query {
         .await
     }
 
+    async fn account_set(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<AccountSet>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        Ok(loader.load_one(AccountSetId::from(id)).await?)
+    }
+
     async fn journal(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Journal>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
         Ok(loader.load_one(JournalId::from(id)).await?)
