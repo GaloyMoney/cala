@@ -309,6 +309,10 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: TxTemplateCreateInput,
     ) -> Result<TxTemplateCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let mut new_tx_input_builder = cala_ledger::tx_template::NewTxInput::builder();
         let TxTemplateTxInput {
             effective,
@@ -391,7 +395,11 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             new_tx_template_builder.metadata(metadata)?;
         }
         let new_tx_template = new_tx_template_builder.build()?;
-        let tx_template = app.ledger().tx_templates().create(new_tx_template).await?;
+        let tx_template = app
+            .ledger()
+            .tx_templates()
+            .create_in_op(&mut op, new_tx_template)
+            .await?;
 
         Ok(tx_template.into())
     }
@@ -402,10 +410,19 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         input: TransactionInput,
     ) -> Result<PostTransactionPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let params = input.params.map(cala_ledger::tx_template::TxParams::from);
         let transaction = app
             .ledger()
-            .post_transaction(input.transaction_id.into(), &input.tx_template_code, params)
+            .post_transaction_in_op(
+                &mut op,
+                input.transaction_id.into(),
+                &input.tx_template_code,
+                params,
+            )
             .await?;
         Ok(transaction.into())
     }
