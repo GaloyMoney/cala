@@ -1,6 +1,6 @@
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use std::collections::HashMap;
 
@@ -85,22 +85,21 @@ impl AccountSetRepo {
         &self,
         ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        let mut query_builder = QueryBuilder::new(
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_accounts a
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT s.id, e.sequence, e.event,
+                s.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts s
             JOIN cala_account_set_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.id IN"#,
-        );
-        query_builder.push_tuples(ids, |mut builder, account_set_id| {
-            builder.push_bind(account_set_id);
-        });
-        query_builder.push(r#"ORDER BY a.id, e.sequence"#);
-        let query = query_builder.build_query_as::<GenericEvent>();
-        let rows = query.fetch_all(&self.pool).await?;
+            ON s.data_source_id = e.data_source_id
+            AND s.id = e.id
+            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND s.id = ANY($1)
+            ORDER BY s.id, e.sequence"#,
+            ids as &[AccountSetId]
+        )
+        .fetch_all(&self.pool)
+        .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?
             .0
