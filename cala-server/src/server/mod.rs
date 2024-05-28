@@ -89,10 +89,8 @@ async fn maybe_init_atomic_operation<'a>(
         .map(|n| async_graphql::Name::new(n.clone()));
     if let Ok(query) = req.parsed_query() {
         let is_mutation = match (&query.operations, operation_name) {
-            (async_graphql::parser::types::DocumentOperations::Single(op), _)
-                if op.node.ty == async_graphql::parser::types::OperationType::Mutation =>
-            {
-                true
+            (async_graphql::parser::types::DocumentOperations::Single(op), _) => {
+                op.node.ty == async_graphql::parser::types::OperationType::Mutation
             }
             (async_graphql::parser::types::DocumentOperations::Multiple(ops), _)
                 if ops.len() == 1 =>
