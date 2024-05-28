@@ -21,6 +21,8 @@ pub use account_balance::*;
 use error::BalanceError;
 use repo::*;
 
+const DUMMY_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
+
 #[derive(Clone)]
 pub struct Balances {
     repo: BalanceRepo,
@@ -154,24 +156,25 @@ impl Balances {
         account_id: AccountId,
         entry: &EntryValues,
     ) -> BalanceSnapshot {
+        let entry_id = EntryId::from(DUMMY_ENTRY_ID);
         Self::update_snapshot(
             time,
             BalanceSnapshot {
                 journal_id: entry.journal_id,
                 account_id,
-                entry_id: entry.id,
+                entry_id,
                 currency: entry.currency,
                 settled_dr_balance: Decimal::ZERO,
                 settled_cr_balance: Decimal::ZERO,
-                settled_entry_id: entry.id,
+                settled_entry_id: entry_id,
                 settled_modified_at: time,
                 pending_dr_balance: Decimal::ZERO,
                 pending_cr_balance: Decimal::ZERO,
-                pending_entry_id: entry.id,
+                pending_entry_id: entry_id,
                 pending_modified_at: time,
                 encumbered_dr_balance: Decimal::ZERO,
                 encumbered_cr_balance: Decimal::ZERO,
-                encumbered_entry_id: entry.id,
+                encumbered_entry_id: entry_id,
                 encumbered_modified_at: time,
                 version: 0,
                 modified_at: time,
