@@ -1,40 +1,32 @@
 ---
 id: intro
-title: Intro
+title: Try Cala
 slug: /
 ---
 
-# Cala documentation
-
-An embeddable double sided accounting ledger built on PG/SQLx
-
-## Use the precompiled binary
-## need to have Docker installed
+# Run locally
+## Install Docker and Docker Compose
 * choose the install method for your system https://docs.docker.com/desktop/
 
-### Download and install cala-server binary
+## Download the docker-compose file to run Cala and its dependencies
 ```
-wget https://github.com/GaloyMoney/cala/releases/download/0.1.3/cala-server-x86_64-unknown-linux-musl-0.1.3.tar.gz
-tar -xvf cala-server-x86_64-unknown-linux-musl-0.1.3.tar.gz
-cd cala-server-x86_64-unknown-linux-musl-0.1.3
-sudo cp ./cala-server /usr/local/bin/
+wget https://raw.githubusercontent.com/GaloyMoney/cala/docs--website/docker-compose.yml
 ```
 
-### Run the Cala server
-#### Start the dependencies in Docker
+## Create a config file
 ```
-git clone https://github.com/GaloyMoney/cala
-cd cala
-make start-deps
+touch cala.yml
 ```
 
-#### Start the server
+## Run the Cala server
 ```
-cala-server --config ./bats/cala.yml
+docker-compose up cala-server
 ```
 
 ## GraphQL demo
-* continue [Demo start page](/demo/start)
+* open the local GraphQL playground: <br />
+http://localhost:2252/graphql
+* continue with the [GraphQL API demo](/docs/demo/create-journal-and-accounts)
 
 ## Cleanup
 ```
