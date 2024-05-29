@@ -23,7 +23,7 @@ pub use entity::*;
 use error::*;
 use repo::*;
 
-const DUMMY_ID: uuid::Uuid = uuid::Uuid::nil();
+const DUMMY_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct AccountSets {
@@ -111,7 +111,7 @@ impl AccountSets {
                     .ok_or(AccountSetError::CouldNotFindById(id))?;
 
                 if target.values().journal_id != member.values().journal_id {
-                    return Err(AccountSetError::JournalIdMissmatch);
+                    return Err(AccountSetError::JournalIdMismatch);
                 }
 
                 let time = self
@@ -137,16 +137,9 @@ impl AccountSets {
             .await?;
 
         let mut entries = Vec::new();
-        let dummy_entry_id = EntryId::from(DUMMY_ID);
         for balance in balances.into_values() {
             let mut sequence: u32 = 0;
-            entries_for_add_balance(
-                &mut sequence,
-                &mut entries,
-                target_account_id,
-                balance,
-                dummy_entry_id,
-            );
+            entries_for_add_balance(&mut sequence, &mut entries, target_account_id, balance);
         }
 
         if entries.is_empty() {
@@ -238,117 +231,110 @@ fn entries_for_add_balance(
     entries: &mut Vec<NewEntry>,
     target_account_id: AccountId,
     balance: BalanceSnapshot,
-    dummy_entry_id: EntryId,
 ) {
     use rust_decimal::Decimal;
 
-    if balance.settled_entry_id != dummy_entry_id {
-        if balance.settled_cr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Settled)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
-                .direction(DebitOrCredit::Credit)
-                .units(balance.settled_cr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
-        if balance.settled_dr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Settled)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
-                .direction(DebitOrCredit::Debit)
-                .units(balance.settled_dr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
+    if balance.settled_cr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Settled)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
+            .direction(DebitOrCredit::Credit)
+            .units(balance.settled_cr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
     }
-    if balance.pending_entry_id != dummy_entry_id {
-        if balance.pending_cr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Pending)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
-                .direction(DebitOrCredit::Credit)
-                .units(balance.pending_cr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
-        if balance.pending_dr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Pending)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
-                .direction(DebitOrCredit::Debit)
-                .units(balance.pending_dr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
+    if balance.settled_dr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Settled)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
+            .direction(DebitOrCredit::Debit)
+            .units(balance.settled_dr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
     }
-    if balance.encumbered_entry_id != dummy_entry_id {
-        if balance.encumbered_cr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Encumbered)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_CR")
-                .direction(DebitOrCredit::Credit)
-                .units(balance.encumbered_cr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
-        if balance.encumbered_dr_balance != Decimal::ZERO {
-            *sequence += 1;
-            let entry = NewEntry::builder()
-                .id(EntryId::new())
-                .journal_id(balance.journal_id)
-                .account_id(target_account_id)
-                .currency(balance.currency)
-                .sequence(*sequence)
-                .layer(Layer::Encumbered)
-                .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_DR")
-                .direction(DebitOrCredit::Debit)
-                .units(balance.encumbered_dr_balance)
-                .transaction_id(DUMMY_ID)
-                .build()
-                .expect("Couldn't build entry");
-            entries.push(entry);
-        }
+    if balance.pending_cr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Pending)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
+            .direction(DebitOrCredit::Credit)
+            .units(balance.pending_cr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
+    }
+    if balance.pending_dr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Pending)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
+            .direction(DebitOrCredit::Debit)
+            .units(balance.pending_dr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
+    }
+    if balance.encumbered_cr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Encumbered)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_CR")
+            .direction(DebitOrCredit::Credit)
+            .units(balance.encumbered_cr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
+    }
+    if balance.encumbered_dr_balance != Decimal::ZERO {
+        *sequence += 1;
+        let entry = NewEntry::builder()
+            .id(EntryId::new())
+            .journal_id(balance.journal_id)
+            .account_id(target_account_id)
+            .currency(balance.currency)
+            .sequence(*sequence)
+            .layer(Layer::Encumbered)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_DR")
+            .direction(DebitOrCredit::Debit)
+            .units(balance.encumbered_dr_balance)
+            .transaction_id(DUMMY_TRANSACTION_ID)
+            .build()
+            .expect("Couldn't build entry");
+        entries.push(entry);
     }
 }
 
