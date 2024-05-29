@@ -121,26 +121,43 @@ impl BalanceRepo {
     ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {
         let mut query_builder = QueryBuilder::new(
             r#"
-          SELECT h.values
-          FROM cala_balance_history h
-          JOIN ( SELECT data_source_id, journal_id, account_id, currency, latest_version
-                 FROM cala_current_balances
-                 WHERE data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = "#,
+        WITH pairs AS (
+          SELECT * FROM ("#,
         );
-        query_builder.push_bind(journal_id);
-        query_builder.push(r#" AND (account_id, currency) IN"#);
-        query_builder.push_tuples(ids, |mut builder, (id, currency)| {
+        query_builder.push_values(ids, |mut builder, (id, currency)| {
             builder.push_bind(id);
             builder.push_bind(currency.code());
         });
         query_builder.push(
             r#"
-        FOR UPDATE ) b
-        ON b.data_source_id = h.data_source_id
-          AND b.journal_id = h.journal_id
-          AND b.account_id = h.account_id
-          AND b.currency = h.currency
-          AND b.latest_version = h.version
+          ) AS v(account_id, currency)),
+          locked_balances AS (
+            SELECT data_source_id, journal_id, account_id, currency, latest_version
+              FROM cala_current_balances
+              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND journal_id = "#,
+        );
+        query_builder.push_bind(journal_id);
+        query_builder.push(
+            r#"
+          AND (account_id, currency) IN (SELECT * from pairs) FOR UPDATE
+          ),
+          locked_accounts AS (
+            SELECT 1
+            FROM cala_accounts a
+            JOIN pairs p ON p.account_id = a.id
+            WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id NOT IN (SELECT DISTINCT account_id FROM locked_balances)
+            FOR UPDATE
+          )
+          SELECT h.values
+          FROM cala_balance_history h
+          JOIN locked_balances b
+          ON b.data_source_id = h.data_source_id
+            AND b.journal_id = h.journal_id
+            AND b.account_id = h.account_id
+            AND b.currency = h.currency
+            AND b.latest_version = h.version
         "#,
         );
         let query = query_builder.build();
