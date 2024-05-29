@@ -21,7 +21,7 @@ pub use account_balance::*;
 use error::BalanceError;
 use repo::*;
 
-const NIL_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
+const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct Balances {
@@ -169,7 +169,7 @@ impl Balances {
         account_id: AccountId,
         entry: &EntryValues,
     ) -> BalanceSnapshot {
-        let entry_id = EntryId::from(NIL_ENTRY_ID);
+        let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
         Self::update_snapshot(
             time,
             BalanceSnapshot {
