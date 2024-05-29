@@ -12,4 +12,6 @@ pub enum AccountSetError {
     AccountError(#[from] crate::account::error::AccountError),
     #[error("AccountSetError - NotFound: id '{0}' not found")]
     CouldNotFindById(AccountSetId),
+    #[error("AccountSetError - JournalIdMissmatch")]
+    JournalIdMissmatch,
 }

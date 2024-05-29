@@ -84,6 +84,21 @@ impl AccountSets {
                     .await?;
             }
             AccountSetMember::AccountSet(id) => {
+                let accounts = self
+                    .repo
+                    .find_all::<AccountSet>(&[account_set_id, id])
+                    .await?;
+                let target = accounts
+                    .get(&account_set_id)
+                    .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
+                let member = accounts
+                    .get(&id)
+                    .ok_or(AccountSetError::CouldNotFindById(id))?;
+
+                if target.values().journal_id != member.values().journal_id {
+                    return Err(AccountSetError::JournalIdMissmatch);
+                }
+
                 self.repo
                     .add_member_set(op.tx(), account_set_id, id)
                     .await?;
