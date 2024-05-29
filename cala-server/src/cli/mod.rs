@@ -11,14 +11,8 @@ use crate::{extension::MutationExtensionMarker, job::JobRegistry};
 #[derive(Parser)]
 #[clap(long_about = None)]
 struct Cli {
-    #[clap(
-        short,
-        long,
-        env = "CALA_CONFIG",
-        default_value = "cala.yml",
-        value_name = "FILE"
-    )]
-    config: PathBuf,
+    #[clap(short, long, env = "CALA_CONFIG", value_name = "FILE")]
+    config: Option<PathBuf>,
     #[clap(
         long,
         env = "CALA_HOME",
@@ -37,7 +31,7 @@ pub async fn run<M: MutationExtensionMarker>(
 ) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let config = Config::from_path(
+    let config = Config::load_config(
         cli.config,
         EnvOverride {
             db_con: cli.pg_con,

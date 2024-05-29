@@ -25,19 +25,28 @@ pub struct EnvOverride {
 }
 
 impl Config {
-    pub fn from_path(
-        path: impl AsRef<Path>,
-        EnvOverride { db_con, server_id }: EnvOverride,
+    pub fn load_config(
+        path: Option<impl AsRef<Path>>,
+        env_override: EnvOverride,
     ) -> anyhow::Result<Self> {
-        let config_file = std::fs::read_to_string(path).context("Couldn't read config file")?;
-        let mut config: Config =
-            serde_yaml::from_str(&config_file).context("Couldn't parse config file")?;
-        config.db.pg_con = db_con;
-        if let Some(server_id) = server_id {
-            config.app.job_execution.server_id.clone_from(&server_id);
-            config.tracing.service_instance_id = server_id;
-        }
+        let mut config = if let Some(config_path) = path {
+            let config_file =
+                std::fs::read_to_string(config_path).context("Couldn't read config file")?;
+            serde_yaml::from_str(&config_file).context("Couldn't parse config file")?
+        } else {
+            println!("No config file provided, using default config.");
+            Config::default()
+        };
 
+        config.apply_env_override(env_override);
         Ok(config)
+    }
+
+    fn apply_env_override(&mut self, EnvOverride { db_con, server_id }: EnvOverride) {
+        self.db.pg_con = db_con;
+        if let Some(server_id) = server_id {
+            self.app.job_execution.server_id.clone_from(&server_id);
+            self.tracing.service_instance_id = server_id;
+        }
     }
 }
