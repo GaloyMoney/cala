@@ -43,10 +43,12 @@ impl Balances {
     pub async fn find(
         &self,
         journal_id: JournalId,
-        account_id: AccountId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        self.repo.find(journal_id, account_id, currency).await
+        self.repo
+            .find(journal_id, account_id.into(), currency)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]

@@ -83,6 +83,19 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    pub async fn add_member(
+        &self,
+        account_set_id: AccountSetId,
+        member: impl Into<AccountSetMember>,
+    ) -> Result<AccountSet, AccountSetError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let account_set = self
+            .add_member_in_op(&mut op, account_set_id, member)
+            .await?;
+        op.commit().await?;
+        Ok(account_set)
+    }
+
     pub async fn add_member_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
