@@ -45,16 +45,40 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, account_id)
-            VALUES ($1, $2)"#,
+    ) -> Result<DateTime<Utc>, AccountSetError> {
+        let row = sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+            VALUES ($1, $2)
+            RETURNING created_at"#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .execute(&mut **db)
+        .fetch_one(&mut **db)
         .await?;
-        Ok(())
+        Ok(row.created_at)
+    }
+
+    pub async fn add_member_set(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<DateTime<Utc>, AccountSetError> {
+        let row = sqlx::query!(
+            r#"
+            WITH member_account_insert AS (
+                INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+                VALUES ($1, $2)
+            )
+            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
+            VALUES ($1, $2)
+            RETURNING created_at"#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
+        )
+        .fetch_one(&mut **db)
+        .await?;
+        Ok(row.created_at)
     }
 
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
@@ -135,6 +159,7 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    #[cfg(feature = "import")]
     pub async fn import_member_account(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -144,11 +169,33 @@ impl AccountSetRepo {
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, account_id, created_at)
+            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, member_account_id, created_at)
             VALUES ($1, $2, $3, $4)"#,
             origin as DataSourceId,
             account_set_id as AccountSetId,
             account_id as AccountId,
+            recorded_at
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import_member_set(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_account_sets (data_source_id, account_set_id, member_account_set_id, created_at)
+            VALUES ($1, $2, $3, $4)"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
             recorded_at
         )
         .execute(&mut **db)
@@ -162,13 +209,27 @@ impl AccountSetRepo {
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let rows = sqlx::query!(
-            r#"SELECT DISTINCT m.account_id AS "account_id: AccountId", m.account_set_id AS "account_set_id: AccountSetId"
+            r#"
+          WITH RECURSIVE account_sets_cte AS (
+            -- Base case: Direct member accounts
+            SELECT m.member_account_id AS account_id, m.account_set_id, s.data_source_id
             FROM cala_account_set_member_accounts m
             JOIN cala_account_sets s
             ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
             WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
             AND s.journal_id = $1
-            AND m.account_id = ANY($2)"#,
+            AND m.member_account_id = ANY($2)
+
+            UNION ALL
+            -- Recursive case: Account sets that are members of other account sets
+            SELECT c.account_id, mas.account_set_id, c.data_source_id
+            FROM account_sets_cte c
+            JOIN cala_account_set_member_account_sets mas
+                ON c.account_set_id = mas.member_account_set_id
+                AND mas.data_source_id = c.data_source_id
+          )
+          SELECT DISTINCT account_id AS "account_id!: AccountId", account_set_id AS "account_set_id!: AccountSetId"
+          FROM account_sets_cte"#,
             journal_id as JournalId,
             account_ids as &[AccountId]
         )

@@ -92,7 +92,8 @@ message AccountSetMemberCreated {
 message AccountSetMember {
   string account_set_id = 1;
   oneof member {
-    string account_id = 2;
+    string member_account_id = 2;
+    string member_account_set_id = 3;
   }
 }
 

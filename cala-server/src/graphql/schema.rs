@@ -239,7 +239,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             for id in account_set_ids {
                 app.ledger()
                     .account_sets()
-                    .add_to_account_set_in_op(&mut op, AccountSetId::from(id), account.id())
+                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
                     .await?;
             }
         }
@@ -274,6 +274,26 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .account_sets()
             .create_in_op(&mut op, builder.build()?)
+            .await?;
+
+        Ok(account_set.into())
+    }
+
+    async fn add_to_account_set(
+        &self,
+        ctx: &Context<'_>,
+        input: AddToAccountSetInput,
+    ) -> Result<AddToAccountSetPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let account_set = app
+            .ledger()
+            .account_sets()
+            .add_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())

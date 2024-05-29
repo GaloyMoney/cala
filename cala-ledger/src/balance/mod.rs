@@ -4,7 +4,7 @@ mod repo;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use sqlx::{Acquire, PgPool};
+use sqlx::{Acquire, PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -20,6 +20,8 @@ use crate::{
 pub use account_balance::*;
 use error::BalanceError;
 use repo::*;
+
+const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct Balances {
@@ -41,10 +43,12 @@ impl Balances {
     pub async fn find(
         &self,
         journal_id: JournalId,
-        account_id: AccountId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        self.repo.find(journal_id, account_id, currency).await
+        self.repo
+            .find(journal_id, account_id.into(), currency)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
@@ -53,6 +57,17 @@ impl Balances {
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all(ids).await
+    }
+
+    pub(crate) async fn find_balances_for_update(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
+        self.repo
+            .load_all_for_update(db, journal_id, account_id)
+            .await
     }
 
     pub(crate) async fn update_balances_in_op(
@@ -154,24 +169,25 @@ impl Balances {
         account_id: AccountId,
         entry: &EntryValues,
     ) -> BalanceSnapshot {
+        let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
         Self::update_snapshot(
             time,
             BalanceSnapshot {
                 journal_id: entry.journal_id,
                 account_id,
-                entry_id: entry.id,
+                entry_id,
                 currency: entry.currency,
                 settled_dr_balance: Decimal::ZERO,
                 settled_cr_balance: Decimal::ZERO,
-                settled_entry_id: entry.id,
+                settled_entry_id: entry_id,
                 settled_modified_at: time,
                 pending_dr_balance: Decimal::ZERO,
                 pending_cr_balance: Decimal::ZERO,
-                pending_entry_id: entry.id,
+                pending_entry_id: entry_id,
                 pending_modified_at: time,
                 encumbered_dr_balance: Decimal::ZERO,
                 encumbered_cr_balance: Decimal::ZERO,
-                encumbered_entry_id: entry.id,
+                encumbered_entry_id: entry_id,
                 encumbered_modified_at: time,
                 version: 0,
                 modified_at: time,

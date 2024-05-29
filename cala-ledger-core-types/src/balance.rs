@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct BalanceSnapshot {
     pub journal_id: JournalId,
     pub account_id: AccountId,

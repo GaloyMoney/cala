@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE account_sets_cte AS (\n            -- Base case: Direct member accounts\n            SELECT m.member_account_id AS account_id, m.account_set_id, s.data_source_id\n            FROM cala_account_set_member_accounts m\n            JOIN cala_account_sets s\n            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id\n            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'\n            AND s.journal_id = $1\n            AND m.member_account_id = ANY($2)\n\n            UNION ALL\n            -- Recursive case: Account sets that are members of other account sets\n            SELECT c.account_id, mas.account_set_id, c.data_source_id\n            FROM account_sets_cte c\n            JOIN cala_account_set_member_account_sets mas\n                ON c.account_set_id = mas.member_account_set_id\n                AND mas.data_source_id = c.data_source_id\n          )\n          SELECT DISTINCT account_id AS \"account_id!: AccountId\", account_set_id AS \"account_set_id!: AccountSetId\"\n          FROM account_sets_cte",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e34dd047047c545c9b587058f28de285ae9d01f27f14fea86347d90d48c48fea"
+}

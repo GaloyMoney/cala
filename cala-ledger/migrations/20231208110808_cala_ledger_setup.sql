@@ -75,11 +75,21 @@ CREATE TABLE cala_account_set_events (
 CREATE TABLE cala_account_set_member_accounts (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   account_set_id UUID NOT NULL,
-  account_id UUID NOT NULL,
+  member_account_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, account_set_id, account_id),
+  UNIQUE(data_source_id, account_set_id, member_account_id),
   FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+  FOREIGN KEY (data_source_id, member_account_id) REFERENCES cala_accounts(data_source_id, id)
+);
+
+CREATE TABLE cala_account_set_member_account_sets (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  account_set_id UUID NOT NULL,
+  member_account_set_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, account_set_id, member_account_set_id),
+  FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id),
+  FOREIGN KEY (data_source_id, member_account_set_id) REFERENCES cala_account_sets(data_source_id, id)
 );
 
 CREATE TABLE cala_tx_templates (
@@ -133,9 +143,9 @@ CREATE TABLE cala_entries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
-  FOREIGN KEY (data_source_id, transaction_id) REFERENCES cala_transactions(data_source_id, id)
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
 );
+CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 
 CREATE TABLE cala_entry_events (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',

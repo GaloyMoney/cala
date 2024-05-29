@@ -65,9 +65,14 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                         .member
                         .ok_or(CalaLedgerOutboxClientError::MissingField)?
                     {
-                        proto::account_set_member::Member::AccountId(account_id) => {
+                        proto::account_set_member::Member::MemberAccountId(account_id) => {
                             cala_types::account_set::AccountSetMember::from(
                                 account_id.parse::<AccountId>()?,
+                            )
+                        }
+                        proto::account_set_member::Member::MemberAccountSetId(account_set_id) => {
+                            cala_types::account_set::AccountSetMember::from(
+                                account_set_id.parse::<AccountSetId>()?,
                             )
                         }
                     },
