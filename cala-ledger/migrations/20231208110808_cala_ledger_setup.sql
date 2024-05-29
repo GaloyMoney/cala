@@ -145,7 +145,7 @@ CREATE TABLE cala_entries (
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
   FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
 );
-CREATE INDEX idx_cala_accounts_transaction_id ON cala_entries (transaction_id);
+CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 
 CREATE TABLE cala_entry_events (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
