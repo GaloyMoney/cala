@@ -77,10 +77,18 @@ impl AccountSets {
     ) -> Result<AccountSet, AccountSetError> {
         let account_set = self.repo.find(account_set_id).await?;
         let member = member.into();
-        let AccountSetMember::Account(account_id) = member;
-        self.repo
-            .add_member_account(op.tx(), account_set_id, account_id)
-            .await?;
+        match member {
+            AccountSetMember::Account(id) => {
+                self.repo
+                    .add_member_account(op.tx(), account_set_id, id)
+                    .await?;
+            }
+            AccountSetMember::AccountSet(id) => {
+                self.repo
+                    .add_member_set(op.tx(), account_set_id, id)
+                    .await?;
+            }
+        }
         op.accumulate(std::iter::once(
             OutboxEventPayload::AccountSetMemberCreated {
                 source: DataSource::Local,
@@ -134,10 +142,18 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: AccountSetMember,
     ) -> Result<(), AccountSetError> {
-        let AccountSetMember::Account(account_id) = member;
-        self.repo
-            .import_member_account(&mut db, recorded_at, origin, account_set_id, account_id)
-            .await?;
+        match member {
+            AccountSetMember::Account(account_id) => {
+                self.repo
+                    .import_member_account(&mut db, recorded_at, origin, account_set_id, account_id)
+                    .await?;
+            }
+            AccountSetMember::AccountSet(account_set_id) => {
+                self.repo
+                    .import_member_set(&mut db, recorded_at, origin, account_set_id, account_set_id)
+                    .await?;
+            }
+        }
         self.outbox
             .persist_events_at(
                 db,

@@ -50,7 +50,14 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                         account_set_id: account_set_id.to_string(),
                         member: Some(match member {
                             AccountSetMember::Account(account_id) => {
-                                proto::account_set_member::Member::AccountId(account_id.to_string())
+                                proto::account_set_member::Member::MemberAccountId(
+                                    account_id.to_string(),
+                                )
+                            }
+                            AccountSetMember::AccountSet(account_set_id) => {
+                                proto::account_set_member::Member::MemberAccountSetId(
+                                    account_set_id.to_string(),
+                                )
                             }
                         }),
                     }),

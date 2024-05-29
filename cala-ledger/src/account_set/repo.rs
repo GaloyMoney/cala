@@ -47,10 +47,27 @@ impl AccountSetRepo {
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, account_id)
+            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
             VALUES ($1, $2)"#,
             account_set_id as AccountSetId,
             account_id as AccountId,
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    pub async fn add_member_set(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
+            VALUES ($1, $2)"#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
         )
         .execute(&mut **db)
         .await?;
@@ -135,6 +152,7 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    #[cfg(feature = "import")]
     pub async fn import_member_account(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -144,11 +162,33 @@ impl AccountSetRepo {
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, account_id, created_at)
+            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, member_account_id, created_at)
             VALUES ($1, $2, $3, $4)"#,
             origin as DataSourceId,
             account_set_id as AccountSetId,
             account_id as AccountId,
+            recorded_at
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import_member_set(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"INSERT INTO cala_account_set_member_account_sets (data_source_id, account_set_id, member_account_set_id, created_at)
+            VALUES ($1, $2, $3, $4)"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
             recorded_at
         )
         .execute(&mut **db)
@@ -162,13 +202,13 @@ impl AccountSetRepo {
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let rows = sqlx::query!(
-            r#"SELECT DISTINCT m.account_id AS "account_id: AccountId", m.account_set_id AS "account_set_id: AccountSetId"
+            r#"SELECT DISTINCT m.member_account_id AS "account_id: AccountId", m.account_set_id AS "account_set_id: AccountSetId"
             FROM cala_account_set_member_accounts m
             JOIN cala_account_sets s
             ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
             WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
             AND s.journal_id = $1
-            AND m.account_id = ANY($2)"#,
+            AND m.member_account_id = ANY($2)"#,
             journal_id as JournalId,
             account_ids as &[AccountId]
         )

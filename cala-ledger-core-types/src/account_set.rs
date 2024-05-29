@@ -17,11 +17,17 @@ pub struct AccountSetValues {
 #[serde(tag = "type", content = "id")]
 pub enum AccountSetMember {
     Account(AccountId),
-    // AccountSet(AccountSetId),
+    AccountSet(AccountSetId),
 }
 
 impl From<AccountId> for AccountSetMember {
     fn from(account_id: AccountId) -> Self {
         AccountSetMember::Account(account_id)
+    }
+}
+
+impl From<AccountSetId> for AccountSetMember {
+    fn from(id: AccountSetId) -> Self {
+        AccountSetMember::AccountSet(id)
     }
 }
