@@ -14,7 +14,7 @@ const FeatureList: FeatureItem[] = [
     image: require('@site/static/img/graphql-api-logo.png').default,
     description: (
       <>
-        Test and refine your applications efficiently with Cala's local GraphQL Playground, allowing for immediate feedback without preliminary coding. Leverage GraphQL's efficient data fetching to enhance performance and user experience.
+        Develop applications efficiently with Cala's GraphQL playground, allowing for immediate feedback without preliminary coding. Leverage the efficient data fetching to enhance performance and user experience.
       </>
     ),
   },
@@ -28,20 +28,11 @@ const FeatureList: FeatureItem[] = [
     ),
   },
   {
-    title: 'Run Anywhere',
-    image: require('@site/static/img/run-anywhere-logo.png').default,
-    description: (
-      <>
-        Can serve you in the cloud, on your own server or locally as you need.
-      </>
-    ),
-  },
-  {
     title: 'Transaction Templates',
-    image: require('@site/static/img/financial-operation-logo.png').default,
+    image: require('@site/static/img/transaction-templates-logo.png').default,
     description: (
       <>
-        Create custom transaction templates for your specific use cases.
+        Create custom transaction templates for your specific use cases. Tailor each template to fit your unique business needs and streamline your financial workflows.
       </>
     ),
   },
@@ -54,7 +45,15 @@ const FeatureList: FeatureItem[] = [
       </>
     ),
   },
-
+  {
+    title: 'Run Anywhere',
+    image: require('@site/static/img/run-anywhere-logo.png').default,
+    description: (
+      <>
+        Can serve you in the cloud, on your own server or locally as you need.
+      </>
+    ),
+  },
   {
     title: 'Open Source Core in Rust',
     image: require('@site/static/img/rust-logo.png').default,
