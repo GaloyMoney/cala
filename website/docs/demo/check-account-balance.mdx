@@ -1,0 +1,46 @@
+---
+id: check-account-balance
+title: Check account balance
+slug: /docs/demo/check-account-balance
+---
+
+### GraphQL body
+```graphql
+query accountWithBalance($accountId: UUID!, $journalId: UUID!, $currency: CurrencyCode!) {
+  account(id: $accountId) {
+    name
+    balance(journalId: $journalId, currency: $currency) {
+      settled {
+        normalBalance {
+          units
+        }
+      }
+    }
+  }
+}
+````
+### Variables
+```
+{
+  "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+  "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
+  "currency": "USD"
+}
+```
+### Response
+```json
+{
+  "data": {
+    "account": {
+      "name": "Alice - Checking",
+      "balance": {
+        "settled": {
+          "normalBalance": {
+            "units": "9.53"
+          }
+        }
+      }
+    }
+  }
+}
+```

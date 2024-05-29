@@ -1,173 +1,133 @@
 ---
 id: tx-template-create
-title: Create a transaction template
-slug: /demo/tx-template-create
+title: Create transaction templates
+slug: /docs/demo/tx-template-create
 ---
 
-```jsx live
-function AccountCreate() {
-  const apiEndpoint = "http://localhost:8080/graphql";
-  const [response, setResponse] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
-
-  const journal_id = "1ad17957-6e4e-48a3-8040-1165b2117341";
-  const asset_account_id = "30e7eefb-b47c-4f14-b837-c3f936a7a31e";
-
-  const operation = `
-    mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depositTemplateCode: String!, $withdrawalTemplateId: UUID!, $withdrawalTemplateCode: String!, $journalId: Expression!, $assetAccountId: Expression!) {
-      depositTemplate: txTemplateCreate(
-        input: {
-          txTemplateId: $depositTemplateId
-          code: $depositTemplateCode
-          description: "An ACH credit into a customer account."
-          params: [
-            { name: "account", type: UUID, description: "Deposit account ID." }
-            {
-              name: "amount"
-              type: DECIMAL
-              description: "Amount with decimal, e.g. '1.23'."
-            }
-            {
-              name: "effective"
-              type: DATE
-              description: "Effective date for transaction."
-            }
-          ]
-          txInput: {
-            journalId: $journalId
-            effective: "params.effective"
-          }
-          entries: [
-            {
-              accountId: $assetAccountId
-              units: "params.amount"
-              currency: "'USD'"
-              entryType: "'ACH_DR'"
-              direction: "DEBIT"
-              layer: "SETTLED"
-            }
-            {
-              accountId: "params.account"
-              units: "params.amount"
-              currency: "'USD'"
-              entryType: "'ACH_CR'"
-              direction: "CREDIT"
-              layer: "SETTLED"
-            }
-          ]
+### GraphQL body
+```graphql
+mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depositTemplateCode: String!, $withdrawalTemplateId: UUID!, $withdrawalTemplateCode: String!, $journalId: Expression!, $assetAccountId: Expression!) {
+  depositTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $depositTemplateId
+      code: $depositTemplateCode
+      description: "An ACH credit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Deposit account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
         }
-      ) {
-        txTemplate{
-          txTemplateId
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
         }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
       }
-
-      withdrawalTemplate: txTemplateCreate(
-        input: {
-          txTemplateId: $withdrawalTemplateId
-          code: $withdrawalTemplateCode
-          description: "An ACH debit into a customer account."
-          params: [
-            { name: "account", type: UUID, description: "Withdraw account ID." }
-            {
-              name: "amount"
-              type: DECIMAL
-              description: "Amount with decimal, e.g. '1.23'."
-            }
-            {
-              name: "effective"
-              type: DATE
-              description: "Effective date for transaction."
-            }
-          ]
-          txInput: {
-            journalId: $journalId
-            effective: "params.effective"
-          }
-          entries: [
-            {
-              accountId: $assetAccountId
-              units: "params.amount"
-              currency: "'USD'"
-              entryType: "'ACH_CR'"
-              direction: "CREDIT"
-              layer: "SETTLED"
-            }
-            {
-              accountId: "params.account"
-              units: "params.amount"
-              currency: "'USD'"
-              entryType: "'ACH_DR'"
-              direction: "DEBIT"
-              layer: "SETTLED"
-            }
-          ]
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
         }
-      ) {
-        txTemplate{
-          txTemplateId
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
         }
-      }
+      ]
     }
-  `;
-
-  function randomUUID() {
-    return crypto.randomUUID().toLowerCase();
+  ) {
+    txTemplate{
+      txTemplateId
+    }
   }
 
-  const deposit_template_id = randomUUID();
-  const withdrawal_template_id = randomUUID();
-  const variables = {
-    depositTemplateId: deposit_template_id,
-    depositTemplateCode: `DEPOSIT-${deposit_template_id}`,
-    withdrawalTemplateId: withdrawal_template_id,
-    withdrawalTemplateCode: `withdrawal-${withdrawal_template_id}`,
-    assetAccountId: `uuid('${asset_account_id}')`,
-    journalId: `uuid('${journal_id}')`,
-  };
-
-  const runOp = async () => {
-    try {
-      const headers = {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      };
-
-      const res = await fetch(apiEndpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: operation,
-          variables,
-        }),
-      });
-      const result = await res.json();
-      if (result.errors) {
-        setErrorMessage(result.errors[0].message);
-      } else {
-        setResponse(result.data);
+  withdrawalTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $withdrawalTemplateId
+      code: $withdrawalTemplateCode
+      description: "An ACH debit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Withdraw account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+        }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
       }
-    } catch (error) {
-      setErrorMessage(error.message);
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
+        }
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
+        }
+      ]
     }
-  };
+  ) {
+    txTemplate{
+      txTemplateId
+    }
+  }
+}
+```
+### Variables
+```json
+{
+  "depositTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c",
+  "depositTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
+  "withdrawalTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
+  "withdrawalTemplateCode": "withdrawal-241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
+  "assetAccountId": "uuid('2e40175d-35c2-4b6f-9c01-cc2309934d25')",
+  "journalId": "uuid('bcc24f47-990c-457d-88cb-76332450ac77')"
+}
+```
 
-  return (
-    <div>
-      <button onClick={runOp}>Send the request</button>
-      <div style={{ marginTop: "10px" }}></div>
-      {errorMessage && (
-        <div style={{ color: "red" }}>Error: {errorMessage}</div>
-      )}
-      {response && (
-        <div>
-          <strong>Response:</strong>{" "}
-          <pre style={{ marginLeft: "10px" }}>
-            {JSON.stringify(response, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
+### Response
+```json
+{
+  "data": {
+    "depositTemplate": {
+      "txTemplate": {
+        "txTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c"
+      }
+    },
+    "withdrawalTemplate": {
+      "txTemplate": {
+        "txTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728"
+      }
+    }
+  }
 }
 ```

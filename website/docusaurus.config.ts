@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Cala',
-  tagline: 'Cala Documentation',
+  tagline: 'A double sided accounting ledger built on PostgreSQL',
   favicon: 'img/favicon.ico',
 
   // production url
@@ -32,7 +32,7 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          routeBasePath: '/', // This changes the base path from /docs
+          routeBasePath: '/docs', // This changes the base path from /docs
           editUrl: ({versionDocsDirPath, docPath}) => {
             return `https://github.com/GaloyMoney/cala/edit/main/${versionDocsDirPath}/${docPath}`;
           },
@@ -50,12 +50,18 @@ const config: Config = {
     // social card
     image: 'img/galoy.png',
     navbar: {
-      title: 'Cala documentation',
+      title: 'Cala',
       logo: {
         alt: 'Cala Logo',
         src: 'img/logo.svg',
       },
       items: [
+        {
+          type: 'docSidebar',
+          sidebarId: 'demoSidebar',
+          position: 'left',
+          label: 'Docs',
+        },
         {
           href: 'https://github.com/GaloyMoney/cala',
           label: 'GitHub',
@@ -69,10 +75,14 @@ const config: Config = {
         {
           title: 'Docs',
           items: [
-            //{
-            //  label: 'Demo',
-            //  to: '/docs/intro',
-            //},
+            {
+              label: 'Try Cala',
+              to: '/docs',
+            },
+            {
+              label: 'GraphQL API demo',
+              to: '/docs/demo/create-journal-and-accounts',
+            },
           ],
         },
         {
@@ -103,6 +113,11 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
+    },
+    colorMode: {
+      defaultMode: 'light',
+      disableSwitch: false, //manual dark mode switch
+      respectPrefersColorScheme: false, // system dark mode switch
     },
     liveCodeBlock: {
       /**

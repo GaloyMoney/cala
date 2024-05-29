@@ -1,86 +1,44 @@
 ---
 id: post-transaction
 title: Post a transaction
-slug: /demo/post-transaction
+slug: /docs/demo/post-transaction
 ---
 
-## Post a transaction
-
-```jsx live
-function AccountCreate() {
-  const apiEndpoint = "http://localhost:8080/graphql";
-  const [response, setResponse] = useState(null);
-  const [errorMessage, setErrorMessage] = useState(null);
-
-  const operation = `
-    mutation accountCreate($input: AccountCreateInput!) {
-      accountCreate(input: $input) {
-        account {
-          accountId
-          name
-        }
-      }
+### GraphQL body
+```graphql
+mutation postTransaction($input: TransactionInput!) {
+  postTransaction(input: $input) {
+    transaction {
+      transactionId
+      correlationId
     }
-  `;
-
-  function randomUUID() {
-    return crypto.randomUUID().toLowerCase();
   }
-
-  const transaction_id = randomUUID();
-  const variables = {
-    input: {
-      transactionId: transaction_id,
-      txTemplateCode: `DEPOSIT-${depositTemplateId}`,
-      params: {
-        account: account_id,
-        amount: "9.53",
-        effective: "2022-09-21"
-    },
-  };
-
-  const runOp = async () => {
-    try {
-      const headers = {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      };
-
-      const res = await fetch(apiEndpoint, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          query: operation,
-          variables,
-        }),
-      });
-      const result = await res.json();
-      if (result.errors) {
-        setErrorMessage(result.errors[0].message);
-      } else {
-        setResponse(result.data);
-      }
-    } catch (error) {
-      setErrorMessage(error.message);
+}
+````
+### Variables
+```json
+{
+  "input": {
+    "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
+    "txTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
+    "params": {
+      "account": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+      "amount": "9.53",
+      "effective": "2022-09-21"
     }
-  };
-
-  return (
-    <div>
-      <button onClick={runOp}>Send the request</button>
-      <div style={{ marginTop: "10px" }}></div>
-      {errorMessage && (
-        <div style={{ color: "red" }}>Error: {errorMessage}</div>
-      )}
-      {response && (
-        <div>
-          <strong>Response:</strong>{" "}
-          <pre style={{ marginLeft: "10px" }}>
-            {JSON.stringify(response, null, 2)}
-          </pre>
-        </div>
-      )}
-    </div>
-  );
+  }
+}
+```
+### Response
+```json
+{
+  "data": {
+    "postTransaction": {
+      "transaction": {
+        "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
+        "correlationId": "204d087b-5b6d-4544-9203-6674d54528d3"
+      }
+    }
+  }
 }
 ```

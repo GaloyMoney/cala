@@ -8,9 +8,10 @@ const sidebars: SidebarsConfig = {
       label: 'GraphQL API demo',
       collapsed: false,
       items: [
-        'demo/journal-create',
-        'demo/account-create',
-        'demo/tx-template-create'
+        'demo/create-journal-and-accounts',
+        'demo/tx-template-create',
+        'demo/post-transaction',
+        'demo/check-account-balance',
       ]
     },
   ],
