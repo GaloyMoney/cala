@@ -64,7 +64,12 @@ impl AccountSetRepo {
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
+            r#"
+            WITH member_account_insert AS (
+                INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+                VALUES ($1, $2)
+            )
+            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
             VALUES ($1, $2)"#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,

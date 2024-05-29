@@ -105,6 +105,13 @@ impl AccountSets {
                 target
             }
         };
+
+        //
+        // check balances
+        // create entries
+        // update balances (including mappings)
+        //
+
         op.accumulate(std::iter::once(
             OutboxEventPayload::AccountSetMemberCreated {
                 source: DataSource::Local,
