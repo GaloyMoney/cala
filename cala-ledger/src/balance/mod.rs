@@ -4,7 +4,7 @@ mod repo;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use sqlx::{Acquire, PgPool};
+use sqlx::{Acquire, PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -55,6 +55,17 @@ impl Balances {
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all(ids).await
+    }
+
+    pub(crate) async fn find_balances_for_update(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
+        self.repo
+            .load_all_for_update(db, journal_id, account_id)
+            .await
     }
 
     pub(crate) async fn update_balances_in_op(

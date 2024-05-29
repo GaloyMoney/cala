@@ -45,16 +45,17 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
+    ) -> Result<DateTime<Utc>, AccountSetError> {
+        let row = sqlx::query!(
             r#"INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-            VALUES ($1, $2)"#,
+            VALUES ($1, $2)
+            RETURNING created_at"#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .execute(&mut **db)
+        .fetch_one(&mut **db)
         .await?;
-        Ok(())
+        Ok(row.created_at)
     }
 
     pub async fn add_member_set(
@@ -62,21 +63,22 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
+    ) -> Result<DateTime<Utc>, AccountSetError> {
+        let row = sqlx::query!(
             r#"
             WITH member_account_insert AS (
                 INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
                 VALUES ($1, $2)
             )
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
-            VALUES ($1, $2)"#,
+            VALUES ($1, $2)
+            RETURNING created_at"#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .execute(&mut **db)
+        .fetch_one(&mut **db)
         .await?;
-        Ok(())
+        Ok(row.created_at)
     }
 
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {

@@ -19,6 +19,11 @@ impl From<&AccountSetId> for AccountId {
         Self(id.0)
     }
 }
+impl From<AccountSetId> for AccountId {
+    fn from(id: AccountSetId) -> Self {
+        Self(id.0)
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]

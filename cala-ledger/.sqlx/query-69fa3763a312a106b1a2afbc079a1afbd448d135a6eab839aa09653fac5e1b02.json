@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH member_account_insert AS (\n                INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)\n                VALUES ($1, $2)\n            )\n            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)\n            VALUES ($1, $2)\n            RETURNING created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "69fa3763a312a106b1a2afbc079a1afbd448d135a6eab839aa09653fac5e1b02"
+}
