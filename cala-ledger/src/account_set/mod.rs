@@ -23,7 +23,7 @@ pub use entity::*;
 use error::*;
 use repo::*;
 
-const DUMMY_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
+const NIL_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct AccountSets {
@@ -246,7 +246,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
             .direction(DebitOrCredit::Credit)
             .units(balance.settled_cr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
@@ -263,7 +263,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
             .direction(DebitOrCredit::Debit)
             .units(balance.settled_dr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
@@ -280,7 +280,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
             .direction(DebitOrCredit::Credit)
             .units(balance.pending_cr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
@@ -297,7 +297,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
             .direction(DebitOrCredit::Debit)
             .units(balance.pending_dr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
@@ -314,7 +314,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_CR")
             .direction(DebitOrCredit::Credit)
             .units(balance.encumbered_cr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
@@ -331,7 +331,7 @@ fn entries_for_add_balance(
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_DR")
             .direction(DebitOrCredit::Debit)
             .units(balance.encumbered_dr_balance)
-            .transaction_id(DUMMY_TRANSACTION_ID)
+            .transaction_id(NIL_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
