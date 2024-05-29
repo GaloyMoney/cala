@@ -69,7 +69,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    pub async fn add_to_account_set_in_op(
+    pub async fn add_member_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
         account_set_id: AccountSetId,

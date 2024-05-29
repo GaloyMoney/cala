@@ -239,7 +239,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             for id in account_set_ids {
                 app.ledger()
                     .account_sets()
-                    .add_to_account_set_in_op(&mut op, AccountSetId::from(id), account.id())
+                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
                     .await?;
             }
         }
@@ -293,7 +293,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .add_to_account_set_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .add_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())
