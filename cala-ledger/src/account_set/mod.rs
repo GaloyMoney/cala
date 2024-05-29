@@ -75,24 +75,24 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMember>,
     ) -> Result<AccountSet, AccountSetError> {
-        let account_set = self.repo.find(account_set_id).await?;
         let member = member.into();
-        match member {
+        let account_set = match member {
             AccountSetMember::Account(id) => {
                 self.repo
                     .add_member_account(op.tx(), account_set_id, id)
                     .await?;
+                self.repo.find(account_set_id).await?
             }
             AccountSetMember::AccountSet(id) => {
-                let accounts = self
+                let mut accounts = self
                     .repo
                     .find_all::<AccountSet>(&[account_set_id, id])
                     .await?;
                 let target = accounts
-                    .get(&account_set_id)
+                    .remove(&account_set_id)
                     .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
                 let member = accounts
-                    .get(&id)
+                    .remove(&id)
                     .ok_or(AccountSetError::CouldNotFindById(id))?;
 
                 if target.values().journal_id != member.values().journal_id {
@@ -102,8 +102,9 @@ impl AccountSets {
                 self.repo
                     .add_member_set(op.tx(), account_set_id, id)
                     .await?;
+                target
             }
-        }
+        };
         op.accumulate(std::iter::once(
             OutboxEventPayload::AccountSetMemberCreated {
                 source: DataSource::Local,

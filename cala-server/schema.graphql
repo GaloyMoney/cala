@@ -86,6 +86,21 @@ type AccountSetCreatePayload {
 	accountSet: AccountSet!
 }
 
+enum AccountSetMemberType {
+	ACCOUNT
+	ACCOUNT_SET
+}
+
+input AddToAccountSetInput {
+	accountSetId: UUID!
+	memberId: UUID!
+	memberType: AccountSetMemberType!
+}
+
+type AddToAccountSetPayload {
+	accountSet: AccountSet!
+}
+
 type Balance {
 	id: ID!
 	journalId: UUID!
@@ -211,6 +226,7 @@ type Mutation {
 	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
 	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
+	addToAccountSet(input: AddToAccountSetInput!): AddToAccountSetPayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	postTransaction(input: TransactionInput!): PostTransactionPayload!

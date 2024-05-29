@@ -279,6 +279,26 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(account_set.into())
     }
 
+    async fn add_to_account_set(
+        &self,
+        ctx: &Context<'_>,
+        input: AddToAccountSetInput,
+    ) -> Result<AddToAccountSetPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let account_set = app
+            .ledger()
+            .account_sets()
+            .add_to_account_set_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .await?;
+
+        Ok(account_set.into())
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,

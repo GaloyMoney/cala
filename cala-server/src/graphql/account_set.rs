@@ -1,8 +1,9 @@
 use async_graphql::{dataloader::*, *};
 
 use cala_ledger::{
+    account_set::AccountSetMember,
     balance::*,
-    primitives::{AccountId, Currency, JournalId},
+    primitives::{AccountId, AccountSetId, Currency, JournalId},
 };
 
 use super::{balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*};
@@ -55,6 +56,35 @@ pub(super) struct AccountSetCreatePayload {
     pub account_set: AccountSet,
 }
 
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
+pub enum AccountSetMemberType {
+    Account,
+    AccountSet,
+}
+#[derive(InputObject)]
+pub(super) struct AddToAccountSetInput {
+    pub account_set_id: UUID,
+    pub member_id: UUID,
+    pub member_type: AccountSetMemberType,
+}
+impl From<AddToAccountSetInput> for AccountSetMember {
+    fn from(input: AddToAccountSetInput) -> Self {
+        match input.member_type {
+            AccountSetMemberType::Account => {
+                AccountSetMember::Account(AccountId::from(input.member_id))
+            }
+            AccountSetMemberType::AccountSet => {
+                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+            }
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+pub(super) struct AddToAccountSetPayload {
+    pub account_set: AccountSet,
+}
+
 impl ToGlobalId for cala_ledger::AccountSetId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("account_set:{}", self))
@@ -82,6 +112,14 @@ impl From<cala_ledger::account_set::AccountSet> for AccountSet {
 }
 
 impl From<cala_ledger::account_set::AccountSet> for AccountSetCreatePayload {
+    fn from(value: cala_ledger::account_set::AccountSet) -> Self {
+        Self {
+            account_set: AccountSet::from(value),
+        }
+    }
+}
+
+impl From<cala_ledger::account_set::AccountSet> for AddToAccountSetPayload {
     fn from(value: cala_ledger::account_set::AccountSet) -> Self {
         Self {
             account_set: AccountSet::from(value),
