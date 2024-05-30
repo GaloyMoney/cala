@@ -4,23 +4,17 @@ title: Try Cala
 slug: /
 ---
 
-# Run locally
 ## Install Docker and Docker Compose
 * choose the install method for your system https://docs.docker.com/desktop/
 
-## Download the docker-compose file to run Cala and its dependencies
-```
+## Download the docker-compose.yml
+```bash
 wget https://raw.githubusercontent.com/GaloyMoney/cala/docs--website/docker-compose.yml
 ```
 
-## Create a config file
-```
-touch cala.yml
-```
-
-## Run the Cala server
-```
-docker-compose up cala-server
+## Run the Cala server with a PostgresQL instance
+```bash
+docker-compose up -d cala-server
 ```
 
 ## GraphQL demo
@@ -29,6 +23,7 @@ http://localhost:2252/graphql
 * continue with the [GraphQL API demo](/docs/demo/create-journal-and-accounts)
 
 ## Cleanup
+* run in the directory where the docker-compose.yml file is
 ```
-make clean-deps
+docker-compose down
 ```
