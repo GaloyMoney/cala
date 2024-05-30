@@ -118,11 +118,11 @@ impl BalanceRepo {
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
-    ) -> Result<HashMap<(AccountId, Currency), BalanceSnapshot>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
         let mut query_builder = QueryBuilder::new(
             r#"
         WITH pairs AS (
-          SELECT * FROM ("#,
+          SELECT account_id, currency, eventually_consistent FROM ("#,
         );
         query_builder.push_values(ids, |mut builder, (id, currency)| {
             builder.push_bind(id);
@@ -130,34 +130,34 @@ impl BalanceRepo {
         });
         query_builder.push(
             r#"
-          ) AS v(account_id, currency)),
+            ) AS v(account_id, currency)
+            JOIN cala_accounts a
+            ON a.data_source_id = '00000000-0000-0000-0000-000000000000' AND account_id = a.id
+          ),
           locked_balances AS (
-            SELECT data_source_id, journal_id, account_id, currency, latest_version
-              FROM cala_current_balances
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND journal_id = "#,
+            SELECT b.data_source_id, b.journal_id, b.account_id, b.currency, b.latest_version
+              FROM cala_current_balances b
+              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
+              WHERE b.data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND b.journal_id = "#,
         );
         query_builder.push_bind(journal_id);
         query_builder.push(
             r#"
-          AND (account_id, currency) IN (SELECT * from pairs) FOR UPDATE
-          ),
-          locked_accounts AS (
-            SELECT 1
-            FROM cala_accounts a
-            JOIN pairs p ON p.account_id = a.id
-            WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.id NOT IN (SELECT DISTINCT account_id FROM locked_balances)
-            FOR UPDATE
+            FOR UPDATE OF b
           )
-          SELECT h.values
-          FROM cala_balance_history h
-          JOIN locked_balances b
+          SELECT p.account_id, p.currency, h.values
+          FROM pairs p
+          LEFT JOIN locked_balances b
+          ON p.account_id = b.account_id
+            AND p.currency = b.currency
+          LEFT JOIN cala_balance_history h
           ON b.data_source_id = h.data_source_id
             AND b.journal_id = h.journal_id
             AND b.account_id = h.account_id
             AND b.currency = h.currency
             AND b.latest_version = h.version
+          WHERE p.eventually_consistent = FALSE
         "#,
         );
         let query = query_builder.build();
@@ -165,10 +165,20 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let values: serde_json::Value = row.get("values");
-            let snapshot: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
-            ret.insert((snapshot.account_id, snapshot.currency), snapshot);
+            let values: Option<serde_json::Value> = row.get("values");
+            let snapshot = values.map(|v| {
+                serde_json::from_value::<BalanceSnapshot>(v)
+                    .expect("Failed to deserialize balance snapshot")
+            });
+            ret.insert(
+                (
+                    row.get("account_id"),
+                    row.get::<&str, _>("currency")
+                        .parse()
+                        .expect("Could not parse currency"),
+                ),
+                snapshot,
+            );
         }
         Ok(ret)
     }

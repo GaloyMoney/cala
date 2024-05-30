@@ -110,7 +110,7 @@ impl Balances {
 
     fn new_snapshots(
         time: DateTime<Utc>,
-        mut current_balances: HashMap<(AccountId, Currency), BalanceSnapshot>,
+        mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
         entries: Vec<EntryValues>,
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
@@ -125,12 +125,15 @@ impl Balances {
                     new_balances.push(latest.clone());
                     latest
                 }
-                (_, Some(balance)) => balance,
-                _ => {
+                (_, Some(Some(balance))) => balance,
+                (_, Some(None)) => {
                     latest_balances.insert(
                         (account_id, &entry.currency),
                         Self::new_snapshot(time, account_id, entry),
                     );
+                    continue;
+                }
+                _ => {
                     continue;
                 }
             };

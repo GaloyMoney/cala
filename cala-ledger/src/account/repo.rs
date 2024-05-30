@@ -26,13 +26,14 @@ impl AccountRepo {
     ) -> Result<Account, AccountError> {
         let id = new_account.id;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type, eventually_consistent)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             id as AccountId,
             new_account.code,
             new_account.name,
             new_account.external_id,
             new_account.normal_balance_type as DebitOrCredit,
+            new_account.eventually_consistent
         )
         .execute(&mut **db)
         .await?;

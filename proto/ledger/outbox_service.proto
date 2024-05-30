@@ -67,6 +67,7 @@ message Account {
 
 message AccountConfig {
   bool is_account_set = 1;
+  bool eventually_consistent = 2;
 }
 
 message AccountSetCreated {
