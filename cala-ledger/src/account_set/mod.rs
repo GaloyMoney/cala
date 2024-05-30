@@ -163,9 +163,6 @@ impl AccountSets {
             .repo
             .fetch_mappings(account_set.values().journal_id, &[target_account_id])
             .await?;
-        self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-            .await?;
 
         Ok(account_set)
     }
