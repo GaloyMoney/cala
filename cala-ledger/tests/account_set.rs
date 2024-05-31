@@ -71,3 +71,70 @@ async fn account_set() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn errors_on_collision() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let (one, two) = helpers::test_accounts();
+    let one = cala.accounts().create(one).await.unwrap();
+    let two = cala.accounts().create(two).await.unwrap();
+
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
+
+    let set_one = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("SET ONE")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let set_one = cala.account_sets().create(set_one).await.unwrap();
+
+    let set_two = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("SET TWO")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let set_two = cala.account_sets().create(set_two).await.unwrap();
+
+    let parent = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("parent")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let parent = cala.account_sets().create(parent).await.unwrap();
+
+    // Cannot add the same account twice
+    let res = cala.account_sets().add_member(set_one.id(), one.id()).await;
+    assert!(res.is_ok());
+    let res = cala.account_sets().add_member(set_one.id(), one.id()).await;
+    assert!(res.is_err());
+
+    // Cannot add an account included in child
+    let res = cala
+        .account_sets()
+        .add_member(parent.id(), set_one.id())
+        .await;
+    assert!(res.is_ok());
+    let res = cala.account_sets().add_member(parent.id(), one.id()).await;
+    assert!(res.is_err());
+
+    let res = cala.account_sets().add_member(set_two.id(), two.id()).await;
+    assert!(res.is_ok());
+    let res = cala.account_sets().add_member(parent.id(), two.id()).await;
+    assert!(res.is_ok());
+
+    // Cannot add an account included in sibling
+    let res = cala.account_sets().add_member(set_one.id(), two.id()).await;
+    assert!(res.is_err());
+
+    Ok(())
+}

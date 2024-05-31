@@ -77,6 +77,7 @@ CREATE TABLE cala_account_set_member_accounts (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   account_set_id UUID NOT NULL,
   member_account_id UUID NOT NULL,
+  transitive BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, account_set_id, member_account_id),
   FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id),
