@@ -40,13 +40,13 @@ impl AccountSetRepo {
         Ok(account_set)
     }
 
-    pub async fn add_member_account(
+    pub async fn add_member_account_and_return_effected_sets(
         &self,
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(r#"
+    ) -> Result<(Vec<AccountSetId>, DateTime<Utc>), AccountSetError> {
+        let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
             FROM cala_account_set_member_account_sets m
@@ -63,35 +63,46 @@ impl AccountSetRepo {
                 AND p.data_source_id = m.data_source_id
           ),
           locked_sets AS (
-            SELECT 1
+            SELECT id, NOW() AS now
             FROM cala_account_sets
             WHERE (id IN (SELECT account_set_id FROM parents
                           UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
             FOR UPDATE
           ),
-          no_transitive_insert AS (
+          non_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
             VALUES ($1, $2)
+          ),
+          transitive_insert AS (
+            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+            SELECT p.account_set_id, $2, TRUE
+            FROM parents p
           )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, $2, TRUE
-          FROM parents p
+          SELECT * FROM locked_sets
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .execute(&mut **db)
+        .fetch_all(&mut **db)
         .await?;
-        Ok(())
+        let mut time = None;
+        let ret = rows
+            .into_iter()
+            .map(|row| {
+                time = row.now;
+                AccountSetId::from(row.id)
+            })
+            .collect();
+        Ok((ret, time.expect("time not set")))
     }
 
-    pub async fn add_member_set(
+    pub async fn add_member_set_and_return_effected_sets(
         &self,
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(r#"
+    ) -> Result<(Vec<AccountSetId>, DateTime<Utc>), AccountSetError> {
+        let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
             FROM cala_account_set_member_account_sets m
@@ -108,7 +119,7 @@ impl AccountSetRepo {
                 AND p.data_source_id = m.data_source_id
           ),
           locked_sets AS (
-            SELECT 1
+            SELECT id, NOW() AS now
             FROM cala_account_sets
             WHERE (id IN (SELECT account_set_id FROM parents
                           UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
@@ -125,18 +136,30 @@ impl AccountSetRepo {
             WHERE m.account_set_id = $2
             AND m.data_source_id = '00000000-0000-0000-0000-000000000000'
             RETURNING member_account_id
+          ),
+          transitive_inserts AS (
+            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+            SELECT p.account_set_id, n.member_account_id, TRUE
+            FROM parents p
+            CROSS JOIN new_members n
           )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, n.member_account_id, TRUE
-          FROM parents p
-          CROSS JOIN new_members n
+          SELECT id, now
+          FROM locked_sets
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .execute(&mut **db)
+        .fetch_all(&mut **db)
         .await?;
-        Ok(())
+        let mut time = None;
+        let ret = rows
+            .into_iter()
+            .map(|row| {
+                time = row.now;
+                AccountSetId::from(row.id)
+            })
+            .collect();
+        Ok((ret, time.expect("time not set")))
     }
 
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {

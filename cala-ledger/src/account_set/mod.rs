@@ -108,7 +108,7 @@ impl AccountSets {
             AccountSetMember::Account(id) => {
                 let set = self.repo.find(account_set_id).await?;
                 self.repo
-                    .add_member_account(op.tx(), account_set_id, id)
+                    .add_member_account_and_return_effected_sets(op.tx(), account_set_id, id)
                     .await?;
                 set
             }
@@ -129,7 +129,7 @@ impl AccountSets {
                 }
 
                 self.repo
-                    .add_member_set(op.tx(), account_set_id, id)
+                    .add_member_set_and_return_effected_sets(op.tx(), account_set_id, id)
                     .await?;
                 target
             }
