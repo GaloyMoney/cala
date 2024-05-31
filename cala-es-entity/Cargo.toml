@@ -1,0 +1,10 @@
+[package]
+name = "cala-es-entity"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+sqlx = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }
