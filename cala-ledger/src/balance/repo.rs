@@ -145,19 +145,30 @@ impl BalanceRepo {
         query_builder.push(
             r#"
             FOR UPDATE OF b
+          ),
+          values AS (
+            SELECT b.data_source_id, p.account_id, p.currency, h.values
+            FROM pairs p
+            LEFT JOIN locked_balances b
+            ON p.account_id = b.account_id
+              AND p.currency = b.currency
+            LEFT JOIN cala_balance_history h
+            ON b.data_source_id = h.data_source_id
+              AND b.journal_id = h.journal_id
+              AND b.account_id = h.account_id
+              AND b.currency = h.currency
+              AND b.latest_version = h.version
+            WHERE p.eventually_consistent = FALSE
+          ),
+          locked_accounts AS (
+            SELECT 1
+            FROM values v
+            JOIN cala_accounts a
+            ON v.data_source_id = a.data_source_id AND v.account_id = a.id
+            WHERE v.values IS NULL
+            FOR UPDATE
           )
-          SELECT p.account_id, p.currency, h.values
-          FROM pairs p
-          LEFT JOIN locked_balances b
-          ON p.account_id = b.account_id
-            AND p.currency = b.currency
-          LEFT JOIN cala_balance_history h
-          ON b.data_source_id = h.data_source_id
-            AND b.journal_id = h.journal_id
-            AND b.account_id = h.account_id
-            AND b.currency = h.currency
-            AND b.latest_version = h.version
-          WHERE p.eventually_consistent = FALSE
+          SELECT account_id, currency, values FROM values
         "#,
         );
         let query = query_builder.build();
@@ -273,6 +284,53 @@ impl BalanceRepo {
         .execute(&mut **db)
         .await?;
         Ok(())
+    }
+
+    pub(crate) async fn load_all_for_update(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            WITH locked_accounts AS (
+              SELECT 1
+              FROM cala_accounts a
+              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND a.id = $1
+              FOR UPDATE
+            ), locked_balances AS (
+              SELECT data_source_id, journal_id, account_id, currency, latest_version
+              FROM cala_current_balances
+              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND journal_id = $2
+              AND account_id = $1
+              FOR UPDATE
+            )
+            SELECT h.values
+            FROM cala_balance_history h
+            JOIN locked_balances b
+            ON b.data_source_id = h.data_source_id
+              AND b.journal_id = h.journal_id
+              AND b.account_id = h.account_id
+              AND b.currency = h.currency
+              AND b.latest_version = h.version
+        "#,
+            account_id as AccountId,
+            journal_id as JournalId
+        )
+        .fetch_all(&mut **db)
+        .await?;
+        let ret = rows
+            .into_iter()
+            .map(|row| {
+                let snapshot: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                (snapshot.currency, snapshot)
+            })
+            .collect();
+        Ok(ret)
     }
 
     #[cfg(feature = "import")]

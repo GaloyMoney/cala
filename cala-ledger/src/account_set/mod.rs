@@ -16,7 +16,7 @@ use crate::{
     balance::*,
     entry::*,
     outbox::*,
-    primitives::{DataSource, DebitOrCredit, Layer},
+    primitives::{DataSource, DebitOrCredit, JournalId, Layer},
 };
 
 pub use entity::*;
@@ -30,8 +30,8 @@ const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
-    _entries: Entries,
-    _balances: Balances,
+    entries: Entries,
+    balances: Balances,
     outbox: Outbox,
     pool: PgPool,
 }
@@ -48,8 +48,8 @@ impl AccountSets {
             repo: AccountSetRepo::new(pool),
             outbox,
             accounts: accounts.clone(),
-            _entries: entries.clone(),
-            _balances: balances.clone(),
+            entries: entries.clone(),
+            balances: balances.clone(),
             pool: pool.clone(),
         }
     }
@@ -104,13 +104,14 @@ impl AccountSets {
         member: impl Into<AccountSetMember>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
-        let account_set = match member {
+        let (time, parents, account_set, member_id) = match member {
             AccountSetMember::Account(id) => {
                 let set = self.repo.find(account_set_id).await?;
-                self.repo
-                    .add_member_account(op.tx(), account_set_id, id)
+                let (time, parents) = self
+                    .repo
+                    .add_member_account_and_return_parents(op.tx(), account_set_id, id)
                     .await?;
-                set
+                (time, parents, set, id)
             }
             AccountSetMember::AccountSet(id) => {
                 let mut accounts = self
@@ -128,10 +129,11 @@ impl AccountSets {
                     return Err(AccountSetError::JournalIdMismatch);
                 }
 
-                self.repo
-                    .add_member_set(op.tx(), account_set_id, id)
+                let (time, parents) = self
+                    .repo
+                    .add_member_set_and_return_parents(op.tx(), account_set_id, id)
                     .await?;
-                target
+                (time, parents, target, AccountId::from(id))
             }
         };
 
@@ -143,6 +145,26 @@ impl AccountSets {
             },
         ));
 
+        let balances = self
+            .balances
+            .find_balances_for_update(op.tx(), account_set.values().journal_id, member_id)
+            .await?;
+
+        let target_account_id = AccountId::from(&account_set.id());
+        let mut entries = Vec::new();
+        for balance in balances.into_values() {
+            entries_for_add_balance(&mut entries, target_account_id, balance);
+        }
+
+        if entries.is_empty() {
+            return Ok(account_set);
+        }
+        let entries = self.entries.create_all_in_op(op, entries).await?;
+        let mappings = std::iter::once((target_account_id, parents)).collect();
+        self.balances
+            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+            .await?;
+
         Ok(account_set)
     }
 
@@ -152,6 +174,14 @@ impl AccountSets {
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         self.repo.find_all(account_set_ids).await
+    }
+
+    pub(crate) async fn fetch_mappings(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        self.repo.fetch_mappings(journal_id, account_ids).await
     }
 
     #[cfg(feature = "import")]
@@ -207,8 +237,7 @@ impl AccountSets {
         Ok(())
     }
 }
-fn _entries_for_add_balance(
-    sequence: &mut u32,
+fn entries_for_add_balance(
     entries: &mut Vec<NewEntry>,
     target_account_id: AccountId,
     balance: BalanceSnapshot,
@@ -216,13 +245,12 @@ fn _entries_for_add_balance(
     use rust_decimal::Decimal;
 
     if balance.settled_cr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
             .direction(DebitOrCredit::Credit)
@@ -233,13 +261,12 @@ fn _entries_for_add_balance(
         entries.push(entry);
     }
     if balance.settled_dr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
             .direction(DebitOrCredit::Debit)
@@ -250,13 +277,12 @@ fn _entries_for_add_balance(
         entries.push(entry);
     }
     if balance.pending_cr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
             .direction(DebitOrCredit::Credit)
@@ -267,13 +293,12 @@ fn _entries_for_add_balance(
         entries.push(entry);
     }
     if balance.pending_dr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
             .direction(DebitOrCredit::Debit)
@@ -284,13 +309,12 @@ fn _entries_for_add_balance(
         entries.push(entry);
     }
     if balance.encumbered_cr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Encumbered)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_CR")
             .direction(DebitOrCredit::Credit)
@@ -301,13 +325,12 @@ fn _entries_for_add_balance(
         entries.push(entry);
     }
     if balance.encumbered_dr_balance != Decimal::ZERO {
-        *sequence += 1;
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
-            .sequence(*sequence)
+            .sequence(1u32)
             .layer(Layer::Encumbered)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_DR")
             .direction(DebitOrCredit::Debit)

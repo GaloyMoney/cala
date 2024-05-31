@@ -121,17 +121,17 @@ teardown_file() {
   )
   exec_graphql 'post-transaction' "$variables"
 
-#   variables=$(jq -n \
-#     --arg journalId "$journal_id" \
-#     --arg accountSetId "$account_set_id" \
-#     '{
-#       "accountSetId": $accountSetId,
-#       "journalId": $journalId,
-#       "currency": "USD"
-#     }'
-#   )
-#   exec_graphql 'account-set-with-balance' "$variables"
-#   balance=$(graphql_output '.data.accountSet.balance.settled.normalBalance.units')
-#   [[ $balance == "9.53" ]] || exit 1
+  variables=$(jq -n \
+    --arg journalId "$journal_id" \
+    --arg accountSetId "$account_set_id" \
+    '{
+      "accountSetId": $accountSetId,
+      "journalId": $journalId,
+      "currency": "USD"
+    }'
+  )
+  exec_graphql 'account-set-with-balance' "$variables"
+  balance=$(graphql_output '.data.accountSet.balance.settled.normalBalance.units')
+  [[ $balance == "9.53" ]] || exit 1
 
 }
