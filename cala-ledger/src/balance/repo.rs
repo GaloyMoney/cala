@@ -145,19 +145,30 @@ impl BalanceRepo {
         query_builder.push(
             r#"
             FOR UPDATE OF b
+          ),
+          values AS (
+            SELECT b.data_source_id, p.account_id, p.currency, h.values
+            FROM pairs p
+            LEFT JOIN locked_balances b
+            ON p.account_id = b.account_id
+              AND p.currency = b.currency
+            LEFT JOIN cala_balance_history h
+            ON b.data_source_id = h.data_source_id
+              AND b.journal_id = h.journal_id
+              AND b.account_id = h.account_id
+              AND b.currency = h.currency
+              AND b.latest_version = h.version
+            WHERE p.eventually_consistent = FALSE
+          ),
+          locked_accounts AS (
+            SELECT 1
+            FROM values v
+            JOIN cala_accounts a
+            ON v.data_source_id = a.data_source_id AND v.account_id = a.id
+            WHERE v.values IS NULL
+            FOR UPDATE
           )
-          SELECT p.account_id, p.currency, h.values
-          FROM pairs p
-          LEFT JOIN locked_balances b
-          ON p.account_id = b.account_id
-            AND p.currency = b.currency
-          LEFT JOIN cala_balance_history h
-          ON b.data_source_id = h.data_source_id
-            AND b.journal_id = h.journal_id
-            AND b.account_id = h.account_id
-            AND b.currency = h.currency
-            AND b.latest_version = h.version
-          WHERE p.eventually_consistent = FALSE
+          SELECT account_id, currency, values FROM values
         "#,
         );
         let query = query_builder.build();
