@@ -69,7 +69,7 @@ pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
-    let _ = fs::create_dir(bria_home);
+fn create_cala_dir(cala_home: &str) -> anyhow::Result<()> {
+    let _ = fs::create_dir(cala_home);
     Ok(())
 }
