@@ -62,6 +62,13 @@ impl AccountSetRepo {
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
           ),
+          locked_sets AS (
+            SELECT 1
+            FROM cala_account_sets
+            WHERE (id IN (SELECT account_set_id FROM parents
+                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
+            FOR UPDATE
+          ),
           no_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
             VALUES ($1, $2)
@@ -99,6 +106,13 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
+          ),
+          locked_sets AS (
+            SELECT 1
+            FROM cala_account_sets
+            WHERE (id IN (SELECT account_set_id FROM parents
+                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
+            FOR UPDATE
           ),
           set_insert AS (
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
