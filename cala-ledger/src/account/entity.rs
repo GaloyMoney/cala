@@ -140,7 +140,7 @@ impl NewAccount {
                     metadata: self.metadata,
                     config: AccountConfig {
                         is_account_set: self.is_account_set,
-                        eventually_consistent: self.eventually_consistent,
+                        eventually_consistent: false,
                     },
                 },
             }],

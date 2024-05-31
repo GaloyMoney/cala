@@ -168,14 +168,15 @@ impl AccountRepo {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
             account.values().normal_balance_type as DebitOrCredit,
+            account.values().config.eventually_consistent,
             recorded_at
         )
         .execute(&mut **db)
