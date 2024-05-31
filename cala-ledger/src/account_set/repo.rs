@@ -40,12 +40,12 @@ impl AccountSetRepo {
         Ok(account_set)
     }
 
-    pub async fn add_member_account_and_return_effected_sets(
+    pub async fn add_member_account_and_return_parents(
         &self,
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(Vec<AccountSetId>, DateTime<Utc>), AccountSetError> {
+    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -63,7 +63,7 @@ impl AccountSetRepo {
                 AND p.data_source_id = m.data_source_id
           ),
           locked_sets AS (
-            SELECT id, NOW() AS now
+            SELECT 1
             FROM cala_account_sets
             WHERE (id IN (SELECT account_set_id FROM parents
                           UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
@@ -78,7 +78,10 @@ impl AccountSetRepo {
             SELECT p.account_set_id, $2, TRUE
             FROM parents p
           )
-          SELECT * FROM locked_sets
+          SELECT account_set_id, NULL AS now
+          FROM parents
+          UNION ALL
+          SELECT NULL AS account_set_id, NOW() AS now
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
@@ -88,20 +91,26 @@ impl AccountSetRepo {
         let mut time = None;
         let ret = rows
             .into_iter()
-            .map(|row| {
-                time = row.now;
-                AccountSetId::from(row.id)
+            .filter_map(|row| {
+                if let Some(t) = row.now {
+                    time = Some(t);
+                    None
+                } else {
+                    Some(AccountSetId::from(
+                        row.account_set_id.expect("account_set_id not set"),
+                    ))
+                }
             })
             .collect();
-        Ok((ret, time.expect("time not set")))
+        Ok((time.expect("time not set"), ret))
     }
 
-    pub async fn add_member_set_and_return_effected_sets(
+    pub async fn add_member_set_and_return_parents(
         &self,
         db: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(Vec<AccountSetId>, DateTime<Utc>), AccountSetError> {
+    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -119,7 +128,7 @@ impl AccountSetRepo {
                 AND p.data_source_id = m.data_source_id
           ),
           locked_sets AS (
-            SELECT id, NOW() AS now
+            SELECT 1
             FROM cala_account_sets
             WHERE (id IN (SELECT account_set_id FROM parents
                           UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
@@ -143,8 +152,10 @@ impl AccountSetRepo {
             FROM parents p
             CROSS JOIN new_members n
           )
-          SELECT id, now
-          FROM locked_sets
+          SELECT account_set_id, NULL AS now
+          FROM parents
+          UNION ALL
+          SELECT NULL AS account_set_id, NOW() AS now
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
@@ -154,12 +165,18 @@ impl AccountSetRepo {
         let mut time = None;
         let ret = rows
             .into_iter()
-            .map(|row| {
-                time = row.now;
-                AccountSetId::from(row.id)
+            .filter_map(|row| {
+                if let Some(t) = row.now {
+                    time = Some(t);
+                    None
+                } else {
+                    Some(AccountSetId::from(
+                        row.account_set_id.expect("account_set_id not set"),
+                    ))
+                }
             })
             .collect();
-        Ok((ret, time.expect("time not set")))
+        Ok((time.expect("time not set"), ret))
     }
 
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
@@ -238,6 +255,36 @@ impl AccountSetRepo {
             .persisted_at(db, origin, recorded_at)
             .await?;
         Ok(())
+    }
+
+    pub async fn fetch_mappings(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+          SELECT m.account_set_id AS "set_id!: AccountSetId", m.member_account_id AS "account_id!: AccountId"
+          FROM cala_account_set_member_accounts m
+          JOIN cala_account_sets s
+          ON m.account_set_id = s.id AND s.journal_id = $1
+            AND m.data_source_id = s.data_source_id
+          WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
+          AND m.member_account_id = ANY($2)
+          "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId]
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut mappings = HashMap::new();
+        for row in rows {
+            mappings
+                .entry(row.account_id)
+                .or_insert_with(Vec::new)
+                .push(row.set_id);
+        }
+        Ok(mappings)
     }
 
     #[cfg(feature = "import")]

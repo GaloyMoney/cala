@@ -158,12 +158,22 @@ impl CalaLedger {
             .create_all_in_op(op, prepared_tx.entries)
             .await?;
 
+        let account_ids = entries
+            .iter()
+            .map(|entry| entry.account_id)
+            .collect::<Vec<_>>();
+        let mappings = self
+            .account_sets
+            .fetch_mappings(transaction.values().journal_id, &account_ids)
+            .await?;
+
         self.balances
             .update_balances_in_op(
                 op,
                 transaction.created_at(),
                 transaction.journal_id(),
                 entries,
+                mappings,
             )
             .await?;
         Ok(transaction)
