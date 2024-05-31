@@ -16,21 +16,22 @@ use crate::{
     balance::*,
     entry::*,
     outbox::*,
-    primitives::{DataSource, DebitOrCredit, JournalId, Layer},
+    primitives::{DataSource, DebitOrCredit, Layer},
 };
 
 pub use entity::*;
 use error::*;
 use repo::*;
 
+#[allow(dead_code)]
 const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
-    entries: Entries,
-    balances: Balances,
+    _entries: Entries,
+    _balances: Balances,
     outbox: Outbox,
     pool: PgPool,
 }
@@ -47,8 +48,8 @@ impl AccountSets {
             repo: AccountSetRepo::new(pool),
             outbox,
             accounts: accounts.clone(),
-            entries: entries.clone(),
-            balances: balances.clone(),
+            _entries: entries.clone(),
+            _balances: balances.clone(),
             pool: pool.clone(),
         }
     }
@@ -153,14 +154,6 @@ impl AccountSets {
         self.repo.find_all(account_set_ids).await
     }
 
-    pub(crate) async fn fetch_mappings(
-        &self,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        self.repo.fetch_mappings(journal_id, account_ids).await
-    }
-
     #[cfg(feature = "import")]
     pub async fn sync_account_set_creation(
         &self,
@@ -214,7 +207,7 @@ impl AccountSets {
         Ok(())
     }
 }
-fn entries_for_add_balance(
+fn _entries_for_add_balance(
     sequence: &mut u32,
     entries: &mut Vec<NewEntry>,
     target_account_id: AccountId,

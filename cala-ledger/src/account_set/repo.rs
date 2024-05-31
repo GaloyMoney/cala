@@ -246,48 +246,4 @@ impl AccountSetRepo {
         .await?;
         Ok(())
     }
-
-    pub async fn fetch_mappings(
-        &self,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        let rows = sqlx::query!(
-            r#"
-          WITH RECURSIVE account_sets_cte AS (
-            -- Base case: Direct member accounts
-            SELECT m.member_account_id AS account_id, m.account_set_id, s.data_source_id
-            FROM cala_account_set_member_accounts m
-            JOIN cala_account_sets s
-            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND s.journal_id = $1
-            AND m.member_account_id = ANY($2)
-
-            UNION ALL
-            -- Recursive case: Account sets that are members of other account sets
-            SELECT c.account_id, mas.account_set_id, c.data_source_id
-            FROM account_sets_cte c
-            JOIN cala_account_set_member_account_sets mas
-                ON c.account_set_id = mas.member_account_set_id
-                AND mas.data_source_id = c.data_source_id
-          )
-          SELECT DISTINCT account_id AS "account_id!: AccountId", account_set_id AS "account_set_id!: AccountSetId"
-          FROM account_sets_cte"#,
-            journal_id as JournalId,
-            account_ids as &[AccountId]
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        let mut mappings = HashMap::new();
-        for row in rows {
-            let account_id = row.account_id;
-            let account_set_id = row.account_set_id;
-            mappings
-                .entry(account_id)
-                .or_insert_with(Vec::new)
-                .push(account_set_id);
-        }
-        Ok(mappings)
-    }
 }

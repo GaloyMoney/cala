@@ -51,7 +51,7 @@ async fn account_set() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let recipient_balance = cala
+    let _recipient_balance = cala
         .balances()
         .find(journal.id(), recipient_account.id(), btc)
         .await?;

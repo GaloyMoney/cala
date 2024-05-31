@@ -4,7 +4,7 @@ mod repo;
 
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use sqlx::{Acquire, PgPool, Postgres, Transaction};
+use sqlx::{Acquire, PgPool};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
