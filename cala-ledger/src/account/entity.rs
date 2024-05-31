@@ -115,6 +115,8 @@ pub struct NewAccount {
     pub(super) metadata: Option<serde_json::Value>,
     #[builder(setter(custom), default)]
     pub(super) is_account_set: bool,
+    #[builder(setter(custom), default)]
+    pub(super) eventually_consistent: bool,
 }
 
 impl NewAccount {
@@ -138,6 +140,7 @@ impl NewAccount {
                     metadata: self.metadata,
                     config: AccountConfig {
                         is_account_set: self.is_account_set,
+                        eventually_consistent: false,
                     },
                 },
             }],
@@ -156,6 +159,11 @@ impl NewAccountBuilder {
 
     pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {
         self.is_account_set = Some(is_account_set);
+        self.eventually_consistent(is_account_set)
+    }
+
+    fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
+        self.is_account_set = Some(eventually_consistent);
         self
     }
 }

@@ -150,6 +150,7 @@ impl From<AccountConfig> for proto::AccountConfig {
     fn from(config: AccountConfig) -> Self {
         proto::AccountConfig {
             is_account_set: config.is_account_set,
+            eventually_consistent: config.eventually_consistent,
         }
     }
 }

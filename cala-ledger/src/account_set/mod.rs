@@ -16,21 +16,22 @@ use crate::{
     balance::*,
     entry::*,
     outbox::*,
-    primitives::{DataSource, DebitOrCredit, JournalId, Layer},
+    primitives::{DataSource, DebitOrCredit, Layer},
 };
 
 pub use entity::*;
 use error::*;
 use repo::*;
 
+#[allow(dead_code)]
 const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
-    entries: Entries,
-    balances: Balances,
+    _entries: Entries,
+    _balances: Balances,
     outbox: Outbox,
     pool: PgPool,
 }
@@ -47,8 +48,8 @@ impl AccountSets {
             repo: AccountSetRepo::new(pool),
             outbox,
             accounts: accounts.clone(),
-            entries: entries.clone(),
-            balances: balances.clone(),
+            _entries: entries.clone(),
+            _balances: balances.clone(),
             pool: pool.clone(),
         }
     }
@@ -103,13 +104,13 @@ impl AccountSets {
         member: impl Into<AccountSetMember>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
-        let (time, account_set, member_id) = match member {
+        let account_set = match member {
             AccountSetMember::Account(id) => {
-                let time = self
-                    .repo
+                let set = self.repo.find(account_set_id).await?;
+                self.repo
                     .add_member_account(op.tx(), account_set_id, id)
                     .await?;
-                (time, self.repo.find(account_set_id).await?, id)
+                set
             }
             AccountSetMember::AccountSet(id) => {
                 let mut accounts = self
@@ -127,11 +128,10 @@ impl AccountSets {
                     return Err(AccountSetError::JournalIdMismatch);
                 }
 
-                let time = self
-                    .repo
+                self.repo
                     .add_member_set(op.tx(), account_set_id, id)
                     .await?;
-                (time, target, AccountId::from(id))
+                target
             }
         };
 
@@ -143,30 +143,6 @@ impl AccountSets {
             },
         ));
 
-        let target_account_id = AccountId::from(&account_set.id());
-        let balances = self
-            .balances
-            .find_balances_for_update(op.tx(), account_set.values().journal_id, member_id)
-            .await?;
-
-        let mut entries = Vec::new();
-        for balance in balances.into_values() {
-            let mut sequence: u32 = 0;
-            entries_for_add_balance(&mut sequence, &mut entries, target_account_id, balance);
-        }
-
-        if entries.is_empty() {
-            return Ok(account_set);
-        }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-        let mappings = self
-            .repo
-            .fetch_mappings(account_set.values().journal_id, &[target_account_id])
-            .await?;
-        self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-            .await?;
-
         Ok(account_set)
     }
 
@@ -176,14 +152,6 @@ impl AccountSets {
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         self.repo.find_all(account_set_ids).await
-    }
-
-    pub(crate) async fn fetch_mappings(
-        &self,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        self.repo.fetch_mappings(journal_id, account_ids).await
     }
 
     #[cfg(feature = "import")]
@@ -239,7 +207,7 @@ impl AccountSets {
         Ok(())
     }
 }
-fn entries_for_add_balance(
+fn _entries_for_add_balance(
     sequence: &mut u32,
     entries: &mut Vec<NewEntry>,
     target_account_id: AccountId,

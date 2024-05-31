@@ -171,6 +171,7 @@ impl From<proto::AccountConfig> for AccountConfig {
     fn from(config: proto::AccountConfig) -> Self {
         Self {
             is_account_set: config.is_account_set,
+            eventually_consistent: config.eventually_consistent,
         }
     }
 }

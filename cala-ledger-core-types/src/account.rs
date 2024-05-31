@@ -19,4 +19,5 @@ pub struct AccountValues {
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct AccountConfig {
     pub is_account_set: bool,
+    pub eventually_consistent: bool,
 }
