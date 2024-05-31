@@ -144,25 +144,25 @@ impl AccountSets {
         ));
 
         let target_account_id = AccountId::from(&account_set.id());
-        let balances = self
-            .balances
-            .find_balances_for_update(op.tx(), account_set.values().journal_id, member_id)
-            .await?;
+        // let balances = self
+        //     .balances
+        //     .find_balances_for_update(op.tx(), account_set.values().journal_id, member_id)
+        //     .await?;
 
-        let mut entries = Vec::new();
-        for balance in balances.into_values() {
-            let mut sequence: u32 = 0;
-            entries_for_add_balance(&mut sequence, &mut entries, target_account_id, balance);
-        }
+        // let mut entries = Vec::new();
+        // for balance in balances.into_values() {
+        //     let mut sequence: u32 = 0;
+        //     entries_for_add_balance(&mut sequence, &mut entries, target_account_id, balance);
+        // }
 
-        if entries.is_empty() {
-            return Ok(account_set);
-        }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-        let mappings = self
-            .repo
-            .fetch_mappings(account_set.values().journal_id, &[target_account_id])
-            .await?;
+        // if entries.is_empty() {
+        //     return Ok(account_set);
+        // }
+        // let entries = self.entries.create_all_in_op(op, entries).await?;
+        // let mappings = self
+        //     .repo
+        //     .fetch_mappings(account_set.values().journal_id, &[target_account_id])
+        //     .await?;
 
         Ok(account_set)
     }

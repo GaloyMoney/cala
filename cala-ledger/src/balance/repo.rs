@@ -183,53 +183,6 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    pub(crate) async fn load_all_for_update(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        journal_id: JournalId,
-        account_id: AccountId,
-    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
-        let rows = sqlx::query!(
-            r#"
-            WITH locked_accounts AS (
-              SELECT 1
-              FROM cala_accounts a
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND a.id = $1
-              FOR UPDATE
-            ), locked_balances AS (
-              SELECT data_source_id, journal_id, account_id, currency, latest_version
-              FROM cala_current_balances
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND journal_id = $2
-              AND account_id = $1
-              FOR UPDATE
-            )
-            SELECT h.values
-            FROM cala_balance_history h
-            JOIN locked_balances b
-            ON b.data_source_id = h.data_source_id
-              AND b.journal_id = h.journal_id
-              AND b.account_id = h.account_id
-              AND b.currency = h.currency
-              AND b.latest_version = h.version
-        "#,
-            account_id as AccountId,
-            journal_id as JournalId
-        )
-        .fetch_all(&mut **db)
-        .await?;
-        let ret = rows
-            .into_iter()
-            .map(|row| {
-                let snapshot: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                (snapshot.currency, snapshot)
-            })
-            .collect();
-        Ok(ret)
-    }
-
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.insert_new_snapshots",
@@ -241,75 +194,10 @@ impl BalanceRepo {
         journal_id: JournalId,
         new_balances: &[BalanceSnapshot],
     ) -> Result<(), BalanceError> {
-        let mut to_insert = HashMap::new();
-        let mut to_update = HashMap::new();
-        let mut previous_versions = HashMap::new();
-        for BalanceSnapshot {
-            account_id,
-            currency,
-            version,
-            ..
-        } in new_balances.iter()
-        {
-            if *version == 1 {
-                to_insert.insert((account_id, currency), version);
-            } else {
-                to_update.insert((account_id, currency), version);
-                if previous_versions.contains_key(&(account_id, currency)) {
-                    continue;
-                }
-                previous_versions.insert((account_id, currency), version - 1);
-            }
-        }
-        if !to_insert.is_empty() {
-            let mut query_builder = QueryBuilder::new(
-                r#"INSERT INTO cala_current_balances
-                  (journal_id, account_id, currency, latest_version)"#,
-            );
-            query_builder.push_values(
-                to_insert.iter(),
-                |mut builder, ((account_id, currency), version)| {
-                    builder.push_bind(journal_id);
-                    builder.push_bind(account_id);
-                    builder.push_bind(currency.code());
-                    builder.push_bind(**version as i32);
-                },
-            );
-            query_builder.build().execute(&mut **db).await?;
-        }
-        if !to_update.is_empty() {
-            let expected_updates = to_update.len();
-            let mut query_builder = QueryBuilder::new("WITH new_balances AS (SELECT * FROM (");
-            query_builder.push_values(
-                to_update,
-                |mut builder, ((account_id, currency), version)| {
-                    builder.push_bind(account_id);
-                    builder.push_bind(currency.code());
-                    builder.push_bind(*version as i32);
-                    builder.push_bind(
-                        previous_versions
-                            .remove(&(account_id, currency))
-                            .expect("previous version missing") as i32,
-                    );
-                },
-            );
-            query_builder.push(r#") AS v(account_id, currency, version, previous_version) )"#);
-            query_builder
-                .push(r#" UPDATE cala_current_balances c SET latest_version = n.version
-                          FROM new_balances n
-                          WHERE n.account_id = c.account_id
-                            AND n.currency = c.currency
-                            AND data_source_id = '00000000-0000-0000-0000-000000000000' AND journal_id = "#);
-            query_builder.push_bind(journal_id);
-            let result = query_builder.build().execute(&mut **db).await?;
-            if result.rows_affected() != (expected_updates as u64) {
-                return Err(BalanceError::OptimisticLockingError);
-            }
-        }
-
         let mut query_builder = QueryBuilder::new(
-            r#"INSERT INTO cala_balance_history (
-                 journal_id, account_id, currency, version, latest_entry_id, values)
+            r#"
+          WITH new_snapshots AS (
+            INSERT INTO cala_balance_history (journal_id, account_id, currency, version, latest_entry_id, values)
             "#,
         );
         query_builder.push_values(new_balances, |mut builder, b| {
@@ -321,6 +209,30 @@ impl BalanceRepo {
             builder
                 .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
         });
+        query_builder.push(
+            r#"
+            RETURNING *
+            ),
+            initial_balances AS (
+              INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version)
+              SELECT journal_id, account_id, currency, version
+              FROM new_snapshots
+              WHERE version = 1
+            ),
+            ranked_balances AS (
+              SELECT *, ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version DESC) AS rn
+              FROM new_snapshots
+              WHERE version != 1
+            )
+            UPDATE cala_current_balances c
+            SET latest_version = n.version
+            FROM ranked_balances n
+            WHERE n.account_id = c.account_id
+              AND n.currency = c.currency
+              AND c.data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND c.journal_id = n.journal_id
+              AND rn = 1"#,
+        );
         query_builder.build().execute(&mut **db).await?;
         Ok(())
     }
