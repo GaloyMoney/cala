@@ -1,3 +1,25 @@
+# [cala release v0.1.7](https://github.com/GaloyMoney/cala/releases/tag/0.1.7)
+
+
+### Bug Fixes
+
+- Cala name (#87)
+
+### Features
+
+- Update set balances (#86)
+- Transitive account sets (#83)
+
+### Miscellaneous Tasks
+
+- Bump tokio from 1.37.0 to 1.38.0 (#85)
+- Use default config when no config file specified (#82)
+- Bump serde from 1.0.202 to 1.0.203 (#75)
+
+### Refactor
+
+- Prohibit multi-set inclusion (#84)
+
 # [cala release v0.1.6](https://github.com/GaloyMoney/cala/releases/tag/0.1.6)
 
 
