@@ -21,7 +21,6 @@ pub struct Config {
 
 pub struct EnvOverride {
     pub db_con: String,
-    pub server_id: Option<String>,
 }
 
 impl Config {
@@ -42,11 +41,7 @@ impl Config {
         Ok(config)
     }
 
-    fn apply_env_override(&mut self, EnvOverride { db_con, server_id }: EnvOverride) {
+    fn apply_env_override(&mut self, EnvOverride { db_con }: EnvOverride) {
         self.db.pg_con = db_con;
-        if let Some(server_id) = server_id {
-            self.app.job_execution.server_id.clone_from(&server_id);
-            self.tracing.service_instance_id = server_id;
-        }
     }
 }

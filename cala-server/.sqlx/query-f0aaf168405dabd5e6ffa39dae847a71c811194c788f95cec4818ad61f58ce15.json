@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    UPDATE job_executions\n                    SET reschedule_after = NOW() + $2::interval\n                    WHERE id = ANY($1)\n                    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Interval"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f0aaf168405dabd5e6ffa39dae847a71c811194c788f95cec4818ad61f58ce15"
+}

@@ -20,8 +20,6 @@ struct Cli {
         value_name = "DIRECTORY"
     )]
     cala_home: String,
-    #[clap(long, env = "CALA_SERVER_ID")]
-    server_id: Option<String>,
     #[clap(env = "PG_CON")]
     pg_con: String,
 }
@@ -31,13 +29,7 @@ pub async fn run<M: MutationExtensionMarker>(
 ) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let config = Config::load_config(
-        cli.config,
-        EnvOverride {
-            db_con: cli.pg_con,
-            server_id: cli.server_id,
-        },
-    )?;
+    let config = Config::load_config(cli.config, EnvOverride { db_con: cli.pg_con })?;
 
     run_cmd::<M>(&cli.cala_home, config, job_registration).await?;
 

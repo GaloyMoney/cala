@@ -5,8 +5,6 @@ use std::time::Duration;
 #[serde_with::serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JobExecutorConfig {
-    #[serde(default = "random_server_id")]
-    pub server_id: String,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     #[serde(default = "default_poll_interval")]
     pub poll_interval: Duration,
@@ -15,14 +13,9 @@ pub struct JobExecutorConfig {
 impl Default for JobExecutorConfig {
     fn default() -> Self {
         Self {
-            server_id: random_server_id(),
             poll_interval: default_poll_interval(),
         }
     }
-}
-
-fn random_server_id() -> String {
-    uuid::Uuid::new_v4().to_string()
 }
 
 fn default_poll_interval() -> Duration {
