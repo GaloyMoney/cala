@@ -2,7 +2,7 @@
 name = "cala-tracing"
 description = "Tracing library powering cala stack"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.1.7"
+version = "0.1.8-dev"
 edition = "2021"
 license = "Apache-2.0"
 
