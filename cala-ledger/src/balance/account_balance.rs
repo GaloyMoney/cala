@@ -27,11 +27,11 @@ impl AccountBalance {
         }
     }
 
-    pub fn encumbered(&self) -> Decimal {
+    pub fn encumbrance(&self) -> Decimal {
         if self.balance_type == DebitOrCredit::Credit {
-            self.details.encumbered_cr_balance - self.details.encumbered_dr_balance
+            self.details.encumbrance_cr_balance - self.details.encumbrance_dr_balance
         } else {
-            self.details.encumbered_dr_balance - self.details.encumbered_cr_balance
+            self.details.encumbrance_dr_balance - self.details.encumbrance_cr_balance
         }
     }
 }

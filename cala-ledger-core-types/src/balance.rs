@@ -21,8 +21,8 @@ pub struct BalanceSnapshot {
     pub pending_cr_balance: Decimal,
     pub pending_entry_id: EntryId,
     pub pending_modified_at: DateTime<Utc>,
-    pub encumbered_dr_balance: Decimal,
-    pub encumbered_cr_balance: Decimal,
-    pub encumbered_entry_id: EntryId,
-    pub encumbered_modified_at: DateTime<Utc>,
+    pub encumbrance_dr_balance: Decimal,
+    pub encumbrance_cr_balance: Decimal,
+    pub encumbrance_entry_id: EntryId,
+    pub encumbrance_modified_at: DateTime<Utc>,
 }

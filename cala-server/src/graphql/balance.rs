@@ -73,10 +73,10 @@ impl From<cala_ledger::balance::AccountBalance> for Balance {
                 entry_id: balance.details.pending_entry_id.into(),
             },
             encumbrance: BalanceAmount {
-                dr_balance: (balance.details.encumbered_dr_balance, currency).into(),
-                cr_balance: (balance.details.encumbered_cr_balance, currency).into(),
-                normal_balance: (balance.encumbered(), currency).into(),
-                entry_id: balance.details.encumbered_entry_id.into(),
+                dr_balance: (balance.details.encumbrance_dr_balance, currency).into(),
+                cr_balance: (balance.details.encumbrance_cr_balance, currency).into(),
+                normal_balance: (balance.encumbrance(), currency).into(),
+                entry_id: balance.details.encumbrance_entry_id.into(),
             },
         }
     }

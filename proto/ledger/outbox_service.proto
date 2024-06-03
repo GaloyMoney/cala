@@ -44,7 +44,7 @@ enum Status {
 enum Layer {
   SETTLED = 0;
   PENDING = 1;
-  ENCUMBERED = 2;
+  ENCUMBRANCE = 2;
 }
 
 message AccountCreated {
@@ -227,8 +227,8 @@ message Balance {
   string pending_cr_balance = 13;
   string pending_entry_id = 14;
   google.protobuf.Timestamp pending_modified_at = 15;
-  string encumbered_dr_balance = 16;
-  string encumbered_cr_balance = 17;
-  string encumbered_entry_id = 18;
-  google.protobuf.Timestamp encumbered_modified_at = 19;
+  string encumbrance_dr_balance = 16;
+  string encumbrance_cr_balance = 17;
+  string encumbrance_entry_id = 18;
+  google.protobuf.Timestamp encumbrance_modified_at = 19;
 }
