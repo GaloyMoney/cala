@@ -97,6 +97,24 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'USD'")
             .build()
             .unwrap(),
+        NewEntryInput::builder()
+            .entry_type("'TEST_USD_PENDING_DR'")
+            .account_id("params.sender")
+            .layer("PENDING")
+            .direction("DEBIT")
+            .units("decimal('100')")
+            .currency("'USD'")
+            .build()
+            .unwrap(),
+        NewEntryInput::builder()
+            .entry_type("'TEST_USD_PENDING_CR'")
+            .account_id("params.recipient")
+            .layer("PENDING")
+            .direction("CREDIT")
+            .units("decimal('100')")
+            .currency("'USD'")
+            .build()
+            .unwrap(),
     ];
     NewTxTemplate::builder()
         .id(uuid::Uuid::new_v4())

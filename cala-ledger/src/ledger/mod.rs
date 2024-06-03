@@ -133,7 +133,12 @@ impl CalaLedger {
         Ok(transaction)
     }
 
-    #[instrument(name = "cala_ledger.post_transaction", skip(self, op))]
+    #[instrument(
+        name = "cala_ledger.post_transaction",
+        skip(self, op)
+        fields(transaction_id, external_id)
+        err
+    )]
     pub async fn post_transaction_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
@@ -149,10 +154,16 @@ impl CalaLedger {
                 params.map(|p| p.into()).unwrap_or_default(),
             )
             .await?;
+
         let transaction = self
             .transactions
             .create_in_op(op, prepared_tx.transaction)
             .await?;
+
+        let span = tracing::Span::current();
+        span.record("transaction_id", &transaction.id().to_string());
+        span.record("external_id", &transaction.values().external_id);
+
         let entries = self
             .entries
             .create_all_in_op(op, prepared_tx.entries)
