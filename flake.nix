@@ -69,9 +69,11 @@
         devShells.default = mkShell (devEnvVars
           // {
             inherit nativeBuildInputs;
+            shellHook = ''
+              export DYLD_LIBRARY_PATH=$(rustc --print target-libdir)
+            '';
           });
 
         formatter = alejandra;
       });
 }
-

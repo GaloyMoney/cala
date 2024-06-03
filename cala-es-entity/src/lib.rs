@@ -6,3 +6,11 @@ pub use sqlx;
 pub use uuid;
 
 mod id;
+
+pub trait EsEntity {
+    fn event_table_name() -> &'static str
+    where
+        Self: Sized;
+}
+
+pub use cala_es_entity_derive::EsEntity;
