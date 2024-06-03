@@ -1,0 +1,121 @@
+---
+id: create-journal-and-accounts
+title: Create journal and accounts
+slug: /demo/create-journal-and-accounts
+---
+
+## Create a journal
+### GraphQL body
+```graphql
+mutation journalCreate($input: JournalCreateInput!) {
+  journalCreate(input: $input) {
+    journal {
+      journalId
+      name
+    }
+  }
+}
+```
+### Variables
+```json
+{
+  "input": {
+    "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
+    "name": "General Ledger"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "journalCreate": {
+      "journal": {
+        "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
+        "name": "General Ledger"
+      }
+    }
+  }
+}
+```
+
+## Create a checking account
+### GraphQL body
+```graphql
+mutation accountCreate($input: AccountCreateInput!) {
+  accountCreate(input: $input) {
+    account {
+      accountId
+      name
+    }
+  }
+}
+```
+
+### Variables
+```json
+{
+  "input": {
+    "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+    "name": "Alice - Checking",
+    "code": "ALICE.CHECKING-3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+    "normalBalanceType": "CREDIT"
+  }
+}
+```
+
+### Response
+
+```json
+{
+  "data": {
+    "accountCreate": {
+      "account": {
+        "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+        "name": "Alice - Checking"
+      }
+    }
+  }
+}
+```
+
+## Create a debit account
+### GraphQL body
+```graphql
+mutation accountCreate($input: AccountCreateInput!) {
+  accountCreate(input: $input) {
+    account {
+      accountId
+      name
+    }
+  }
+}
+```
+
+### Variables
+```
+{
+  "input": {
+    "accountId": "2e40175d-35c2-4b6f-9c01-cc2309934d25",
+    "name": "Assets",
+    "code": "ASSET-2e40175d-35c2-4b6f-9c01-cc2309934d25",
+    "normalBalanceType": "DEBIT"
+  }
+}
+```
+
+### Response
+```json
+{
+  "data": {
+    "accountCreate": {
+      "account": {
+        "accountId": "2e40175d-35c2-4b6f-9c01-cc2309934d25",
+        "name": "Assets"
+      }
+    }
+  }
+}
+```

@@ -1,0 +1,44 @@
+---
+id: post-transaction
+title: Post a transaction
+slug: /docs/demo/post-transaction
+---
+
+### GraphQL body
+```graphql
+mutation postTransaction($input: TransactionInput!) {
+  postTransaction(input: $input) {
+    transaction {
+      transactionId
+      correlationId
+    }
+  }
+}
+````
+### Variables
+```json
+{
+  "input": {
+    "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
+    "txTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
+    "params": {
+      "account": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
+      "amount": "9.53",
+      "effective": "2022-09-21"
+    }
+  }
+}
+```
+### Response
+```json
+{
+  "data": {
+    "postTransaction": {
+      "transaction": {
+        "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
+        "correlationId": "204d087b-5b6d-4544-9203-6674d54528d3"
+      }
+    }
+  }
+}
+```

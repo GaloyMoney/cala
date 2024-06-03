@@ -1,0 +1,133 @@
+---
+id: tx-template-create
+title: Create transaction templates
+slug: /docs/demo/tx-template-create
+---
+
+### GraphQL body
+```graphql
+mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depositTemplateCode: String!, $withdrawalTemplateId: UUID!, $withdrawalTemplateCode: String!, $journalId: Expression!, $assetAccountId: Expression!) {
+  depositTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $depositTemplateId
+      code: $depositTemplateCode
+      description: "An ACH credit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Deposit account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+        }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
+      }
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
+        }
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
+        }
+      ]
+    }
+  ) {
+    txTemplate{
+      txTemplateId
+    }
+  }
+
+  withdrawalTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $withdrawalTemplateId
+      code: $withdrawalTemplateCode
+      description: "An ACH debit into a customer account."
+      params: [
+        { name: "account", type: UUID, description: "Withdraw account ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+        }
+      ]
+      txInput: {
+        journalId: $journalId
+        effective: "params.effective"
+      }
+      entries: [
+        {
+          accountId: $assetAccountId
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_CR'"
+          direction: "CREDIT"
+          layer: "SETTLED"
+        }
+        {
+          accountId: "params.account"
+          units: "params.amount"
+          currency: "'USD'"
+          entryType: "'ACH_DR'"
+          direction: "DEBIT"
+          layer: "SETTLED"
+        }
+      ]
+    }
+  ) {
+    txTemplate{
+      txTemplateId
+    }
+  }
+}
+```
+### Variables
+```json
+{
+  "depositTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c",
+  "depositTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
+  "withdrawalTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
+  "withdrawalTemplateCode": "withdrawal-241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
+  "assetAccountId": "uuid('2e40175d-35c2-4b6f-9c01-cc2309934d25')",
+  "journalId": "uuid('bcc24f47-990c-457d-88cb-76332450ac77')"
+}
+```
+
+### Response
+```json
+{
+  "data": {
+    "depositTemplate": {
+      "txTemplate": {
+        "txTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c"
+      }
+    },
+    "withdrawalTemplate": {
+      "txTemplate": {
+        "txTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728"
+      }
+    }
+  }
+}
+```

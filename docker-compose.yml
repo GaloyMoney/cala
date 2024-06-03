@@ -42,3 +42,11 @@ services:
       - HONEYCOMB_API_KEY=${HONEYCOMB_API_KEY}
     volumes:
       - ./dev/otel-agent-config.yaml:/etc/otel-agent-config.yaml
+  cala-server:
+    image: us.gcr.io/galoy-org/cala:latest
+    depends_on:
+      - server-pg
+    ports:
+      - "2252:2252"
+    environment:
+      - PG_CON=postgres://user:password@server-pg:5432/pg
