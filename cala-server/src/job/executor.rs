@@ -93,6 +93,7 @@ impl JobExecutor {
 
     #[allow(clippy::too_many_arguments)]
     #[instrument(
+        level = "trace",
         name = "job_executor.poll_jobs",
         skip(pool, registry, running_jobs),
         fields(n_jobs_to_spawn, n_jobs_running),
