@@ -17,7 +17,6 @@ CREATE TABLE job_events (
 
 CREATE TABLE job_executions (
   id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
-  executing_server_id VARCHAR,
   state_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW()
