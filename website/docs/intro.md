@@ -9,7 +9,7 @@ slug: /
 
 ## Download the docker-compose.yml
 ```bash
-wget https://raw.githubusercontent.com/GaloyMoney/cala/docs--website/docker-compose.yml
+wget https://raw.githubusercontent.com/GaloyMoney/cala/main/docker-compose.yml
 ```
 
 ## Run the Cala server with a PostgresQL instance
