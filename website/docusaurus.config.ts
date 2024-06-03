@@ -34,7 +34,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/docs', // This changes the base path from /docs
           editUrl: ({versionDocsDirPath, docPath}) => {
-            return `https://github.com/GaloyMoney/cala/edit/main/${versionDocsDirPath}/${docPath}`;
+            return `https://github.com/GaloyMoney/cala/edit/main//website/${versionDocsDirPath}/${docPath}`;
           },
           showLastUpdateAuthor: false,
           showLastUpdateTime: false,
