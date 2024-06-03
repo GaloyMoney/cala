@@ -1,3 +1,15 @@
+# [cala release v0.1.8](https://github.com/GaloyMoney/cala/releases/tag/0.1.8)
+
+
+### Documentation
+
+- Add website with graphql api demo (#55)
+
+### Miscellaneous Tasks
+
+- Rename encumbered -> encumbrance (#90)
+- Remove CALA_SERVER_ID env variable (#89)
+
 # [cala release v0.1.7](https://github.com/GaloyMoney/cala/releases/tag/0.1.7)
 
 
