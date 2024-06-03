@@ -443,10 +443,10 @@ impl TryFrom<proto::Balance> for BalanceSnapshot {
             pending_cr_balance,
             pending_entry_id,
             pending_modified_at,
-            encumbered_dr_balance,
-            encumbered_cr_balance,
-            encumbered_entry_id,
-            encumbered_modified_at,
+            encumbrance_dr_balance,
+            encumbrance_cr_balance,
+            encumbrance_entry_id,
+            encumbrance_modified_at,
         }: proto::Balance,
     ) -> Result<Self, Self::Error> {
         let res = Self {
@@ -473,10 +473,10 @@ impl TryFrom<proto::Balance> for BalanceSnapshot {
             pending_modified_at: pending_modified_at
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?
                 .into(),
-            encumbered_dr_balance: encumbered_dr_balance.parse()?,
-            encumbered_cr_balance: encumbered_cr_balance.parse()?,
-            encumbered_entry_id: encumbered_entry_id.parse()?,
-            encumbered_modified_at: encumbered_modified_at
+            encumbrance_dr_balance: encumbrance_dr_balance.parse()?,
+            encumbrance_cr_balance: encumbrance_cr_balance.parse()?,
+            encumbrance_entry_id: encumbrance_entry_id.parse()?,
+            encumbrance_modified_at: encumbrance_modified_at
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?
                 .into(),
         };
@@ -489,7 +489,7 @@ impl From<proto::Layer> for Layer {
         match layer {
             proto::Layer::Settled => Layer::Settled,
             proto::Layer::Pending => Layer::Pending,
-            proto::Layer::Encumbered => Layer::Encumbered,
+            proto::Layer::Encumbrance => Layer::Encumbrance,
         }
     }
 }

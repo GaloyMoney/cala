@@ -187,10 +187,10 @@ impl Balances {
                 pending_cr_balance: Decimal::ZERO,
                 pending_entry_id: entry_id,
                 pending_modified_at: time,
-                encumbered_dr_balance: Decimal::ZERO,
-                encumbered_cr_balance: Decimal::ZERO,
-                encumbered_entry_id: entry_id,
-                encumbered_modified_at: time,
+                encumbrance_dr_balance: Decimal::ZERO,
+                encumbrance_cr_balance: Decimal::ZERO,
+                encumbrance_entry_id: entry_id,
+                encumbrance_modified_at: time,
                 version: 0,
                 modified_at: time,
                 created_at: time,
@@ -232,15 +232,15 @@ impl Balances {
                     }
                 }
             }
-            Layer::Encumbered => {
-                snapshot.encumbered_entry_id = entry.id;
-                snapshot.encumbered_modified_at = time;
+            Layer::Encumbrance => {
+                snapshot.encumbrance_entry_id = entry.id;
+                snapshot.encumbrance_modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.encumbered_dr_balance += entry.units;
+                        snapshot.encumbrance_dr_balance += entry.units;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.encumbered_cr_balance += entry.units;
+                        snapshot.encumbrance_cr_balance += entry.units;
                     }
                 }
             }

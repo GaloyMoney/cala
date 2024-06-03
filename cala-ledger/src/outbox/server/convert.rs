@@ -419,10 +419,10 @@ impl From<BalanceSnapshot> for proto::Balance {
             pending_cr_balance,
             pending_entry_id,
             pending_modified_at,
-            encumbered_dr_balance,
-            encumbered_cr_balance,
-            encumbered_entry_id,
-            encumbered_modified_at,
+            encumbrance_dr_balance,
+            encumbrance_cr_balance,
+            encumbrance_entry_id,
+            encumbrance_modified_at,
         }: BalanceSnapshot,
     ) -> Self {
         proto::Balance {
@@ -441,10 +441,10 @@ impl From<BalanceSnapshot> for proto::Balance {
             pending_cr_balance: pending_cr_balance.to_string(),
             pending_entry_id: pending_entry_id.to_string(),
             pending_modified_at: Some(pending_modified_at.into()),
-            encumbered_dr_balance: encumbered_dr_balance.to_string(),
-            encumbered_cr_balance: encumbered_cr_balance.to_string(),
-            encumbered_entry_id: encumbered_entry_id.to_string(),
-            encumbered_modified_at: Some(encumbered_modified_at.into()),
+            encumbrance_dr_balance: encumbrance_dr_balance.to_string(),
+            encumbrance_cr_balance: encumbrance_cr_balance.to_string(),
+            encumbrance_entry_id: encumbrance_entry_id.to_string(),
+            encumbrance_modified_at: Some(encumbrance_modified_at.into()),
         }
     }
 }
@@ -454,7 +454,7 @@ impl From<Layer> for proto::Layer {
         match layer {
             Layer::Settled => proto::Layer::Settled,
             Layer::Pending => proto::Layer::Pending,
-            Layer::Encumbered => proto::Layer::Encumbered,
+            Layer::Encumbrance => proto::Layer::Encumbrance,
         }
     }
 }

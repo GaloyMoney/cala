@@ -308,33 +308,33 @@ fn entries_for_add_balance(
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbered_cr_balance != Decimal::ZERO {
+    if balance.encumbrance_cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
             .sequence(1u32)
-            .layer(Layer::Encumbered)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_CR")
+            .layer(Layer::Encumbrance)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.encumbered_cr_balance)
+            .units(balance.encumbrance_cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbered_dr_balance != Decimal::ZERO {
+    if balance.encumbrance_dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
             .account_id(target_account_id)
             .currency(balance.currency)
             .sequence(1u32)
-            .layer(Layer::Encumbered)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBERED_DR")
+            .layer(Layer::Encumbrance)
+            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.encumbered_dr_balance)
+            .units(balance.encumbrance_dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");

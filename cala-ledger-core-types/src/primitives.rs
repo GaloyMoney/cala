@@ -74,7 +74,7 @@ impl Default for Status {
 pub enum Layer {
     Settled,
     Pending,
-    Encumbered,
+    Encumbrance,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -90,7 +90,7 @@ impl<'a> TryFrom<CelResult<'a>> for Layer {
         match val {
             CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
             CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
-            CelValue::String(v) if v.as_ref() == "ENCUMBERED" => Ok(Layer::Encumbered),
+            CelValue::String(v) if v.as_ref() == "ENCUMBRANCE" => Ok(Layer::Encumbrance),
             v => Err(ResultCoercionError::BadExternalTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&v),
