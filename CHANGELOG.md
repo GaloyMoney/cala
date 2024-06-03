@@ -1,3 +1,10 @@
+# [cala release v0.1.10](https://github.com/GaloyMoney/cala/releases/tag/0.1.10)
+
+
+### Miscellaneous Tasks
+
+- Make poll_jobs a trace
+
 # [cala release v0.1.9](https://github.com/GaloyMoney/cala/releases/tag/0.1.9)
 
 
