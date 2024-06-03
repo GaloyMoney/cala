@@ -67,6 +67,7 @@ groups:
   - release
   - release-docker
   - set-dev-version
+  - bump-image-in-chart
 
 jobs:
 - #@ rust_check_code()
@@ -286,6 +287,60 @@ jobs:
       repository: repo
       rebase: true
 
+- name: bump-image-in-chart
+  plan:
+  - in_parallel:
+    - get: latest-image
+      passed: [ release-docker ]
+      params: { skip_download: true }
+    - get: repo
+      trigger: true
+      passed: [ release-docker ]
+    - get: version
+      trigger: true
+      passed: [ release-docker ]
+    - get: charts-repo
+      params: { skip_download: true }
+    - get: pipeline-tasks
+  - task: bump-image-digest-in-values
+    config:
+      platform: linux
+      image_resource: #@ nodejs_task_image_config()
+      inputs:
+      - name: repo
+      - name: latest-image
+      - name: pipeline-tasks
+      - name: charts-repo
+      - name: version
+      outputs:
+        - name: charts-repo
+      params:
+        BRANCH: #@ data.values.git_charts_branch
+        CHARTS_SUBDIR: "cala"
+      run:
+        path: pipeline-tasks/ci/tasks/bump-image-digest.sh
+  - put: charts-repo-bot-branch
+    params:
+      repository: charts-repo
+      force: true
+  - task: open-charts-pr
+    config:
+      platform: linux
+      image_resource: #@ nodejs_task_image_config()
+      inputs:
+      - name: pipeline-tasks
+      - name: latest-image
+      - name: charts-repo
+      - name: repo
+      params:
+        GH_APP_ID: #@ data.values.github_app_id
+        GH_APP_PRIVATE_KEY: #@ data.values.github_app_private_key
+        BRANCH: #@ data.values.git_charts_branch
+        BOT_BRANCH: #@ data.values.git_charts_bot_branch
+        CHARTS_SUBDIR: "cala"
+      run:
+        path: pipeline-tasks/ci/tasks/open-charts-pr.sh
+
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
@@ -293,6 +348,8 @@ resources:
 - #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
+- #@ charts_repo_resource()
+- #@ charts_repo_bot_branch()
 - name: latest-image
   type: registry-image
   source:
