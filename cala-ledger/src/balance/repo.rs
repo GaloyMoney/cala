@@ -224,16 +224,17 @@ impl BalanceRepo {
             r#"
             RETURNING *
             ),
+            ranked_balances AS (
+              SELECT *,
+                ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version) AS rn,
+                MAX(version) OVER (PARTITION BY account_id, currency) AS max
+              FROM new_snapshots
+            ),
             initial_balances AS (
               INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version)
               SELECT journal_id, account_id, currency, version
-              FROM new_snapshots
-              WHERE version = 1
-            ),
-            ranked_balances AS (
-              SELECT *, ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version DESC) AS rn
-              FROM new_snapshots
-              WHERE version != 1
+              FROM ranked_balances
+              WHERE version = rn AND rn = max
             )
             UPDATE cala_current_balances c
             SET latest_version = n.version
@@ -242,7 +243,8 @@ impl BalanceRepo {
               AND n.currency = c.currency
               AND c.data_source_id = '00000000-0000-0000-0000-000000000000'
               AND c.journal_id = n.journal_id
-              AND rn = 1"#,
+              AND version = max AND version != rn
+              "#,
         );
         query_builder.build().execute(&mut **db).await?;
         Ok(())
