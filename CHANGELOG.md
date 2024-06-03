@@ -1,3 +1,10 @@
+# [cala release v0.1.9](https://github.com/GaloyMoney/cala/releases/tag/0.1.9)
+
+
+### Bug Fixes
+
+- Multiple entries for same account (#92)
+
 # [cala release v0.1.8](https://github.com/GaloyMoney/cala/releases/tag/0.1.8)
 
 
