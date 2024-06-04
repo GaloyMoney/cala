@@ -1,3 +1,14 @@
+# [cala release v0.1.11](https://github.com/GaloyMoney/cala/releases/tag/0.1.11)
+
+
+### Documentation
+
+- Fix edit this page links (#91)
+
+### Testing
+
+- Add doc test to ci (#94)
+
 # [cala release v0.1.10](https://github.com/GaloyMoney/cala/releases/tag/0.1.10)
 
 
