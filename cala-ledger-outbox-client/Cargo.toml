@@ -2,7 +2,7 @@
 name = "cala-ledger-outbox-client"
 description = "Outbox client for cala-ledger"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.1.12-dev"
+version = "0.2.0"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["client", "outbox"]
@@ -12,8 +12,8 @@ categories = ["client", "outbox"]
 fail-on-warnings = []
 
 [dependencies]
-cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.1.12-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.1.12-dev" }
+cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.0" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.0" }
 
 futures = { workspace = true }
 uuid = { workspace = true }
