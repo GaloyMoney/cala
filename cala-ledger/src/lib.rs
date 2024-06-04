@@ -1,3 +1,12 @@
+//! # cala-ledger
+//!
+//! This crate provides a set of primitives for implementing an SQL-compatible
+//! double-entry accounting system. This system is engineered specifically for
+//! dealing with money and building financial products.
+//!
+//! Visit the [website of the Cala project](https://cala.sh) for more info and tutorials.
+//!
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
