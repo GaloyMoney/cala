@@ -9,13 +9,6 @@
 //!
 //! ## Quick Start
 //!
-//! Add and execute the migrations from the migrations directory before usage.
-//! ```bash,ignore
-//! cp ./migrations/* <path/to/your/projects/migrations>
-//! # in your project
-//! cargo sqlx migrate run
-//! ```
-//!
 //! Here is how to initialize a ledger create a primitive template and post a transaction.
 //! This is a toy example that brings all pieces together end-to-end.
 //! Not recommended for real use.
@@ -25,11 +18,10 @@
 //! use uuid::uuid;
 //!
 //! async fn init_cala(journal_id: JournalId) -> anyhow::Result<CalaLedger, anyhow::Error> {
-//!     let pg_con =
-//!         std::env::var("PG_CON").unwrap_or(format!("postgres://user:password@localhost:5432/pg"));
-//!     let pool = sqlx::PgPool::connect(&pg_con).await?;
-//!
-//!     let cala_config = CalaLedgerConfig::builder().pool(pool.clone()).build()?;
+//!     let cala_config = CalaLedgerConfig::builder()
+//!         .pg_con("postgres://user:password@localhost:5432/pg")
+//!         .exec_migrations(true)
+//!         .build()?;
 //!     let cala = CalaLedger::init(cala_config).await?;
 //!
 //!     // Initialize the journal - all entities are constructed via builders
