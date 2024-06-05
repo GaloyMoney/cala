@@ -284,6 +284,7 @@ type PostTransactionPayload {
 }
 
 type Query {
+	serverVersion: String!
 	account(id: UUID!): Account
 	accountByExternalId(externalId: String!): Account
 	accounts(first: Int!, after: String): AccountConnection!

@@ -8,21 +8,21 @@ use cala_ledger::{AtomicOperation, CalaLedger};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::{app::CalaApp, extension::MutationExtensionMarker, graphql};
+use crate::{app::CalaApp, extension::*, graphql};
 
 pub use config::*;
 
-pub async fn run<M: MutationExtensionMarker>(
+pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     config: ServerConfig,
     app: CalaApp,
 ) -> anyhow::Result<()> {
     let ledger = app.ledger().clone();
-    let schema = graphql::schema::<M>(Some(app));
+    let schema = graphql::schema::<Q, M>(Some(app));
 
     let app = Router::new()
         .route(
             "/graphql",
-            get(playground).post(axum::routing::post(graphql_handler::<M>)),
+            get(playground).post(axum::routing::post(graphql_handler::<Q, M>)),
         )
         .layer(Extension(schema))
         .layer(Extension(ledger));
@@ -35,9 +35,9 @@ pub async fn run<M: MutationExtensionMarker>(
     Ok(())
 }
 
-pub async fn graphql_handler<M: MutationExtensionMarker>(
+pub async fn graphql_handler<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     headers: HeaderMap,
-    schema: Extension<Schema<graphql::Query, graphql::CoreMutation<M>, EmptySubscription>>,
+    schema: Extension<Schema<graphql::CoreQuery<Q>, graphql::CoreMutation<M>, EmptySubscription>>,
     Extension(ledger): Extension<CalaLedger>,
     req: GraphQLRequest,
 ) -> GraphQLResponse {

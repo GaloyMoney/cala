@@ -6,7 +6,7 @@ use clap::Parser;
 use std::{fs, path::PathBuf};
 
 use self::config::{Config, EnvOverride};
-use crate::{extension::MutationExtensionMarker, job::JobRegistry};
+use crate::{extension::*, job::JobRegistry};
 
 #[derive(Parser)]
 #[clap(long_about = None)]
@@ -24,19 +24,19 @@ struct Cli {
     pg_con: String,
 }
 
-pub async fn run<M: MutationExtensionMarker>(
+pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     job_registration: impl FnOnce(&mut JobRegistry),
 ) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     let config = Config::load_config(cli.config, EnvOverride { db_con: cli.pg_con })?;
 
-    run_cmd::<M>(&cli.cala_home, config, job_registration).await?;
+    run_cmd::<Q, M>(&cli.cala_home, config, job_registration).await?;
 
     Ok(())
 }
 
-async fn run_cmd<M: MutationExtensionMarker>(
+async fn run_cmd<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     cala_home: &str,
     config: Config,
     job_registration: impl FnOnce(&mut JobRegistry),
@@ -50,7 +50,7 @@ async fn run_cmd<M: MutationExtensionMarker>(
     let mut registry = JobRegistry::new(&ledger);
     job_registration(&mut registry);
     let app = crate::app::CalaApp::run(pool, config.app, ledger, registry).await?;
-    crate::server::run::<M>(config.server, app).await?;
+    crate::server::run::<Q, M>(config.server, app).await?;
     Ok(())
 }
 

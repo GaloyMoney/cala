@@ -16,13 +16,17 @@ use async_graphql::{dataloader::*, *};
 pub use job::Job;
 pub use schema::*;
 
-use crate::{app::CalaApp, extension::MutationExtensionMarker};
+use crate::{app::CalaApp, extension::*};
 use loader::LedgerDataLoader;
 
-pub fn schema<M: MutationExtensionMarker>(
+pub fn schema<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     app: Option<CalaApp>,
-) -> Schema<Query, CoreMutation<M>, EmptySubscription> {
-    let schema = Schema::build(Query, CoreMutation::<M>::default(), EmptySubscription);
+) -> Schema<CoreQuery<Q>, CoreMutation<M>, EmptySubscription> {
+    let schema = Schema::build(
+        CoreQuery::<Q>::default(),
+        CoreMutation::<M>::default(),
+        EmptySubscription,
+    );
     if let Some(app) = app {
         schema
             .data(

@@ -7,14 +7,22 @@ use super::{
     account::*, account_set::*, balance::*, job::*, journal::*, loader::*, primitives::*,
     transaction::*, tx_template::*,
 };
-use crate::{app::CalaApp, extension::MutationExtensionMarker};
+use crate::{app::CalaApp, extension::*};
 
 type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
 
-pub struct Query;
+#[derive(Default)]
+pub struct CoreQuery<E: QueryExtensionMarker> {
+    _phantom: std::marker::PhantomData<E>,
+}
 
-#[Object]
-impl Query {
+#[Object(name = "Query")]
+impl<E: QueryExtensionMarker> CoreQuery<E> {
+    #[graphql(flatten)]
+    async fn extension(&self) -> E {
+        E::default()
+    }
+
     async fn account(&self, ctx: &Context<'_>, id: UUID) -> async_graphql::Result<Option<Account>> {
         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
         Ok(loader.load_one(AccountId::from(id)).await?)
