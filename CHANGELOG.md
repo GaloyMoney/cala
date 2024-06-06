@@ -1,3 +1,15 @@
+# [cala release v0.2.3](https://github.com/GaloyMoney/cala/releases/tag/0.2.3)
+
+
+### Bug Fixes
+
+- Sql syntax
+- Expose ledger / types from correct module
+
+### Miscellaneous Tasks
+
+- Expose as_bytes
+
 # [cala release v0.2.2](https://github.com/GaloyMoney/cala/releases/tag/0.2.2)
 
 
