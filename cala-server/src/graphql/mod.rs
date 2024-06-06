@@ -4,7 +4,7 @@ mod balance;
 mod convert;
 mod job;
 mod journal;
-mod loader;
+pub mod loader;
 pub mod primitives;
 mod schema;
 mod timestamp;

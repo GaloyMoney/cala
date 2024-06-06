@@ -23,6 +23,10 @@ macro_rules! entity_id {
             pub fn new() -> Self {
                 uuid::Uuid::new_v4().into()
             }
+
+            pub fn as_bytes(&self) -> &[u8; 16] {
+                self.0.as_bytes()
+            }
         }
 
         impl From<uuid::Uuid> for $name {
