@@ -13,9 +13,6 @@ mod tx_template;
 
 use async_graphql::{dataloader::*, *};
 
-pub use cala_ledger as ledger;
-pub use cala_types as core_types;
-
 pub use job::Job;
 pub use schema::*;
 
