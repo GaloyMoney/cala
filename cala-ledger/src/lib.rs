@@ -26,7 +26,7 @@
 //!
 //!     // Initialize the journal - all entities are constructed via builders
 //!     let new_journal = NewJournal::builder()
-//!         .id(JournalId::new())
+//!         .id(journal_id)
 //!         .name("Ledger")
 //!         .build()
 //!         .expect("Couldn't build NewJournal");
