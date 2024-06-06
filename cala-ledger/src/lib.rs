@@ -20,7 +20,7 @@
 //! async fn init_cala(journal_id: JournalId) -> anyhow::Result<CalaLedger, anyhow::Error> {
 //!     let cala_config = CalaLedgerConfig::builder()
 //!         .pg_con("postgres://user:password@localhost:5432/pg")
-//!         .exec_migrations(true)
+//!         // .exec_migrations(true) # commented out for execution in CI
 //!         .build()?;
 //!     let cala = CalaLedger::init(cala_config).await?;
 //!
