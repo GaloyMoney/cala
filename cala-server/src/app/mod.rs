@@ -37,7 +37,7 @@ impl CalaApp {
         })
     }
 
-    pub(crate) fn ledger(&self) -> &CalaLedger {
+    pub fn ledger(&self) -> &CalaLedger {
         &self.ledger
     }
 
