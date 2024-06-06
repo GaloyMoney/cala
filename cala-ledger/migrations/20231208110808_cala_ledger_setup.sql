@@ -56,7 +56,7 @@ CREATE TABLE cala_account_sets (
   name VARCHAR NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
-  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id)
+  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
   FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id)
 );
 CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
