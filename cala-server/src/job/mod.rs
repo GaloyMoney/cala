@@ -22,6 +22,7 @@ pub use traits::*;
 
 use error::*;
 use executor::*;
+use repo::*;
 
 #[derive(Clone)]
 pub struct Jobs {

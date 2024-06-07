@@ -4,9 +4,7 @@ use tracing::instrument;
 
 use std::{collections::HashMap, sync::Arc};
 
-pub use super::{
-    config::*, current::*, entity::*, error::JobError, registry::*, repo::*, traits::*,
-};
+use super::{config::*, current::*, entity::*, error::JobError, registry::*, repo::*, traits::*};
 use crate::primitives::JobId;
 
 #[derive(Clone)]
