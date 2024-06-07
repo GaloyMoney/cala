@@ -22,7 +22,7 @@ axum-extra = { version = "0.9.3", default-features = false, features = ["tracing
 base64 = { version = "0.22.1" }
 cached = { version = "0.51", features = ["async"] }
 chrono = { version = "0.4.31", features = ["clock", "serde"], default-features = false }
-clap = { version = "4.4", features = ["derive", "env", "cargo"] }
+clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.0"
 sqlx = { version = "0.7.4", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 thiserror = "1.0.61"
