@@ -1,3 +1,24 @@
+# [cala release v0.2.4](https://github.com/GaloyMoney/cala/releases/tag/0.2.4)
+
+
+### Bug Fixes
+
+- Lookup in same tx
+- Commit AtomicOperation without events
+- Check-code
+
+### Documentation
+
+- Docs.rs landing page (#95)
+
+### Features
+
+- Add integrations
+
+### Refactor
+
+- Add Jobs service layer
+
 # [cala release v0.2.3](https://github.com/GaloyMoney/cala/releases/tag/0.2.3)
 
 
