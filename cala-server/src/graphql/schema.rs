@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{app::CalaApp, extension::*};
 
-type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
+pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {

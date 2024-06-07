@@ -1,7 +1,10 @@
 use async_graphql::*;
 
 use super::job::*;
-use crate::{app::CalaApp, graphql::Job};
+use crate::{
+    app::CalaApp,
+    graphql::{DbOp, Job},
+};
 
 #[derive(InputObject)]
 pub struct CalaOutboxImportJobCreateInput {
@@ -26,8 +29,13 @@ impl Mutation {
         input: CalaOutboxImportJobCreateInput,
     ) -> async_graphql::Result<CalaOutboxImportJobCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
         let job = app
-            .create_and_spawn_job::<CalaOutboxImportJobInitializer, _>(
+            .create_and_spawn_job_in_op::<CalaOutboxImportJobInitializer, _>(
+                &mut op,
                 input.name.clone(),
                 input.description.clone(),
                 CalaOutboxImportConfig::from(input),

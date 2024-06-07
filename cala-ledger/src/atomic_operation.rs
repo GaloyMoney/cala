@@ -17,7 +17,7 @@ impl<'a> AtomicOperation<'a> {
         })
     }
 
-    pub(crate) fn tx(&mut self) -> &mut Transaction<'a, Postgres> {
+    pub fn tx(&mut self) -> &mut Transaction<'a, Postgres> {
         &mut self.tx
     }
 

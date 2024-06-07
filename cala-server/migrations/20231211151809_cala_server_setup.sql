@@ -21,3 +21,11 @@ CREATE TABLE job_executions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+CREATE TABLE integrations (
+  id UUID PRIMARY KEY,
+  name VARCHAR NOT NULL UNIQUE,
+  config JSONB,
+  modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

@@ -2,7 +2,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
 
 use super::error::JobError;
-use crate::primitives::JobId;
+use crate::{integration::*, primitives::JobId};
 
 pub struct CurrentJob {
     id: JobId,
@@ -54,5 +54,9 @@ impl CurrentJob {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    pub async fn integration(&self, id: IntegrationId) -> Result<Integration, sqlx::Error> {
+        Integrations::new(self.pool()).find_by_id(id).await
     }
 }

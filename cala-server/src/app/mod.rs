@@ -4,9 +4,9 @@ mod error;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use cala_ledger::{query::*, CalaLedger};
+use cala_ledger::{query::*, AtomicOperation, CalaLedger};
 
-use crate::job::*;
+use crate::{integration::*, job::*};
 pub use config::*;
 pub use error::*;
 
@@ -37,13 +37,18 @@ impl CalaApp {
         })
     }
 
+    pub fn integrations(&self) -> Integrations {
+        Integrations::new(&self.pool)
+    }
+
     pub fn ledger(&self) -> &CalaLedger {
         &self.ledger
     }
 
-    #[instrument(name = "cala_server.create_and_spawn_job", skip(self, config))]
-    pub async fn create_and_spawn_job<I: JobInitializer + Default, C: serde::Serialize>(
+    #[instrument(name = "cala_server.create_and_spawn_job", skip(self, op, config))]
+    pub async fn create_and_spawn_job_in_op<I: JobInitializer + Default, C: serde::Serialize>(
         &self,
+        op: &mut AtomicOperation<'_>,
         name: String,
         description: Option<String>,
         config: C,
@@ -55,10 +60,8 @@ impl CalaApp {
             .job_type(<I as JobInitializer>::job_type())
             .build()
             .expect("Could not build job");
-        let mut tx = self.pool.begin().await?;
-        let job = self.jobs.create_in_tx(&mut tx, new_job).await?;
-        self.job_executor.spawn_job::<I>(&mut tx, &job).await?;
-        tx.commit().await?;
+        let job = self.jobs.create_in_tx(op.tx(), new_job).await?;
+        self.job_executor.spawn_job::<I>(op.tx(), &job).await?;
         Ok(job)
     }
 
