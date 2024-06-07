@@ -34,7 +34,8 @@ impl Mutation {
             .try_lock()
             .expect("Lock held concurrently");
         let job = app
-            .create_and_spawn_job_in_op::<CalaOutboxImportJobInitializer, _>(
+            .jobs()
+            .create_and_spawn_in_op::<CalaOutboxImportJobInitializer, _>(
                 &mut op,
                 input.name.clone(),
                 input.description.clone(),

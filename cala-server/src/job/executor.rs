@@ -16,15 +16,15 @@ pub struct JobExecutor {
     registry: Arc<JobRegistry>,
     poller_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     running_jobs: Arc<RwLock<HashMap<JobId, JobHandle>>>,
-    jobs: Jobs,
+    jobs: JobRepo,
 }
 
 impl JobExecutor {
-    pub fn new(
+    pub(super) fn new(
         pool: &PgPool,
         config: JobExecutorConfig,
         registry: JobRegistry,
-        jobs: &Jobs,
+        jobs: &JobRepo,
     ) -> Self {
         Self {
             pool: pool.clone(),
@@ -106,7 +106,7 @@ impl JobExecutor {
         poll_limit: u32,
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<JobId, JobHandle>>>,
-        jobs: &Jobs,
+        jobs: &JobRepo,
     ) -> Result<(), JobError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);

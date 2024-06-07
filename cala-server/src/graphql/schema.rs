@@ -179,7 +179,8 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
                 let result = app
-                    .list_jobs(cala_ledger::query::PaginatedQueryArgs {
+                    .jobs()
+                    .list(cala_ledger::query::PaginatedQueryArgs {
                         first,
                         after: after.map(crate::job::JobByNameCursor::from),
                     })

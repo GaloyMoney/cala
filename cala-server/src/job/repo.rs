@@ -5,11 +5,11 @@ use crate::primitives::JobId;
 use cala_ledger::{entity::*, query::*};
 
 #[derive(Debug, Clone)]
-pub struct Jobs {
+pub(super) struct JobRepo {
     pool: PgPool,
 }
 
-impl Jobs {
+impl JobRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
     }
@@ -74,6 +74,7 @@ impl Jobs {
             end_cursor,
         })
     }
+
     pub async fn find_by_id(&self, id: JobId) -> Result<Job, JobError> {
         let rows = sqlx::query_as!(
             GenericEvent,
