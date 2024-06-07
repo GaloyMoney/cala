@@ -178,7 +178,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
-    pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
+    pub async fn find_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+    ) -> Result<AccountSet, AccountSetError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -191,7 +195,7 @@ impl AccountSetRepo {
             AND a.id = $1"#,
             account_set_id as AccountSetId
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut **db)
         .await?;
         match EntityEvents::load_first(rows) {
             Ok(account_set) => Ok(account_set),
@@ -204,6 +208,15 @@ impl AccountSetRepo {
 
     pub(super) async fn find_all<T: From<AccountSet>>(
         &self,
+        ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
+        let mut tx = self.pool.begin().await?;
+        self.find_all_in_tx(&mut tx, ids).await
+    }
+
+    pub(super) async fn find_all_in_tx<T: From<AccountSet>>(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
         ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         let rows = sqlx::query_as!(
@@ -219,7 +232,7 @@ impl AccountSetRepo {
             ORDER BY s.id, e.sequence"#,
             ids as &[AccountSetId]
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut **db)
         .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?

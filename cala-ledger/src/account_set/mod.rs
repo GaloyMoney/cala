@@ -106,7 +106,7 @@ impl AccountSets {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
             AccountSetMember::Account(id) => {
-                let set = self.repo.find(account_set_id).await?;
+                let set = self.repo.find_in_tx(op.tx(), account_set_id).await?;
                 let (time, parents) = self
                     .repo
                     .add_member_account_and_return_parents(op.tx(), account_set_id, id)
@@ -116,7 +116,7 @@ impl AccountSets {
             AccountSetMember::AccountSet(id) => {
                 let mut accounts = self
                     .repo
-                    .find_all::<AccountSet>(&[account_set_id, id])
+                    .find_all_in_tx::<AccountSet>(op.tx(), &[account_set_id, id])
                     .await?;
                 let target = accounts
                     .remove(&account_set_id)
