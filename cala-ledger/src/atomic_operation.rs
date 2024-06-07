@@ -30,9 +30,13 @@ impl<'a> AtomicOperation<'a> {
     }
 
     pub async fn commit(self) -> Result<(), sqlx::Error> {
-        self.outbox
-            .persist_events(self.tx, self.accumulated_events)
-            .await?;
+        if self.accumulated_events.is_empty() {
+            self.tx.commit().await?;
+        } else {
+            self.outbox
+                .persist_events(self.tx, self.accumulated_events)
+                .await?;
+        }
         Ok(())
     }
 }
