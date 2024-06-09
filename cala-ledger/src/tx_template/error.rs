@@ -1,6 +1,6 @@
-use thiserror::Error;
-
 use rust_decimal::Decimal;
+use sqlx::error::DatabaseError;
+use thiserror::Error;
 
 use cala_types::primitives::{Currency, Layer};
 use cel_interpreter::CelError;
@@ -8,7 +8,9 @@ use cel_interpreter::CelError;
 #[derive(Error, Debug)]
 pub enum TxTemplateError {
     #[error("TxTemplateError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
+    #[error("TxTemplateError - DuplicateKey: {0}")]
+    DuplicateKey(Box<dyn DatabaseError>),
     #[error("TxTemplateError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
     #[error("TxTemplateError - TxParamTypeMismatch: {0}")]
@@ -25,4 +27,15 @@ pub enum TxTemplateError {
     UnbalancedTransaction(Currency, Layer, Decimal),
     #[error("TxTemplateError - NotFound: code '{0}' not found")]
     CouldNotFindByCode(String),
+}
+
+impl From<sqlx::Error> for TxTemplateError {
+    fn from(e: sqlx::Error) -> Self {
+        match e {
+            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
+                Self::DuplicateKey(err)
+            }
+            e => Self::Sqlx(e),
+        }
+    }
 }
