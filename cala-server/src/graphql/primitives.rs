@@ -103,6 +103,12 @@ impl From<UUID> for cala_ledger::TxTemplateId {
     }
 }
 
+impl From<UUID> for crate::integration::IntegrationId {
+    fn from(uuid: UUID) -> Self {
+        crate::integration::IntegrationId::from(uuid.0)
+    }
+}
+
 impl From<UUID> for cala_ledger::TransactionId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::TransactionId::from(uuid.0)

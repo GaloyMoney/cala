@@ -51,7 +51,11 @@ impl Integrations {
         Ok(integration)
     }
 
-    pub async fn find_by_id(&self, id: IntegrationId) -> Result<Integration, sqlx::Error> {
+    pub async fn find_by_id(
+        &self,
+        id: impl Into<IntegrationId>,
+    ) -> Result<Integration, sqlx::Error> {
+        let id = id.into();
         let row = sqlx::query_as!(
             Integration,
             r#"SELECT id, name, config

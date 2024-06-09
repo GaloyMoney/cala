@@ -1,4 +1,4 @@
-mod account;
+pub mod account;
 pub mod account_set;
 mod balance;
 mod convert;
