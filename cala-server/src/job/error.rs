@@ -14,8 +14,8 @@ pub enum JobError {
     JobTypeMismatch(JobType, JobType),
     #[error("JobError - JobInitError: {0}")]
     JobInitError(String),
-    #[error("JobError - BadConfig: {0}")]
-    CouldNotSerializeConfig(serde_json::Error),
+    #[error("JobError - BadData: {0}")]
+    CouldNotSerializeData(serde_json::Error),
     #[error("JobError - BadState: {0}")]
     CouldNotSerializeState(serde_json::Error),
     #[error("JobError - NoInitializerPresent")]

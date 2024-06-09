@@ -30,7 +30,7 @@ pub enum JobEvent {
         job_type: JobType,
         name: String,
         description: Option<String>,
-        config: serde_json::Value,
+        data: serde_json::Value,
     },
 }
 
@@ -48,13 +48,13 @@ pub struct Job {
     pub name: String,
     pub job_type: JobType,
     pub description: Option<String>,
-    config: serde_json::Value,
+    data: serde_json::Value,
     pub(super) _events: EntityEvents<JobEvent>,
 }
 
 impl Job {
-    pub fn config<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
-        serde_json::from_value(self.config.clone())
+    pub fn data<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_value(self.data.clone())
     }
 }
 
@@ -73,14 +73,14 @@ impl TryFrom<EntityEvents<JobEvent>> for Job {
                 name,
                 job_type,
                 description,
-                config,
+                data,
             } = event;
             builder = builder
                 .id(*id)
                 .name(name.clone())
                 .job_type(job_type.clone())
                 .description(description.clone())
-                .config(config.clone());
+                .data(data.clone());
         }
         builder._events(events).build()
     }
@@ -97,7 +97,7 @@ pub struct NewJob {
     #[builder(setter(into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(custom))]
-    pub(super) config: serde_json::Value,
+    pub(super) data: serde_json::Value,
 }
 
 impl NewJob {
@@ -115,16 +115,15 @@ impl NewJob {
                 name: self.name,
                 job_type: self.job_type,
                 description: self.description,
-                config: self.config,
+                data: self.data,
             }],
         )
     }
 }
 
 impl NewJobBuilder {
-    pub fn config<C: serde::Serialize>(&mut self, config: C) -> Result<&mut Self, JobError> {
-        self.config =
-            Some(serde_json::to_value(config).map_err(JobError::CouldNotSerializeConfig)?);
+    pub fn data<C: serde::Serialize>(&mut self, data: C) -> Result<&mut Self, JobError> {
+        self.data = Some(serde_json::to_value(data).map_err(JobError::CouldNotSerializeData)?);
         Ok(self)
     }
 }

@@ -42,18 +42,18 @@ impl Jobs {
         }
     }
 
-    #[instrument(name = "cala_server.jobs.create_and_spawn", skip(self, op, config))]
-    pub async fn create_and_spawn_in_op<I: JobInitializer + Default, C: serde::Serialize>(
+    #[instrument(name = "cala_server.jobs.create_and_spawn", skip(self, op, data))]
+    pub async fn create_and_spawn_in_op<I: JobInitializer + Default, D: serde::Serialize>(
         &self,
         op: &mut AtomicOperation<'_>,
         name: String,
         description: Option<String>,
-        config: C,
+        data: D,
     ) -> Result<Job, JobError> {
         let new_job = NewJob::builder()
             .name(name)
             .description(description)
-            .config(config)?
+            .data(data)?
             .job_type(<I as JobInitializer>::job_type())
             .build()
             .expect("Could not build job");

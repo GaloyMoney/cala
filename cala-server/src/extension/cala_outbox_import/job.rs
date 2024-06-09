@@ -29,9 +29,8 @@ impl JobInitializer for CalaOutboxImportJobInitializer {
         job: &Job,
         ledger: &CalaLedger,
     ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
-        let config = job.config()?;
         Ok(Box::new(CalaOutboxImportJob {
-            config,
+            config: job.data()?,
             ledger: ledger.clone(),
         }))
     }
