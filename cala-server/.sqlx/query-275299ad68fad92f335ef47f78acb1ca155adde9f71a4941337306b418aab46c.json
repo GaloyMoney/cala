@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, config\n            FROM integrations\n            WHERE id = $1",
+  "query": "SELECT id, name, data\n            FROM integrations\n            WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "config",
+        "name": "data",
         "type_info": "Jsonb"
       }
     ],
@@ -30,5 +30,5 @@
       true
     ]
   },
-  "hash": "1d6e75c9722d99134e8cc7873fc388464c204b9a6105ebfbf5e948722caaafc0"
+  "hash": "275299ad68fad92f335ef47f78acb1ca155adde9f71a4941337306b418aab46c"
 }

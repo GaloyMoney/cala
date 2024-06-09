@@ -7,19 +7,19 @@ cala_types::entity_id! { IntegrationId }
 pub struct Integration {
     pub id: IntegrationId,
     pub name: String,
-    config: serde_json::Value,
+    data: serde_json::Value,
 }
 
 impl Integration {
-    fn new(name: String, config: impl serde::Serialize) -> Self {
+    fn new(name: String, data: impl serde::Serialize) -> Self {
         Self {
             id: IntegrationId::new(),
             name,
-            config: serde_json::to_value(config).expect("Could not serialize config"),
+            data: serde_json::to_value(data).expect("Could not serialize data"),
         }
     }
-    pub fn config<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
-        serde_json::from_value(self.config.clone())
+    pub fn data<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
+        serde_json::from_value(self.data.clone())
     }
 }
 
@@ -36,15 +36,15 @@ impl Integrations {
         &self,
         op: &mut AtomicOperation<'_>,
         name: String,
-        config: impl serde::Serialize,
+        data: impl serde::Serialize,
     ) -> Result<Integration, sqlx::Error> {
-        let integration = Integration::new(name, config);
+        let integration = Integration::new(name, data);
         sqlx::query!(
-            r#"INSERT INTO integrations (id, name, config)
+            r#"INSERT INTO integrations (id, name, data)
             VALUES ($1, $2, $3)"#,
             integration.id as IntegrationId,
             integration.name,
-            integration.config
+            integration.data
         )
         .execute(&mut **op.tx())
         .await?;
@@ -58,7 +58,7 @@ impl Integrations {
         let id = id.into();
         let row = sqlx::query_as!(
             Integration,
-            r#"SELECT id, name, config
+            r#"SELECT id, name, data
             FROM integrations
             WHERE id = $1"#,
             id as IntegrationId
