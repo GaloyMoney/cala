@@ -69,7 +69,7 @@ impl TxTemplateRepo {
         Ok(ret)
     }
 
-    pub(super) async fn find_by_code(&self, code: String) -> Result<TxTemplate, TxTemplateError> {
+    pub(super) async fn find_by_code(&self, code: &str) -> Result<TxTemplate, TxTemplateError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -87,7 +87,7 @@ impl TxTemplateRepo {
         match EntityEvents::load_first(rows) {
             Ok(tx_template) => Ok(tx_template),
             Err(EntityError::NoEntityEventsPresent) => {
-                Err(TxTemplateError::CouldNotFindByCode(code))
+                Err(TxTemplateError::CouldNotFindByCode(code.to_owned()))
             }
             Err(e) => Err(e.into()),
         }

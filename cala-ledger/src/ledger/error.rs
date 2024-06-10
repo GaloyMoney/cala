@@ -1,3 +1,4 @@
+use sqlx::error::DatabaseError;
 use thiserror::Error;
 
 use crate::{
@@ -10,7 +11,9 @@ use crate::{
 #[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("LedgerError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
+    #[error("LedgerError - DuplicateKey: {0}")]
+    DuplicateKey(Box<dyn DatabaseError>),
     #[error("LedgerError - Migrate: {0}")]
     SqlxMigrate(#[from] sqlx::migrate::MigrateError),
     #[error("LedgerError - Config: {0}")]
@@ -31,4 +34,15 @@ pub enum LedgerError {
     EntryError(#[from] EntryError),
     #[error("LedgerError - BalanceError: {0}")]
     BalanceError(#[from] BalanceError),
+}
+
+impl From<sqlx::Error> for LedgerError {
+    fn from(e: sqlx::Error) -> Self {
+        match e {
+            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
+                LedgerError::DuplicateKey(err)
+            }
+            e => LedgerError::Sqlx(e),
+        }
+    }
 }

@@ -2,13 +2,13 @@ use sqlx::{PgPool, Postgres, Transaction};
 
 use crate::outbox::*;
 
-pub struct AtomicOperation<'a> {
-    tx: Transaction<'a, Postgres>,
+pub struct AtomicOperation<'t> {
+    tx: Transaction<'t, Postgres>,
     outbox: Outbox,
     accumulated_events: Vec<OutboxEventPayload>,
 }
 
-impl<'a> AtomicOperation<'a> {
+impl<'t> AtomicOperation<'t> {
     pub(crate) async fn init(pool: &PgPool, outbox: &Outbox) -> Result<Self, sqlx::Error> {
         Ok(Self {
             tx: pool.begin().await?,
@@ -17,7 +17,7 @@ impl<'a> AtomicOperation<'a> {
         })
     }
 
-    pub fn tx(&mut self) -> &mut Transaction<'a, Postgres> {
+    pub fn tx(&mut self) -> &mut Transaction<'t, Postgres> {
         &mut self.tx
     }
 

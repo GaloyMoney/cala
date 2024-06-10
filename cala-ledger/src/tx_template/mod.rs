@@ -77,8 +77,8 @@ impl TxTemplates {
         self.repo.find_all(tx_template_ids).await
     }
 
-    pub async fn find_by_code(&self, code: String) -> Result<TxTemplate, TxTemplateError> {
-        self.repo.find_by_code(code).await
+    pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
+        self.repo.find_by_code(code.as_ref()).await
     }
 
     #[instrument(
