@@ -24,7 +24,12 @@ impl CalaApp {
         ledger: CalaLedger,
         registry: JobRegistry,
     ) -> Result<Self, ApplicationError> {
-        let mut jobs = Jobs::new(&pool, config.job_execution.clone(), registry);
+        let mut jobs = Jobs::new(
+            &pool,
+            config.job_execution.clone(),
+            registry,
+            config.encryption.clone(),
+        );
         jobs.start_poll().await?;
         Ok(Self {
             pool,

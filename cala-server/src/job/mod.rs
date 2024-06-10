@@ -25,6 +25,8 @@ use error::*;
 use executor::*;
 use repo::*;
 
+use crate::integration::EncryptionConfig;
+
 #[derive(Clone)]
 pub struct Jobs {
     _pool: PgPool,
@@ -33,9 +35,14 @@ pub struct Jobs {
 }
 
 impl Jobs {
-    pub fn new(pool: &PgPool, config: JobExecutorConfig, registry: JobRegistry) -> Self {
+    pub fn new(
+        pool: &PgPool,
+        config: JobExecutorConfig,
+        registry: JobRegistry,
+        encryption: EncryptionConfig,
+    ) -> Self {
         let repo = JobRepo::new(pool);
-        let executor = JobExecutor::new(pool, config, registry, &repo);
+        let executor = JobExecutor::new(pool, config, registry, &repo, encryption);
         Self {
             _pool: pool.clone(),
             repo,

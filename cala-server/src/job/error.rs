@@ -22,6 +22,8 @@ pub enum JobError {
     NoInitializerPresent,
     #[error("JobError - JobExecutionError: {0}")]
     JobExecutionError(String),
+    #[error("JobError - IntegrationError: {0}")]
+    IntegrationError(#[from] crate::integration::error::IntegrationError),
 }
 
 impl From<Box<dyn std::error::Error>> for JobError {
