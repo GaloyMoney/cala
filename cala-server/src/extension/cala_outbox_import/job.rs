@@ -49,7 +49,10 @@ struct CalaOutboxImportJobState {
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
     #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
-    async fn run(&self, mut current_job: CurrentJob) -> Result<(), Box<dyn std::error::Error>> {
+    async fn run(
+        &self,
+        mut current_job: CurrentJob,
+    ) -> Result<JobCompletion, Box<dyn std::error::Error>> {
         println!(
             "Executing CalaOutboxImportJob importing from endpoint: {}",
             self.config.endpoint
@@ -81,6 +84,6 @@ impl JobRunner for CalaOutboxImportJob {
                 }
             }
         }
-        Ok(())
+        Ok(JobCompletion::Complete)
     }
 }

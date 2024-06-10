@@ -20,4 +20,12 @@ pub enum JobError {
     CouldNotSerializeState(serde_json::Error),
     #[error("JobError - NoInitializerPresent")]
     NoInitializerPresent,
+    #[error("JobError - JobExecutionError: {0}")]
+    JobExecutionError(String),
+}
+
+impl From<Box<dyn std::error::Error>> for JobError {
+    fn from(error: Box<dyn std::error::Error>) -> Self {
+        JobError::JobExecutionError(error.to_string())
+    }
 }

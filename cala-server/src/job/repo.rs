@@ -34,6 +34,15 @@ impl JobRepo {
         Ok(job)
     }
 
+    pub async fn persist(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        mut job: Job,
+    ) -> Result<(), JobError> {
+        job.events.persist(db).await?;
+        Ok(())
+    }
+
     pub async fn list(
         &self,
         query: PaginatedQueryArgs<JobByNameCursor>,

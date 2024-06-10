@@ -32,6 +32,7 @@ pub enum JobEvent {
         description: Option<String>,
         data: serde_json::Value,
     },
+    Completed,
 }
 
 impl EntityEvent for JobEvent {
@@ -49,12 +50,16 @@ pub struct Job {
     pub job_type: JobType,
     pub description: Option<String>,
     data: serde_json::Value,
-    pub(super) _events: EntityEvents<JobEvent>,
+    pub(super) events: EntityEvents<JobEvent>,
 }
 
 impl Job {
     pub fn data<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_value(self.data.clone())
+    }
+
+    pub(super) fn complete(&mut self) {
+        self.events.push(JobEvent::Completed);
     }
 }
 
@@ -68,21 +73,25 @@ impl TryFrom<EntityEvents<JobEvent>> for Job {
     fn try_from(events: EntityEvents<JobEvent>) -> Result<Self, Self::Error> {
         let mut builder = JobBuilder::default();
         for event in events.iter() {
-            let JobEvent::Initialized {
-                id,
-                name,
-                job_type,
-                description,
-                data,
-            } = event;
-            builder = builder
-                .id(*id)
-                .name(name.clone())
-                .job_type(job_type.clone())
-                .description(description.clone())
-                .data(data.clone());
+            match event {
+                JobEvent::Initialized {
+                    id,
+                    name,
+                    job_type,
+                    description,
+                    data,
+                } => {
+                    builder = builder
+                        .id(*id)
+                        .name(name.clone())
+                        .job_type(job_type.clone())
+                        .description(description.clone())
+                        .data(data.clone());
+                }
+                JobEvent::Completed => {}
+            }
         }
-        builder._events(events).build()
+        builder.events(events).build()
     }
 }
 
