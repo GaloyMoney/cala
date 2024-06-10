@@ -11,9 +11,9 @@ pub struct Integration {
 }
 
 impl Integration {
-    fn new(name: String, data: impl serde::Serialize) -> Self {
+    fn new(id: IntegrationId, name: String, data: impl serde::Serialize) -> Self {
         Self {
-            id: IntegrationId::new(),
+            id,
             name,
             data: serde_json::to_value(data).expect("Could not serialize data"),
         }
@@ -35,10 +35,11 @@ impl Integrations {
     pub async fn create_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
+        id: IntegrationId,
         name: String,
         data: impl serde::Serialize,
     ) -> Result<Integration, sqlx::Error> {
-        let integration = Integration::new(name, data);
+        let integration = Integration::new(id, name, data);
         sqlx::query!(
             r#"INSERT INTO integrations (id, name, data)
             VALUES ($1, $2, $3)"#,
