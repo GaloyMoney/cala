@@ -4,7 +4,7 @@ use chacha20poly1305::{
 };
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use super::{error::IntegrationError, Integration};
+use super::{error::IntegrationError, Data};
 
 pub type EncryptionKey = chacha20poly1305::Key;
 #[derive(Clone)]
@@ -19,7 +19,7 @@ pub struct EncryptionConfig {
     pub key: EncryptionKey,
 }
 
-impl Integration {
+impl Data {
     pub(super) fn encrypt(
         &self,
         key: &EncryptionKey,
@@ -27,7 +27,7 @@ impl Integration {
         let cipher = ChaCha20Poly1305::new(key);
         let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng);
         let encrypted_config = cipher
-            .encrypt(&nonce, serde_json::to_vec(&self.data)?.as_slice())
+            .encrypt(&nonce, serde_json::to_vec(&self.0)?.as_slice())
             .expect("should always encrypt");
         Ok((ConfigCipher(encrypted_config), Nonce(nonce.to_vec())))
     }
@@ -81,19 +81,19 @@ impl std::fmt::Debug for EncryptionConfig {
 
 #[cfg(test)]
 mod tests {
-    pub use super::*;
+    use super::*;
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-    struct Data {
+    struct Dummy {
         pub name: String,
         pub secret: String,
     }
 
-    impl Default for Data {
+    impl Default for Dummy {
         fn default() -> Self {
             Self {
                 name: "Alice".to_string(),
-                secret: "secret".to_string(),
+                secret: "Secret".to_string(),
             }
         }
     }
@@ -104,12 +104,21 @@ mod tests {
 
     #[test]
     fn encrypt_decrypt() {
-        let integration = Integration::new("name".to_string(), Data::default());
         let key = gen_encryption_key();
-        let (encrypted, nonce) = integration.encrypt(&key).expect("Failed to encrypt");
-        let decrypted: Data =
-            Integration::decrypt(&encrypted, &nonce, &key).expect("Failed to decrypt");
+        let data = Data::new(Dummy::default());
+        let (encrypted, nonce) = data.encrypt(&key).expect("Failed to encrypt");
+        let decrypted: Dummy = Data::decrypt(&encrypted, &nonce, &key).expect("Failed to decrypt");
 
-        assert_eq!(integration.data, serde_json::to_value(&decrypted).unwrap());
+        assert_eq!(data.0, serde_json::to_value(&decrypted).unwrap());
+    }
+
+    #[test]
+    fn serialize_deserialize() {
+        let key = gen_encryption_key();
+        let encryption_config = EncryptionConfig { key };
+        let serialized = serde_json::to_string(&encryption_config).unwrap();
+        let deserialized: EncryptionConfig = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized.key, key);
+        assert_eq!(encryption_config, deserialized)
     }
 }

@@ -38,7 +38,7 @@ impl Config {
             Config::default()
         };
 
-        let _ = config.apply_env_override(env_override);
+        let _ = config.apply_env_override(env_override)?;
         Ok(config)
     }
 
@@ -60,6 +60,7 @@ impl Config {
         }
 
         self.app.encryption.key = EncryptionKey::clone_from_slice(key_bytes.as_ref());
+
         Ok(())
     }
 }

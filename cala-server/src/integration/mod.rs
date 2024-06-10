@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 mod encryption_config;
 pub mod error;
 
@@ -13,7 +15,22 @@ cala_types::entity_id! { IntegrationId }
 pub struct Integration {
     pub id: IntegrationId,
     pub name: String,
-    data: serde_json::Value,
+    data: Data,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+struct Data(serde_json::Value);
+
+impl Data {
+    fn new(data: impl serde::Serialize) -> Self {
+        Self(serde_json::to_value(data).unwrap())
+    }
+}
+
+impl AsRef<serde_json::Value> for Data {
+    fn as_ref(&self) -> &serde_json::Value {
+        &self.0
+    }
 }
 
 impl Integration {
@@ -21,11 +38,11 @@ impl Integration {
         Self {
             id,
             name,
-            data: serde_json::to_value(data).expect("Could not serialize data"),
+            data: Data::new(data),
         }
     }
     pub fn data<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
-        serde_json::from_value(self.data.clone())
+        serde_json::from_value(self.data.as_ref().clone())
     }
 }
 
@@ -48,9 +65,9 @@ impl Integrations {
         id: impl Into<IntegrationId> + std::fmt::Debug,
         name: String,
         data: impl serde::Serialize,
-    ) -> Result<Integration, sqlx::Error> {
+    ) -> Result<Integration, IntegrationError> {
         let integration = Integration::new(id.into(), name, data);
-        let (cipher, nonce) = integration.encrypt(&self.encryption_config.key)?;
+        let (cipher, nonce) = integration.data.encrypt(&self.encryption_config.key)?;
         sqlx::query!(
             r#"INSERT INTO integrations (id, name, cipher, nonce)
             VALUES ($1, $2, $3, $4)"#,
@@ -78,7 +95,7 @@ impl Integrations {
         .fetch_one(&self.pool)
         .await?;
 
-        let data = Integration::decrypt(
+        let data = Data::decrypt(
             &ConfigCipher(row.cipher),
             &Nonce(row.nonce),
             &self.encryption_config.key,
