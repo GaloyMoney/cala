@@ -1,3 +1,9 @@
+mod encryption_config;
+pub mod error;
+
+pub use encryption_config::*;
+use error::IntegrationError;
+
 use sqlx::PgPool;
 
 use cala_ledger::AtomicOperation;
@@ -25,11 +31,15 @@ impl Integration {
 
 pub struct Integrations {
     pool: PgPool,
+    encryption_config: EncryptionConfig,
 }
 
 impl Integrations {
-    pub(crate) fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub(crate) fn new(pool: &PgPool, encryption_config: &EncryptionConfig) -> Self {
+        Self {
+            pool: pool.clone(),
+            encryption_config: encryption_config.clone(),
+        }
     }
 
     pub async fn create_in_op(
@@ -40,12 +50,14 @@ impl Integrations {
         data: impl serde::Serialize,
     ) -> Result<Integration, sqlx::Error> {
         let integration = Integration::new(id.into(), name, data);
+        let (cipher, nonce) = integration.encrypt(&self.encryption_config.key)?;
         sqlx::query!(
-            r#"INSERT INTO integrations (id, name, data)
-            VALUES ($1, $2, $3)"#,
+            r#"INSERT INTO integrations (id, name, cipher, nonce)
+            VALUES ($1, $2, $3, $4)"#,
             integration.id as IntegrationId,
             integration.name,
-            integration.data
+            &cipher.0,
+            &nonce.0
         )
         .execute(&mut **op.tx())
         .await?;
@@ -55,17 +67,26 @@ impl Integrations {
     pub async fn find_by_id(
         &self,
         id: impl Into<IntegrationId>,
-    ) -> Result<Integration, sqlx::Error> {
+    ) -> Result<Integration, IntegrationError> {
         let id = id.into();
-        let row = sqlx::query_as!(
-            Integration,
-            r#"SELECT id, name, data
+        let row = sqlx::query!(
+            r#"SELECT id, name, cipher, nonce 
             FROM integrations
             WHERE id = $1"#,
             id as IntegrationId
         )
         .fetch_one(&self.pool)
         .await?;
-        Ok(row)
+
+        let data = Integration::decrypt(
+            &ConfigCipher(row.cipher),
+            &Nonce(row.nonce),
+            &self.encryption_config.key,
+        )?;
+        Ok(Integration {
+            id,
+            name: row.name,
+            data,
+        })
     }
 }

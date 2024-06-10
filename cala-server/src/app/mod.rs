@@ -14,6 +14,7 @@ pub struct CalaApp {
     pool: PgPool,
     ledger: CalaLedger,
     jobs: Jobs,
+    config: AppConfig,
 }
 
 impl CalaApp {
@@ -23,13 +24,18 @@ impl CalaApp {
         ledger: CalaLedger,
         registry: JobRegistry,
     ) -> Result<Self, ApplicationError> {
-        let mut jobs = Jobs::new(&pool, config.job_execution, registry);
+        let mut jobs = Jobs::new(&pool, config.job_execution.clone(), registry);
         jobs.start_poll().await?;
-        Ok(Self { pool, ledger, jobs })
+        Ok(Self {
+            pool,
+            ledger,
+            jobs,
+            config,
+        })
     }
 
     pub fn integrations(&self) -> Integrations {
-        Integrations::new(&self.pool)
+        Integrations::new(&self.pool, &self.config.encryption)
     }
 
     pub fn ledger(&self) -> &CalaLedger {

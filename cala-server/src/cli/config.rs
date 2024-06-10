@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use super::db::*;
-use crate::{app::AppConfig, server::ServerConfig};
+use crate::{app::AppConfig, integration::EncryptionKey, server::ServerConfig};
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub struct Config {
@@ -21,6 +21,7 @@ pub struct Config {
 
 pub struct EnvOverride {
     pub db_con: String,
+    pub encryption_key: String,
 }
 
 impl Config {
@@ -37,11 +38,28 @@ impl Config {
             Config::default()
         };
 
-        config.apply_env_override(env_override);
+        let _ = config.apply_env_override(env_override);
         Ok(config)
     }
 
-    fn apply_env_override(&mut self, EnvOverride { db_con }: EnvOverride) {
+    fn apply_env_override(
+        &mut self,
+        EnvOverride {
+            db_con,
+            encryption_key,
+        }: EnvOverride,
+    ) -> anyhow::Result<()> {
         self.db.pg_con = db_con;
+
+        let key_bytes = hex::decode(encryption_key)?;
+        if key_bytes.len() != 32 {
+            return Err(anyhow::anyhow!(
+                "Signer encryption key must be 32 bytes, got {}",
+                key_bytes.len()
+            ));
+        }
+
+        self.app.encryption.key = EncryptionKey::clone_from_slice(key_bytes.as_ref());
+        Ok(())
     }
 }

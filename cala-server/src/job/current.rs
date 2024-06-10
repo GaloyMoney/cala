@@ -65,6 +65,7 @@ impl CurrentJob {
     }
 
     pub async fn integration(&self, id: IntegrationId) -> Result<Integration, sqlx::Error> {
-        Integrations::new(self.pool()).find_by_id(id).await
+        unimplemented!();
+        // Integrations::new(self.pool()).find_by_id(id).await
     }
 }

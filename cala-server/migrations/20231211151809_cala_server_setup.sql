@@ -27,8 +27,10 @@ CREATE TABLE job_executions (
 
 CREATE TABLE integrations (
   id UUID PRIMARY KEY,
+<<<<<<< HEAD
   name VARCHAR NOT NULL,
-  data JSONB,
+  cipher BYTEA NOT NULL,
+  nonce BYTEA NOT NULL,
   modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

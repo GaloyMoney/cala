@@ -22,6 +22,8 @@ struct Cli {
     cala_home: String,
     #[clap(env = "PG_CON")]
     pg_con: String,
+    #[clap(env = "ENCRYPTION_KEY")]
+    encryption_key: String,
 }
 
 pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
@@ -29,7 +31,13 @@ pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
 ) -> anyhow::Result<()> {
     let cli = Cli::parse();
 
-    let config = Config::load_config(cli.config, EnvOverride { db_con: cli.pg_con })?;
+    let config = Config::load_config(
+        cli.config,
+        EnvOverride {
+            db_con: cli.pg_con,
+            encryption_key: cli.encryption_key,
+        },
+    )?;
 
     run_cmd::<Q, M>(&cli.cala_home, config, job_registration).await?;
 
