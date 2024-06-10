@@ -107,7 +107,7 @@
 //!     params.insert("sender_account_id", sender_account_id);
 //!     params.insert("units", Decimal::ONE);
 //!     // Create the transaction via the template
-//!     cala.post_transaction(TransactionId::new(), "GENERAL_INCOME", Some(params))
+//!     cala.post_transaction(TransactionId::new(), "GENERAL_INCOME", params)
 //!         .await?;
 //!
 //!     let account_balance = cala
