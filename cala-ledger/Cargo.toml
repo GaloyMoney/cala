@@ -4,7 +4,7 @@ description = "An embeddable double sided accounting ledger built on PG/SQLx"
 repository = "https://github.com/GaloyMoney/cala"
 documentation = "https://docs.rs/cala-ledger"
 readme = "../README.md"
-version = "0.2.6-dev"
+version = "0.2.6"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["accounting", "ledger"]
@@ -15,9 +15,9 @@ fail-on-warnings = []
 import = []
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.6-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.6-dev" }
-cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.2.6-dev" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.6" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.6" }
+cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.2.6" }
 
 cached = { workspace = true }
 chrono = { workspace = true }

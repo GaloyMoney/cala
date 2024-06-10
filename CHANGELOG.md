@@ -1,3 +1,10 @@
+# [cala release v0.2.6](https://github.com/GaloyMoney/cala/releases/tag/0.2.6)
+
+
+### Refactor
+
+- Pass IntegrationId
+
 # [cala release v0.2.5](https://github.com/GaloyMoney/cala/releases/tag/0.2.5)
 
 
