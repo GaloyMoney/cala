@@ -450,7 +450,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
                 &mut op,
                 input.transaction_id.into(),
                 &input.tx_template_code,
-                params,
+                params.unwrap_or_default(),
             )
             .await?;
         Ok(transaction.into())

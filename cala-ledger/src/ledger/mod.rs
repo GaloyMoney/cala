@@ -123,7 +123,7 @@ impl CalaLedger {
         &self,
         tx_id: TransactionId,
         tx_template_code: &str,
-        params: Option<impl Into<TxParams> + std::fmt::Debug>,
+        params: impl Into<TxParams> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
@@ -144,15 +144,11 @@ impl CalaLedger {
         op: &mut AtomicOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
-        params: Option<impl Into<TxParams> + std::fmt::Debug>,
+        params: impl Into<TxParams> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction(
-                tx_id,
-                tx_template_code,
-                params.map(|p| p.into()).unwrap_or_default(),
-            )
+            .prepare_transaction(tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self

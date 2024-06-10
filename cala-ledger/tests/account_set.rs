@@ -124,7 +124,7 @@ async fn balances() -> anyhow::Result<()> {
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
-    cala.post_transaction(TransactionId::new(), &tx_code, Some(params))
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
 

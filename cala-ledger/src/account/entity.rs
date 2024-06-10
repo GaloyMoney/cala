@@ -72,6 +72,13 @@ impl Account {
             .latest_event_persisted_at
             .expect("No events for account")
     }
+
+    pub fn metadata<T: serde::de::DeserializeOwned>(&self) -> Result<Option<T>, serde_json::Error> {
+        match &self.values.metadata {
+            Some(metadata) => Ok(Some(serde_json::from_value(metadata.clone())?)),
+            None => Ok(None),
+        }
+    }
 }
 
 impl TryFrom<EntityEvents<AccountEvent>> for Account {
