@@ -29,7 +29,7 @@ pub enum JobCompletion {
 #[async_trait]
 pub trait JobRunner: Send + Sync + 'static {
     async fn run(
-        &self,
+        &mut self,
         current_job: CurrentJob,
     ) -> Result<JobCompletion, Box<dyn std::error::Error>>;
 }

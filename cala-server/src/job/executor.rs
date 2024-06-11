@@ -203,7 +203,7 @@ impl JobExecutor {
         id: JobId,
         pool: PgPool,
         payload: Option<serde_json::Value>,
-        runner: Box<dyn JobRunner>,
+        mut runner: Box<dyn JobRunner>,
         repo: JobRepo,
     ) -> Result<(), JobError> {
         let current_job_pool = pool.clone();
