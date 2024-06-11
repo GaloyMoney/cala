@@ -2,7 +2,7 @@
 name = "cala-ledger-core-types"
 repository = "https://github.com/GaloyMoney/cala"
 description = "Core types for cala"
-version = "0.2.11-dev"
+version = "0.2.11"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["core-types"]
@@ -11,7 +11,7 @@ categories = ["core-types"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.2.11-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.2.11" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
