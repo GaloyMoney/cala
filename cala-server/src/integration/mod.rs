@@ -1,16 +1,14 @@
-use serde::{Deserialize, Serialize};
-
 mod encryption_config;
 pub mod error;
 
-pub use encryption_config::*;
-use error::IntegrationError;
-
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 
 use cala_ledger::AtomicOperation;
-
 cala_types::entity_id! { IntegrationId }
+
+pub use encryption_config::*;
+use error::IntegrationError;
 
 pub struct Integration {
     pub id: IntegrationId,
