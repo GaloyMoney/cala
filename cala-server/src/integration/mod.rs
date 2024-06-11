@@ -66,6 +66,7 @@ impl Integrations {
     ) -> Result<Integration, IntegrationError> {
         let integration = Integration::new(id.into(), name, data);
         let (cipher, nonce) = integration.data.encrypt(&self.encryption_config.key)?;
+
         sqlx::query!(
             r#"INSERT INTO integrations (id, name, cipher, nonce)
             VALUES ($1, $2, $3, $4)"#,

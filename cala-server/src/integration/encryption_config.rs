@@ -8,9 +8,9 @@ use super::{error::IntegrationError, Data};
 
 pub type EncryptionKey = chacha20poly1305::Key;
 #[derive(Clone)]
-pub struct ConfigCipher(pub(super) Vec<u8>);
+pub(super) struct ConfigCipher(pub(super) Vec<u8>);
 #[derive(Clone)]
-pub struct Nonce(pub(super) Vec<u8>);
+pub(super) struct Nonce(pub(super) Vec<u8>);
 
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(into = "RawEncryptionConfig")]

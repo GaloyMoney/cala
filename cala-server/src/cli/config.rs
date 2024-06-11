@@ -60,7 +60,6 @@ impl Config {
         }
 
         self.app.encryption.key = EncryptionKey::clone_from_slice(key_bytes.as_ref());
-
         Ok(())
     }
 }
