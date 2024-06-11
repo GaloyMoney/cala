@@ -1,4 +1,5 @@
-use async_graphql::{dataloader::*, *};
+use async_graphql::{dataloader::*, types::connection::*, *};
+use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
     account_set::AccountSetMember,
@@ -123,6 +124,49 @@ impl From<cala_ledger::account_set::AccountSet> for AddToAccountSetPayload {
     fn from(value: cala_ledger::account_set::AccountSet) -> Self {
         Self {
             account_set: AccountSet::from(value),
+        }
+    }
+}
+
+impl From<&cala_ledger::account_set::AccountSetValues> for AccountSetByNameCursor {
+    fn from(values: &cala_ledger::account_set::AccountSetValues) -> Self {
+        Self {
+            name: values.name.clone(),
+            id: values.id,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(super) struct AccountSetByNameCursor {
+    pub name: String,
+    pub id: cala_ledger::primitives::AccountSetId,
+}
+
+impl CursorType for AccountSetByNameCursor {
+    type Error = String;
+
+    fn encode_cursor(&self) -> String {
+        use base64::{engine::general_purpose, Engine as _};
+        let json = serde_json::to_string(&self).expect("could not serialize token");
+        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
+    }
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        use base64::{engine::general_purpose, Engine as _};
+        let bytes = general_purpose::STANDARD_NO_PAD
+            .decode(s.as_bytes())
+            .map_err(|e| e.to_string())?;
+        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+        serde_json::from_str(&json).map_err(|e| e.to_string())
+    }
+}
+
+impl From<AccountSetByNameCursor> for cala_ledger::account_set::AccountSetByNameCursor {
+    fn from(cursor: AccountSetByNameCursor) -> Self {
+        Self {
+            name: cursor.name,
+            id: cursor.id,
         }
     }
 }

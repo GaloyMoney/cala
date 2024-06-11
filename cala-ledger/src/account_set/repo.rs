@@ -5,9 +5,13 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::AccountId, primitives::JournalId};
+use crate::{
+    entity::*,
+    primitives::{AccountId, JournalId},
+    query,
+};
 
-use super::{entity::*, error::*};
+use super::{entity::*, error::*, AccountSetByNameCursor};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountSetRepo {
@@ -204,6 +208,52 @@ impl AccountSetRepo {
             }
             Err(e) => Err(e.into()),
         }
+    }
+
+    pub async fn find_where_account_is_member(
+        &self,
+        account_id: AccountId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"
+            WITH member_account_sets AS (
+              SELECT a.id, a.name, a.created_at
+              FROM cala_account_set_member_accounts asm
+              JOIN cala_account_sets a ON asm.account_set_id = a.id
+              WHERE asm.member_account_id = $1 AND transitive IS FALSE
+              AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
+              ORDER BY a.name, a.id
+              LIMIT $4
+            )
+            SELECT mas.id, e.sequence, e.event,
+              mas.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+              FROM member_account_sets mas
+              JOIN cala_account_set_events e ON mas.id = e.id
+              ORDER BY mas.name, mas.id, e.sequence
+            "#,
+            account_id as AccountId,
+            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+            query.after.map(|c| c.name),
+            query.first as i64 + 1
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
+        let mut end_cursor = None;
+        if let Some(last) = entities.last() {
+            end_cursor = Some(AccountSetByNameCursor {
+                id: last.values().id,
+                name: last.values().name.clone(),
+            });
+        }
+        Ok(query::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     pub(super) async fn find_all<T: From<AccountSet>>(
