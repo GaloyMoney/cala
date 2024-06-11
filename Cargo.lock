@@ -189,9 +189,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-axum"
-version = "7.0.5"
+version = "7.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d94b2673899046dbbb803dff9c400330f7908727f5edb99979c3d841136ee754"
+checksum = "28f874ad4bc10519f3fa500e36814452033a5ce9ea681ab0a2e0d3b1f18bae44"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1810,7 +1810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -2451,7 +2451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80b776a1b2dc779f5ee0641f8ade0125bc1298dd41a9a0c16d8bd57b42d222b1"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -2508,7 +2508,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "598b7365952c2ed4e32902de0533653aafbe5ae3da436e8e2335c7d375a1cef3"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "prost",
  "prost-build",
  "prost-types",
