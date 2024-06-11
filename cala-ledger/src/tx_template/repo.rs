@@ -79,7 +79,8 @@ impl TxTemplateRepo {
             ON a.data_source_id = e.data_source_id
             AND a.id = e.id
             WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.code = $1"#,
+            AND a.code = $1
+            ORDER BY e.sequence"#,
             code
         )
         .fetch_all(&self.pool)

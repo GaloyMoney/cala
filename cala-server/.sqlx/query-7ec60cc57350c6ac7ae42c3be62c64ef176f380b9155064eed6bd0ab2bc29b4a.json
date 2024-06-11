@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, e.sequence, e.event,\n                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM cala_tx_templates a\n            JOIN cala_tx_template_events e\n            ON a.data_source_id = e.data_source_id\n            AND a.id = e.id\n            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'\n            AND a.code = $1",
+  "query": "SELECT a.id, e.sequence, e.event,\n                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM cala_transactions a\n            JOIN cala_transaction_events e\n            ON a.data_source_id = e.data_source_id\n            AND a.id = e.id\n            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'\n            AND a.external_id = $1\n            ORDER BY e.sequence",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "cd0eaf0bcf0b32e3f8f50157375731b67b2976337b3347cdea3c59e12e452dd3"
+  "hash": "7ec60cc57350c6ac7ae42c3be62c64ef176f380b9155064eed6bd0ab2bc29b4a"
 }
