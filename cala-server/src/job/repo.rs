@@ -34,10 +34,10 @@ impl JobRepo {
         Ok(job)
     }
 
-    pub async fn persist(
+    pub async fn persist_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,
-        mut job: Job,
+        job: &mut Job,
     ) -> Result<(), JobError> {
         job.events.persist(db).await?;
         Ok(())

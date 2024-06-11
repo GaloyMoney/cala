@@ -1,7 +1,7 @@
 use serde::{de::DeserializeOwned, Serialize};
 use sqlx::{PgPool, Postgres, Transaction};
 
-use super::error::JobError;
+use super::{entity::*, error::JobError, repo::*};
 use crate::{integration::*, primitives::JobId};
 
 pub struct CurrentJob {
@@ -27,7 +27,7 @@ impl CurrentJob {
         }
     }
 
-    pub async fn update_state<T: Serialize>(
+    pub async fn update_execution_state<T: Serialize>(
         &mut self,
         db: &mut Transaction<'_, Postgres>,
         state: T,
@@ -54,6 +54,18 @@ impl CurrentJob {
 
     pub fn pool(&self) -> &PgPool {
         &self.pool
+    }
+
+    pub async fn entity(&self) -> Result<Job, JobError> {
+        JobRepo::new(self.pool()).find_by_id(self.id).await
+    }
+
+    pub async fn persist_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        entity: &mut Job,
+    ) -> Result<(), JobError> {
+        JobRepo::new(self.pool()).persist_in_tx(db, entity).await
     }
 
     pub async fn integration(&self, id: IntegrationId) -> Result<Integration, sqlx::Error> {

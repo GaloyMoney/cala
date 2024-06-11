@@ -67,7 +67,7 @@ impl JobRunner for CalaOutboxImportJob {
                 Some(Ok(message)) => {
                     let mut tx = current_job.pool().begin().await?;
                     state.last_synced = message.sequence;
-                    current_job.update_state(&mut tx, &state).await?;
+                    current_job.update_execution_state(&mut tx, &state).await?;
                     self.ledger
                         .sync_outbox_event(
                             tx,

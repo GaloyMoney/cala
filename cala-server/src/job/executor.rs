@@ -246,7 +246,7 @@ impl JobExecutor {
         .execute(&mut *db)
         .await?;
         job.complete();
-        repo.persist(&mut db, job).await?;
+        repo.persist_in_tx(&mut db, &mut job).await?;
         db.commit().await?;
         Ok(())
     }
