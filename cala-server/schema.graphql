@@ -318,6 +318,7 @@ type Query {
 	serverVersion: String!
 	account(id: UUID!): Account
 	accountByExternalId(externalId: String!): Account
+	accountByCode(code: String!): Account
 	accounts(first: Int!, after: String): AccountConnection!
 	accountSet(id: UUID!): AccountSet
 	journal(id: UUID!): Journal
