@@ -2,7 +2,7 @@
 name = "cala-server"
 description = "Server to sync other cala deployments"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.2.9"
+version = "0.2.10-dev"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["server", "sync"]
@@ -11,11 +11,11 @@ categories = ["server", "sync"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.9" }
-cala-ledger = { path = "../cala-ledger", features = ["import"], package = "cala-ledger", version = "0.2.9" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.9" }
-cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.2.9" }
-cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.2.9" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.10-dev" }
+cala-ledger = { path = "../cala-ledger", features = ["import"], package = "cala-ledger", version = "0.2.10-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.10-dev" }
+cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.2.10-dev" }
+cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.2.10-dev" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
