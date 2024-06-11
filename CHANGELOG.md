@@ -1,3 +1,10 @@
+# [cala release v0.2.12](https://github.com/GaloyMoney/cala/releases/tag/0.2.12)
+
+
+### Features
+
+- Add accountByCode query (#103)
+
 # [cala release v0.2.11](https://github.com/GaloyMoney/cala/releases/tag/0.2.11)
 
 
