@@ -1,3 +1,14 @@
+# [cala release v0.2.7](https://github.com/GaloyMoney/cala/releases/tag/0.2.7)
+
+
+### Features
+
+- Add sets query to account (#100)
+
+### Refactor
+
+- Inject job_id (#99)
+
 # [cala release v0.2.6](https://github.com/GaloyMoney/cala/releases/tag/0.2.6)
 
 
