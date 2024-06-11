@@ -1,3 +1,17 @@
+# [cala release v0.2.10](https://github.com/GaloyMoney/cala/releases/tag/0.2.10)
+
+
+### Bug Fixes
+
+- Lint
+
+### Miscellaneous Tasks
+
+- Setter(into) on journal status
+- Make more graphql mods public
+- Make JobRunner.run accept &mut self
+- From<Decimal> for rust_decimal::DEcimal
+
 # [cala release v0.2.9](https://github.com/GaloyMoney/cala/releases/tag/0.2.9)
 
 
