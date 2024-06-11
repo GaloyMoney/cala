@@ -83,7 +83,8 @@ impl TransactionRepo {
             ON a.data_source_id = e.data_source_id
             AND a.id = e.id
             WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.external_id = $1"#,
+            AND a.external_id = $1
+            ORDER BY e.sequence"#,
             external_id
         )
         .fetch_all(&self.pool)

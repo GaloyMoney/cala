@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, e.sequence, e.event,\n                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM cala_account_sets a\n            JOIN cala_account_set_events e\n            ON a.data_source_id = e.data_source_id\n            AND a.id = e.id\n            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'\n            AND a.id = $1",
+  "query": "SELECT a.id, e.sequence, e.event,\n                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM cala_tx_templates a\n            JOIN cala_tx_template_events e\n            ON a.data_source_id = e.data_source_id\n            AND a.id = e.id\n            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'\n            AND a.code = $1\n            ORDER BY e.sequence",
   "describe": {
     "columns": [
       {
@@ -31,7 +31,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Text"
       ]
     },
     "nullable": [
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "e315dfafa413d41430066ceb00c21047608599fb63b7822e8f5a676ce2f367bb"
+  "hash": "a4093155c9bb098edefc0da48dafdee211170abe8dc5926430bb0a8caba71697"
 }
