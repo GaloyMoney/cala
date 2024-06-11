@@ -46,6 +46,19 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         }
     }
 
+    async fn account_by_code(
+        &self,
+        ctx: &Context<'_>,
+        code: String,
+    ) -> async_graphql::Result<Option<Account>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        match app.ledger().accounts().find_by_code(code).await {
+            Ok(account) => Ok(Some(account.into())),
+            Err(cala_ledger::account::error::AccountError::CouldNotFindByCode(_)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     async fn accounts(
         &self,
         ctx: &Context<'_>,

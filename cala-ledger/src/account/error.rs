@@ -12,6 +12,8 @@ pub enum AccountError {
     CouldNotFindById(AccountId),
     #[error("AccountError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
+    #[error("AccountError - NotFound: code '{0}' not found")]
+    CouldNotFindByCode(String),
     #[error("AccountError - external_id already exists")]
     ExternalIdAlreadyExists,
     #[error("AccountError - code already exists")]
