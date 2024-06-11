@@ -52,10 +52,11 @@ impl JobExecutor {
         }
         sqlx::query!(
             r#"
-          INSERT INTO job_executions (id, reschedule_after)
-          VALUES ($1, COALESCE($2, NOW()))
+          INSERT INTO job_executions (id, name, reschedule_after)
+          VALUES ($1, $2, COALESCE($3, NOW()))
         "#,
             job.id as JobId,
+            job.name,
             schedule_at
         )
         .execute(&mut **db)
@@ -123,6 +124,17 @@ impl JobExecutor {
                     WHERE id = ANY($1)
                     "#,
                     &ids as &[JobId],
+                    pg_interval
+                )
+                .fetch_all(pool)
+                .await?;
+                // mark 'lost' jobs as 'pending'
+                sqlx::query!(
+                    r#"
+                    UPDATE job_executions
+                    SET state = 'pending'
+                    WHERE state = 'running' AND reschedule_after < NOW() + $1::interval
+                    "#,
                     pg_interval
                 )
                 .fetch_all(pool)

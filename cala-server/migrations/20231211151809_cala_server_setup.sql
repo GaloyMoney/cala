@@ -14,10 +14,11 @@ CREATE TABLE job_events (
   UNIQUE(id, sequence)
 );
 
-CREATE TYPE JobExecutionState AS ENUM ('pending', 'running', 'paused');
+CREATE TYPE JobExecutionState AS ENUM ('pending', 'running');
 
 CREATE TABLE job_executions (
   id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
+  name VARCHAR NOT NULL,
   state JobExecutionState NOT NULL DEFAULT 'pending',
   state_json JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

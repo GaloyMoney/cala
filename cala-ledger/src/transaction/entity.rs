@@ -101,7 +101,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
 pub(crate) struct NewTransaction {
-    #[builder(setter(into))]
+    #[builder(setter(custom))]
     pub(super) id: TransactionId,
     #[builder(setter(into))]
     pub(super) journal_id: JournalId,
@@ -109,7 +109,7 @@ pub(crate) struct NewTransaction {
     pub(super) tx_template_id: TxTemplateId,
     pub(super) effective: chrono::NaiveDate,
     #[builder(setter(into), default)]
-    pub(super) correlation_id: Option<String>,
+    pub(super) correlation_id: String,
     #[builder(setter(strip_option, into), default)]
     pub(super) external_id: Option<String>,
     #[builder(setter(strip_option, into), default)]
@@ -123,7 +123,6 @@ impl NewTransaction {
     pub fn builder() -> NewTransactionBuilder {
         NewTransactionBuilder::default()
     }
-
     #[allow(dead_code)]
     pub(super) fn initial_events(self) -> EntityEvents<TransactionEvent> {
         EntityEvents::init(
@@ -135,7 +134,7 @@ impl NewTransaction {
                     journal_id: self.journal_id,
                     tx_template_id: self.tx_template_id,
                     effective: self.effective,
-                    correlation_id: self.correlation_id.unwrap_or_else(|| self.id.to_string()),
+                    correlation_id: self.correlation_id,
                     external_id: self.external_id,
                     description: self.description,
                     metadata: self.metadata,
@@ -146,21 +145,32 @@ impl NewTransaction {
     }
 }
 
+impl NewTransactionBuilder {
+    pub fn id(&mut self, id: impl Into<TransactionId>) -> &mut Self {
+        self.id = Some(id.into());
+        if self.correlation_id.is_none() {
+            self.correlation_id = Some(self.id.unwrap().to_string());
+        }
+        self
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn it_builds() {
+        let id = uuid::Uuid::new_v4();
         let new_transaction = NewTransaction::builder()
-            .id(uuid::Uuid::new_v4())
+            .id(id)
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
             .entry_ids(vec![EntryId::new()])
             .effective(chrono::NaiveDate::default())
             .build()
             .unwrap();
-        assert!(new_transaction.correlation_id.is_none());
+        assert_eq!(id.to_string(), new_transaction.correlation_id);
         assert!(new_transaction.external_id.is_none());
     }
 

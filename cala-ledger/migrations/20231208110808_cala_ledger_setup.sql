@@ -120,10 +120,12 @@ CREATE TABLE cala_transactions (
   id UUID NOT NULL,
   journal_id UUID NOT NULL,
   external_id VARCHAR DEFAULT NULL,
+  correlation_id VARCHAR NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id)
 );
+CREATE INDEX idx_cala_transactions_data_source_id_correlation_id ON cala_transactions (data_source_id, correlation_id);
 CREATE UNIQUE INDEX idx_cala_transactions_data_source_id_external_id ON cala_transactions (data_source_id, external_id) WHERE external_id IS NOT NULL;
 
 CREATE TABLE cala_transaction_events (

@@ -4,11 +4,12 @@ use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
 
 use std::collections::HashMap;
 
-use cala_types::primitives::*;
-
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{entity::*, primitives::TransactionId};
+use crate::{
+    entity::*,
+    primitives::{JournalId, TransactionId},
+};
 
 use super::{entity::*, error::*};
 
@@ -28,10 +29,11 @@ impl TransactionRepo {
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (id, journal_id, external_id)
-            VALUES ($1, $2, $3)"#,
+            r#"INSERT INTO cala_transactions (id, journal_id, correlation_id, external_id)
+            VALUES ($1, $2, $3, $4)"#,
             new_transaction.id as TransactionId,
             new_transaction.journal_id as JournalId,
+            new_transaction.correlation_id,
             new_transaction.external_id
         )
         .execute(&mut **db)
@@ -107,11 +109,12 @@ impl TransactionRepo {
         transaction: &mut Transaction,
     ) -> Result<(), TransactionError> {
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, external_id, correlation_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             origin as DataSourceId,
             transaction.values().id as TransactionId,
             transaction.values().journal_id as JournalId,
+            transaction.values().correlation_id,
             transaction.values().external_id,
             recorded_at
         )

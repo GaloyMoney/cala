@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          INSERT INTO job_executions (id, name, reschedule_after)\n          VALUES ($1, $2, COALESCE($3, NOW()))\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ce9ec6b1826709f46837b3a6402f26a56a4ceca9c9fdda1203fe60d2e38d542"
+}
