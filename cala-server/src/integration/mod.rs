@@ -35,11 +35,11 @@ impl Integrations {
     pub async fn create_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        id: IntegrationId,
+        id: impl Into<IntegrationId> + std::fmt::Debug,
         name: String,
         data: impl serde::Serialize,
     ) -> Result<Integration, sqlx::Error> {
-        let integration = Integration::new(id, name, data);
+        let integration = Integration::new(id.into(), name, data);
         sqlx::query!(
             r#"INSERT INTO integrations (id, name, data)
             VALUES ($1, $2, $3)"#,

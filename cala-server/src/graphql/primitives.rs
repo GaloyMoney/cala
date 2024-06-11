@@ -68,7 +68,7 @@ pub enum ParamDataType {
     Json,
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct UUID(uuid::Uuid);
 scalar!(UUID);
@@ -103,15 +103,21 @@ impl From<UUID> for cala_ledger::TxTemplateId {
     }
 }
 
-impl From<UUID> for crate::integration::IntegrationId {
-    fn from(uuid: UUID) -> Self {
-        crate::integration::IntegrationId::from(uuid.0)
-    }
-}
-
 impl From<UUID> for cala_ledger::TransactionId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::TransactionId::from(uuid.0)
+    }
+}
+
+impl From<UUID> for crate::primitives::JobId {
+    fn from(uuid: UUID) -> Self {
+        crate::primitives::JobId::from(uuid.0)
+    }
+}
+
+impl From<UUID> for crate::integration::IntegrationId {
+    fn from(uuid: UUID) -> Self {
+        crate::integration::IntegrationId::from(uuid.0)
     }
 }
 

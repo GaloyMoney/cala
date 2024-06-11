@@ -3,11 +3,12 @@ use async_graphql::*;
 use super::job::*;
 use crate::{
     app::CalaApp,
-    graphql::{DbOp, Job},
+    graphql::{primitives::UUID, DbOp, Job},
 };
 
 #[derive(InputObject)]
 pub struct CalaOutboxImportJobCreateInput {
+    pub job_id: UUID,
     pub name: String,
     pub description: Option<String>,
     pub endpoint: String,
@@ -37,6 +38,7 @@ impl Mutation {
             .jobs()
             .create_and_spawn_in_op::<CalaOutboxImportJobInitializer, _>(
                 &mut op,
+                input.job_id,
                 input.name.clone(),
                 input.description.clone(),
                 CalaOutboxImportConfig::from(input),
