@@ -101,7 +101,7 @@ pub struct NewJournal {
     pub id: JournalId,
     #[builder(setter(into))]
     pub(super) name: String,
-    #[builder(default)]
+    #[builder(setter(into), default)]
     pub(super) status: Status,
     #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,

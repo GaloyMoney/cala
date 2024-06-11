@@ -322,7 +322,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         builder
             .id(input.journal_id)
             .name(input.name)
-            .status(input.status.into());
+            .status(input.status);
         if let Some(description) = input.description {
             builder.description(description);
         }
