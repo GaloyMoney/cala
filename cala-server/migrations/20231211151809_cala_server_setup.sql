@@ -26,7 +26,7 @@ CREATE TABLE job_executions (
 
 CREATE TABLE integrations (
   id UUID PRIMARY KEY,
-  name VARCHAR NOT NULL UNIQUE,
+  name VARCHAR NOT NULL,
   data JSONB,
   modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
