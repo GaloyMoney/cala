@@ -6,7 +6,11 @@ use cala_ledger::{
     primitives::{AccountId, Currency, JournalId},
 };
 
-use super::{balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*};
+use crate::app::CalaApp;
+
+use super::{
+    account_set::*, balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*,
+};
 
 #[derive(Clone, SimpleObject)]
 #[graphql(complex)]
@@ -40,6 +44,45 @@ impl Account {
         let balance: Option<AccountBalance> =
             loader.load_one((journal_id, account_id, currency)).await?;
         Ok(balance.map(Balance::from))
+    }
+
+    async fn sets(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let result = app
+                    .ledger()
+                    .account_sets()
+                    .find_where_account_is_member(
+                        self.account_id.into(),
+                        cala_ledger::query::PaginatedQueryArgs {
+                            first,
+                            after: after
+                                .map(cala_ledger::account_set::AccountSetByNameCursor::from),
+                        },
+                    )
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = AccountSetByNameCursor::from(entity.values());
+                        Edge::new(cursor, AccountSet::from(entity))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
     }
 }
 

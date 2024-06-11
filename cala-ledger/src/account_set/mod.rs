@@ -1,3 +1,4 @@
+mod cursor;
 mod entity;
 pub mod error;
 mod repo;
@@ -17,8 +18,10 @@ use crate::{
     entry::*,
     outbox::*,
     primitives::{DataSource, DebitOrCredit, JournalId, Layer},
+    query::*,
 };
 
+pub use cursor::*;
 pub use entity::*;
 use error::*;
 use repo::*;
@@ -174,6 +177,21 @@ impl AccountSets {
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         self.repo.find_all(account_set_ids).await
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.find_where_account_is_member",
+        skip(self),
+        err
+    )]
+    pub async fn find_where_account_is_member(
+        &self,
+        account_id: AccountId,
+        query: PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.repo
+            .find_where_account_is_member(account_id, query)
+            .await
     }
 
     pub(crate) async fn fetch_mappings(
