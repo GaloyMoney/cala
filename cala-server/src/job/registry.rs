@@ -26,7 +26,7 @@ impl JobRegistry {
         self.initializers.contains_key(job_type)
     }
 
-    pub(super) fn init_job(&self, job: &Job) -> Result<Box<dyn JobRunner>, JobError> {
+    pub(super) fn init_job(&self, job: Job) -> Result<Box<dyn JobRunner>, JobError> {
         self.initializers
             .get(&job.job_type)
             .ok_or(JobError::NoInitializerPresent)?

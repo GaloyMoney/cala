@@ -183,7 +183,7 @@ impl JobExecutor {
         repo: JobRepo,
     ) -> Result<(), JobError> {
         let id = job.id;
-        let runner = registry.init_job(&job)?;
+        let runner = registry.init_job(job)?;
         let all_jobs = Arc::clone(running_jobs);
         let pool = pool.clone();
         let handle = tokio::spawn(async move {

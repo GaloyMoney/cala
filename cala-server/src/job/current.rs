@@ -56,10 +56,6 @@ impl CurrentJob {
         &self.pool
     }
 
-    pub async fn entity(&self) -> Result<Job, JobError> {
-        JobRepo::new(self.pool()).find_by_id(self.id).await
-    }
-
     pub async fn persist_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,

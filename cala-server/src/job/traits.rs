@@ -14,7 +14,7 @@ pub trait JobInitializer: Send + Sync + 'static {
 
     fn init(
         &self,
-        job: &Job,
+        job: Job,
         ledger: &CalaLedger,
     ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>>;
 }

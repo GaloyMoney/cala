@@ -26,7 +26,7 @@ impl JobInitializer for CalaOutboxImportJobInitializer {
 
     fn init(
         &self,
-        job: &Job,
+        job: Job,
         ledger: &CalaLedger,
     ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
         Ok(Box::new(CalaOutboxImportJob {
