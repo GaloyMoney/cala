@@ -1,15 +1,15 @@
 pub mod account;
 pub mod account_set;
-mod balance;
+pub mod balance;
 mod convert;
 mod job;
-mod journal;
+pub mod journal;
 pub mod loader;
 pub mod primitives;
 mod schema;
 mod timestamp;
-mod transaction;
-mod tx_template;
+pub mod transaction;
+pub mod tx_template;
 
 use async_graphql::{dataloader::*, *};
 
