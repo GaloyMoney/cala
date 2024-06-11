@@ -172,3 +172,8 @@ impl From<rust_decimal::Decimal> for Decimal {
         Self(value)
     }
 }
+impl From<Decimal> for rust_decimal::Decimal {
+    fn from(value: Decimal) -> Self {
+        value.0
+    }
+}
