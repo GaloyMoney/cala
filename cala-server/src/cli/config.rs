@@ -38,7 +38,7 @@ impl Config {
             Config::default()
         };
 
-        let _ = config.apply_env_override(env_override)?;
+        config.apply_env_override(env_override)?;
         Ok(config)
     }
 
