@@ -23,10 +23,13 @@ wait_for_new_import_job() {
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
 
+  job_id=$(random_uuid)
   variables=$(
     jq -n \
+      --arg jobId "$job_id" \
     '{
       input: {
+        jobId: $jobId,
         name: "rust-example",
         endpoint: "http://localhost:2253"
       }

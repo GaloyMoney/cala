@@ -122,6 +122,7 @@ type BalanceAmount {
 
 
 input CalaOutboxImportJobCreateInput {
+	jobId: UUID!
 	name: String!
 	description: String
 	endpoint: String!

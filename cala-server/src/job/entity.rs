@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
 use super::error::JobError;
-use crate::primitives::JobId;
+pub use crate::primitives::JobId;
 
 #[derive(Clone, Eq, Hash, PartialEq, Debug, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
@@ -111,9 +111,7 @@ pub struct NewJob {
 
 impl NewJob {
     pub fn builder() -> NewJobBuilder {
-        let mut builder = NewJobBuilder::default();
-        builder.id(JobId::new());
-        builder
+        NewJobBuilder::default()
     }
 
     pub(super) fn initial_events(self) -> EntityEvents<JobEvent> {

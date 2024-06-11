@@ -47,11 +47,13 @@ impl Jobs {
     pub async fn create_and_spawn_in_op<I: JobInitializer + Default, D: serde::Serialize>(
         &self,
         op: &mut AtomicOperation<'_>,
+        id: impl Into<JobId> + std::fmt::Debug,
         name: String,
         description: Option<String>,
         data: D,
     ) -> Result<Job, JobError> {
         let new_job = NewJob::builder()
+            .id(id)
             .name(name)
             .description(description)
             .data(data)?
