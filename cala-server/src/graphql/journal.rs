@@ -4,11 +4,11 @@ use super::{convert::ToGlobalId, primitives::*};
 
 #[derive(InputObject)]
 pub struct JournalCreateInput {
-    pub journal_id: UUID,
-    pub name: String,
+    pub(super) journal_id: UUID,
+    pub(super) name: String,
     #[graphql(default)]
-    pub status: Status,
-    pub description: Option<String>,
+    pub(super) status: Status,
+    pub(super) description: Option<String>,
 }
 
 #[derive(Clone, SimpleObject)]

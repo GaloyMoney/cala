@@ -319,7 +319,10 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::journal::NewJournal::builder();
-        builder.id(input.journal_id).name(input.name);
+        builder
+            .id(input.journal_id)
+            .name(input.name)
+            .status(input.status.into());
         if let Some(description) = input.description {
             builder.description(description);
         }
