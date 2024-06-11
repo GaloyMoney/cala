@@ -1,3 +1,10 @@
+# [cala release v0.2.9](https://github.com/GaloyMoney/cala/releases/tag/0.2.9)
+
+
+### Refactor
+
+- Pass owned Job in init
+
 # [cala release v0.2.8](https://github.com/GaloyMoney/cala/releases/tag/0.2.8)
 
 
