@@ -18,6 +18,13 @@ impl JobRegistry {
     }
 
     pub fn add_initializer<I: JobInitializer + Default>(&mut self) {
+        let job_type = <I as JobInitializer>::job_type();
+        assert!(
+            self.initializers.get(&job_type).is_none(),
+            "Job initializer {} already exists",
+            job_type
+        );
+
         self.initializers
             .insert(<I as JobInitializer>::job_type(), Box::<I>::default());
     }
