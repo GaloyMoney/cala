@@ -43,6 +43,16 @@ impl AccountRepo {
         Ok(account)
     }
 
+    pub async fn persist_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account: &mut Account,
+    ) -> Result<(), AccountError> {
+        let events = &mut account.events;
+        events.persist(db).await?;
+        Ok(())
+    }
+
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
         let rows = sqlx::query_as!(
             GenericEvent,
@@ -142,13 +152,6 @@ impl AccountRepo {
             Err(EntityError::NoEntityEventsPresent) => Err(AccountError::CouldNotFindByCode(code)),
             Err(e) => Err(e.into()),
         }
-    }
-
-    pub async fn update(&self, account: Account) -> Result<Account, AccountError> {
-        let mut tx = self.pool.begin().await?;
-        let mut events = account.events;
-        events.persist(&mut tx).await?;
-        Ok(Account::try_from(events)?)
     }
 
     pub async fn list(

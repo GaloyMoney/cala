@@ -21,17 +21,6 @@ pub enum AccountEvent {
     },
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
-pub struct AccountUpdateParams {
-    pub external_id: Option<String>,
-    pub code: Option<String>,
-    pub name: Option<String>,
-    pub normal_balance_type: Option<DebitOrCredit>,
-    pub description: Option<String>,
-    pub status: Option<Status>,
-    pub metadata: Option<serde_json::Value>,
-}
-
 impl EntityEvent for AccountEvent {
     type EntityId = AccountId;
     fn event_table_name() -> &'static str {
@@ -42,7 +31,7 @@ impl EntityEvent for AccountEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct Account {
-    pub(super) values: AccountValues,
+    values: AccountValues,
     pub(super) events: EntityEvents<AccountEvent>,
 }
 
@@ -75,9 +64,8 @@ impl Account {
         self.values
     }
 
-    pub fn update(
-        &mut self,
-        AccountUpdateParams {
+    pub fn update(&mut self, builder: AccountUpdate) {
+        let AccountUpdateValues {
             external_id,
             code,
             name,
@@ -85,16 +73,20 @@ impl Account {
             description,
             status,
             metadata,
-        }: AccountUpdateParams,
-    ) {
+        } = builder.build().expect("AccountUpdateValues always exist");
+
+        let mut is_updated = false;
+
         if let Some(code) = code {
             if self.values.code != code {
                 self.values.code.clone_from(&code);
+                is_updated = true;
             }
         }
         if let Some(name) = name {
             if self.values.name != name {
                 self.values.name.clone_from(&name);
+                is_updated = true;
             }
         }
         if let Some(normal_balance_type) = normal_balance_type {
@@ -102,26 +94,32 @@ impl Account {
                 self.values
                     .normal_balance_type
                     .clone_from(&normal_balance_type);
+                is_updated = true;
             }
         }
         if let Some(status) = status {
             if self.values.status != status {
                 self.values.status.clone_from(&status);
+                is_updated = true;
             }
         }
         if self.values.external_id != external_id {
             self.values.external_id.clone_from(&external_id);
+            is_updated = true;
         }
         if self.values.description != description {
             self.values.description.clone_from(&description);
+            is_updated = true;
         }
         if self.values.metadata != metadata {
             self.values.metadata.clone_from(&metadata);
+            is_updated = true;
         }
-
-        self.events.push(AccountEvent::Updated {
-            values: self.values.clone(),
-        });
+        if is_updated {
+            self.events.push(AccountEvent::Updated {
+                values: self.values.clone(),
+            });
+        }
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
@@ -165,6 +163,18 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
         }
         builder.events(events).build()
     }
+}
+
+#[derive(Debug, Builder, Default)]
+#[builder(name = "AccountUpdate", default)]
+pub struct AccountUpdateValues {
+    pub external_id: Option<String>,
+    pub code: Option<String>,
+    pub name: Option<String>,
+    pub normal_balance_type: Option<DebitOrCredit>,
+    pub description: Option<String>,
+    pub status: Option<Status>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.

@@ -85,14 +85,14 @@ impl Accounts {
         self.repo.list(query).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.update", skip(self))]
+    #[instrument(name = "cala_ledger.accounts.update", skip(self, builder))]
     pub async fn update(
         &self,
         account_id: AccountId,
-        params: AccountUpdateParams,
+        builder: AccountUpdate,
     ) -> Result<Account, AccountError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
-        let account = self.update_in_op(&mut op, account_id, params).await?;
+        let account = self.update_in_op(&mut op, account_id, builder).await?;
         op.commit().await?;
         Ok(account)
     }
@@ -101,10 +101,11 @@ impl Accounts {
         &self,
         op: &mut AtomicOperation<'_>,
         account_id: AccountId,
-        params: AccountUpdateParams,
+        builder: AccountUpdate,
     ) -> Result<Account, AccountError> {
-        let account = self.repo.find(account_id).await?;
-        let updated_account = account.update(params);
+        let mut account = self.repo.find(account_id).await?;
+        account.update(builder);
+        self.repo.persist_in_tx(op.tx(), &mut account).await?;
 
         op.accumulate(account.events.last_persisted());
         Ok(account)
@@ -112,6 +113,24 @@ impl Accounts {
 
     #[cfg(feature = "import")]
     pub async fn sync_account_creation(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        values: AccountValues,
+    ) -> Result<(), AccountError> {
+        let mut account = Account::import(origin, values);
+        self.repo
+            .import(&mut db, recorded_at, origin, &mut account)
+            .await?;
+        self.outbox
+            .persist_events_at(db, account.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_account_update(
         &self,
         mut db: sqlx::Transaction<'_, sqlx::Postgres>,
         recorded_at: DateTime<Utc>,
@@ -141,6 +160,10 @@ impl From<&AccountEvent> for OutboxEventPayload {
                 account: account.clone(),
             },
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
+                source: DataSource::Local,
+                account: account.clone(),
+            },
+            AccountEvent::Updated { values: account } => OutboxEventPayload::AccountUpdated {
                 source: DataSource::Local,
                 account: account.clone(),
             },
