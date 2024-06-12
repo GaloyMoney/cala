@@ -163,9 +163,13 @@ impl From<&AccountEvent> for OutboxEventPayload {
                 source: DataSource::Local,
                 account: account.clone(),
             },
-            AccountEvent::Updated { values: account } => OutboxEventPayload::AccountUpdated {
+            AccountEvent::Updated {
+                values: account,
+                fields,
+            } => OutboxEventPayload::AccountUpdated {
                 source: DataSource::Local,
                 account: account.clone(),
+                fields: fields.clone(),
             },
         }
     }

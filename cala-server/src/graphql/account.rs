@@ -200,3 +200,11 @@ impl From<cala_ledger::account::Account> for AccountCreatePayload {
         }
     }
 }
+
+impl From<cala_ledger::account::Account> for AccountUpdatePayload {
+    fn from(value: cala_ledger::account::Account) -> Self {
+        Self {
+            account: Account::from(value),
+        }
+    }
+}

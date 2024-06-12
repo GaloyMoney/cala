@@ -272,6 +272,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     async fn account_update(
         &self,
         ctx: &Context<'_>,
+        id: UUID,
         input: AccountUpdateInput,
     ) -> Result<AccountUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
@@ -282,10 +283,19 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let mut builder = cala_ledger::account::AccountUpdate::default();
         builder
             .name(input.name)
-            .status(input.status)
+            .code(input.code)
             .description(input.description)
-            .metadata(input.metadata)
-            .external_id(input.external_id);
+            .metadata(input.metadata)?
+            .external_id(input.external_id)
+            .status(input.status.map(Into::into))
+            .normal_balance_type(input.normal_balance_type.map(Into::into));
+
+        let account = app
+            .ledger()
+            .accounts()
+            .update_in_op(&mut op, AccountId::from(id), builder)
+            .await?;
+        Ok(account.into())
     }
 
     async fn account_set_create(

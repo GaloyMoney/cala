@@ -28,6 +28,7 @@ message CalaLedgerEvent {
     EntryCreated entry_created = 11;
     BalanceCreated balance_created = 12;
     BalanceUpdated balance_updated = 13;
+    AccountUpdated account_updated = 14;
   }
 }
 
@@ -50,6 +51,12 @@ enum Layer {
 message AccountCreated {
   string data_source_id = 1;
   Account account = 2;
+}
+
+message AccountUpdated {
+  string data_source_id = 1;
+  Account account = 2;
+  repeated string fields = 3;
 }
 
 message Account {

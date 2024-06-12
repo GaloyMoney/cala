@@ -42,6 +42,17 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     account.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::AccountUpdated(proto::AccountUpdated {
+                data_source_id,
+                account,
+                fields,
+            }) => AccountUpdated {
+                source: data_source_id.parse()?,
+                account: AccountValues::try_from(
+                    account.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+                fields,
+            },
             proto::cala_ledger_event::Payload::AccountSetCreated(proto::AccountSetCreated {
                 data_source_id,
                 account_set,

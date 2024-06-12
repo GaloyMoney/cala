@@ -18,6 +18,7 @@ pub enum AccountEvent {
     },
     Updated {
         values: AccountValues,
+        fields: Vec<String>,
     },
 }
 
@@ -75,17 +76,21 @@ impl Account {
             metadata,
         } = builder.build().expect("AccountUpdateValues always exist");
 
+        let mut updated_fields = Vec::new();
+
         let mut is_updated = false;
 
         if let Some(code) = code {
             if self.values.code != code {
                 self.values.code.clone_from(&code);
+                updated_fields.push("code".to_string());
                 is_updated = true;
             }
         }
         if let Some(name) = name {
             if self.values.name != name {
                 self.values.name.clone_from(&name);
+                updated_fields.push("name".to_string());
                 is_updated = true;
             }
         }
@@ -94,30 +99,37 @@ impl Account {
                 self.values
                     .normal_balance_type
                     .clone_from(&normal_balance_type);
+                updated_fields.push("normal_balance_type".to_string());
                 is_updated = true;
             }
         }
         if let Some(status) = status {
             if self.values.status != status {
                 self.values.status.clone_from(&status);
+                updated_fields.push("status".to_string());
                 is_updated = true;
             }
         }
         if self.values.external_id != external_id {
             self.values.external_id.clone_from(&external_id);
+            updated_fields.push("external_id".to_string());
             is_updated = true;
         }
         if self.values.description != description {
             self.values.description.clone_from(&description);
+            updated_fields.push("description".to_string());
             is_updated = true;
         }
         if self.values.metadata != metadata {
             self.values.metadata.clone_from(&metadata);
+            updated_fields.push("metadata".to_string());
             is_updated = true;
         }
+
         if is_updated {
             self.events.push(AccountEvent::Updated {
                 values: self.values.clone(),
+                fields: updated_fields,
             });
         }
     }
@@ -156,7 +168,7 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
                 AccountEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }
-                AccountEvent::Updated { values } => {
+                AccountEvent::Updated { values, .. } => {
                     builder = builder.values(values.clone());
                 }
             }
@@ -174,7 +186,18 @@ pub struct AccountUpdateValues {
     pub normal_balance_type: Option<DebitOrCredit>,
     pub description: Option<String>,
     pub status: Option<Status>,
+    #[builder(setter(custom), default)]
     pub metadata: Option<serde_json::Value>,
+}
+
+impl AccountUpdate {
+    pub fn metadata<T: serde::Serialize>(
+        &mut self,
+        metadata: T,
+    ) -> Result<&mut Self, serde_json::Error> {
+        self.metadata = Some(Some(serde_json::to_value(metadata)?));
+        Ok(self)
+    }
 }
 
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
