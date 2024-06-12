@@ -100,6 +100,29 @@ impl TransactionRepo {
         }
     }
 
+    pub async fn find_by_id(&self, id: TransactionId) -> Result<Transaction, TransactionError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_transactions a
+            JOIN cala_transaction_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND a.id = $1
+            ORDER BY e.sequence"#,
+            id as TransactionId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(transaction) => Ok(transaction),
+            Err(EntityError::NoEntityEventsPresent) => Err(TransactionError::CouldNotFindById(id)),
+            Err(e) => Err(e.into()),
+        }
+    }
+
     #[cfg(feature = "import")]
     pub async fn import(
         &self,

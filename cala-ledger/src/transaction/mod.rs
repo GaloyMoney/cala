@@ -52,6 +52,14 @@ impl Transactions {
         self.repo.find_by_external_id(external_id).await
     }
 
+    #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self), err)]
+    pub async fn find_by_id(
+        &self,
+        transaction_id: TransactionId,
+    ) -> Result<Transaction, TransactionError> {
+        self.repo.find_by_id(transaction_id).await
+    }
+
     #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
     pub async fn find_all<T: From<Transaction>>(
         &self,

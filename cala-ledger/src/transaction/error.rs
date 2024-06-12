@@ -1,6 +1,8 @@
 use sqlx::error::DatabaseError;
 use thiserror::Error;
 
+use cala_types::primitives::TransactionId;
+
 #[derive(Error, Debug)]
 pub enum TransactionError {
     #[error("TransactionError - Sqlx: {0}")]
@@ -11,6 +13,8 @@ pub enum TransactionError {
     EntityError(#[from] crate::entity::EntityError),
     #[error("TransactionError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
+    #[error("TransactionError - NotFound: id '{0}' not found")]
+    CouldNotFindById(TransactionId),
 }
 
 impl From<sqlx::Error> for TransactionError {
