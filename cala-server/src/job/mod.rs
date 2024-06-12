@@ -95,6 +95,11 @@ impl Jobs {
         self.repo.list(query).await
     }
 
+    #[instrument(name = "cala_server.jobs.find", skip(self))]
+    pub async fn find(&self, id: JobId) -> Result<Job, JobError> {
+        self.repo.find_by_id(id).await
+    }
+
     pub(crate) async fn start_poll(&mut self) -> Result<(), JobError> {
         self.executor.start_poll().await
     }
