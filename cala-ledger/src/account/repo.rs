@@ -48,8 +48,20 @@ impl AccountRepo {
         db: &mut Transaction<'_, Postgres>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
-        let events = &mut account.events;
-        events.persist(db).await?;
+        sqlx::query!(
+            r#"UPDATE cala_accounts
+            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5, eventually_consistent = $6
+            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'"#,
+            account.values().id as AccountId,
+            account.values().code,
+            account.values().name,
+            account.values().external_id,
+            account.values().normal_balance_type as DebitOrCredit,
+            account.values().config.eventually_consistent
+        )
+        .execute(&mut **db)
+        .await?;
+        account.events.persist(db).await?;
         Ok(())
     }
 

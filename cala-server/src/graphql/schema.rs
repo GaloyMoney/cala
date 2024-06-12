@@ -280,21 +280,25 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
+
         let mut builder = cala_ledger::account::AccountUpdate::default();
         builder
             .name(input.name)
             .code(input.code)
-            .description(input.description)
-            .metadata(input.metadata)?
             .external_id(input.external_id)
             .status(input.status.map(Into::into))
-            .normal_balance_type(input.normal_balance_type.map(Into::into));
+            .normal_balance_type(input.normal_balance_type.map(Into::into))
+            .eventually_consistent(input.eventually_consistent)
+            .metadata(input.metadata)?
+            .description(input.description);
 
-        let account = app
-            .ledger()
+        let mut account = app.ledger().accounts().find(AccountId::from(id)).await?;
+        account.update(builder);
+        app.ledger()
             .accounts()
-            .update_in_op(&mut op, AccountId::from(id), builder)
+            .update_in_op(&mut op, &mut account)
             .await?;
+
         Ok(account.into())
     }
 

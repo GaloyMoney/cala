@@ -140,6 +140,7 @@ pub(super) struct AccountUpdateInput {
     pub description: Option<String>,
     pub status: Option<Status>,
     pub metadata: Option<JSON>,
+    pub eventually_consistent: Option<bool>,
 }
 
 #[derive(SimpleObject)]

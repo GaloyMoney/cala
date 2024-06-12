@@ -85,30 +85,22 @@ impl Accounts {
         self.repo.list(query).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.update", skip(self, builder))]
-    pub async fn update(
-        &self,
-        account_id: AccountId,
-        builder: AccountUpdate,
-    ) -> Result<Account, AccountError> {
+    #[instrument(name = "cala_ledger.accounts.update", skip(self, account))]
+    pub async fn update(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
-        let account = self.update_in_op(&mut op, account_id, builder).await?;
+        self.update_in_op(&mut op, account).await?;
         op.commit().await?;
-        Ok(account)
+        Ok(())
     }
 
     pub async fn update_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        account_id: AccountId,
-        builder: AccountUpdate,
-    ) -> Result<Account, AccountError> {
-        let mut account = self.repo.find(account_id).await?;
-        account.update(builder);
-        self.repo.persist_in_tx(op.tx(), &mut account).await?;
-
+        account: &mut Account,
+    ) -> Result<(), AccountError> {
+        self.repo.persist_in_tx(op.tx(), account).await?;
         op.accumulate(account.events.last_persisted());
-        Ok(account)
+        Ok(())
     }
 
     #[cfg(feature = "import")]

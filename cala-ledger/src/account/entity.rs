@@ -73,60 +73,64 @@ impl Account {
             normal_balance_type,
             description,
             status,
+            eventually_consistent,
             metadata,
         } = builder.build().expect("AccountUpdateValues always exist");
 
         let mut updated_fields = Vec::new();
 
-        let mut is_updated = false;
-
         if let Some(code) = code {
-            if self.values.code != code {
+            if code != self.values().code {
                 self.values.code.clone_from(&code);
                 updated_fields.push("code".to_string());
-                is_updated = true;
             }
         }
         if let Some(name) = name {
-            if self.values.name != name {
+            if name != self.values().name {
                 self.values.name.clone_from(&name);
                 updated_fields.push("name".to_string());
-                is_updated = true;
             }
         }
         if let Some(normal_balance_type) = normal_balance_type {
-            if self.values.normal_balance_type != normal_balance_type {
+            if normal_balance_type != self.values().normal_balance_type {
                 self.values
                     .normal_balance_type
                     .clone_from(&normal_balance_type);
                 updated_fields.push("normal_balance_type".to_string());
-                is_updated = true;
             }
         }
         if let Some(status) = status {
-            if self.values.status != status {
+            if status != self.values().status {
                 self.values.status.clone_from(&status);
                 updated_fields.push("status".to_string());
-                is_updated = true;
             }
         }
-        if self.values.external_id != external_id {
+        if let Some(eventually_consistent) = eventually_consistent {
+            if eventually_consistent
+                && eventually_consistent != self.values().config.eventually_consistent
+            {
+                self.values.config.eventually_consistent = eventually_consistent;
+                updated_fields.push("config".to_string());
+            }
+        }
+        if external_id.is_some() && external_id != self.values().external_id {
             self.values.external_id.clone_from(&external_id);
             updated_fields.push("external_id".to_string());
-            is_updated = true;
         }
-        if self.values.description != description {
+        if description.is_some() && description != self.values().description {
             self.values.description.clone_from(&description);
             updated_fields.push("description".to_string());
-            is_updated = true;
         }
-        if self.values.metadata != metadata {
-            self.values.metadata.clone_from(&metadata);
-            updated_fields.push("metadata".to_string());
-            is_updated = true;
+        if let Some(metadata) = metadata {
+            if metadata != serde_json::Value::Null
+                && Some(&metadata) != self.values().metadata.as_ref()
+            {
+                self.values.metadata = Some(metadata);
+                updated_fields.push("metadata".to_string());
+            }
         }
 
-        if is_updated {
+        if !updated_fields.is_empty() {
             self.events.push(AccountEvent::Updated {
                 values: self.values.clone(),
                 fields: updated_fields,
@@ -186,6 +190,7 @@ pub struct AccountUpdateValues {
     pub normal_balance_type: Option<DebitOrCredit>,
     pub description: Option<String>,
     pub status: Option<Status>,
+    pub eventually_consistent: Option<bool>,
     #[builder(setter(custom), default)]
     pub metadata: Option<serde_json::Value>,
 }
