@@ -1,3 +1,16 @@
+# [cala release v0.2.14](https://github.com/GaloyMoney/cala/releases/tag/0.2.14)
+
+
+### Bug Fixes
+
+- Prohibit job intiializers overwriting
+- Filter by data_source_id (#105)
+
+### Miscellaneous Tasks
+
+- Impl find_by_id for transaction (#108)
+- Expose find fn for jobs (#107)
+
 # [cala release v0.2.13](https://github.com/GaloyMoney/cala/releases/tag/0.2.13)
 
 
