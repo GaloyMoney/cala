@@ -16,6 +16,20 @@ pub enum AccountEvent {
     Initialized {
         values: AccountValues,
     },
+    Updated {
+        values: AccountValues,
+    },
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct AccountUpdateParams {
+    pub external_id: Option<String>,
+    pub code: Option<String>,
+    pub name: Option<String>,
+    pub normal_balance_type: Option<DebitOrCredit>,
+    pub description: Option<String>,
+    pub status: Option<Status>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 impl EntityEvent for AccountEvent {
@@ -28,7 +42,7 @@ impl EntityEvent for AccountEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct Account {
-    values: AccountValues,
+    pub(super) values: AccountValues,
     pub(super) events: EntityEvents<AccountEvent>,
 }
 
@@ -59,6 +73,55 @@ impl Account {
 
     pub fn into_values(self) -> AccountValues {
         self.values
+    }
+
+    pub fn update(
+        &mut self,
+        AccountUpdateParams {
+            external_id,
+            code,
+            name,
+            normal_balance_type,
+            description,
+            status,
+            metadata,
+        }: AccountUpdateParams,
+    ) {
+        if let Some(code) = code {
+            if self.values.code != code {
+                self.values.code.clone_from(&code);
+            }
+        }
+        if let Some(name) = name {
+            if self.values.name != name {
+                self.values.name.clone_from(&name);
+            }
+        }
+        if let Some(normal_balance_type) = normal_balance_type {
+            if self.values.normal_balance_type != normal_balance_type {
+                self.values
+                    .normal_balance_type
+                    .clone_from(&normal_balance_type);
+            }
+        }
+        if let Some(status) = status {
+            if self.values.status != status {
+                self.values.status.clone_from(&status);
+            }
+        }
+        if self.values.external_id != external_id {
+            self.values.external_id.clone_from(&external_id);
+        }
+        if self.values.description != description {
+            self.values.description.clone_from(&description);
+        }
+        if self.values.metadata != metadata {
+            self.values.metadata.clone_from(&metadata);
+        }
+
+        self.events.push(AccountEvent::Updated {
+            values: self.values.clone(),
+        });
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
@@ -93,6 +156,9 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
                     builder = builder.values(values.clone());
                 }
                 AccountEvent::Initialized { values } => {
+                    builder = builder.values(values.clone());
+                }
+                AccountEvent::Updated { values } => {
                     builder = builder.values(values.clone());
                 }
             }

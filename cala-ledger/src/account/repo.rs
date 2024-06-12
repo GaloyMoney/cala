@@ -144,6 +144,13 @@ impl AccountRepo {
         }
     }
 
+    pub async fn update(&self, account: Account) -> Result<Account, AccountError> {
+        let mut tx = self.pool.begin().await?;
+        let mut events = account.events;
+        events.persist(&mut tx).await?;
+        Ok(Account::try_from(events)?)
+    }
+
     pub async fn list(
         &self,
         query: PaginatedQueryArgs<AccountByNameCursor>,

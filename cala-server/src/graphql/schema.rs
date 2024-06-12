@@ -269,6 +269,18 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(account.into())
     }
 
+    async fn account_update(
+        &self,
+        ctx: &Context<'_>,
+        input: AccountUpdateInput,
+    ) -> Result<AccountUpdatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+    }
+
     async fn account_set_create(
         &self,
         ctx: &Context<'_>,
