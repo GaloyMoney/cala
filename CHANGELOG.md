@@ -1,3 +1,11 @@
+# [cala release v0.2.13](https://github.com/GaloyMoney/cala/releases/tag/0.2.13)
+
+
+### Bug Fixes
+
+- Update some queries
+- Order by e.sequence (#104)
+
 # [cala release v0.2.12](https://github.com/GaloyMoney/cala/releases/tag/0.2.12)
 
 
