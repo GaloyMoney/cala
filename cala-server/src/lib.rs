@@ -14,6 +14,7 @@ pub mod server;
 pub use async_graphql;
 pub use async_trait;
 pub use futures;
+pub use sqlx;
 pub use tokio;
 pub use tracing;
 
