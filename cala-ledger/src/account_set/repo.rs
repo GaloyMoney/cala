@@ -222,8 +222,10 @@ impl AccountSetRepo {
             WITH member_account_sets AS (
               SELECT a.id, a.name, a.created_at
               FROM cala_account_set_member_accounts asm
-              JOIN cala_account_sets a ON asm.account_set_id = a.id
-              WHERE asm.member_account_id = $1 AND transitive IS FALSE
+              JOIN cala_account_sets a ON asm.data_source_id = a.data_source_id AND
+              asm.account_set_id = a.id
+              WHERE asm.data_source_id = '00000000-0000-0000-0000-000000000000' AND
+              asm.member_account_id = $1 AND transitive IS FALSE
               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
               ORDER BY a.name, a.id
               LIMIT $4
