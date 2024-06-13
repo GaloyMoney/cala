@@ -129,7 +129,6 @@ input AccountUpdateInput {
 	description: String
 	status: Status
 	metadata: JSON
-	eventuallyConsistent: Boolean
 }
 
 type AccountUpdatePayload {

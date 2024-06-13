@@ -288,7 +288,6 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .external_id(input.external_id)
             .status(input.status.map(Into::into))
             .normal_balance_type(input.normal_balance_type.map(Into::into))
-            .eventually_consistent(input.eventually_consistent)
             .metadata(input.metadata)?
             .description(input.description);
 
@@ -296,7 +295,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         account.update(builder);
         app.ledger()
             .accounts()
-            .update_in_op(&mut op, &mut account)
+            .persist_in_op(&mut op, &mut account)
             .await?;
 
         Ok(account.into())

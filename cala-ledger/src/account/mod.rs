@@ -85,15 +85,15 @@ impl Accounts {
         self.repo.list(query).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.update", skip(self, account))]
-    pub async fn update(&self, account: &mut Account) -> Result<(), AccountError> {
+    #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
+    pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
-        self.update_in_op(&mut op, account).await?;
+        self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())
     }
 
-    pub async fn update_in_op(
+    pub async fn persist_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
         account: &mut Account,

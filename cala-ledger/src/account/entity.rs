@@ -73,7 +73,6 @@ impl Account {
             normal_balance_type,
             description,
             status,
-            eventually_consistent,
             metadata,
         } = builder.build().expect("AccountUpdateValues always exist");
 
@@ -103,14 +102,6 @@ impl Account {
             if status != self.values().status {
                 self.values.status.clone_from(&status);
                 updated_fields.push("status".to_string());
-            }
-        }
-        if let Some(eventually_consistent) = eventually_consistent {
-            if eventually_consistent
-                && eventually_consistent != self.values().config.eventually_consistent
-            {
-                self.values.config.eventually_consistent = eventually_consistent;
-                updated_fields.push("config".to_string());
             }
         }
         if external_id.is_some() && external_id != self.values().external_id {
@@ -190,7 +181,6 @@ pub struct AccountUpdateValues {
     pub normal_balance_type: Option<DebitOrCredit>,
     pub description: Option<String>,
     pub status: Option<Status>,
-    pub eventually_consistent: Option<bool>,
     #[builder(setter(custom), default)]
     pub metadata: Option<serde_json::Value>,
 }

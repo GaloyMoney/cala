@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE cala_accounts\n            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5, eventually_consistent = $6\n            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'",
+  "query": "UPDATE cala_accounts\n            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5\n            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'",
   "describe": {
     "columns": [],
     "parameters": {
@@ -19,11 +19,10 @@
               ]
             }
           }
-        },
-        "Bool"
+        }
       ]
     },
     "nullable": []
   },
-  "hash": "b0deaa7bc44b12b8599f32e46efcc152e9f3650cd9484f6247ad105f78b97ffa"
+  "hash": "67f2b33262254fd0d5d54f5bf92ead9ca880e166919d3e9fd52650bcef348488"
 }
