@@ -182,6 +182,29 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    pub async fn persist_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set: &mut AccountSet,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"UPDATE cala_account_sets
+            SET name = $2
+            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'"#,
+            account_set.values().id as AccountSetId,
+            account_set.values().name,
+        )
+        .execute(&mut **db)
+        .await?;
+        account_set.events.persist(db).await?;
+        Ok(())
+    }
+
+    pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
+        let mut tx = self.pool.begin().await?;
+        self.find_in_tx(&mut tx, account_set_id).await
+    }
+
     pub async fn find_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -393,6 +416,62 @@ impl AccountSetRepo {
         )
         .execute(&mut **db)
         .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn find_imported(
+        &self,
+        account_set_id: AccountSetId,
+        origin: DataSourceId,
+    ) -> Result<AccountSet, AccountSetError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_account_sets a
+            JOIN cala_account_set_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = $1
+            AND a.id = $2
+            ORDER BY e.sequence"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(account_set) => Ok(account_set),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(AccountSetError::CouldNotFindById(account_set_id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn persist_at_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account_set: &mut AccountSet,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"UPDATE cala_account_sets
+            SET name = $3
+            WHERE data_source_id = $1 AND id = $2"#,
+            origin as DataSourceId,
+            account_set.values().id as AccountSetId,
+            account_set.values().name,
+        )
+        .execute(&mut **db)
+        .await?;
+        account_set
+            .events
+            .persisted_at(db, origin, recorded_at)
+            .await?;
         Ok(())
     }
 }

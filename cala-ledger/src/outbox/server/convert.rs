@@ -48,6 +48,15 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                 data_source_id: source.to_string(),
                 account_set: Some(proto::AccountSet::from(account_set)),
             }),
+            OutboxEventPayload::AccountSetUpdated {
+                source,
+                account_set,
+                fields,
+            } => proto::cala_ledger_event::Payload::AccountSetUpdated(proto::AccountSetUpdated {
+                data_source_id: source.to_string(),
+                account_set: Some(proto::AccountSet::from(account_set)),
+                fields,
+            }),
             OutboxEventPayload::AccountSetMemberCreated {
                 source,
                 account_set_id,

@@ -346,6 +346,47 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(account_set.into())
     }
 
+    async fn account_set_update(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+        input: AccountSetUpdateInput,
+    ) -> Result<AccountSetUpdatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+        let mut builder = cala_ledger::account_set::AccountSetUpdate::default();
+        if let Some(name) = input.name {
+            builder.name(name);
+        }
+        if let Some(desc) = input.description {
+            builder.description(desc);
+        }
+        if let Some(normal_balance_type) = input.normal_balance_type {
+            builder.normal_balance_type(normal_balance_type);
+        }
+
+        if let Some(metadata) = input.metadata {
+            builder.metadata(metadata)?;
+        }
+
+        let mut account_set = app
+            .ledger()
+            .account_sets()
+            .find(AccountSetId::from(id))
+            .await?;
+        account_set.update(builder);
+
+        app.ledger()
+            .account_sets()
+            .persist_in_op(&mut op, &mut account_set)
+            .await?;
+
+        Ok(account_set.into())
+    }
+
     async fn add_to_account_set(
         &self,
         ctx: &Context<'_>,

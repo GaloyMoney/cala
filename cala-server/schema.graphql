@@ -121,6 +121,17 @@ enum AccountSetMemberType {
 	ACCOUNT_SET
 }
 
+input AccountSetUpdateInput {
+	name: String
+	normalBalanceType: DebitOrCredit
+	description: String
+	metadata: JSON
+}
+
+type AccountSetUpdatePayload {
+	accountSet: AccountSet!
+}
+
 input AccountUpdateInput {
 	externalId: String
 	code: String
@@ -282,6 +293,7 @@ type Mutation {
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
 	accountUpdate(id: UUID!, input: AccountUpdateInput!): AccountUpdatePayload!
 	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
+	accountSetUpdate(id: UUID!, input: AccountSetUpdateInput!): AccountSetUpdatePayload!
 	addToAccountSet(input: AddToAccountSetInput!): AddToAccountSetPayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	journalUpdate(id: UUID!, input: JournalUpdateInput!): JournalUpdatePayload!

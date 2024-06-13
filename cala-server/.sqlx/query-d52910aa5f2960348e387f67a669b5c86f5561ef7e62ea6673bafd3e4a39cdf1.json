@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT a.id, e.sequence, e.event,\n                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n            FROM cala_account_sets a\n            JOIN cala_account_set_events e\n            ON a.data_source_id = e.data_source_id\n            AND a.id = e.id\n            WHERE a.data_source_id = $1\n            AND a.id = $2\n            ORDER BY e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d52910aa5f2960348e387f67a669b5c86f5561ef7e62ea6673bafd3e4a39cdf1"
+}

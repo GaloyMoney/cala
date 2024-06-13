@@ -137,6 +137,27 @@ impl From<&cala_ledger::account_set::AccountSetValues> for AccountSetByNameCurso
     }
 }
 
+#[derive(InputObject)]
+pub(super) struct AccountSetUpdateInput {
+    pub name: Option<String>,
+    pub normal_balance_type: Option<DebitOrCredit>,
+    pub description: Option<String>,
+    pub metadata: Option<JSON>,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct AccountSetUpdatePayload {
+    pub account_set: AccountSet,
+}
+
+impl From<cala_ledger::account_set::AccountSet> for AccountSetUpdatePayload {
+    fn from(value: cala_ledger::account_set::AccountSet) -> Self {
+        Self {
+            account_set: AccountSet::from(value),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub(super) struct AccountSetByNameCursor {
     pub name: String,

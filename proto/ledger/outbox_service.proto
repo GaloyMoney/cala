@@ -20,16 +20,17 @@ message CalaLedgerEvent {
   oneof payload {
     bool empty = 4;
     AccountCreated account_created = 5;
-    AccountSetCreated account_set_created = 6;
-    AccountSetMemberCreated account_set_member_created = 7;
-    JournalCreated journal_created = 8;
-    TxTemplateCreated tx_template_created = 9;
-    TransactionCreated transaction_created = 10;
-    EntryCreated entry_created = 11;
-    BalanceCreated balance_created = 12;
-    BalanceUpdated balance_updated = 13;
-    AccountUpdated account_updated = 14;
-    JournalUpdated journal_updated = 15;
+    AccountUpdated account_updated = 6;
+    AccountSetCreated account_set_created = 7;
+    AccountSetUpdated account_set_updated = 8;
+    AccountSetMemberCreated account_set_member_created = 9;
+    JournalCreated journal_created = 10;
+    JournalUpdated journal_updated = 11;
+    TxTemplateCreated tx_template_created = 12;
+    TransactionCreated transaction_created = 13;
+    EntryCreated entry_created = 14;
+    BalanceCreated balance_created = 15;
+    BalanceUpdated balance_updated = 16;
   }
 }
 
@@ -81,6 +82,12 @@ message AccountConfig {
 message AccountSetCreated {
   string data_source_id = 1;
   AccountSet account_set = 2;
+}
+
+message AccountSetUpdated {
+  string data_source_id = 1;
+  AccountSet account_set = 2;
+  repeated string fields = 3;
 }
 
 message AccountSet {

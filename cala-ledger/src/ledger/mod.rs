@@ -226,6 +226,15 @@ impl CalaLedger {
                     .sync_account_set_creation(db, event.recorded_at, origin, account_set)
                     .await?
             }
+            AccountSetUpdated {
+                account_set,
+                fields,
+                ..
+            } => {
+                self.account_sets
+                    .sync_account_set_update(db, event.recorded_at, origin, account_set, fields)
+                    .await?
+            }
             AccountSetMemberCreated {
                 account_set_id,
                 member,
