@@ -67,9 +67,19 @@ async fn main() -> anyhow::Result<()> {
         .name("MY JOURNAL")
         .description("description")
         .build()?;
-    let journal = cala.journals().create(new_journal).await?;
+    let mut journal = cala.journals().create(new_journal).await?;
     let journal_id = journal.id();
     println!("journal_id: {}", journal_id);
+
+    // update journal name and description
+
+    let mut builder = JournalUpdate::default();
+    builder
+        .name("UPDATED_JOURNAL_NAME")
+        .description("new description")
+        .build()?;
+    journal.update(builder);
+    cala.journals().persist(&mut journal).await?;
 
     let tx_input = NewTxInput::builder()
         .journal_id(format!("uuid('{}')", journal_id))
