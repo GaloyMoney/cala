@@ -246,9 +246,11 @@ impl CalaLedger {
                     .sync_journal_creation(db, event.recorded_at, origin, journal)
                     .await?
             }
-            JournalUpdated { journal, .. } => {
+            JournalUpdated {
+                journal, fields, ..
+            } => {
                 self.journals
-                    .sync_journal_creation(db, event.recorded_at, origin, journal)
+                    .sync_journal_update(db, event.recorded_at, origin, journal, fields)
                     .await?
             }
             TransactionCreated { transaction, .. } => {

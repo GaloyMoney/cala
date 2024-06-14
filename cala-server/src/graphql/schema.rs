@@ -406,10 +406,15 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .expect("Lock held concurrently");
 
         let mut builder = cala_ledger::journal::JournalUpdate::default();
-        builder
-            .name(input.name)
-            .status(input.status.map(Into::into))
-            .description(input.description);
+        if let Some(name) = input.name {
+            builder.name(name);
+        }
+        if let Some(status) = input.status {
+            builder.status(status);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
 
         let mut journal = app.ledger().journals().find(JournalId::from(id)).await?;
         journal.update(builder);

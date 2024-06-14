@@ -60,12 +60,15 @@ impl Journal {
         &self.values
     }
 
-    pub fn update(&mut self, builder: JournalUpdate) {
+    pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
         let JournalUpdateValues {
             name,
             status,
             description,
-        } = builder.build().expect("JournalUpdateValues always exist");
+        } = builder
+            .into()
+            .build()
+            .expect("JournalUpdateValues always exist");
         let mut updated_fields = Vec::new();
 
         if let Some(name) = name {
@@ -113,9 +116,36 @@ impl Journal {
 #[derive(Builder, Debug, Default)]
 #[builder(name = "JournalUpdate", default)]
 pub struct JournalUpdateValues {
+    #[builder(setter(into, strip_option))]
     pub name: Option<String>,
+    #[builder(setter(into, strip_option))]
     pub status: Option<Status>,
+    #[builder(setter(into, strip_option))]
     pub description: Option<String>,
+}
+
+impl From<(JournalValues, Vec<String>)> for JournalUpdate {
+    fn from((values, fields): (JournalValues, Vec<String>)) -> Self {
+        let mut builder = JournalUpdate::default();
+
+        for field in fields {
+            match field.as_str() {
+                "name" => {
+                    builder.name(values.name.clone());
+                }
+                "status" => {
+                    builder.status(values.status);
+                }
+                "description" => {
+                    if let Some(ref desc) = values.description {
+                        builder.description(desc);
+                    }
+                }
+                _ => unreachable!("Unknown field: {}", field),
+            }
+        }
+        builder
+    }
 }
 
 impl TryFrom<EntityEvents<JournalEvent>> for Journal {

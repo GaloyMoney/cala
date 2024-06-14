@@ -100,6 +100,26 @@ impl Journals {
             .await?;
         Ok(())
     }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_journal_update(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        values: JournalValues,
+        fields: Vec<String>,
+    ) -> Result<(), JournalError> {
+        let mut journal = self.repo.find_imported(values.id, origin).await?;
+        journal.update((values, fields));
+        self.repo
+            .persist_at_in_tx(&mut db, recorded_at, origin, &mut journal)
+            .await?;
+        self.outbox
+            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
 }
 
 impl From<&JournalEvent> for OutboxEventPayload {

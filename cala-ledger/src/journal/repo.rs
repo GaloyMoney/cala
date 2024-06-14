@@ -128,4 +128,56 @@ impl JournalRepo {
         journal.events.persisted_at(db, origin, recorded_at).await?;
         Ok(())
     }
+
+    #[cfg(feature = "import")]
+    pub async fn find_imported(
+        &self,
+        journal_id: JournalId,
+        origin: DataSourceId,
+    ) -> Result<Journal, JournalError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_journals a
+            JOIN cala_journal_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = $1
+            AND a.id = $2
+            ORDER BY e.sequence"#,
+            origin as DataSourceId,
+            journal_id as JournalId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(journal) => Ok(journal),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(JournalError::CouldNotFindById(journal_id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    pub async fn persist_at_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        journal: &mut Journal,
+    ) -> Result<(), JournalError> {
+        sqlx::query!(
+            r#"UPDATE cala_journals
+            SET name = $3
+            WHERE data_source_id = $1 AND id = $2"#,
+            origin as DataSourceId,
+            journal.values().id as JournalId,
+            journal.values().name,
+        )
+        .execute(&mut **db)
+        .await?;
+        journal.events.persisted_at(db, origin, recorded_at).await?;
+        Ok(())
+    }
 }
