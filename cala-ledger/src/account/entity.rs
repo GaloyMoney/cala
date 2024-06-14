@@ -226,7 +226,7 @@ impl From<(AccountValues, Vec<String>)> for AccountUpdate {
                         .metadata(values.metadata.clone())
                         .expect("Failed to serialize metadata");
                 }
-                _ => {}
+                _ => unreachable!("Unknown field: {}", field),
             }
         }
         builder
