@@ -45,10 +45,19 @@ async fn main() -> anyhow::Result<()> {
         .id(AccountId::new())
         .name(format!("ACCOUNT #{:03}", random_number))
         .code(code_string)
-        .description("description")
+        .description("description".to_string())
         .build()?;
-    let account = cala.accounts().create(new_account).await?;
+    let mut account = cala.accounts().create(new_account).await?;
     println!("account_id: {}", account.id());
+
+    // update account name and description
+    let mut builder = AccountUpdate::default();
+    builder
+        .name(format!("ACCOUNT #{:03}", random_number))
+        .description("new description".to_string())
+        .build()?;
+    account.update(builder);
+    cala.accounts().persist(&mut account).await?;
 
     let result = cala.accounts().list(PaginatedQueryArgs::default()).await?;
     println!("No of accounts: {}", result.entities.len());
