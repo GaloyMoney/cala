@@ -16,6 +16,10 @@ pub enum AccountEvent {
     Initialized {
         values: AccountValues,
     },
+    Updated {
+        values: AccountValues,
+        fields: Vec<String>,
+    },
 }
 
 impl EntityEvent for AccountEvent {
@@ -61,6 +65,73 @@ impl Account {
         self.values
     }
 
+    pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
+        let AccountUpdateValues {
+            external_id,
+            code,
+            name,
+            normal_balance_type,
+            description,
+            status,
+            metadata,
+        } = builder
+            .into()
+            .build()
+            .expect("AccountUpdateValues always exist");
+
+        let mut updated_fields = Vec::new();
+
+        if let Some(code) = code {
+            if code != self.values().code {
+                self.values.code.clone_from(&code);
+                updated_fields.push("code".to_string());
+            }
+        }
+        if let Some(name) = name {
+            if name != self.values().name {
+                self.values.name.clone_from(&name);
+                updated_fields.push("name".to_string());
+            }
+        }
+        if let Some(normal_balance_type) = normal_balance_type {
+            if normal_balance_type != self.values().normal_balance_type {
+                self.values
+                    .normal_balance_type
+                    .clone_from(&normal_balance_type);
+                updated_fields.push("normal_balance_type".to_string());
+            }
+        }
+        if let Some(status) = status {
+            if status != self.values().status {
+                self.values.status.clone_from(&status);
+                updated_fields.push("status".to_string());
+            }
+        }
+        if external_id.is_some() && external_id != self.values().external_id {
+            self.values.external_id.clone_from(&external_id);
+            updated_fields.push("external_id".to_string());
+        }
+        if description.is_some() && description != self.values().description {
+            self.values.description.clone_from(&description);
+            updated_fields.push("description".to_string());
+        }
+        if let Some(metadata) = metadata {
+            if metadata != serde_json::Value::Null
+                && Some(&metadata) != self.values().metadata.as_ref()
+            {
+                self.values.metadata = Some(metadata);
+                updated_fields.push("metadata".to_string());
+            }
+        }
+
+        if !updated_fields.is_empty() {
+            self.events.push(AccountEvent::Updated {
+                values: self.values.clone(),
+                fields: updated_fields,
+            });
+        }
+    }
+
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
             .entity_first_persisted_at
@@ -95,9 +166,82 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
                 AccountEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }
+                AccountEvent::Updated { values, .. } => {
+                    builder = builder.values(values.clone());
+                }
             }
         }
         builder.events(events).build()
+    }
+}
+
+#[derive(Debug, Builder, Default)]
+#[builder(name = "AccountUpdate", default)]
+pub struct AccountUpdateValues {
+    #[builder(setter(strip_option, into))]
+    pub external_id: Option<String>,
+    #[builder(setter(strip_option, into))]
+    pub code: Option<String>,
+    #[builder(setter(strip_option, into))]
+    pub name: Option<String>,
+    #[builder(setter(strip_option, into))]
+    pub normal_balance_type: Option<DebitOrCredit>,
+    #[builder(setter(strip_option, into))]
+    pub description: Option<String>,
+    #[builder(setter(strip_option, into))]
+    pub status: Option<Status>,
+    #[builder(setter(custom))]
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl AccountUpdate {
+    pub fn metadata<T: serde::Serialize>(
+        &mut self,
+        metadata: T,
+    ) -> Result<&mut Self, serde_json::Error> {
+        self.metadata = Some(Some(serde_json::to_value(metadata)?));
+        Ok(self)
+    }
+}
+
+impl From<(AccountValues, Vec<String>)> for AccountUpdate {
+    fn from((values, fields): (AccountValues, Vec<String>)) -> Self {
+        let mut builder = AccountUpdate::default();
+        for field in fields {
+            match field.as_str() {
+                "external_id" => {
+                    if let Some(ref ext_id) = values.external_id {
+                        builder.external_id(ext_id);
+                    }
+                }
+                "code" => {
+                    builder.code(values.code.clone());
+                }
+                "name" => {
+                    builder.name(values.name.clone());
+                }
+                "normal_balance_type" => {
+                    builder.normal_balance_type(values.normal_balance_type);
+                }
+                "description" => {
+                    if let Some(ref desc) = values.description {
+                        builder.description(desc);
+                    }
+                }
+                "status" => {
+                    builder.status(values.status);
+                }
+                "metadata" => {
+                    if let Some(metadata) = values.metadata.clone() {
+                        builder
+                            .metadata(metadata)
+                            .expect("Failed to serialize metadata");
+                    }
+                }
+                _ => unreachable!("Unknown field: {}", field),
+            }
+        }
+        builder
     }
 }
 

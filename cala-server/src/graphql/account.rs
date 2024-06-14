@@ -131,6 +131,22 @@ pub(super) struct AccountCreatePayload {
     pub account: Account,
 }
 
+#[derive(InputObject)]
+pub(super) struct AccountUpdateInput {
+    pub external_id: Option<String>,
+    pub code: Option<String>,
+    pub name: Option<String>,
+    pub normal_balance_type: Option<DebitOrCredit>,
+    pub description: Option<String>,
+    pub status: Option<Status>,
+    pub metadata: Option<JSON>,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct AccountUpdatePayload {
+    pub account: Account,
+}
+
 impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("account:{}", self))
@@ -178,6 +194,14 @@ impl From<cala_ledger::account::Account> for Account {
 }
 
 impl From<cala_ledger::account::Account> for AccountCreatePayload {
+    fn from(value: cala_ledger::account::Account) -> Self {
+        Self {
+            account: Account::from(value),
+        }
+    }
+}
+
+impl From<cala_ledger::account::Account> for AccountUpdatePayload {
     fn from(value: cala_ledger::account::Account) -> Self {
         Self {
             account: Account::from(value),

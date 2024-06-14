@@ -85,6 +85,24 @@ impl Accounts {
         self.repo.list(query).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
+    pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        self.persist_in_op(&mut op, account).await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    pub async fn persist_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account: &mut Account,
+    ) -> Result<(), AccountError> {
+        self.repo.persist_in_tx(op.tx(), account).await?;
+        op.accumulate(account.events.last_persisted());
+        Ok(())
+    }
+
     #[cfg(feature = "import")]
     pub async fn sync_account_creation(
         &self,
@@ -96,6 +114,26 @@ impl Accounts {
         let mut account = Account::import(origin, values);
         self.repo
             .import(&mut db, recorded_at, origin, &mut account)
+            .await?;
+        self.outbox
+            .persist_events_at(db, account.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_account_update(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        values: AccountValues,
+        fields: Vec<String>,
+    ) -> Result<(), AccountError> {
+        let mut account = self.repo.find_imported(values.id, origin).await?;
+        account.update((values, fields));
+        self.repo
+            .persist_at_in_tx(&mut db, recorded_at, origin, &mut account)
             .await?;
         self.outbox
             .persist_events_at(db, account.events.last_persisted(), recorded_at)
@@ -118,6 +156,14 @@ impl From<&AccountEvent> for OutboxEventPayload {
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
                 source: DataSource::Local,
                 account: account.clone(),
+            },
+            AccountEvent::Updated {
+                values: account,
+                fields,
+            } => OutboxEventPayload::AccountUpdated {
+                source: DataSource::Local,
+                account: account.clone(),
+                fields: fields.clone(),
             },
         }
     }

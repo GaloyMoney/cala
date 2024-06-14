@@ -121,6 +121,20 @@ enum AccountSetMemberType {
 	ACCOUNT_SET
 }
 
+input AccountUpdateInput {
+	externalId: String
+	code: String
+	name: String
+	normalBalanceType: DebitOrCredit
+	description: String
+	status: Status
+	metadata: JSON
+}
+
+type AccountUpdatePayload {
+	account: Account!
+}
+
 input AddToAccountSetInput {
 	accountSetId: UUID!
 	memberId: UUID!
@@ -256,6 +270,7 @@ type Money {
 type Mutation {
 	calaOutboxImportJobCreate(input: CalaOutboxImportJobCreateInput!): CalaOutboxImportJobCreatePayload!
 	accountCreate(input: AccountCreateInput!): AccountCreatePayload!
+	accountUpdate(id: UUID!, input: AccountUpdateInput!): AccountUpdatePayload!
 	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
 	addToAccountSet(input: AddToAccountSetInput!): AddToAccountSetPayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
