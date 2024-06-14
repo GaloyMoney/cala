@@ -196,3 +196,37 @@ async fn balances() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn account_set_update() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
+
+    // create account set
+    let initial_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let new_account_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name(initial_name.clone())
+        .journal_id(journal.id())
+        .build()?;
+
+    let mut account_set = cala.account_sets().create(new_account_set).await?;
+    assert_eq!(initial_name, account_set.values().name);
+
+    // update account set name and description
+    let updated_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let mut builder = AccountSetUpdate::default();
+    builder.name(updated_name.clone()).build()?;
+    account_set.update(builder);
+    cala.account_sets().persist(&mut account_set).await?;
+
+    assert_eq!(updated_name, account_set.values().name);
+    Ok(())
+}

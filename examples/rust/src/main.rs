@@ -3,7 +3,7 @@ use rand::Rng;
 use std::fs;
 
 use cala_ledger::{
-    account::*, account_set::*, journal::*, migrate::IncludeMigrations, query::*, tx_template::*, *,
+    account::*, journal::*, migrate::IncludeMigrations, query::*, tx_template::*, *,
 };
 
 pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
@@ -45,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         .id(AccountId::new())
         .name(format!("ACCOUNT #{:03}", random_number))
         .code(code_string)
-        .description("description".to_string())
+        .description("description")
         .build()?;
     let mut account = cala.accounts().create(new_account).await?;
     println!("account_id: {}", account.id());
@@ -54,7 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let mut builder = AccountUpdate::default();
     builder
         .name(format!("ACCOUNT #{:04}", random_number))
-        .description("new description".to_string())
+        .description("new description")
         .build()?;
     account.update(builder);
     cala.accounts().persist(&mut account).await?;
@@ -81,24 +81,6 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
     journal.update(builder);
     cala.journals().persist(&mut journal).await?;
-
-    // create account set
-    let new_account_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name(format!("ACCOUNT_SET #{:03}", random_number))
-        .journal_id(journal_id)
-        .build()?;
-    let mut account_set = cala.account_sets().create(new_account_set).await?;
-    println!("account_set_id: {}", account_set.id());
-
-    // update account set name and description
-    let mut builder = AccountSetUpdate::default();
-    builder
-        .name(format!("ACCOUNT_SET #{:04}", random_number))
-        .description("new description".to_string())
-        .build()?;
-    account_set.update(builder);
-    cala.account_sets().persist(&mut account_set).await?;
 
     let tx_input = NewTxInput::builder()
         .journal_id(format!("uuid('{}')", journal_id))
