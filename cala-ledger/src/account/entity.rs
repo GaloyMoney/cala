@@ -178,13 +178,19 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
 #[derive(Debug, Builder, Default)]
 #[builder(name = "AccountUpdate", default)]
 pub struct AccountUpdateValues {
+    #[builder(setter(strip_option, into))]
     pub external_id: Option<String>,
+    #[builder(setter(strip_option, into))]
     pub code: Option<String>,
+    #[builder(setter(strip_option, into))]
     pub name: Option<String>,
+    #[builder(setter(strip_option, into))]
     pub normal_balance_type: Option<DebitOrCredit>,
+    #[builder(setter(strip_option, into))]
     pub description: Option<String>,
+    #[builder(setter(strip_option, into))]
     pub status: Option<Status>,
-    #[builder(setter(custom), default)]
+    #[builder(setter(custom))]
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -204,27 +210,33 @@ impl From<(AccountValues, Vec<String>)> for AccountUpdate {
         for field in fields {
             match field.as_str() {
                 "external_id" => {
-                    builder.external_id(values.external_id.clone());
+                    if let Some(ref ext_id) = values.external_id {
+                        builder.external_id(ext_id);
+                    }
                 }
                 "code" => {
-                    builder.code(Some(values.code.clone()));
+                    builder.code(values.code.clone());
                 }
                 "name" => {
-                    builder.name(Some(values.name.clone()));
+                    builder.name(values.name.clone());
                 }
                 "normal_balance_type" => {
-                    builder.normal_balance_type(Some(values.normal_balance_type));
+                    builder.normal_balance_type(values.normal_balance_type);
                 }
                 "description" => {
-                    builder.description(values.description.clone());
+                    if let Some(ref desc) = values.description {
+                        builder.description(desc);
+                    }
                 }
                 "status" => {
-                    builder.status(Some(values.status));
+                    builder.status(values.status);
                 }
                 "metadata" => {
-                    builder
-                        .metadata(values.metadata.clone())
-                        .expect("Failed to serialize metadata");
+                    if let Some(metadata) = values.metadata.clone() {
+                        builder
+                            .metadata(metadata)
+                            .expect("Failed to serialize metadata");
+                    }
                 }
                 _ => unreachable!("Unknown field: {}", field),
             }

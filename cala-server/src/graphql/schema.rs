@@ -282,14 +282,27 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .expect("Lock held concurrently");
 
         let mut builder = cala_ledger::account::AccountUpdate::default();
-        builder
-            .name(input.name)
-            .code(input.code)
-            .external_id(input.external_id)
-            .status(input.status.map(Into::into))
-            .normal_balance_type(input.normal_balance_type.map(Into::into))
-            .metadata(input.metadata)?
-            .description(input.description);
+        if let Some(name) = input.name {
+            builder.name(name);
+        }
+        if let Some(code) = input.code {
+            builder.code(code);
+        }
+        if let Some(normal_balance_type) = input.normal_balance_type {
+            builder.normal_balance_type(normal_balance_type);
+        }
+        if let Some(status) = input.status {
+            builder.status(status);
+        }
+        if let Some(external_id) = input.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+        if let Some(metadata) = input.metadata {
+            builder.metadata(metadata)?;
+        }
 
         let mut account = app.ledger().accounts().find(AccountId::from(id)).await?;
         account.update(builder);
