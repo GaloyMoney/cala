@@ -65,7 +65,7 @@ impl Account {
         self.values
     }
 
-    pub fn update(&mut self, builder: AccountUpdate) {
+    pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
         let AccountUpdateValues {
             external_id,
             code,
@@ -74,7 +74,10 @@ impl Account {
             description,
             status,
             metadata,
-        } = builder.build().expect("AccountUpdateValues always exist");
+        } = builder
+            .into()
+            .build()
+            .expect("AccountUpdateValues always exist");
 
         let mut updated_fields = Vec::new();
 
@@ -192,6 +195,41 @@ impl AccountUpdate {
     ) -> Result<&mut Self, serde_json::Error> {
         self.metadata = Some(Some(serde_json::to_value(metadata)?));
         Ok(self)
+    }
+}
+
+impl From<(AccountValues, Vec<String>)> for AccountUpdate {
+    fn from((values, fields): (AccountValues, Vec<String>)) -> Self {
+        let mut builder = AccountUpdate::default();
+        for field in fields {
+            match field.as_str() {
+                "external_id" => {
+                    builder.external_id(values.external_id.clone());
+                }
+                "code" => {
+                    builder.code(Some(values.code.clone()));
+                }
+                "name" => {
+                    builder.name(Some(values.name.clone()));
+                }
+                "normal_balance_type" => {
+                    builder.normal_balance_type(Some(values.normal_balance_type));
+                }
+                "description" => {
+                    builder.description(values.description.clone());
+                }
+                "status" => {
+                    builder.status(Some(values.status));
+                }
+                "metadata" => {
+                    builder
+                        .metadata(values.metadata.clone())
+                        .expect("Failed to serialize metadata");
+                }
+                _ => {}
+            }
+        }
+        builder
     }
 }
 

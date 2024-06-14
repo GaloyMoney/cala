@@ -230,4 +230,60 @@ impl AccountRepo {
         account.events.persisted_at(db, origin, recorded_at).await?;
         Ok(())
     }
+
+    #[cfg(feature = "import")]
+    pub async fn persist_at_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        account: &mut Account,
+    ) -> Result<(), AccountError> {
+        sqlx::query!(
+            r#"UPDATE cala_accounts
+            SET code = $3, name = $4, external_id = $5, normal_balance_type = $6
+            WHERE data_source_id = $1 AND id = $2"#,
+            origin as DataSourceId,
+            account.values().id as AccountId,
+            account.values().code,
+            account.values().name,
+            account.values().external_id,
+            account.values().normal_balance_type as DebitOrCredit,
+        )
+        .execute(&mut **db)
+        .await?;
+        account.events.persisted_at(db, origin, recorded_at).await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn find_imported(
+        &self,
+        account_id: AccountId,
+        origin: DataSourceId,
+    ) -> Result<Account, AccountError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            FROM cala_accounts a
+            JOIN cala_account_events e
+            ON a.data_source_id = e.data_source_id
+            AND a.id = e.id
+            WHERE a.data_source_id = $1
+            AND a.id = $2
+            ORDER BY e.sequence"#,
+            origin as DataSourceId,
+            account_id as AccountId
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        match EntityEvents::load_first(rows) {
+            Ok(account) => Ok(account),
+            Err(EntityError::NoEntityEventsPresent) => {
+                Err(AccountError::CouldNotFindById(account_id))
+            }
+            Err(e) => Err(e.into()),
+        }
+    }
 }

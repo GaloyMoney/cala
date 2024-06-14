@@ -128,10 +128,12 @@ impl Accounts {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         values: AccountValues,
+        fields: Vec<String>,
     ) -> Result<(), AccountError> {
-        let mut account = Account::import(origin, values);
+        let mut account = self.repo.find_imported(values.id, origin).await?;
+        account.update((values, fields));
         self.repo
-            .import(&mut db, recorded_at, origin, &mut account)
+            .persist_at_in_tx(&mut db, recorded_at, origin, &mut account)
             .await?;
         self.outbox
             .persist_events_at(db, account.events.last_persisted(), recorded_at)
