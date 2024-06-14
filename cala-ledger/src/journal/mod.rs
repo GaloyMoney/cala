@@ -60,6 +60,29 @@ impl Journals {
         self.repo.find_all(journal_ids).await
     }
 
+    #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
+    pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
+        self.repo.find(journal_id).await
+    }
+
+    #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
+    pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        self.persist_in_op(&mut op, journal).await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    pub async fn persist_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        journal: &mut Journal,
+    ) -> Result<(), JournalError> {
+        self.repo.persist_in_tx(op.tx(), journal).await?;
+        op.accumulate(journal.events.last_persisted());
+        Ok(())
+    }
+
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
@@ -71,6 +94,26 @@ impl Journals {
         let mut journal = Journal::import(origin, values);
         self.repo
             .import(&mut db, recorded_at, origin, &mut journal)
+            .await?;
+        self.outbox
+            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_journal_update(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        values: JournalValues,
+        fields: Vec<String>,
+    ) -> Result<(), JournalError> {
+        let mut journal = self.repo.find_imported(values.id, origin).await?;
+        journal.update((values, fields));
+        self.repo
+            .persist_at_in_tx(&mut db, recorded_at, origin, &mut journal)
             .await?;
         self.outbox
             .persist_events_at(db, journal.events.last_persisted(), recorded_at)
@@ -90,6 +133,11 @@ impl From<&JournalEvent> for OutboxEventPayload {
             JournalEvent::Initialized { values } => OutboxEventPayload::JournalCreated {
                 source: DataSource::Local,
                 journal: values.clone(),
+            },
+            JournalEvent::Updated { values, fields } => OutboxEventPayload::JournalUpdated {
+                source: DataSource::Local,
+                journal: values.clone(),
+                fields: fields.clone(),
             },
         }
     }

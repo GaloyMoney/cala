@@ -29,6 +29,7 @@ message CalaLedgerEvent {
     BalanceCreated balance_created = 12;
     BalanceUpdated balance_updated = 13;
     AccountUpdated account_updated = 14;
+    JournalUpdated journal_updated = 15;
   }
 }
 
@@ -108,6 +109,12 @@ message AccountSetMember {
 message JournalCreated {
   string data_source_id = 1;
   Journal journal = 2;
+}
+
+message JournalUpdated {
+  string data_source_id = 1;
+  Journal journal = 2;
+  repeated string fields = 3;
 }
 
 message Journal {

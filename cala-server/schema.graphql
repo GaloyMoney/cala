@@ -262,6 +262,16 @@ type JournalCreatePayload {
 	journal: Journal!
 }
 
+input JournalUpdateInput {
+	name: String
+	status: Status
+	description: String
+}
+
+type JournalUpdatePayload {
+	journal: Journal!
+}
+
 type Money {
 	units: Decimal!
 	currency: CurrencyCode!
@@ -274,6 +284,7 @@ type Mutation {
 	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
 	addToAccountSet(input: AddToAccountSetInput!): AddToAccountSetPayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
+	journalUpdate(id: UUID!, input: JournalUpdateInput!): JournalUpdatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	postTransaction(input: TransactionInput!): PostTransactionPayload!
 }

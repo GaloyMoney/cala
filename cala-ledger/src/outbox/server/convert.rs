@@ -78,6 +78,15 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                     journal: Some(proto::Journal::from(journal)),
                 })
             }
+            OutboxEventPayload::JournalUpdated {
+                source,
+                journal,
+                fields,
+            } => proto::cala_ledger_event::Payload::JournalUpdated(proto::JournalUpdated {
+                data_source_id: source.to_string(),
+                journal: Some(proto::Journal::from(journal)),
+                fields,
+            }),
             OutboxEventPayload::TxTemplateCreated {
                 source,
                 tx_template,

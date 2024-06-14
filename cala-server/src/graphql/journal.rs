@@ -59,3 +59,23 @@ impl From<cala_ledger::journal::Journal> for JournalCreatePayload {
         }
     }
 }
+
+#[derive(InputObject)]
+pub struct JournalUpdateInput {
+    pub(super) name: Option<String>,
+    pub(super) status: Option<Status>,
+    pub(super) description: Option<String>,
+}
+
+#[derive(SimpleObject)]
+pub struct JournalUpdatePayload {
+    pub journal: Journal,
+}
+
+impl From<cala_ledger::journal::Journal> for JournalUpdatePayload {
+    fn from(value: cala_ledger::journal::Journal) -> Self {
+        JournalUpdatePayload {
+            journal: Journal::from(value),
+        }
+    }
+}

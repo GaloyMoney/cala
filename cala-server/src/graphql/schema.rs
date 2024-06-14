@@ -393,6 +393,39 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(journal.into())
     }
 
+    async fn journal_update(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+        input: JournalUpdateInput,
+    ) -> Result<JournalUpdatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let mut builder = cala_ledger::journal::JournalUpdate::default();
+        if let Some(name) = input.name {
+            builder.name(name);
+        }
+        if let Some(status) = input.status {
+            builder.status(status);
+        }
+        if let Some(description) = input.description {
+            builder.description(description);
+        }
+
+        let mut journal = app.ledger().journals().find(JournalId::from(id)).await?;
+        journal.update(builder);
+
+        app.ledger()
+            .journals()
+            .persist_in_op(&mut op, &mut journal)
+            .await?;
+
+        Ok(journal.into())
+    }
     async fn tx_template_create(
         &self,
         ctx: &Context<'_>,

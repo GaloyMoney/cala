@@ -98,6 +98,17 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     journal.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::JournalUpdated(proto::JournalUpdated {
+                data_source_id,
+                journal,
+                fields,
+            }) => JournalUpdated {
+                source: data_source_id.parse()?,
+                journal: JournalValues::try_from(
+                    journal.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+                fields,
+            },
             proto::cala_ledger_event::Payload::TxTemplateCreated(proto::TxTemplateCreated {
                 data_source_id,
                 tx_template,

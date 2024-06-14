@@ -15,6 +15,10 @@ pub enum JournalEvent {
     Initialized {
         values: JournalValues,
     },
+    Updated {
+        values: JournalValues,
+        fields: Vec<String>,
+    },
 }
 
 impl EntityEvent for JournalEvent {
@@ -56,6 +60,42 @@ impl Journal {
         &self.values
     }
 
+    pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
+        let JournalUpdateValues {
+            name,
+            status,
+            description,
+        } = builder
+            .into()
+            .build()
+            .expect("JournalUpdateValues always exist");
+        let mut updated_fields = Vec::new();
+
+        if let Some(name) = name {
+            if name != self.values().name {
+                self.values.name.clone_from(&name);
+                updated_fields.push("name".to_string());
+            }
+        }
+        if let Some(status) = status {
+            if status != self.values().status {
+                self.values.status.clone_from(&status);
+                updated_fields.push("status".to_string());
+            }
+        }
+        if description.is_some() && description != self.values().description {
+            self.values.description.clone_from(&description);
+            updated_fields.push("description".to_string());
+        }
+
+        if !updated_fields.is_empty() {
+            self.events.push(JournalEvent::Updated {
+                values: self.values.clone(),
+                fields: updated_fields,
+            });
+        }
+    }
+
     pub fn into_values(self) -> JournalValues {
         self.values
     }
@@ -73,6 +113,41 @@ impl Journal {
     }
 }
 
+#[derive(Builder, Debug, Default)]
+#[builder(name = "JournalUpdate", default)]
+pub struct JournalUpdateValues {
+    #[builder(setter(into, strip_option))]
+    pub name: Option<String>,
+    #[builder(setter(into, strip_option))]
+    pub status: Option<Status>,
+    #[builder(setter(into, strip_option))]
+    pub description: Option<String>,
+}
+
+impl From<(JournalValues, Vec<String>)> for JournalUpdate {
+    fn from((values, fields): (JournalValues, Vec<String>)) -> Self {
+        let mut builder = JournalUpdate::default();
+
+        for field in fields {
+            match field.as_str() {
+                "name" => {
+                    builder.name(values.name.clone());
+                }
+                "status" => {
+                    builder.status(values.status);
+                }
+                "description" => {
+                    if let Some(ref desc) = values.description {
+                        builder.description(desc);
+                    }
+                }
+                _ => unreachable!("Unknown field: {}", field),
+            }
+        }
+        builder
+    }
+}
+
 impl TryFrom<EntityEvents<JournalEvent>> for Journal {
     type Error = EntityError;
 
@@ -85,6 +160,9 @@ impl TryFrom<EntityEvents<JournalEvent>> for Journal {
                     builder = builder.values(values.clone());
                 }
                 JournalEvent::Initialized { values } => {
+                    builder = builder.values(values.clone());
+                }
+                JournalEvent::Updated { values, .. } => {
                     builder = builder.values(values.clone());
                 }
             }

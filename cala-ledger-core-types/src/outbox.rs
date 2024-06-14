@@ -50,6 +50,11 @@ pub enum OutboxEventPayload {
         source: DataSource,
         journal: JournalValues,
     },
+    JournalUpdated {
+        source: DataSource,
+        journal: JournalValues,
+        fields: Vec<String>,
+    },
     TxTemplateCreated {
         source: DataSource,
         tx_template: TxTemplateValues,
