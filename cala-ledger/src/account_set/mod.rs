@@ -87,6 +87,28 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
+    pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        self.persist_in_op(&mut op, account_set).await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.persist_in_op",
+        skip(self, op, account_set)
+    )]
+    pub async fn persist_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account_set: &mut AccountSet,
+    ) -> Result<(), AccountSetError> {
+        self.repo.persist_in_tx(op.tx(), account_set).await?;
+        op.accumulate(account_set.events.last_persisted());
+        Ok(())
+    }
+
     pub async fn add_member(
         &self,
         account_set_id: AccountSetId,
@@ -179,6 +201,11 @@ impl AccountSets {
         self.repo.find_all(account_set_ids).await
     }
 
+    #[instrument(name = "cala_ledger.account_sets.find", skip(self), err)]
+    pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
+        self.repo.find(account_set_id).await
+    }
+
     #[instrument(
         name = "cala_ledger.account_sets.find_where_account_is_member",
         skip(self),
@@ -213,6 +240,26 @@ impl AccountSets {
         let mut account_set = AccountSet::import(origin, values);
         self.repo
             .import(&mut db, recorded_at, origin, &mut account_set)
+            .await?;
+        self.outbox
+            .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
+            .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_account_set_update(
+        &self,
+        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+        origin: DataSourceId,
+        values: AccountSetValues,
+        fields: Vec<String>,
+    ) -> Result<(), AccountSetError> {
+        let mut account_set = self.repo.find_imported(values.id, origin).await?;
+        account_set.update((values, fields));
+        self.repo
+            .persist_at_in_tx(&mut db, recorded_at, origin, &mut account_set)
             .await?;
         self.outbox
             .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
@@ -376,6 +423,11 @@ impl From<&AccountSetEvent> for OutboxEventPayload {
             } => OutboxEventPayload::AccountSetCreated {
                 source: DataSource::Local,
                 account_set: account_set.clone(),
+            },
+            AccountSetEvent::Updated { values, fields } => OutboxEventPayload::AccountSetUpdated {
+                source: DataSource::Local,
+                account_set: values.clone(),
+                fields: fields.clone(),
             },
         }
     }

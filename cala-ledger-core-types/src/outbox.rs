@@ -41,6 +41,11 @@ pub enum OutboxEventPayload {
         source: DataSource,
         account_set: AccountSetValues,
     },
+    AccountSetUpdated {
+        source: DataSource,
+        account_set: AccountSetValues,
+        fields: Vec<String>,
+    },
     AccountSetMemberCreated {
         source: DataSource,
         account_set_id: AccountSetId,
