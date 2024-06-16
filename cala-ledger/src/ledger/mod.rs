@@ -250,6 +250,21 @@ impl CalaLedger {
                     )
                     .await?
             }
+            AccountSetMemberRemoved {
+                account_set_id,
+                member,
+                ..
+            } => {
+                self.account_sets
+                    .sync_account_set_member_removal(
+                        db,
+                        event.recorded_at,
+                        origin,
+                        account_set_id,
+                        member,
+                    )
+                    .await?
+            }
             JournalCreated { journal, .. } => {
                 self.journals
                     .sync_journal_creation(db, event.recorded_at, origin, journal)

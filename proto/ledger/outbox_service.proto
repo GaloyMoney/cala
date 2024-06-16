@@ -24,13 +24,14 @@ message CalaLedgerEvent {
     AccountSetCreated account_set_created = 7;
     AccountSetUpdated account_set_updated = 8;
     AccountSetMemberCreated account_set_member_created = 9;
-    JournalCreated journal_created = 10;
-    JournalUpdated journal_updated = 11;
-    TxTemplateCreated tx_template_created = 12;
-    TransactionCreated transaction_created = 13;
-    EntryCreated entry_created = 14;
-    BalanceCreated balance_created = 15;
-    BalanceUpdated balance_updated = 16;
+    AccountSetMemberRemoved account_set_member_removed = 10;
+    JournalCreated journal_created = 11;
+    JournalUpdated journal_updated = 12;
+    TxTemplateCreated tx_template_created = 13;
+    TransactionCreated transaction_created = 14;
+    EntryCreated entry_created = 15;
+    BalanceCreated balance_created = 16;
+    BalanceUpdated balance_updated = 17;
   }
 }
 
@@ -111,6 +112,11 @@ message AccountSetMember {
     string member_account_id = 2;
     string member_account_set_id = 3;
   }
+}
+
+message AccountSetMemberRemoved {
+  string data_source_id = 1;
+  AccountSetMember member = 2;
 }
 
 message JournalCreated {

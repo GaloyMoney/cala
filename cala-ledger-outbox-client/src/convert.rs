@@ -100,6 +100,33 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     },
                 }
             }
+            proto::cala_ledger_event::Payload::AccountSetMemberRemoved(
+                proto::AccountSetMemberRemoved {
+                    data_source_id,
+                    member,
+                },
+            ) => {
+                let member = member.ok_or(CalaLedgerOutboxClientError::MissingField)?;
+                AccountSetMemberRemoved {
+                    source: data_source_id.parse()?,
+                    account_set_id: member.account_set_id.parse()?,
+                    member: match member
+                        .member
+                        .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                    {
+                        proto::account_set_member::Member::MemberAccountId(account_id) => {
+                            cala_types::account_set::AccountSetMember::from(
+                                account_id.parse::<AccountId>()?,
+                            )
+                        }
+                        proto::account_set_member::Member::MemberAccountSetId(account_set_id) => {
+                            cala_types::account_set::AccountSetMember::from(
+                                account_set_id.parse::<AccountSetId>()?,
+                            )
+                        }
+                    },
+                }
+            }
             proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
                 data_source_id,
                 journal,

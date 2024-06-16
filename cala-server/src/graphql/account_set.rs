@@ -62,12 +62,14 @@ pub enum AccountSetMemberType {
     Account,
     AccountSet,
 }
+
 #[derive(InputObject)]
 pub(super) struct AddToAccountSetInput {
     pub account_set_id: UUID,
     pub member_id: UUID,
     pub member_type: AccountSetMemberType,
 }
+
 impl From<AddToAccountSetInput> for AccountSetMember {
     fn from(input: AddToAccountSetInput) -> Self {
         match input.member_type {
@@ -83,6 +85,31 @@ impl From<AddToAccountSetInput> for AccountSetMember {
 
 #[derive(SimpleObject)]
 pub(super) struct AddToAccountSetPayload {
+    pub account_set: AccountSet,
+}
+
+#[derive(InputObject)]
+pub(super) struct RemoveFromAccountSetInput {
+    pub account_set_id: UUID,
+    pub member_id: UUID,
+    pub member_type: AccountSetMemberType,
+}
+
+impl From<RemoveFromAccountSetInput> for AccountSetMember {
+    fn from(input: RemoveFromAccountSetInput) -> Self {
+        match input.member_type {
+            AccountSetMemberType::Account => {
+                AccountSetMember::Account(AccountId::from(input.member_id))
+            }
+            AccountSetMemberType::AccountSet => {
+                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+            }
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+pub(super) struct RemoveFromAccountSetPayload {
     pub account_set: AccountSet,
 }
 
@@ -121,6 +148,14 @@ impl From<cala_ledger::account_set::AccountSet> for AccountSetCreatePayload {
 }
 
 impl From<cala_ledger::account_set::AccountSet> for AddToAccountSetPayload {
+    fn from(value: cala_ledger::account_set::AccountSet) -> Self {
+        Self {
+            account_set: AccountSet::from(value),
+        }
+    }
+}
+
+impl From<cala_ledger::account_set::AccountSet> for RemoveFromAccountSetPayload {
     fn from(value: cala_ledger::account_set::AccountSet) -> Self {
         Self {
             account_set: AccountSet::from(value),

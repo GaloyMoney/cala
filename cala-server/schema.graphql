@@ -295,6 +295,7 @@ type Mutation {
 	accountSetCreate(input: AccountSetCreateInput!): AccountSetCreatePayload!
 	accountSetUpdate(id: UUID!, input: AccountSetUpdateInput!): AccountSetUpdatePayload!
 	addToAccountSet(input: AddToAccountSetInput!): AddToAccountSetPayload!
+	removeFromAccountSet(input: RemoveFromAccountSetInput!): RemoveFromAccountSetPayload!
 	journalCreate(input: JournalCreateInput!): JournalCreatePayload!
 	journalUpdate(id: UUID!, input: JournalUpdateInput!): JournalUpdatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
@@ -366,6 +367,16 @@ type Query {
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!
+}
+
+input RemoveFromAccountSetInput {
+	accountSetId: UUID!
+	memberId: UUID!
+	memberType: AccountSetMemberType!
+}
+
+type RemoveFromAccountSetPayload {
+	accountSet: AccountSet!
 }
 
 enum Status {

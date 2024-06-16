@@ -51,6 +51,11 @@ pub enum OutboxEventPayload {
         account_set_id: AccountSetId,
         member: AccountSetMember,
     },
+    AccountSetMemberRemoved {
+        source: DataSource,
+        account_set_id: AccountSetId,
+        member: AccountSetMember,
+    },
     JournalCreated {
         source: DataSource,
         journal: JournalValues,
