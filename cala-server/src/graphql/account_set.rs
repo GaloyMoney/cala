@@ -56,6 +56,61 @@ impl AccountSet {
         };
         Ok(balance.map(Balance::from))
     }
+
+    async fn sets(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let account_set_id: AccountSetId = self.account_set_id.into();
+
+        query(
+            after.clone(),
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let query_args = cala_ledger::query::PaginatedQueryArgs {
+                    first,
+                    after: after.map(cala_ledger::account_set::AccountSetByNameCursor::from),
+                };
+
+                let result = match ctx.data_opt::<DbOp>() {
+                    Some(op) => {
+                        let mut op = op.try_lock().expect("Lock held concurrently");
+                        app.ledger()
+                            .account_sets()
+                            .find_where_account_set_is_member_in_op(
+                                &mut op,
+                                account_set_id,
+                                query_args,
+                            )
+                            .await?
+                    }
+                    None => {
+                        app.ledger()
+                            .account_sets()
+                            .find_where_account_set_is_member(account_set_id, query_args)
+                            .await?
+                    }
+                };
+
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = AccountSetByNameCursor::from(entity.values());
+                        Edge::new(cursor, AccountSet::from(entity))
+                    }));
+
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
+    }
 }
 
 #[derive(InputObject)]

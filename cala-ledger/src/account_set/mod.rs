@@ -305,6 +305,37 @@ impl AccountSets {
             .await
     }
 
+    #[instrument(
+        name = "cala_ledger.account_sets.find_where_account_set_is_member",
+        skip(self),
+        err
+    )]
+    pub async fn find_where_account_set_is_member(
+        &self,
+        account_set_id: AccountSetId,
+        query: PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.repo
+            .find_where_account_set_is_member(account_set_id, query)
+            .await
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.find_where_account_set_is_member_in_op",
+        skip(self, op),
+        err
+    )]
+    pub async fn find_where_account_set_is_member_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account_set_id: AccountSetId,
+        query: PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.repo
+            .find_where_account_set_is_member_in_tx(op.tx(), account_set_id, query)
+            .await
+    }
+
     pub(crate) async fn fetch_mappings(
         &self,
         journal_id: JournalId,

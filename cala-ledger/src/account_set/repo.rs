@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Executor, PgPool, Postgres, Transaction};
 
 use std::collections::HashMap;
 
@@ -394,6 +394,74 @@ impl AccountSetRepo {
             query.first as i64 + 1
         )
         .fetch_all(&self.pool)
+        .await?;
+
+        let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
+        let mut end_cursor = None;
+        if let Some(last) = entities.last() {
+            end_cursor = Some(AccountSetByNameCursor {
+                id: last.values().id,
+                name: last.values().name.clone(),
+            });
+        }
+        Ok(query::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    pub async fn find_where_account_set_is_member(
+        &self,
+        account_set_id: AccountSetId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.find_where_account_set_is_member_in_executor(&self.pool, account_set_id, query)
+            .await
+    }
+
+    pub async fn find_where_account_set_is_member_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.find_where_account_set_is_member_in_executor(&mut **tx, account_set_id, query)
+            .await
+    }
+
+    async fn find_where_account_set_is_member_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        account_set_id: AccountSetId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"
+            WITH member_account_sets AS (
+              SELECT a.id, a.name, a.created_at
+              FROM cala_account_set_member_account_sets asm
+              JOIN cala_account_sets a ON asm.data_source_id = a.data_source_id AND
+              asm.account_set_id = a.id
+              WHERE asm.data_source_id = '00000000-0000-0000-0000-000000000000' AND
+              asm.member_account_set_id = $1
+              AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
+              ORDER BY a.name, a.id
+              LIMIT $4
+            )
+            SELECT mas.id, e.sequence, e.event,
+              mas.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+              FROM member_account_sets mas
+              JOIN cala_account_set_events e ON mas.id = e.id
+              ORDER BY mas.name, mas.id, e.sequence
+            "#,
+            account_set_id as AccountSetId,
+            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+            query.after.map(|c| c.name),
+            query.first as i64 + 1
+        )
+        .fetch_all(executor)
         .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;

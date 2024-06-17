@@ -72,6 +72,7 @@ type AccountSet {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(currency: CurrencyCode!): Balance
+	sets(first: Int!, after: String): AccountSetConnection!
 }
 
 type AccountSetConnection {
