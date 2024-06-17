@@ -64,7 +64,7 @@ impl AccountSet {
         after: Option<String>,
     ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
-        let account_set_id: AccountSetId = self.account_set_id.into();
+        let account_set_id = AccountSetId::from(self.account_set_id);
 
         query(
             after.clone(),
@@ -83,17 +83,13 @@ impl AccountSet {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()
                             .account_sets()
-                            .find_where_account_set_is_member_in_op(
-                                &mut op,
-                                account_set_id,
-                                query_args,
-                            )
+                            .find_where_member_in_op(&mut op, account_set_id, query_args)
                             .await?
                     }
                     None => {
                         app.ledger()
                             .account_sets()
-                            .find_where_account_set_is_member(account_set_id, query_args)
+                            .find_where_member(account_set_id, query_args)
                             .await?
                     }
                 };

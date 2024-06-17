@@ -291,49 +291,52 @@ impl AccountSets {
     }
 
     #[instrument(
-        name = "cala_ledger.account_sets.find_where_account_is_member",
-        skip(self),
+        name = "cala_ledger.account_sets.find_where_member",
+        skip(self, member),
         err
     )]
-    pub async fn find_where_account_is_member(
+    pub async fn find_where_member(
         &self,
-        account_id: AccountId,
+        member: impl Into<AccountSetMember>,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
-        self.repo
-            .find_where_account_is_member(account_id, query)
-            .await
+        match member.into() {
+            AccountSetMember::Account(account_id) => {
+                self.repo
+                    .find_where_account_is_member(account_id, query)
+                    .await
+            }
+            AccountSetMember::AccountSet(account_set_id) => {
+                self.repo
+                    .find_where_account_set_is_member(account_set_id, query)
+                    .await
+            }
+        }
     }
 
     #[instrument(
-        name = "cala_ledger.account_sets.find_where_account_set_is_member",
-        skip(self),
+        name = "cala_ledger.account_sets.find_where_member_in_op",
+        skip(self, op, member),
         err
     )]
-    pub async fn find_where_account_set_is_member(
-        &self,
-        account_set_id: AccountSetId,
-        query: PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
-        self.repo
-            .find_where_account_set_is_member(account_set_id, query)
-            .await
-    }
-
-    #[instrument(
-        name = "cala_ledger.account_sets.find_where_account_set_is_member_in_op",
-        skip(self, op),
-        err
-    )]
-    pub async fn find_where_account_set_is_member_in_op(
+    pub async fn find_where_member_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        account_set_id: AccountSetId,
+        member: impl Into<AccountSetMember>,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
-        self.repo
-            .find_where_account_set_is_member_in_tx(op.tx(), account_set_id, query)
-            .await
+        match member.into() {
+            AccountSetMember::Account(account_id) => {
+                self.repo
+                    .find_where_account_is_member_in_tx(op.tx(), account_id, query)
+                    .await
+            }
+            AccountSetMember::AccountSet(account_set_id) => {
+                self.repo
+                    .find_where_account_set_is_member_in_tx(op.tx(), account_set_id, query)
+                    .await
+            }
+        }
     }
 
     pub(crate) async fn fetch_mappings(

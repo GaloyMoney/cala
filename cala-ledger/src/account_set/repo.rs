@@ -368,6 +368,26 @@ impl AccountSetRepo {
         account_id: AccountId,
         query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.find_where_account_is_member_in_executor(&self.pool, account_id, query)
+            .await
+    }
+
+    pub async fn find_where_account_is_member_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        account_id: AccountId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        self.find_where_account_is_member_in_executor(&mut **tx, account_id, query)
+            .await
+    }
+
+    async fn find_where_account_is_member_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        account_id: AccountId,
+        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"
@@ -393,7 +413,7 @@ impl AccountSetRepo {
             query.after.map(|c| c.name),
             query.first as i64 + 1
         )
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;

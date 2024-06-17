@@ -68,6 +68,7 @@ impl Account {
         after: Option<String>,
     ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
+        let account_id = AccountId::from(self.account_id);
         query(
             after,
             None,
@@ -75,18 +76,26 @@ impl Account {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let result = app
-                    .ledger()
-                    .account_sets()
-                    .find_where_account_is_member(
-                        self.account_id.into(),
-                        cala_ledger::query::PaginatedQueryArgs {
-                            first,
-                            after: after
-                                .map(cala_ledger::account_set::AccountSetByNameCursor::from),
-                        },
-                    )
-                    .await?;
+                let query_args = cala_ledger::query::PaginatedQueryArgs {
+                    first,
+                    after: after.map(cala_ledger::account_set::AccountSetByNameCursor::from),
+                };
+
+                let result = match ctx.data_opt::<DbOp>() {
+                    Some(op) => {
+                        let mut op = op.try_lock().expect("Lock held concurrently");
+                        app.ledger()
+                            .account_sets()
+                            .find_where_member_in_op(&mut op, account_id, query_args)
+                            .await?
+                    }
+                    None => {
+                        app.ledger()
+                            .account_sets()
+                            .find_where_member(account_id, query_args)
+                            .await?
+                    }
+                };
                 let mut connection = Connection::new(false, result.has_next_page);
                 connection
                     .edges
