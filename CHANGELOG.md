@@ -1,3 +1,22 @@
+# [cala release v0.2.16](https://github.com/GaloyMoney/cala/releases/tag/0.2.16)
+
+
+### Features
+
+- Impl accountSetUpdate (#111)
+- Impl journalUpdate (#110)
+- AccountUpdate mutation (#106)
+
+### Miscellaneous Tasks
+
+- Read balance in op (#115)
+- Impl removeFromAccountSet (#114)
+- Add tx_template_id to transactions table (#113)
+- Move account set update test to account_set.rs (#112)
+- Bump async-graphql-axum from 7.0.5 to 7.0.6 (#102)
+- Bump clap from 4.5.6 to 4.5.7 (#101)
+- Bump cached from 0.51.3 to 0.51.4 (#109)
+
 # [cala release v0.2.15](https://github.com/GaloyMoney/cala/releases/tag/0.2.15)
 
 
