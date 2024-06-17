@@ -14,6 +14,11 @@ const sidebars: SidebarsConfig = {
         'demo/check-account-balance',
       ]
     },
+    {
+      type: 'link',
+      label: 'API Reference',
+      href: 'https://cala.sh/api-reference.html',
+    },
   ],
 };
 
