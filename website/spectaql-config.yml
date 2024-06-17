@@ -1,0 +1,11 @@
+introspection:
+  schemaFile: ../cala-server/schema.graphql
+
+info:
+  title: Cala GraphQL API reference
+  description: Get started on [cala.sh/docs](https://cala.sh/docs/)
+
+servers:
+  - url: http://localhost:2252/graphql
+    description: Local dev environment
+    production: false
