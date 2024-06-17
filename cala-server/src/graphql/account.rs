@@ -10,6 +10,7 @@ use crate::app::CalaApp;
 
 use super::{
     account_set::*, balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*,
+    schema::DbOp,
 };
 
 #[derive(Clone, SimpleObject)]
@@ -37,12 +38,26 @@ impl Account {
         journal_id: UUID,
         currency: CurrencyCode,
     ) -> async_graphql::Result<Option<Balance>> {
-        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
         let journal_id = JournalId::from(journal_id);
         let account_id = AccountId::from(self.account_id);
         let currency = Currency::from(currency);
-        let balance: Option<AccountBalance> =
-            loader.load_one((journal_id, account_id, currency)).await?;
+
+        let balance: Option<AccountBalance> = match ctx.data_opt::<DbOp>() {
+            Some(op) => {
+                let app = ctx.data_unchecked::<CalaApp>();
+                let mut op = op.try_lock().expect("Lock held concurrently");
+                Some(
+                    app.ledger()
+                        .balances()
+                        .find_in_op(&mut op, journal_id, account_id, currency)
+                        .await?,
+                )
+            }
+            None => {
+                let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+                loader.load_one((journal_id, account_id, currency)).await?
+            }
+        };
         Ok(balance.map(Balance::from))
     }
 
