@@ -81,6 +81,30 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                     }),
                 },
             ),
+            OutboxEventPayload::AccountSetMemberRemoved {
+                source,
+                account_set_id,
+                member,
+            } => proto::cala_ledger_event::Payload::AccountSetMemberRemoved(
+                proto::AccountSetMemberRemoved {
+                    data_source_id: source.to_string(),
+                    member: Some(proto::AccountSetMember {
+                        account_set_id: account_set_id.to_string(),
+                        member: Some(match member {
+                            AccountSetMember::Account(account_id) => {
+                                proto::account_set_member::Member::MemberAccountId(
+                                    account_id.to_string(),
+                                )
+                            }
+                            AccountSetMember::AccountSet(account_set_id) => {
+                                proto::account_set_member::Member::MemberAccountSetId(
+                                    account_set_id.to_string(),
+                                )
+                            }
+                        }),
+                    }),
+                },
+            ),
             OutboxEventPayload::JournalCreated { source, journal } => {
                 proto::cala_ledger_event::Payload::JournalCreated(proto::JournalCreated {
                     data_source_id: source.to_string(),

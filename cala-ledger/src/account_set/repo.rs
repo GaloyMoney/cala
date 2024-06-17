@@ -108,6 +108,68 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    pub async fn remove_member_account_and_return_parents(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        account_id: AccountId,
+    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+          WITH RECURSIVE parents AS (
+            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            FROM cala_account_set_member_account_sets m
+            JOIN cala_account_sets s
+            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
+            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND m.member_account_set_id = $1
+
+            UNION ALL
+            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            FROM parents p
+            JOIN cala_account_set_member_account_sets m
+                ON p.account_set_id = m.member_account_set_id
+                AND p.data_source_id = m.data_source_id
+          ),
+          locked_sets AS (
+            SELECT 1
+            FROM cala_account_sets
+            WHERE (id IN (SELECT account_set_id FROM parents
+                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
+            FOR UPDATE
+          ),
+          deletions as (
+            DELETE FROM cala_account_set_member_accounts
+            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
+            AND member_account_id = $2
+          )
+          SELECT account_set_id, NULL AS now
+          FROM parents
+          UNION ALL
+          SELECT NULL AS account_set_id, NOW() AS now
+          "#,
+            account_set_id as AccountSetId,
+            account_id as AccountId,
+        )
+        .fetch_all(&mut **db)
+        .await?;
+        let mut time = None;
+        let ret = rows
+            .into_iter()
+            .filter_map(|row| {
+                if let Some(t) = row.now {
+                    time = Some(t);
+                    None
+                } else {
+                    Some(AccountSetId::from(
+                        row.account_set_id.expect("account_set_id not set"),
+                    ))
+                }
+            })
+            .collect();
+        Ok((time.expect("time not set"), ret))
+    }
+
     pub async fn add_member_set_and_return_parents(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -154,6 +216,73 @@ impl AccountSetRepo {
             SELECT p.account_set_id, n.member_account_id, TRUE
             FROM parents p
             CROSS JOIN new_members n
+          )
+          SELECT account_set_id, NULL AS now
+          FROM parents
+          UNION ALL
+          SELECT NULL AS account_set_id, NOW() AS now
+          "#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
+        )
+        .fetch_all(&mut **db)
+        .await?;
+        let mut time = None;
+        let ret = rows
+            .into_iter()
+            .filter_map(|row| {
+                if let Some(t) = row.now {
+                    time = Some(t);
+                    None
+                } else {
+                    Some(AccountSetId::from(
+                        row.account_set_id.expect("account_set_id not set"),
+                    ))
+                }
+            })
+            .collect();
+        Ok((time.expect("time not set"), ret))
+    }
+
+    pub async fn remove_member_set_and_return_parents(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        let rows = sqlx::query!(r#"
+          WITH RECURSIVE parents AS (
+            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            FROM cala_account_set_member_account_sets m
+            JOIN cala_account_sets s
+            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
+            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND m.member_account_set_id = $1
+
+            UNION ALL
+            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            FROM parents p
+            JOIN cala_account_set_member_account_sets m
+                ON p.account_set_id = m.member_account_set_id
+                AND p.data_source_id = m.data_source_id
+          ),
+          locked_sets AS (
+            SELECT 1
+            FROM cala_account_sets
+            WHERE (id IN (SELECT account_set_id FROM parents
+                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
+            FOR UPDATE
+          ),
+          member_accounts_deletion AS (
+            DELETE FROM cala_account_set_member_accounts
+            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
+            AND member_account_id IN (SELECT member_account_id FROM cala_account_set_member_accounts
+                                      WHERE account_set_id = $2)
+          ),
+          member_account_set_deletion AS (
+            DELETE FROM cala_account_set_member_account_sets
+            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
+            AND member_account_set_id = $2
           )
           SELECT account_set_id, NULL AS now
           FROM parents
@@ -398,6 +527,26 @@ impl AccountSetRepo {
     }
 
     #[cfg(feature = "import")]
+    pub async fn import_remove_member_account(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        account_id: AccountId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"DELETE FROM cala_account_set_member_accounts
+            WHERE data_source_id = $1 AND account_set_id = $2 AND member_account_id = $3"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId,
+            account_id as AccountId,
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
     pub async fn import_member_set(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -413,6 +562,26 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
             recorded_at
+        )
+        .execute(&mut **db)
+        .await?;
+        Ok(())
+    }
+
+    #[cfg(feature = "import")]
+    pub async fn import_remove_member_set(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        origin: DataSourceId,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!(
+            r#"DELETE FROM cala_account_set_member_account_sets
+            WHERE data_source_id = $1 AND account_set_id = $2 AND member_account_set_id = $3"#,
+            origin as DataSourceId,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
         )
         .execute(&mut **db)
         .await?;

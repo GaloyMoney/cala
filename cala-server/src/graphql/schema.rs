@@ -407,6 +407,26 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(account_set.into())
     }
 
+    async fn remove_from_account_set(
+        &self,
+        ctx: &Context<'_>,
+        input: RemoveFromAccountSetInput,
+    ) -> Result<RemoveFromAccountSetPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let account_set = app
+            .ledger()
+            .account_sets()
+            .remove_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .await?;
+
+        Ok(account_set.into())
+    }
+
     async fn journal_create(
         &self,
         ctx: &Context<'_>,

@@ -67,6 +67,17 @@ async fn errors_on_collision() -> anyhow::Result<()> {
     let res = cala.account_sets().add_member(set_one.id(), two.id()).await;
     assert!(res.is_err());
 
+    // remove one from set_one
+    let res = cala
+        .account_sets()
+        .remove_member(set_one.id(), one.id())
+        .await;
+    assert!(res.is_ok());
+
+    // can add one to parent set
+    let res = cala.account_sets().add_member(parent.id(), one.id()).await;
+    assert!(res.is_ok());
+
     Ok(())
 }
 
@@ -193,6 +204,26 @@ async fn balances() -> anyhow::Result<()> {
 
     assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
     assert_eq!(parent_balance.details.version, 2);
+
+    cala.account_sets()
+        .remove_member(parent_set.id(), before_set.id())
+        .await
+        .unwrap();
+    let parent_balance = cala
+        .balances()
+        .find(journal.id(), parent_set.id(), btc)
+        .await?;
+    assert_eq!(parent_balance.settled(), sender_balance.settled());
+
+    cala.account_sets()
+        .remove_member(after_set.id(), sender_account.id())
+        .await
+        .unwrap();
+    let parent_balance = cala
+        .balances()
+        .find(journal.id(), parent_set.id(), btc)
+        .await?;
+    assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
 
     Ok(())
 }
