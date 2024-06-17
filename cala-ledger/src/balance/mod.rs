@@ -51,6 +51,19 @@ impl Balances {
             .await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op), err)]
+    pub async fn find_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        currency: Currency,
+    ) -> Result<AccountBalance, BalanceError> {
+        self.repo
+            .find_in_tx(op.tx(), journal_id, account_id.into(), currency)
+            .await
+    }
+
     #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
     pub async fn find_all(
         &self,

@@ -1,4 +1,4 @@
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
@@ -27,6 +27,28 @@ impl BalanceRepo {
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
+        self.find_in_executor(&self.pool, journal_id, account_id, currency)
+            .await
+    }
+
+    pub async fn find_in_tx(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+    ) -> Result<AccountBalance, BalanceError> {
+        self.find_in_executor(&mut **tx, journal_id, account_id, currency)
+            .await
+    }
+
+    pub async fn find_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+    ) -> Result<AccountBalance, BalanceError> {
         let row = sqlx::query!(
             r#"
             SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
@@ -49,7 +71,7 @@ impl BalanceRepo {
             account_id as AccountId,
             currency.code(),
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(executor)
         .await?;
 
         if let Some(row) = row {
