@@ -290,14 +290,10 @@ impl AccountSets {
         self.repo.find(account_set_id).await
     }
 
-    #[instrument(
-        name = "cala_ledger.account_sets.find_where_member",
-        skip(self, member),
-        err
-    )]
+    #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self), err)]
     pub async fn find_where_member(
         &self,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMember> + std::fmt::Debug,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
         match member.into() {
@@ -316,13 +312,13 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.find_where_member_in_op",
-        skip(self, op, member),
+        skip(self, op),
         err
     )]
     pub async fn find_where_member_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMember> + std::fmt::Debug,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
         match member.into() {
