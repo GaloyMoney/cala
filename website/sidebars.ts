@@ -16,8 +16,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'link',
-      label: 'API Reference',
+      label: 'API reference',
       href: 'https://cala.sh/api-reference.html',
+    },
+    {
+      type: 'link',
+      label: 'Rust crate docs',
+      href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
     },
   ],
 };
