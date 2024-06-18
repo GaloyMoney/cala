@@ -4,7 +4,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 
 const config: Config = {
   title: 'Cala',
-  tagline: 'A double sided accounting ledger built on PostgreSQL',
+  tagline: 'a powerful open source core banking ledger',
   favicon: 'img/favicon.ico',
 
   // production url
