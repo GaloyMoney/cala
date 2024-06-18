@@ -1,3 +1,14 @@
+# [cala release v0.2.17](https://github.com/GaloyMoney/cala/releases/tag/0.2.17)
+
+
+### Features
+
+- Add sets query on account sets (#116)
+
+### Miscellaneous Tasks
+
+- Don't skip member from tracing (#118)
+
 # [cala release v0.2.16](https://github.com/GaloyMoney/cala/releases/tag/0.2.16)
 
 
