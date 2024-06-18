@@ -2,12 +2,8 @@
 name: Website update API reference
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - website/spectaql-config.yml
-      - cala-server/schema.graphql
+  release:
+    types: [published]
 
 jobs:
   update-api-reference:
