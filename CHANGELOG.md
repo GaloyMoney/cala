@@ -1,3 +1,10 @@
+# [cala release v0.2.18](https://github.com/GaloyMoney/cala/releases/tag/0.2.18)
+
+
+### Miscellaneous Tasks
+
+- Persist_at_in_tx under imported flag (#119)
+
 # [cala release v0.2.17](https://github.com/GaloyMoney/cala/releases/tag/0.2.17)
 
 
