@@ -160,6 +160,7 @@ impl JournalRepo {
         }
     }
 
+    #[cfg(feature = "import")]
     pub async fn persist_at_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,
