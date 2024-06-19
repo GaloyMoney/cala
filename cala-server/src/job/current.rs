@@ -8,14 +8,21 @@ pub struct CurrentJob {
     id: JobId,
     pool: PgPool,
     state_json: Option<serde_json::Value>,
+    encryption_config: crate::integration::EncryptionConfig,
 }
 
 impl CurrentJob {
-    pub(super) fn new(id: JobId, pool: PgPool, state: Option<serde_json::Value>) -> Self {
+    pub(super) fn new(
+        id: JobId,
+        pool: PgPool,
+        state: Option<serde_json::Value>,
+        encryption_config: EncryptionConfig,
+    ) -> Self {
         Self {
             id,
             pool,
             state_json: state,
+            encryption_config,
         }
     }
 
@@ -64,8 +71,10 @@ impl CurrentJob {
         JobRepo::new(self.pool()).persist_in_tx(db, entity).await
     }
 
-    pub async fn integration(&self, id: IntegrationId) -> Result<Integration, sqlx::Error> {
-        unimplemented!();
-        // Integrations::new(self.pool()).find_by_id(id).await
+    pub async fn integration(&self, id: IntegrationId) -> Result<Integration, JobError> {
+        let integration = Integrations::new(self.pool(), &self.encryption_config)
+            .find_by_id(id)
+            .await?;
+        Ok(integration)
     }
 }

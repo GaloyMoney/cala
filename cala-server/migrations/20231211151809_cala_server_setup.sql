@@ -27,7 +27,6 @@ CREATE TABLE job_executions (
 
 CREATE TABLE integrations (
   id UUID PRIMARY KEY,
-<<<<<<< HEAD
   name VARCHAR NOT NULL,
   cipher BYTEA NOT NULL,
   nonce BYTEA NOT NULL,
