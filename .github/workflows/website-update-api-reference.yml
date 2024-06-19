@@ -1,0 +1,28 @@
+# website-update-api-reference.yml
+name: Website update API reference
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-api-reference:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@v12
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build the API reference
+        run: |
+          cd website
+          npm install spectaql
+          npx spectaql spectaql-config.yml -t static -f api-reference.html
+      - name: Deploy the API reference
+        run: |
+          git config --local user.name 'github-actions[bot]'
+          git config --local user.email 'github-actions[bot]@users.noreply.github.com'
+          git add website/static/api-reference.html
+          git commit -m "docs: api reference update: $GITHUB_SHA"
+          git push origin main

@@ -14,6 +14,16 @@ const sidebars: SidebarsConfig = {
         'demo/check-account-balance',
       ]
     },
+    {
+      type: 'link',
+      label: 'API reference',
+      href: 'https://cala.sh/api-reference.html',
+    },
+    {
+      type: 'link',
+      label: 'Rust crate docs',
+      href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
+    },
   ],
 };
 
