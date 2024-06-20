@@ -34,3 +34,8 @@
   /* Update the background color */
   --ifm-background-color: #0d1117; /* Dark mode background */
 }
+
+a.noUnderline, a.noUnderline:hover, a.noUnderline:focus {
+  text-decoration: none;
+  color: inherit;
+}

@@ -105,6 +105,10 @@ const config: Config = {
               label: 'GitHub',
               href: 'https://github.com/GaloyMoney',
             },
+            {
+              label: 'Docs.rs',
+              href: 'https://docs.rs/cala-ledger/latest/cala_ledger',
+            },
           ],
         },
       ],
