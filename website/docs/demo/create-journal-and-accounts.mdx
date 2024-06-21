@@ -1,11 +1,30 @@
 ---
 id: create-journal-and-accounts
-title: Create journal and accounts
+title: Create a journal and accounts
 slug: /demo/create-journal-and-accounts
 ---
 
+Create different types of accounts (journal, checking, and debit accounts) through the GraphQL API.
+
 ## Create a journal
+
+Initiate the creation of a journal, specifically a "General Ledger," which is fundamental in accounting for keeping track of all the financial transactions of a company.
+
+### Variables
+
+The GraphQL mutation request input contains the unique ID and the name of the journal. The system creates a journal entity with these details.
+
+```json
+{
+  "input": {
+    "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
+    "name": "General Ledger"
+  }
+}
+```
+
 ### GraphQL body
+
 ```graphql
 mutation journalCreate($input: JournalCreateInput!) {
   journalCreate(input: $input) {
@@ -16,17 +35,10 @@ mutation journalCreate($input: JournalCreateInput!) {
   }
 }
 ```
-### Variables
-```json
-{
-  "input": {
-    "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
-    "name": "General Ledger"
-  }
-}
-```
 
 ### Response
+
+The system returns the details of the newly created journal, including its ID and name, confirming the successful creation.
 
 ```json
 {
@@ -42,19 +54,14 @@ mutation journalCreate($input: JournalCreateInput!) {
 ```
 
 ## Create a checking account
-### GraphQL body
-```graphql
-mutation accountCreate($input: AccountCreateInput!) {
-  accountCreate(input: $input) {
-    account {
-      accountId
-      name
-    }
-  }
-}
-```
+
+Next create a checking account named `Alice - Checking`. Checking accounts are typically used for day-to-day banking transactions.
+
+The mutation request includes details like account ID, name, and other attributes like `code` and `normalBalanceType`. <br />
+The `normalBalanceType` indicates whether the account is a debit or credit type, essential for correct accounting practices.
 
 ### Variables
+
 ```json
 {
   "input": {
@@ -66,7 +73,22 @@ mutation accountCreate($input: AccountCreateInput!) {
 }
 ```
 
+### GraphQL body
+
+```graphql
+mutation accountCreate($input: AccountCreateInput!) {
+  accountCreate(input: $input) {
+    account {
+      accountId
+      name
+    }
+  }
+}
+```
+
 ### Response
+
+The response confirms the creation of the checking account with the specified details, ensuring the account is ready for transactional activities.
 
 ```json
 {
@@ -82,19 +104,13 @@ mutation accountCreate($input: AccountCreateInput!) {
 ```
 
 ## Create a debit account
-### GraphQL body
-```graphql
-mutation accountCreate($input: AccountCreateInput!) {
-  accountCreate(input: $input) {
-    account {
-      accountId
-      name
-    }
-  }
-}
-```
+
+Create a debit account labeled `Assets`. Debit accounts are crucial for tracking resources owned by a business.
+
+Similar to the previous account creation, the mutation includes unique identifiers and account-specific information like the `normalBalanceType`, which in this case is `DEBIT`, indicating the nature of transactions expected.
 
 ### Variables
+
 ```
 {
   "input": {
@@ -106,7 +122,23 @@ mutation accountCreate($input: AccountCreateInput!) {
 }
 ```
 
+### GraphQL body
+
+```graphql
+mutation accountCreate($input: AccountCreateInput!) {
+  accountCreate(input: $input) {
+    account {
+      accountId
+      name
+    }
+  }
+}
+```
+
 ### Response
+
+The response shows the successful creation of the debit account, confirming that it's set up to track asset-related transactions.
+
 ```json
 {
   "data": {

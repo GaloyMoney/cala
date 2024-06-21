@@ -4,9 +4,38 @@ title: Create transaction templates
 slug: /docs/demo/tx-template-create
 ---
 
+This functionality allows a user (an administrator or financial manager) to define templates for recurring transaction types - specifically deposits and withdrawals. By defining these templates, the user ensures consistency, accuracy, and efficiency in transaction processing.
+
+## Process
+
+### Creation of Deposit Transaction Template
+
+- **Identification and Description**: The template is uniquely identified by a `txTemplateId` and a descriptive code. The description explains that this template is for an ACH credit into a customer's account.
+
+- **Parameters**: Parameters like the account ID (`account`), transaction amount (`amount`), and effective date (`effective`) are defined, which are necessary inputs for executing a deposit transaction.
+
+- **Transaction and Entries Definition**:
+  The transaction input specifies which journal to log this transaction under and when it becomes effective. Entries detail the movement of funds, specifying which account to debit and which to credit, in what amount, and under what transaction conditions, e.g., `currency` and transaction type (`entryType`).
+
+### Creation of Withdrawal Transaction Template
+
+- **Identification and Description**: Similarly, this template has its unique identifier and code, and is described for use in ACH debits from a customer's account.
+
+- **Parameters**: It uses the same types of parameters as the deposit template, allowing for consistency across templates.
+
+- **Transaction and Entries Definition**: This template defines how funds will be withdrawn, including debiting the customer's account and crediting an asset account, with specifics on the transaction type and conditions.
+
 ### GraphQL body
+
 ```graphql
-mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depositTemplateCode: String!, $withdrawalTemplateId: UUID!, $withdrawalTemplateCode: String!, $journalId: Expression!, $assetAccountId: Expression!) {
+mutation CreateDepositAndWithdrawalTxTemplates(
+  $depositTemplateId: UUID!
+  $depositTemplateCode: String!
+  $withdrawalTemplateId: UUID!
+  $withdrawalTemplateCode: String!
+  $journalId: Expression!
+  $assetAccountId: Expression!
+) {
   depositTemplate: txTemplateCreate(
     input: {
       txTemplateId: $depositTemplateId
@@ -25,10 +54,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
           description: "Effective date for transaction."
         }
       ]
-      txInput: {
-        journalId: $journalId
-        effective: "params.effective"
-      }
+      txInput: { journalId: $journalId, effective: "params.effective" }
       entries: [
         {
           accountId: $assetAccountId
@@ -49,7 +75,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
       ]
     }
   ) {
-    txTemplate{
+    txTemplate {
       txTemplateId
     }
   }
@@ -72,10 +98,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
           description: "Effective date for transaction."
         }
       ]
-      txInput: {
-        journalId: $journalId
-        effective: "params.effective"
-      }
+      txInput: { journalId: $journalId, effective: "params.effective" }
       entries: [
         {
           accountId: $assetAccountId
@@ -96,13 +119,22 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
       ]
     }
   ) {
-    txTemplate{
+    txTemplate {
       txTemplateId
     }
   }
 }
 ```
+
 ### Variables
+
+* **depositTemplateId**: A unique identifier for the deposit transaction template. This ensures that the template is uniquely recognized within the system.
+* **depositTemplateCode**: A code that describes the deposit transaction template. This provides an easy reference for users.
+* **withdrawalTemplateId**: A unique identifier for the withdrawal transaction template. This ensures that the template is uniquely recognized within the system.
+* **withdrawalTemplateCode**: A code that describes the withdrawal transaction template. This provides an easy reference for users.
+* **journalId**: The identifier for the journal where the transactions will be logged. This links the transaction to the correct financial journal.
+* **assetAccountId**: The identifier for the asset account involved in the transactions. This specifies which account will be debited or credited during the transaction.
+
 ```json
 {
   "depositTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c",
@@ -114,7 +146,10 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
 }
 ```
 
-### Response
+## Response
+
+Upon successful submission of the GraphQL mutations, the system creates these templates and returns their IDs in the response. This confirms that the templates are ready for use in future transactions.
+
 ```json
 {
   "data": {
@@ -131,3 +166,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
   }
 }
 ```
+
+## Significance
+
+Creating transaction templates standardizes the execution of frequent transaction types, reducing errors and the time needed for transaction entry. This systematization is crucial for large organizations or financial institutions where transactions occur regularly and need to adhere to strict regulatory and internal standards. The use of GraphQL allows for clear, customizable, and direct communication with the database, facilitating dynamic interaction with the financial data.
