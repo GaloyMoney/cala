@@ -83,17 +83,17 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 AccountSetMemberCreated {
                     source: data_source_id.parse()?,
                     account_set_id: member.account_set_id.parse()?,
-                    member: match member
+                    member_id: match member
                         .member
                         .ok_or(CalaLedgerOutboxClientError::MissingField)?
                     {
                         proto::account_set_member::Member::MemberAccountId(account_id) => {
-                            cala_types::account_set::AccountSetMember::from(
+                            cala_types::account_set::AccountSetMemberId::from(
                                 account_id.parse::<AccountId>()?,
                             )
                         }
                         proto::account_set_member::Member::MemberAccountSetId(account_set_id) => {
-                            cala_types::account_set::AccountSetMember::from(
+                            cala_types::account_set::AccountSetMemberId::from(
                                 account_set_id.parse::<AccountSetId>()?,
                             )
                         }
@@ -110,17 +110,17 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                 AccountSetMemberRemoved {
                     source: data_source_id.parse()?,
                     account_set_id: member.account_set_id.parse()?,
-                    member: match member
+                    member_id: match member
                         .member
                         .ok_or(CalaLedgerOutboxClientError::MissingField)?
                     {
                         proto::account_set_member::Member::MemberAccountId(account_id) => {
-                            cala_types::account_set::AccountSetMember::from(
+                            cala_types::account_set::AccountSetMemberId::from(
                                 account_id.parse::<AccountId>()?,
                             )
                         }
                         proto::account_set_member::Member::MemberAccountSetId(account_set_id) => {
-                            cala_types::account_set::AccountSetMember::from(
+                            cala_types::account_set::AccountSetMemberId::from(
                                 account_set_id.parse::<AccountSetId>()?,
                             )
                         }

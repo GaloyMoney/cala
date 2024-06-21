@@ -237,7 +237,7 @@ impl CalaLedger {
             }
             AccountSetMemberCreated {
                 account_set_id,
-                member,
+                member_id,
                 ..
             } => {
                 self.account_sets
@@ -246,13 +246,13 @@ impl CalaLedger {
                         event.recorded_at,
                         origin,
                         account_set_id,
-                        member,
+                        member_id,
                     )
                     .await?
             }
             AccountSetMemberRemoved {
                 account_set_id,
-                member,
+                member_id,
                 ..
             } => {
                 self.account_sets
@@ -261,7 +261,7 @@ impl CalaLedger {
                         event.recorded_at,
                         origin,
                         account_set_id,
-                        member,
+                        member_id,
                     )
                     .await?
             }

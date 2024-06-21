@@ -15,19 +15,19 @@ pub struct AccountSetValues {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "id")]
-pub enum AccountSetMember {
+pub enum AccountSetMemberId {
     Account(AccountId),
     AccountSet(AccountSetId),
 }
 
-impl From<AccountId> for AccountSetMember {
+impl From<AccountId> for AccountSetMemberId {
     fn from(account_id: AccountId) -> Self {
-        AccountSetMember::Account(account_id)
+        Self::Account(account_id)
     }
 }
 
-impl From<AccountSetId> for AccountSetMember {
+impl From<AccountSetId> for AccountSetMemberId {
     fn from(id: AccountSetId) -> Self {
-        AccountSetMember::AccountSet(id)
+        Self::AccountSet(id)
     }
 }

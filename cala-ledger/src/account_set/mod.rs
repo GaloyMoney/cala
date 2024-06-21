@@ -112,7 +112,7 @@ impl AccountSets {
     pub async fn add_member(
         &self,
         account_set_id: AccountSetId,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let account_set = self
@@ -126,11 +126,11 @@ impl AccountSets {
         &self,
         op: &mut AtomicOperation<'_>,
         account_set_id: AccountSetId,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
-            AccountSetMember::Account(id) => {
+            AccountSetMemberId::Account(id) => {
                 let set = self.repo.find_in_tx(op.tx(), account_set_id).await?;
                 let (time, parents) = self
                     .repo
@@ -138,7 +138,7 @@ impl AccountSets {
                     .await?;
                 (time, parents, set, id)
             }
-            AccountSetMember::AccountSet(id) => {
+            AccountSetMemberId::AccountSet(id) => {
                 let mut accounts = self
                     .repo
                     .find_all_in_tx::<AccountSet>(op.tx(), &[account_set_id, id])
@@ -166,7 +166,7 @@ impl AccountSets {
             OutboxEventPayload::AccountSetMemberCreated {
                 source: DataSource::Local,
                 account_set_id,
-                member,
+                member_id: member,
             },
         ));
 
@@ -196,7 +196,7 @@ impl AccountSets {
     pub async fn remove_member(
         &self,
         account_set_id: AccountSetId,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let account_set = self
@@ -210,11 +210,11 @@ impl AccountSets {
         &self,
         op: &mut AtomicOperation<'_>,
         account_set_id: AccountSetId,
-        member: impl Into<AccountSetMember>,
+        member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
-            AccountSetMember::Account(id) => {
+            AccountSetMemberId::Account(id) => {
                 let set = self.repo.find_in_tx(op.tx(), account_set_id).await?;
                 let (time, parents) = self
                     .repo
@@ -222,7 +222,7 @@ impl AccountSets {
                     .await?;
                 (time, parents, set, id)
             }
-            AccountSetMember::AccountSet(id) => {
+            AccountSetMemberId::AccountSet(id) => {
                 let mut accounts = self
                     .repo
                     .find_all_in_tx::<AccountSet>(op.tx(), &[account_set_id, id])
@@ -250,7 +250,7 @@ impl AccountSets {
             OutboxEventPayload::AccountSetMemberRemoved {
                 source: DataSource::Local,
                 account_set_id,
-                member,
+                member_id: member,
             },
         ));
 
@@ -293,16 +293,16 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self), err)]
     pub async fn find_where_member(
         &self,
-        member: impl Into<AccountSetMember> + std::fmt::Debug,
+        member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
         match member.into() {
-            AccountSetMember::Account(account_id) => {
+            AccountSetMemberId::Account(account_id) => {
                 self.repo
                     .find_where_account_is_member(account_id, query)
                     .await
             }
-            AccountSetMember::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
                     .find_where_account_set_is_member(account_set_id, query)
                     .await
@@ -318,16 +318,16 @@ impl AccountSets {
     pub async fn find_where_member_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        member: impl Into<AccountSetMember> + std::fmt::Debug,
+        member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
         match member.into() {
-            AccountSetMember::Account(account_id) => {
+            AccountSetMemberId::Account(account_id) => {
                 self.repo
                     .find_where_account_is_member_in_tx(op.tx(), account_id, query)
                     .await
             }
-            AccountSetMember::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
                     .find_where_account_set_is_member_in_tx(op.tx(), account_set_id, query)
                     .await
@@ -388,15 +388,15 @@ impl AccountSets {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member_id: AccountSetMemberId,
     ) -> Result<(), AccountSetError> {
-        match member {
-            AccountSetMember::Account(account_id) => {
+        match member_id {
+            AccountSetMemberId::Account(account_id) => {
                 self.repo
                     .import_member_account(&mut db, recorded_at, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMember::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
                     .import_member_set(&mut db, recorded_at, origin, account_set_id, account_set_id)
                     .await?;
@@ -408,7 +408,7 @@ impl AccountSets {
                 std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
                     source: DataSource::Remote { id: origin },
                     account_set_id,
-                    member,
+                    member_id,
                 }),
                 recorded_at,
             )
@@ -423,15 +423,15 @@ impl AccountSets {
         recorded_at: DateTime<Utc>,
         origin: DataSourceId,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member_id: AccountSetMemberId,
     ) -> Result<(), AccountSetError> {
-        match member {
-            AccountSetMember::Account(account_id) => {
+        match member_id {
+            AccountSetMemberId::Account(account_id) => {
                 self.repo
                     .import_remove_member_account(&mut db, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMember::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
                     .import_remove_member_set(&mut db, origin, account_set_id, account_set_id)
                     .await?;
@@ -443,7 +443,7 @@ impl AccountSets {
                 std::iter::once(OutboxEventPayload::AccountSetMemberRemoved {
                     source: DataSource::Remote { id: origin },
                     account_set_id,
-                    member,
+                    member_id,
                 }),
                 recorded_at,
             )

@@ -2,7 +2,7 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
-    account_set::AccountSetMember,
+    account_set::AccountSetMemberId,
     balance::*,
     primitives::{AccountId, AccountSetId, Currency, JournalId},
 };
@@ -138,14 +138,14 @@ pub(super) struct AddToAccountSetInput {
     pub member_type: AccountSetMemberType,
 }
 
-impl From<AddToAccountSetInput> for AccountSetMember {
+impl From<AddToAccountSetInput> for AccountSetMemberId {
     fn from(input: AddToAccountSetInput) -> Self {
         match input.member_type {
             AccountSetMemberType::Account => {
-                AccountSetMember::Account(AccountId::from(input.member_id))
+                AccountSetMemberId::Account(AccountId::from(input.member_id))
             }
             AccountSetMemberType::AccountSet => {
-                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+                AccountSetMemberId::AccountSet(AccountSetId::from(input.member_id))
             }
         }
     }
@@ -163,14 +163,14 @@ pub(super) struct RemoveFromAccountSetInput {
     pub member_type: AccountSetMemberType,
 }
 
-impl From<RemoveFromAccountSetInput> for AccountSetMember {
+impl From<RemoveFromAccountSetInput> for AccountSetMemberId {
     fn from(input: RemoveFromAccountSetInput) -> Self {
         match input.member_type {
             AccountSetMemberType::Account => {
-                AccountSetMember::Account(AccountId::from(input.member_id))
+                AccountSetMemberId::Account(AccountId::from(input.member_id))
             }
             AccountSetMemberType::AccountSet => {
-                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+                AccountSetMemberId::AccountSet(AccountSetId::from(input.member_id))
             }
         }
     }
