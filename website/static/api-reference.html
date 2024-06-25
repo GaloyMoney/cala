@@ -82,6 +82,9 @@
               <li><a href="#definition-AccountSetCreateInput">AccountSetCreateInput</a></li>
               <li><a href="#definition-AccountSetCreatePayload">AccountSetCreatePayload</a></li>
               <li><a href="#definition-AccountSetEdge">AccountSetEdge</a></li>
+              <li><a href="#definition-AccountSetMember">AccountSetMember</a></li>
+              <li><a href="#definition-AccountSetMemberConnection">AccountSetMemberConnection</a></li>
+              <li><a href="#definition-AccountSetMemberEdge">AccountSetMemberEdge</a></li>
               <li><a href="#definition-AccountSetMemberType">AccountSetMemberType</a></li>
               <li><a href="#definition-AccountSetUpdateInput">AccountSetUpdateInput</a></li>
               <li><a href="#definition-AccountSetUpdatePayload">AccountSetUpdatePayload</a></li>
@@ -227,7 +230,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -241,14 +244,14 @@
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"account"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
@@ -347,11 +350,11 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"accountByCode"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
@@ -442,7 +445,7 @@
                   <h5>Variables</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">}</span>
+                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
                   </html>
@@ -455,14 +458,14 @@
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"accountByExternalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
@@ -534,6 +537,12 @@
     <span class="hljs-symbol">balance <span class="hljs-tag">{
       <span class="hljs-type">...BalanceFragment</span>
     }</span></span>
+    <span class="hljs-symbol">members <span class="hljs-tag">{
+      <span class="hljs-type">...AccountSetMemberConnectionFragment</span>
+    }</span></span>
+    <span class="hljs-symbol">sets <span class="hljs-tag">{
+      <span class="hljs-type">...AccountSetConnectionFragment</span>
+    }</span></span>
   }</span></span>
 }</span></span>
 </code></pre>
@@ -545,7 +554,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -558,17 +567,19 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"accountSet"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"balance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Balance</span>
+      <span class="hljs-attr">"balance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Balance</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"members"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSetMemberConnection</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"sets"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSetConnection</span>
     <span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
@@ -654,7 +665,7 @@
                   <h5>Variables</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"first"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"after"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">}</span>
+                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"first"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span> <span class="hljs-attr">"after"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
                   </html>
@@ -770,8 +781,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"currency"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">CurrencyCode</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -786,9 +797,9 @@
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"balance"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"currency"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">CurrencyCode</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"settled"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">BalanceAmount</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"pending"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">BalanceAmount</span><span class="hljs-punctuation">,</span>
@@ -966,7 +977,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -979,9 +990,9 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"journal"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
@@ -1103,7 +1114,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -1117,14 +1128,14 @@
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"transaction"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"effective"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"2007-12-03"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"correlationId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span>
@@ -1203,7 +1214,7 @@
                   <h5>Variables</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">}</span>
+                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span><span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
                   </html>
@@ -1216,13 +1227,13 @@
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"transactionByExternalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
       <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"effective"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"2007-12-03"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"correlationId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
@@ -1308,7 +1319,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -1321,10 +1332,10 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"txTemplate"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"params"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">ParamDefinition</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"txInput"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">TxInput</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"entries"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">EntryInput</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
@@ -1424,14 +1435,14 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
     <span class="hljs-attr">"txTemplateByCode"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"params"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">ParamDefinition</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"txInput"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">TxInput</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"entries"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">EntryInput</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+      <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
       <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span>
@@ -1659,7 +1670,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"input"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSetUpdateInput</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -1748,7 +1759,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"input"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountUpdateInput</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -2056,7 +2067,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"input"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">JournalUpdateInput</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -2446,10 +2457,10 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
@@ -2610,16 +2621,16 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"accountSetIds"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span>
-    <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+    <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
   <span class="hljs-punctuation">]</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -2816,6 +2827,52 @@
                           </div>
                         </td>
                       </tr>
+                      <tr class="row-has-field-arguments">
+                        <td data-property-name=""><span class="property-name"><code>members</code></span> - <span class="property-type"><a href="#definition-AccountSetMemberConnection"><code>AccountSetMemberConnection!</code></a></span>
+                        </td>
+                        <td>
+                        </td>
+                      </tr>
+                      <tr class="row-field-arguments">
+                        <td colspan="2">
+                          <div class="field-arguments">
+                            <h5 class="field-arguments-heading"> Arguments </h5>
+                            <div class="field-argument-list">
+                              <div class="field-argument">
+                                <h6 class="field-argument-name"><span class="property-name"><code>first</code></span> - <span class="property-type"><a href="#definition-Int"><code>Int!</code></a></span>
+                                </h6>
+                              </div>
+                              <div class="field-argument">
+                                <h6 class="field-argument-name"><span class="property-name"><code>after</code></span> - <span class="property-type"><a href="#definition-String"><code>String</code></a></span>
+                                </h6>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      <tr class="row-has-field-arguments">
+                        <td data-property-name=""><span class="property-name"><code>sets</code></span> - <span class="property-type"><a href="#definition-AccountSetConnection"><code>AccountSetConnection!</code></a></span>
+                        </td>
+                        <td>
+                        </td>
+                      </tr>
+                      <tr class="row-field-arguments">
+                        <td colspan="2">
+                          <div class="field-arguments">
+                            <h5 class="field-arguments-heading"> Arguments </h5>
+                            <div class="field-argument-list">
+                              <div class="field-argument">
+                                <h6 class="field-argument-name"><span class="property-name"><code>first</code></span> - <span class="property-type"><a href="#definition-Int"><code>Int!</code></a></span>
+                                </h6>
+                              </div>
+                              <div class="field-argument">
+                                <h6 class="field-argument-name"><span class="property-name"><code>after</code></span> - <span class="property-type"><a href="#definition-String"><code>String</code></a></span>
+                                </h6>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -2826,17 +2883,19 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"balance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Balance</span>
+  <span class="hljs-attr">"balance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Balance</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"members"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSetMemberConnection</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"sets"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSetConnection</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -2967,8 +3026,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
@@ -3063,7 +3122,154 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">AccountSet</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"cursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
+  <span class="hljs-attr">"cursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+                    </body>
+                  </html>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section id="definition-AccountSetMember" class="definition definition-union" data-traverse-target="definition-AccountSetMember">
+            <div class="definition-group-name">
+              <a href="#group-Types">Types</a>
+            </div>
+            <h2 class="definition-heading">AccountSetMember</h2>
+            <div class="doc-row">
+              <div class="doc-copy">
+                <div class="definition-properties doc-copy-section">
+                  <h5>Types</h5>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Union Types</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <p><a href="#definition-Account"><code>Account</code></a></p>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>
+                          <p><a href="#definition-AccountSet"><code>AccountSet</code></a></p>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="doc-examples">
+                <div class="example-section example-section-is-code">
+                  <h5>Example</h5>
+                  <html>
+                    <head></head>
+                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol">Account</span>
+</code></pre>
+                    </body>
+                  </html>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section id="definition-AccountSetMemberConnection" class="definition definition-object" data-traverse-target="definition-AccountSetMemberConnection">
+            <div class="definition-group-name">
+              <a href="#group-Types">Types</a>
+            </div>
+            <h2 class="definition-heading">AccountSetMemberConnection</h2>
+            <div class="doc-row">
+              <div class="doc-copy">
+                <div class="definition-properties doc-copy-section">
+                  <h5>Fields</h5>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Field Name</th>
+                        <th>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td data-property-name=""><span class="property-name"><code>pageInfo</code></span> - <span class="property-type"><a href="#definition-PageInfo"><code>PageInfo!</code></a></span>
+                        </td>
+                        <td> Information to aid in pagination. </td>
+                      </tr>
+                      <tr>
+                        <td data-property-name=""><span class="property-name"><code>edges</code></span> - <span class="property-type"><a href="#definition-AccountSetMemberEdge"><code>[AccountSetMemberEdge!]!</code></a></span>
+                        </td>
+                        <td> A list of edges. </td>
+                      </tr>
+                      <tr>
+                        <td data-property-name=""><span class="property-name"><code>nodes</code></span> - <span class="property-type"><a href="#definition-AccountSetMember"><code>[AccountSetMember!]!</code></a></span>
+                        </td>
+                        <td> A list of nodes. </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="doc-examples">
+                <div class="example-section example-section-is-code">
+                  <h5>Example</h5>
+                  <html>
+                    <head></head>
+                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"pageInfo"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">PageInfo</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"edges"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">AccountSetMemberEdge</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"nodes"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">Account</span><span class="hljs-punctuation">]</span>
+<span class="hljs-punctuation">}</span>
+</code></pre>
+                    </body>
+                  </html>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section id="definition-AccountSetMemberEdge" class="definition definition-object" data-traverse-target="definition-AccountSetMemberEdge">
+            <div class="definition-group-name">
+              <a href="#group-Types">Types</a>
+            </div>
+            <h2 class="definition-heading">AccountSetMemberEdge</h2>
+            <div class="doc-row">
+              <div class="doc-copy">
+                <div class="definition-description doc-copy-section">
+                  <h5>Description</h5>
+                  <p>An edge in a connection.</p>
+                </div>
+                <div class="definition-properties doc-copy-section">
+                  <h5>Fields</h5>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Field Name</th>
+                        <th>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td data-property-name=""><span class="property-name"><code>node</code></span> - <span class="property-type"><a href="#definition-AccountSetMember"><code>AccountSetMember!</code></a></span>
+                        </td>
+                        <td> The item at the end of the edge </td>
+                      </tr>
+                      <tr>
+                        <td data-property-name=""><span class="property-name"><code>cursor</code></span> - <span class="property-type"><a href="#definition-String"><code>String!</code></a></span>
+                        </td>
+                        <td> A cursor for use in pagination </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="doc-examples">
+                <div class="example-section example-section-is-code">
+                  <h5>Example</h5>
+                  <html>
+                    <head></head>
+                    <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
+  <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Account</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"cursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -3305,9 +3511,9 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalanceType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"DEBIT"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
@@ -3406,8 +3612,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"memberId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"memberId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"memberType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACCOUNT"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -3538,15 +3744,15 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"currency"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">CurrencyCode</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"settled"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">BalanceAmount</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"pending"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">BalanceAmount</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"encumbrance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">BalanceAmount</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span>
+  <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -3609,7 +3815,7 @@
   <span class="hljs-attr">"drBalance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Money</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"crBalance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Money</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"normalBalance"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Money</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+  <span class="hljs-attr">"entryId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -3689,8 +3895,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"jobId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"jobId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"endpoint"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
@@ -3999,7 +4205,7 @@
                   <h5>Example</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-json"><span class="hljs-number">987</span>
+                    <body><pre><code class="hljs language-json"><span class="hljs-number">123</span>
 </code></pre>
                     </body>
                   </html>
@@ -4079,10 +4285,10 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"jobId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
+  <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"jobId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -4186,7 +4392,7 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"node"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Job</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"cursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
+  <span class="hljs-attr">"cursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -4271,9 +4477,9 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
@@ -4341,10 +4547,10 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -4441,9 +4647,9 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"status"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACTIVE"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -4594,7 +4800,7 @@
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"hasPreviousPage"</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">true</span></span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"hasNextPage"</span><span class="hljs-punctuation">:</span> <span class="hljs-literal"><span class="hljs-keyword">false</span></span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"startCursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"startCursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"endCursor"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -4748,7 +4954,7 @@
   <span class="hljs-attr">"name"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"type"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"STRING"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"default"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Expression</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
                     </body>
@@ -4912,8 +5118,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"memberId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"accountSetId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"memberId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"memberType"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"ACCOUNT"</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>
@@ -5028,7 +5234,7 @@
                   <h5>Example</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol">"xyz789"</span>
+                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol">"abc123"</span>
 </code></pre>
                     </body>
                   </html>
@@ -5157,14 +5363,14 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"4"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">987</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"journalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"effective"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"2007-12-03"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"correlationId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"externalId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span>
@@ -5224,7 +5430,7 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"transactionId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"txTemplateCode"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"params"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
@@ -5406,13 +5612,13 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"id"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">4</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"version"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">123</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"params"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">ParamDefinition</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"txInput"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">TxInput</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"entries"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">EntryInput</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"description"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"metadata"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-punctuation">}</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"createdAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"modifiedAt"</span><span class="hljs-punctuation">:</span> <span class="hljs-number">1592577642</span>
@@ -5500,8 +5706,8 @@
                   <html>
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
-  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span><span class="hljs-punctuation">,</span>
-  <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"abc123"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"txTemplateId"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"3145a101-2210-4b44-9763-5c788d21b2a3"</span><span class="hljs-punctuation">,</span>
+  <span class="hljs-attr">"code"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">"xyz789"</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"params"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">ParamDefinitionInput</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"txInput"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">TxTemplateTxInput</span><span class="hljs-punctuation">,</span>
   <span class="hljs-attr">"entries"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">[</span><span class="hljs-string">TxTemplateEntryInput</span><span class="hljs-punctuation">]</span><span class="hljs-punctuation">,</span>
@@ -5742,7 +5948,7 @@
                   <h5>Example</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol">"7264d0c7-acf6-4069-913d-bb6ffd933733"</span>
+                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol">"3145a101-2210-4b44-9763-5c788d21b2a3"</span>
 </code></pre>
                     </body>
                   </html>
