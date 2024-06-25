@@ -1,12 +1,12 @@
 ---
 id: create-journal-and-accounts
-title: Create a journal and accounts
-slug: /demo/create-journal-and-accounts
+title: Create a Journal and Accounts
+slug: /docs/create-journal-and-accounts
 ---
 
 Create different types of accounts (journal, checking, and debit accounts) through the GraphQL API.
 
-## Create a journal
+## Create a Journal
 
 Initiate the creation of a journal, specifically a "General Ledger," which is fundamental in accounting for keeping track of all the financial transactions of a company.
 
@@ -23,7 +23,7 @@ The GraphQL mutation request input contains the unique ID and the name of the jo
 }
 ```
 
-### GraphQL body
+### GraphQL Request Body
 
 ```graphql
 mutation journalCreate($input: JournalCreateInput!) {
@@ -53,7 +53,7 @@ The system returns the details of the newly created journal, including its ID an
 }
 ```
 
-## Create a checking account
+## Create a Checking Account
 
 Next create a checking account named `Alice - Checking`. Checking accounts are typically used for day-to-day banking transactions.
 
@@ -103,7 +103,7 @@ The response confirms the creation of the checking account with the specified de
 }
 ```
 
-## Create a debit account
+## Create a Debit Account
 
 Create a debit account labeled `Assets`. Debit accounts are crucial for tracking resources owned by a business.
 
@@ -122,7 +122,7 @@ Similar to the previous account creation, the mutation includes unique identifie
 }
 ```
 
-### GraphQL body
+### GraphQL Request Body
 
 ```graphql
 mutation accountCreate($input: AccountCreateInput!) {

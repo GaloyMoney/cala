@@ -23,15 +23,15 @@ const FeatureList: FeatureItem[] = [
     link: "https://cala.sh/api-reference.html",
   },
   {
-    title: "Double Sided Accounting",
-    image: require("@site/static/img/double-sided-accounting-logo.png").default,
+    title: "Double-Entry Accounting",
+    image: require("@site/static/img/double-entry-accounting-logo.png").default,
     description: (
       <>
         Every transaction is recorded accurately on both sides of the ledger
         providing a complete and transparent view of your financial operations.
       </>
     ),
-    link: "https://cala.sh/docs/demo/create-journal-and-accounts",
+    link: "/accounting/double-entry-accounting",
   },
   {
     title: "Transaction Templates",
@@ -43,7 +43,7 @@ const FeatureList: FeatureItem[] = [
         financial workflows.
       </>
     ),
-    link: "https://cala.sh/docs/docs/demo/tx-template-create",
+    link: "/docs/tx-template-create",
   },
   {
     title: "Embeddable",

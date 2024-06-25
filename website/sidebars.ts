@@ -25,6 +25,12 @@ const sidebars: SidebarsConfig = {
       href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
     },
   ],
+  accountingSidebar: [
+    'accounting/accounting-intro',
+    'accounting/glossary',
+    'accounting/double-entry-accounting',
+    'accounting/step-by-step',
+  ],
 };
 
 export default sidebars;
