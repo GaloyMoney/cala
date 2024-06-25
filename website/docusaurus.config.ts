@@ -32,12 +32,12 @@ const config: Config = {
       {
         docs: {
           sidebarPath: './sidebars.ts',
-          routeBasePath: '/docs', // This changes the base path from /docs
-          editUrl: ({versionDocsDirPath, docPath}) => {
-            return `https://github.com/GaloyMoney/cala/edit/main//website/${versionDocsDirPath}/${docPath}`;
-          },
-          showLastUpdateAuthor: false,
-          showLastUpdateTime: false,
+          routeBasePath: '/', // This changes the base path from /docs
+          //editUrl: ({versionDocsDirPath, docPath}) => {
+          //  return `https://github.com/GaloyMoney/cala/edit/main//website/${versionDocsDirPath}/${docPath}`;
+          //},
+          //showLastUpdateAuthor: false,
+          //showLastUpdateTime: false,
         },
         theme: {
           customCss: './src/css/custom.css',
@@ -63,6 +63,22 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          type: 'docSidebar',
+          sidebarId: 'accountingSidebar',
+          position: 'left',
+          label: 'Accounting Intro',
+        },
+        {
+          href: 'https://cala.sh/api-reference.html',
+          label: 'API Reference',
+          position: 'left',
+        },
+        {
+          href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
+          label: 'Rust crate docs',
+          position: 'left',
+        },
+        {
           href: 'https://github.com/GaloyMoney/cala',
           label: 'GitHub',
           position: 'right',
@@ -81,7 +97,7 @@ const config: Config = {
             },
             {
               label: 'GraphQL API demo',
-              to: '/docs/demo/create-journal-and-accounts',
+              to: '/docs/create-journal-and-accounts',
             },
           ],
         },
