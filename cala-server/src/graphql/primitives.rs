@@ -49,6 +49,11 @@ impl JSON {
 #[serde(transparent)]
 pub struct Timestamp(chrono::DateTime<chrono::Utc>);
 scalar!(Timestamp);
+impl Timestamp {
+    pub fn into_inner(self) -> chrono::DateTime<chrono::Utc> {
+        self.0
+    }
+}
 impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
     fn from(value: chrono::DateTime<chrono::Utc>) -> Self {
         Self(value)

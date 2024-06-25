@@ -72,6 +72,7 @@ type AccountSet {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(currency: CurrencyCode!): Balance
+	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
 }
 
@@ -111,6 +112,37 @@ type AccountSetEdge {
 	The item at the end of the edge
 	"""
 	node: AccountSet!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
+
+union AccountSetMember = Account | AccountSet
+
+type AccountSetMemberConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [AccountSetMemberEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [AccountSetMember!]!
+}
+
+"""
+An edge in a connection.
+"""
+type AccountSetMemberEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: AccountSetMember!
 	"""
 	A cursor for use in pagination
 	"""

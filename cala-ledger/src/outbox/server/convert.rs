@@ -60,19 +60,19 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             OutboxEventPayload::AccountSetMemberCreated {
                 source,
                 account_set_id,
-                member,
+                member_id,
             } => proto::cala_ledger_event::Payload::AccountSetMemberCreated(
                 proto::AccountSetMemberCreated {
                     data_source_id: source.to_string(),
                     member: Some(proto::AccountSetMember {
                         account_set_id: account_set_id.to_string(),
-                        member: Some(match member {
-                            AccountSetMember::Account(account_id) => {
+                        member: Some(match member_id {
+                            AccountSetMemberId::Account(account_id) => {
                                 proto::account_set_member::Member::MemberAccountId(
                                     account_id.to_string(),
                                 )
                             }
-                            AccountSetMember::AccountSet(account_set_id) => {
+                            AccountSetMemberId::AccountSet(account_set_id) => {
                                 proto::account_set_member::Member::MemberAccountSetId(
                                     account_set_id.to_string(),
                                 )
@@ -84,19 +84,19 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             OutboxEventPayload::AccountSetMemberRemoved {
                 source,
                 account_set_id,
-                member,
+                member_id,
             } => proto::cala_ledger_event::Payload::AccountSetMemberRemoved(
                 proto::AccountSetMemberRemoved {
                     data_source_id: source.to_string(),
                     member: Some(proto::AccountSetMember {
                         account_set_id: account_set_id.to_string(),
-                        member: Some(match member {
-                            AccountSetMember::Account(account_id) => {
+                        member: Some(match member_id {
+                            AccountSetMemberId::Account(account_id) => {
                                 proto::account_set_member::Member::MemberAccountId(
                                     account_id.to_string(),
                                 )
                             }
-                            AccountSetMember::AccountSet(account_set_id) => {
+                            AccountSetMemberId::AccountSet(account_set_id) => {
                                 proto::account_set_member::Member::MemberAccountSetId(
                                     account_set_id.to_string(),
                                 )

@@ -49,12 +49,12 @@ pub enum OutboxEventPayload {
     AccountSetMemberCreated {
         source: DataSource,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member_id: AccountSetMemberId,
     },
     AccountSetMemberRemoved {
         source: DataSource,
         account_set_id: AccountSetId,
-        member: AccountSetMember,
+        member_id: AccountSetMemberId,
     },
     JournalCreated {
         source: DataSource,

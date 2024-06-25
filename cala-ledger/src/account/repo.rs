@@ -1,6 +1,6 @@
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Executor, PgPool, Postgres, Transaction};
 
 use std::collections::HashMap;
 
@@ -93,6 +93,22 @@ impl AccountRepo {
         &self,
         ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
+        self.find_all_in_executor(&self.pool, ids).await
+    }
+
+    pub(super) async fn find_all_in_tx<T: From<Account>>(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, T>, AccountError> {
+        self.find_all_in_executor(&mut **tx, ids).await
+    }
+
+    async fn find_all_in_executor<T: From<Account>>(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, T>, AccountError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"SELECT a.id, e.sequence, e.event,
@@ -106,7 +122,7 @@ impl AccountRepo {
             ORDER BY a.id, e.sequence"#,
             ids as &[AccountId]
         )
-        .fetch_all(&self.pool)
+        .fetch_all(executor)
         .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?

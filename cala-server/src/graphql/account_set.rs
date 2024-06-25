@@ -2,7 +2,7 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
-    account_set::AccountSetMember,
+    account_set::AccountSetMemberId,
     balance::*,
     primitives::{AccountId, AccountSetId, Currency, JournalId},
 };
@@ -11,6 +11,12 @@ use super::{
     balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*, schema::DbOp,
 };
 use crate::app::CalaApp;
+
+#[derive(Union)]
+enum AccountSetMember {
+    Account(super::account::Account),
+    AccountSet(AccountSet),
+}
 
 #[derive(Clone, SimpleObject)]
 #[graphql(complex)]
@@ -55,6 +61,93 @@ impl AccountSet {
             }
         };
         Ok(balance.map(Balance::from))
+    }
+
+    async fn members(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<AccountSetMemberCursor, AccountSetMember, EmptyFields, EmptyFields>>
+    {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let account_set_id = AccountSetId::from(self.account_set_id);
+
+        query(
+            after.clone(),
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let query_args = cala_ledger::query::PaginatedQueryArgs {
+                    first,
+                    after: after.map(cala_ledger::account_set::AccountSetMemberCursor::from),
+                };
+
+                let (ids, mut accounts, mut sets) = match ctx.data_opt::<DbOp>() {
+                    Some(op) => {
+                        let mut op = op.try_lock().expect("Lock held concurrently");
+                        let account_sets = app.ledger().account_sets();
+                        let accounts = app.ledger().accounts();
+                        let ids = account_sets
+                            .list_members_in_op(&mut op, account_set_id, query_args)
+                            .await?;
+                        let mut account_ids = Vec::new();
+                        let mut set_ids = Vec::new();
+                        for id in ids.entities.iter() {
+                            match id {
+                                AccountSetMemberId::Account(id) => account_ids.push(*id),
+                                AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
+                            }
+                        }
+                        (
+                            ids,
+                            accounts.find_all_in_op(&mut op, &account_ids).await?,
+                            account_sets.find_all_in_op(&mut op, &set_ids).await?,
+                        )
+                    }
+                    None => {
+                        let ids = app
+                            .ledger()
+                            .account_sets()
+                            .list_members(account_set_id, query_args)
+                            .await?;
+                        let mut account_ids = Vec::new();
+                        let mut set_ids = Vec::new();
+                        for id in ids.entities.iter() {
+                            match id {
+                                AccountSetMemberId::Account(id) => account_ids.push(*id),
+                                AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
+                            }
+                        }
+                        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+                        (
+                            ids,
+                            loader.load_many(account_ids).await?,
+                            loader.load_many(set_ids).await?,
+                        )
+                    }
+                };
+                let mut connection = Connection::new(false, ids.has_next_page);
+                connection
+                    .edges
+                    .extend(ids.entities.into_iter().map(|id| match id {
+                        AccountSetMemberId::Account(id) => {
+                            let entity = accounts.remove(&id).expect("Account exists");
+                            let cursor = AccountSetMemberCursor::from(&entity);
+                            Edge::new(cursor, AccountSetMember::Account(entity))
+                        }
+                        AccountSetMemberId::AccountSet(id) => {
+                            let entity = sets.remove(&id).expect("Account exists");
+                            let cursor = AccountSetMemberCursor::from(&entity);
+                            Edge::new(cursor, AccountSetMember::AccountSet(entity))
+                        }
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
     }
 
     async fn sets(
@@ -138,14 +231,14 @@ pub(super) struct AddToAccountSetInput {
     pub member_type: AccountSetMemberType,
 }
 
-impl From<AddToAccountSetInput> for AccountSetMember {
+impl From<AddToAccountSetInput> for AccountSetMemberId {
     fn from(input: AddToAccountSetInput) -> Self {
         match input.member_type {
             AccountSetMemberType::Account => {
-                AccountSetMember::Account(AccountId::from(input.member_id))
+                AccountSetMemberId::Account(AccountId::from(input.member_id))
             }
             AccountSetMemberType::AccountSet => {
-                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+                AccountSetMemberId::AccountSet(AccountSetId::from(input.member_id))
             }
         }
     }
@@ -163,14 +256,14 @@ pub(super) struct RemoveFromAccountSetInput {
     pub member_type: AccountSetMemberType,
 }
 
-impl From<RemoveFromAccountSetInput> for AccountSetMember {
+impl From<RemoveFromAccountSetInput> for AccountSetMemberId {
     fn from(input: RemoveFromAccountSetInput) -> Self {
         match input.member_type {
             AccountSetMemberType::Account => {
-                AccountSetMember::Account(AccountId::from(input.member_id))
+                AccountSetMemberId::Account(AccountId::from(input.member_id))
             }
             AccountSetMemberType::AccountSet => {
-                AccountSetMember::AccountSet(AccountSetId::from(input.member_id))
+                AccountSetMemberId::AccountSet(AccountSetId::from(input.member_id))
             }
         }
     }
@@ -291,6 +384,54 @@ impl From<AccountSetByNameCursor> for cala_ledger::account_set::AccountSetByName
         Self {
             name: cursor.name,
             id: cursor.id,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(super) struct AccountSetMemberCursor {
+    pub member_created_at: Timestamp,
+}
+
+impl CursorType for AccountSetMemberCursor {
+    type Error = String;
+
+    fn encode_cursor(&self) -> String {
+        use base64::{engine::general_purpose, Engine as _};
+        let json = serde_json::to_string(&self).expect("could not serialize token");
+        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
+    }
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        use base64::{engine::general_purpose, Engine as _};
+        let bytes = general_purpose::STANDARD_NO_PAD
+            .decode(s.as_bytes())
+            .map_err(|e| e.to_string())?;
+        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+        serde_json::from_str(&json).map_err(|e| e.to_string())
+    }
+}
+
+impl From<AccountSetMemberCursor> for cala_ledger::account_set::AccountSetMemberCursor {
+    fn from(cursor: AccountSetMemberCursor) -> Self {
+        Self {
+            member_created_at: cursor.member_created_at.into_inner(),
+        }
+    }
+}
+
+impl From<&super::account::Account> for AccountSetMemberCursor {
+    fn from(account: &super::account::Account) -> Self {
+        Self {
+            member_created_at: account.created_at.clone(),
+        }
+    }
+}
+
+impl From<&AccountSet> for AccountSetMemberCursor {
+    fn from(set: &AccountSet) -> Self {
+        Self {
+            member_created_at: set.created_at.clone(),
         }
     }
 }
