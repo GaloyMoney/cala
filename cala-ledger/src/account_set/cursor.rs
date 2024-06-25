@@ -15,3 +15,8 @@ impl From<&AccountSetValues> for AccountSetByNameCursor {
         }
     }
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AccountSetMemberCursor {
+    pub member_created_at: chrono::DateTime<chrono::Utc>,
+}

@@ -11,7 +11,7 @@ use crate::{
     query,
 };
 
-use super::{entity::*, error::*, AccountSetByNameCursor};
+use super::{cursor::*, entity::*, error::*, AccountSetByNameCursor};
 
 #[derive(Debug, Clone)]
 pub(super) struct AccountSetRepo {
@@ -41,6 +41,98 @@ impl AccountSetRepo {
         events.persist(db).await?;
         let account_set = AccountSet::try_from(events)?;
         Ok(account_set)
+    }
+
+    pub async fn list_children(
+        &self,
+        id: AccountSetId,
+        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    {
+        self.list_children_in_executor(&self.pool, id, args).await
+    }
+
+    pub async fn list_children_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        id: AccountSetId,
+        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    {
+        self.list_children_in_executor(&mut **db, id, args).await
+    }
+
+    async fn list_children_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        id: AccountSetId,
+        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
+    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    {
+        let rows = sqlx::query!(
+            r#"
+            WITH member_accounts AS (
+              SELECT
+                member_account_id AS member_id,
+                member_account_id,
+                NULL::uuid AS member_account_set_id,
+                created_at
+              FROM cala_account_set_member_accounts
+              WHERE
+                account_set_id = $1
+                AND (created_at < $2 OR $2 IS NULL)
+                ORDER BY created_at DESC
+                LIMIT $3
+            ), member_sets AS (
+              SELECT
+                member_account_set_id AS member_id,
+                NULL::uuid AS member_account_id,
+                member_account_set_id,
+                created_at
+              FROM cala_account_set_member_account_sets
+              WHERE
+                account_set_id = $1
+                AND (created_at < $2 OR $2 IS NULL)
+                ORDER BY created_at DESC
+                LIMIT $3
+            )
+            SELECT * FROM member_accounts
+            UNION ALL
+            SELECT * FROM member_sets
+            ORDER BY created_at DESC
+            LIMIT $3
+          "#,
+            id as AccountSetId,
+            args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>,
+            args.first as i64 + 1,
+        )
+        .fetch_all(executor)
+        .await?;
+        let has_next_page = rows.len() > args.first;
+        let mut end_cursor = None;
+        if let Some(last) = rows.last() {
+            end_cursor = Some(AccountSetMemberCursor {
+                member_created_at: last.created_at.expect("created_at not set"),
+            });
+        }
+        let ids = rows
+            .into_iter()
+            .take(args.first)
+            .map(|row| {
+                if let Some(member_account_id) = row.member_account_id {
+                    AccountSetMemberId::Account(AccountId::from(member_account_id))
+                } else if let Some(member_account_set_id) = row.member_account_set_id {
+                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id))
+                } else {
+                    unreachable!()
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(query::PaginatedQueryRet {
+            entities: ids,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     pub async fn add_member_account_and_return_parents(

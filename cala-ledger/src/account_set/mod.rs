@@ -285,6 +285,15 @@ impl AccountSets {
         self.repo.find_all(account_set_ids).await
     }
 
+    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self, op), err)]
+    pub async fn find_all_in_op<T: From<AccountSet>>(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
+        self.repo.find_all_in_tx(op.tx(), account_set_ids).await
+    }
+
     #[instrument(name = "cala_ledger.account_sets.find", skip(self), err)]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
         self.repo.find(account_set_id).await
@@ -333,6 +342,25 @@ impl AccountSets {
                     .await
             }
         }
+    }
+
+    pub async fn list_members(
+        &self,
+        id: AccountSetId,
+        args: PaginatedQueryArgs<AccountSetMemberCursor>,
+    ) -> Result<PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    {
+        self.repo.list_children(id, args).await
+    }
+
+    pub async fn list_members_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        id: AccountSetId,
+        args: PaginatedQueryArgs<AccountSetMemberCursor>,
+    ) -> Result<PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    {
+        self.repo.list_children_in_tx(op.tx(), id, args).await
     }
 
     pub(crate) async fn fetch_mappings(

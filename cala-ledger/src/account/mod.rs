@@ -67,6 +67,15 @@ impl Accounts {
         self.repo.find_all(account_ids).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, op), err)]
+    pub async fn find_all_in_op<T: From<Account>>(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, T>, AccountError> {
+        self.repo.find_all_in_tx(op.tx(), account_ids).await
+    }
+
     #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
         self.repo.find_by_external_id(external_id).await

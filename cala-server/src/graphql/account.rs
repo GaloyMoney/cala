@@ -26,7 +26,7 @@ pub struct Account {
     external_id: Option<String>,
     description: Option<String>,
     metadata: Option<JSON>,
-    created_at: Timestamp,
+    pub(super) created_at: Timestamp,
     modified_at: Timestamp,
 }
 
