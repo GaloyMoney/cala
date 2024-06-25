@@ -1,3 +1,18 @@
+# [cala release v0.2.19](https://github.com/GaloyMoney/cala/releases/tag/0.2.19)
+
+
+### Documentation
+
+- Add graphql api demo explanations (#121)
+- Clickable landing page items (#120)
+- Generate and update API reference for cala.sh (#117)
+
+### Miscellaneous Tasks
+
+- Account set member (#122)
+- Bump lazy_static from 1.4.0 to 1.5.0 (#123)
+- Bump uuid from 1.8.0 to 1.9.0 (#124)
+
 # [cala release v0.2.18](https://github.com/GaloyMoney/cala/releases/tag/0.2.18)
 
 
