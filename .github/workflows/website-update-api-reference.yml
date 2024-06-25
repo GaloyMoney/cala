@@ -4,6 +4,7 @@ name: Website update API reference
 on:
   release:
     types: [published]
+  workflow_dispatch:
 
 jobs:
   update-api-reference:
@@ -25,4 +26,4 @@ jobs:
           git config --local user.email 'github-actions[bot]@users.noreply.github.com'
           git add website/static/api-reference.html
           git commit -m "docs: api reference update: $GITHUB_SHA"
-          git push origin main
+          git push
