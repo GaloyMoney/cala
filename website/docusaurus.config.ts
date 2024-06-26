@@ -146,6 +146,12 @@ const config: Config = {
        */
       playgroundPosition: 'bottom',
     },
+    algolia: {
+      appId: 'O0AKBHZC9K',
+      apiKey: '470bd6518378e8367534ce5d7ddf767b',
+      indexName: 'cala',
+      contextualSearch: false, // only false works
+    },
   } satisfies Preset.ThemeConfig,
 
   markdown: {
