@@ -1,3 +1,24 @@
+# [cala release v0.2.20](https://github.com/GaloyMoney/cala/releases/tag/0.2.20)
+
+
+### Bug Fixes
+
+- Deploy api reference action (#135)
+
+### Documentation
+
+- Api reference update: 22ce6f31ffa3b8fbe2dc96c3fff59196e5dfd678
+- Add accounting intro pages (#125)
+
+### Miscellaneous Tasks
+
+- PostTransaction -> transactionPost (#137)
+- Nix in actions, deploy website after API reference update (#136)
+- Bump serde_json from 1.0.117 to 1.0.118 (#131)
+- Bump uuid from 1.9.0 to 1.9.1 (#130)
+- Bump napi from 2.16.6 to 2.16.7 (#133)
+- Bump napi-derive from 2.16.5 to 2.16.6 (#132)
+
 # [cala release v0.2.19](https://github.com/GaloyMoney/cala/releases/tag/0.2.19)
 
 
