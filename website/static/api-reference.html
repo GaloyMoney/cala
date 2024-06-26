@@ -61,7 +61,7 @@
                   <li><a href="#mutation-calaOutboxImportJobCreate">calaOutboxImportJobCreate</a></li>
                   <li><a href="#mutation-journalCreate">journalCreate</a></li>
                   <li><a href="#mutation-journalUpdate">journalUpdate</a></li>
-                  <li><a href="#mutation-postTransaction">postTransaction</a></li>
+                  <li><a href="#mutation-transactionPost">transactionPost</a></li>
                   <li><a href="#mutation-removeFromAccountSet">removeFromAccountSet</a></li>
                   <li><a href="#mutation-txTemplateCreate">txTemplateCreate</a></li>
                 </ul>
@@ -2086,12 +2086,12 @@
               </div>
             </div>
           </section>
-          <section id="mutation-postTransaction" class="operation operation-mutation" data-traverse-target="mutation-postTransaction">
+          <section id="mutation-transactionPost" class="operation operation-mutation" data-traverse-target="mutation-transactionPost">
             <div class="operation-group-name">
               <a href="#group-Operations-Mutations">Mutations</a>
             </div>
             <h2 class="operation-heading ">
-              <code>postTransaction</code>
+              <code>transactionPost</code>
             </h2>
             <div class="doc-row">
               <div class="doc-copy">
@@ -2127,8 +2127,8 @@
                   <h5>Query</h5>
                   <html>
                     <head></head>
-                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol"><span class="hljs-keyword">mutation</span> postTransaction<span class="hljs-tag">(<span class="hljs-code">$input</span>:<span class="hljs-type"> TransactionInput!</span>)</span> <span class="hljs-tag">{
-  <span class="hljs-symbol">postTransaction<span class="hljs-tag">(input: <span class="hljs-code">$input</span>)</span> <span class="hljs-tag">{
+                    <body><pre><code class="hljs language-gql"><span class="hljs-symbol"><span class="hljs-keyword">mutation</span> transactionPost<span class="hljs-tag">(<span class="hljs-code">$input</span>:<span class="hljs-type"> TransactionInput!</span>)</span> <span class="hljs-tag">{
+  <span class="hljs-symbol">transactionPost<span class="hljs-tag">(input: <span class="hljs-code">$input</span>)</span> <span class="hljs-tag">{
     <span class="hljs-symbol">transaction <span class="hljs-tag">{
       <span class="hljs-type">...TransactionFragment</span>
     }</span></span>
@@ -2153,7 +2153,7 @@
                     <head></head>
                     <body><pre><code class="hljs language-json"><span class="hljs-punctuation">{</span>
   <span class="hljs-attr">"data"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span>
-    <span class="hljs-attr">"postTransaction"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"transaction"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Transaction</span><span class="hljs-punctuation">}</span>
+    <span class="hljs-attr">"transactionPost"</span><span class="hljs-punctuation">:</span> <span class="hljs-punctuation">{</span><span class="hljs-attr">"transaction"</span><span class="hljs-punctuation">:</span> <span class="hljs-string">Transaction</span><span class="hljs-punctuation">}</span>
   <span class="hljs-punctuation">}</span>
 <span class="hljs-punctuation">}</span>
 </code></pre>

@@ -1,7 +1,7 @@
 ---
-id: post-transaction
+id: transaction-post
 title: Post a Transaction
-slug: /docs//post-transaction
+slug: /docs/transaction-post
 ---
 
 This functionality allows to execute financial transactions based on predefined parameters and templates. The specific transaction being posted here is based on a deposit template, which facilitates adding funds to a user's account.
@@ -30,11 +30,11 @@ This functionality allows to execute financial transactions based on predefined 
 
 ### GraphQL Request Body
 
-The `postTransaction` mutation is called with the inputs below. This mutation processes the transaction based on the provided template and parameters.
+The `transactionPost` mutation is called with the inputs below. This mutation processes the transaction based on the provided template and parameters.
 
 ```graphql
-mutation postTransaction($input: TransactionInput!) {
-  postTransaction(input: $input) {
+mutation transactionPost($input: TransactionInput!) {
+  transactionPost(input: $input) {
     transaction {
       transactionId
       correlationId
@@ -52,7 +52,7 @@ Upon successful processing of the mutation, the system returns the transaction I
 ```json
 {
   "data": {
-    "postTransaction": {
+    "transactionPost": {
       "transaction": {
         "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
         "correlationId": "204d087b-5b6d-4544-9203-6674d54528d3"

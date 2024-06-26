@@ -26,7 +26,7 @@ pub struct Transaction {
 }
 
 #[derive(SimpleObject)]
-pub struct PostTransactionPayload {
+pub struct TransactionPostPayload {
     pub transaction: Transaction,
 }
 
@@ -63,7 +63,7 @@ impl From<cala_ledger::transaction::Transaction> for Transaction {
     }
 }
 
-impl From<cala_ledger::transaction::Transaction> for PostTransactionPayload {
+impl From<cala_ledger::transaction::Transaction> for TransactionPostPayload {
     fn from(value: cala_ledger::transaction::Transaction) -> Self {
         Self {
             transaction: Transaction::from(value),
