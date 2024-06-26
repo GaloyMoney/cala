@@ -1,3 +1,15 @@
+# [cala release v0.2.21](https://github.com/GaloyMoney/cala/releases/tag/0.2.21)
+
+
+### Bug Fixes
+
+- Filter transitive for list_children
+
+### Documentation
+
+- Add search to website (#138)
+- Api reference update: 2c66d873a79f00b71395474f3fda7bfea604bb03
+
 # [cala release v0.2.20](https://github.com/GaloyMoney/cala/releases/tag/0.2.20)
 
 
