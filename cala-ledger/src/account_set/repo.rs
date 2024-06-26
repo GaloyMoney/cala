@@ -79,7 +79,8 @@ impl AccountSetRepo {
                 created_at
               FROM cala_account_set_member_accounts
               WHERE
-                account_set_id = $1
+                transitive IS FALSE
+                AND account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
                 ORDER BY created_at DESC
                 LIMIT $3
