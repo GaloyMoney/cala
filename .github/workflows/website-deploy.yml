@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'website/**'
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,23 +15,18 @@ jobs:
     permissions:
         contents: write
     steps:
+      - uses: DeterminateSystems/nix-installer-action@v12
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
-      - name: Install yarn
-        run: npm install -g yarn
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           cd website
           yarn install --frozen-lockfile
-
-      - name: Build website
+      - name: Build Website
         run: |
           cd website
-          yarn build
+          nix-shell -p yarn --run "yarn build"
 
       # Docs: https://github.com/peaceiris/actions-gh-pages#%EF%B8%8F-docusaurus
       - name: Deploy to GitHub Pages

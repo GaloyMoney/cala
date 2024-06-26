@@ -9,23 +9,18 @@ on:
 
 jobs:
   test-deploy:
-    name: Test deployment
+    name: Test Deployment
     runs-on: ubuntu-latest
     steps:
+      - uses: DeterminateSystems/nix-installer-action@v12
+      - uses: DeterminateSystems/magic-nix-cache-action@v7
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
-      - name: Install yarn
-        run: npm install -g yarn
-
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           cd website
-          yarn install --frozen-lockfile
-
-      - name: Test build
+          nix-shell -p yarn --run "yarn install --frozen-lockfile"
+      - name: Test Build
         run: |
           cd website
-          yarn build
+          nix-shell -p yarn --run "yarn build"
