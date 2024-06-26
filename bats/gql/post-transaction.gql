@@ -1,8 +1,0 @@
-mutation postTransaction($input: TransactionInput!) {
-  postTransaction(input: $input) {
-    transaction {
-      transactionId
-      correlationId
-    }
-  }
-}

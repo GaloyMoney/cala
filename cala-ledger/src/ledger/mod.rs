@@ -123,7 +123,7 @@ impl CalaLedger {
         &self.transactions
     }
 
-    pub async fn post_transaction(
+    pub async fn transaction_post(
         &self,
         tx_id: TransactionId,
         tx_template_code: &str,
@@ -131,19 +131,19 @@ impl CalaLedger {
     ) -> Result<Transaction, LedgerError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
-            .post_transaction_in_op(&mut op, tx_id, tx_template_code, params)
+            .transaction_post_in_op(&mut op, tx_id, tx_template_code, params)
             .await?;
         op.commit().await?;
         Ok(transaction)
     }
 
     #[instrument(
-        name = "cala_ledger.post_transaction",
+        name = "cala_ledger.transaction_post",
         skip(self, op)
         fields(transaction_id, external_id)
         err
     )]
-    pub async fn post_transaction_in_op(
+    pub async fn transaction_post_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
         tx_id: TransactionId,

@@ -6,7 +6,7 @@ use cala_ledger::{tx_template::*, *};
 use rand::distributions::{Alphanumeric, DistString};
 
 #[tokio::test]
-async fn post_transaction() -> anyhow::Result<()> {
+async fn transaction_post() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -31,7 +31,7 @@ async fn post_transaction() -> anyhow::Result<()> {
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
 
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
+    cala.transaction_post(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
 
@@ -40,7 +40,7 @@ async fn post_transaction() -> anyhow::Result<()> {
     params.insert("journal_id", journal.id());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
+    cala.transaction_post(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
     let recipient_balance = cala

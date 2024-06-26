@@ -119,7 +119,7 @@ teardown_file() {
       }
     }'
   )
-  exec_graphql 'post-transaction' "$variables"
+  exec_graphql 'transaction-post' "$variables"
 
   variables=$(jq -n \
     --arg journalId "$journal_id" \

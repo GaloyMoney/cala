@@ -98,7 +98,7 @@ teardown_file() {
       }
     }'
   )
-  exec_graphql 'post-transaction' "$variables"
+  exec_graphql 'transaction-post' "$variables"
 
   # create an account set
   account_set_id=$(random_uuid)

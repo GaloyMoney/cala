@@ -99,8 +99,8 @@ teardown_file() {
       }
     }'
   )
-  exec_graphql 'post-transaction' "$variables"
-  correlation_id=$(graphql_output '.data.postTransaction.transaction.correlationId')
+  exec_graphql 'transaction-post' "$variables"
+  correlation_id=$(graphql_output '.data.transactionPost.transaction.correlationId')
   [[ $correlation_id == $transaction_id  ]] || exit 1
 
   # check balance

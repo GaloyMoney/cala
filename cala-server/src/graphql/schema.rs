@@ -588,11 +588,11 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         Ok(tx_template.into())
     }
 
-    async fn post_transaction(
+    async fn transaction_post(
         &self,
         ctx: &Context<'_>,
         input: TransactionInput,
-    ) -> Result<PostTransactionPayload> {
+    ) -> Result<TransactionPostPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
             .data_unchecked::<DbOp>()
@@ -601,7 +601,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let params = input.params.map(cala_ledger::tx_template::TxParams::from);
         let transaction = app
             .ledger()
-            .post_transaction_in_op(
+            .transaction_post_in_op(
                 &mut op,
                 input.transaction_id.into(),
                 &input.tx_template_code,
