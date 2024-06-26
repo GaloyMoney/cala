@@ -13,13 +13,13 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v12
       - uses: DeterminateSystems/magic-nix-cache-action@v7
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
       - name: Build the API reference
         run: |
           cd website
           npm install spectaql
           npx spectaql spectaql-config.yml -t static -f api-reference.html
+
       - name: Deploy the API reference
         run: |
           git config --local user.name 'github-actions[bot]'
@@ -27,3 +27,21 @@ jobs:
           git add website/static/api-reference.html
           git commit -m "docs: api reference update: $GITHUB_SHA"
           git push origin HEAD:main
+
+      - name: Install Website Dependencies
+        run: |
+          cd website
+          nix-shell -p yarn --run "yarn install --frozen-lockfile"
+
+      - name: Build Website
+        run: |
+          cd website
+          nix-shell -p yarn --run "yarn build"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website/build
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
