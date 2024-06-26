@@ -1,0 +1,11 @@
+[package]
+name = "cala-es-entity"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+cala-es-entity-derive = { version = "0.1.0", path = "../cala-es-entity-derive" }
+
+sqlx = { workspace = true }
+uuid = { workspace = true }
+serde = { workspace = true }

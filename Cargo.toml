@@ -1,9 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
+  "cala-es-entity",
+  "cala-es-entity-derive",
+  "cala-ledger-core-types",
   "cala-ledger",
   "cala-ledger-outbox-client",
-  "cala-ledger-core-types",
   "cala-server",
   "cala-tracing",
   "cala-nodejs",
