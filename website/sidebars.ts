@@ -1,8 +1,8 @@
-import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
+import type { SidebarsConfig } from '@docusaurus/plugin-content-docs';
 
 const sidebars: SidebarsConfig = {
   demoSidebar: [
-      'intro',
+    'intro',
     {
       type: 'category',
       label: 'GraphQL API demo',
@@ -10,7 +10,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'demo/create-journal-and-accounts',
         'demo/tx-template-create',
-        'demo/post-transaction',
+        'demo/transaction-post',
         'demo/check-account-balance',
       ]
     },

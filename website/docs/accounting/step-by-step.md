@@ -8,7 +8,7 @@ slug: /docs/step-by-step
 
 2. [**Define Transaction Templates**](/docs/tx-template-create): Create templates for common transactions like deposits and withdrawals. This ensures that each transaction follows a consistent structure.
 
-3. [**Post Transactions**](/docs/post-transaction): Use the transaction templates to post transactions. This involves specifying the necessary parameters and ensuring that the correct accounts are debited or credited.
+3. [**Post Transactions**](/docs/transaction-post): Use the transaction templates to post transactions. This involves specifying the necessary parameters and ensuring that the correct accounts are debited or credited.
 
 4. [**Check Account Balances**](/docs/check-account-balance): Regularly query the balances of accounts to monitor the financial status. This helps in maintaining accurate and up-to-date financial records.
 
