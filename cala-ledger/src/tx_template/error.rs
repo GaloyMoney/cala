@@ -13,10 +13,6 @@ pub enum TxTemplateError {
     DuplicateKey(Box<dyn DatabaseError>),
     #[error("TxTemplateError - EntityError: {0}")]
     EntityError(#[from] crate::entity::EntityError),
-    #[error("TxTemplateError - TxParamTypeMismatch: {0}")]
-    TxParamTypeMismatch(String),
-    #[error("SqlxLedgerError - TooManyParameters")]
-    TooManyParameters,
     #[error("TxTemplateError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("TxTemplateError - NotFound")]
@@ -27,6 +23,8 @@ pub enum TxTemplateError {
     UnbalancedTransaction(Currency, Layer, Decimal),
     #[error("TxTemplateError - NotFound: code '{0}' not found")]
     CouldNotFindByCode(String),
+    #[error("{0}")]
+    ParamError(#[from] crate::param::error::ParamError),
 }
 
 impl From<sqlx::Error> for TxTemplateError {

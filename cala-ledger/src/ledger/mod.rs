@@ -18,7 +18,7 @@ use crate::{
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
-    tx_template::{TxParams, TxTemplates},
+    tx_template::{Params, TxTemplates},
 };
 #[cfg(feature = "import")]
 mod import_deps {
@@ -127,7 +127,7 @@ impl CalaLedger {
         &self,
         tx_id: TransactionId,
         tx_template_code: &str,
-        params: impl Into<TxParams> + std::fmt::Debug,
+        params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
@@ -148,7 +148,7 @@ impl CalaLedger {
         op: &mut AtomicOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
-        params: impl Into<TxParams> + std::fmt::Debug,
+        params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates

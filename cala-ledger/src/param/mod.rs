@@ -1,15 +1,19 @@
+pub mod definition;
+pub mod error;
+
 use cel_interpreter::{CelContext, CelMap, CelValue};
 use std::collections::HashMap;
 
-use super::error::TxTemplateError;
-use cala_types::tx_template::ParamDefinition;
+pub use cala_types::param::*;
+
+use error::*;
 
 #[derive(Debug)]
-pub struct TxParams {
+pub struct Params {
     values: HashMap<String, CelValue>,
 }
 
-impl TxParams {
+impl Params {
     pub fn new() -> Self {
         Self {
             values: HashMap::new(),
@@ -23,8 +27,8 @@ impl TxParams {
     pub(crate) fn into_context(
         mut self,
         defs: Option<&Vec<ParamDefinition>>,
-    ) -> Result<CelContext, TxTemplateError> {
-        let mut ctx = super::cel_context::initialize();
+    ) -> Result<CelContext, ParamError> {
+        let mut ctx = crate::cel_context::initialize();
         if let Some(defs) = defs {
             let mut cel_map = CelMap::new();
             for d in defs {
@@ -33,7 +37,7 @@ impl TxParams {
                         d.name.clone(),
                         d.r#type
                             .coerce_value(v)
-                            .map_err(TxTemplateError::TxParamTypeMismatch)?,
+                            .map_err(ParamError::ParamTypeMismatch)?,
                     );
                 }
                 if let Some(expr) = d.default.as_ref() {
@@ -44,14 +48,14 @@ impl TxParams {
         }
 
         if !self.values.is_empty() {
-            return Err(TxTemplateError::TooManyParameters);
+            return Err(ParamError::TooManyParameters);
         }
 
         Ok(ctx)
     }
 }
 
-impl Default for TxParams {
+impl Default for Params {
     fn default() -> Self {
         Self::new()
     }
