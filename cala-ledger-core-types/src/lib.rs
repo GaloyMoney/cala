@@ -9,6 +9,7 @@ pub mod balance;
 pub mod entry;
 pub mod journal;
 pub mod outbox;
+pub mod param;
 pub mod primitives;
 pub mod transaction;
 pub mod tx_template;

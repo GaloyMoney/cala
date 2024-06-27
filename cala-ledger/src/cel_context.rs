@@ -1,6 +1,6 @@
 use cel_interpreter::CelContext;
 
-pub(super) fn initialize() -> CelContext {
+pub(crate) fn initialize() -> CelContext {
     let mut ctx = CelContext::new();
     ctx.add_variable("SETTLED", "SETTLED");
     ctx.add_variable("PENDING", "PENDING");

@@ -131,7 +131,7 @@ async fn balances() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let mut params = TxParams::new();
+    let mut params = Params::new();
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());

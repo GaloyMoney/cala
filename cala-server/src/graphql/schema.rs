@@ -598,7 +598,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
-        let params = input.params.map(cala_ledger::tx_template::TxParams::from);
+        let params = input.params.map(cala_ledger::tx_template::Params::from);
         let transaction = app
             .ledger()
             .transaction_post_in_op(

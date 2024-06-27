@@ -26,7 +26,7 @@ async fn transaction_post() -> anyhow::Result<()> {
 
     cala.tx_templates().create(new_template).await.unwrap();
 
-    let mut params = TxParams::new();
+    let mut params = Params::new();
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
@@ -36,7 +36,7 @@ async fn transaction_post() -> anyhow::Result<()> {
         .unwrap();
 
     // Run it again to test balance updates
-    let mut params = TxParams::new();
+    let mut params = Params::new();
     params.insert("journal_id", journal.id());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());

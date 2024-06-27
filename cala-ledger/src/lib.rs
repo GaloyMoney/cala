@@ -103,7 +103,7 @@
 //!         .build()?;
 //!     cala.accounts().create(sender_account).await?;
 //!     // Prepare the input parameters that the template requires
-//!     let mut params = TxParams::new();
+//!     let mut params = Params::new();
 //!     params.insert("sender_account_id", sender_account_id);
 //!     params.insert("units", Decimal::ONE);
 //!     // Create the transaction via the template
@@ -123,6 +123,9 @@
 
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
+
+mod cel_context;
+mod param;
 
 pub mod account;
 pub mod account_set;

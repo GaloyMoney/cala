@@ -5,6 +5,7 @@ pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 use cel_interpreter::CelExpression;
 
 use crate::entity::*;
+pub use crate::param::definition::*;
 #[cfg(feature = "import")]
 use crate::primitives::*;
 
@@ -159,7 +160,7 @@ impl NewTxTemplateBuilder {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Builder, Deserialize)]
+#[derive(Clone, Debug, Builder)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct NewEntryInput {
     #[builder(setter(into))]
@@ -317,62 +318,6 @@ fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), Str
     Ok(())
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Builder)]
-#[builder(build_fn(validate = "Self::validate"))]
-pub struct NewParamDefinition {
-    #[builder(setter(into))]
-    pub(super) name: String,
-    pub(super) r#type: ParamDataType,
-    #[builder(setter(strip_option, name = "default_expr", into), default)]
-    pub(super) default: Option<String>,
-    #[builder(setter(strip_option, into), default)]
-    pub(super) description: Option<String>,
-}
-
-impl NewParamDefinition {
-    pub fn builder() -> NewParamDefinitionBuilder {
-        NewParamDefinitionBuilder::default()
-    }
-
-    pub fn default_expr(&self) -> Option<CelExpression> {
-        self.default
-            .as_ref()
-            .map(|v| v.parse().expect("Couldn't create default_expr"))
-    }
-}
-
-impl NewParamDefinitionBuilder {
-    fn validate(&self) -> Result<(), String> {
-        if let Some(Some(expr)) = self.default.as_ref() {
-            let expr = CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
-            let param_type = ParamDataType::try_from(
-                &expr
-                    .evaluate(&super::cel_context::initialize())
-                    .map_err(|e| format!("{e}"))?,
-            )?;
-            let specified_type = self.r#type.as_ref().unwrap();
-            if &param_type != specified_type {
-                return Err(format!(
-                    "Default expression type {param_type:?} does not match parameter type {specified_type:?}"
-                ));
-            }
-        }
-        Ok(())
-    }
-}
-
-impl From<NewParamDefinition> for cala_types::tx_template::ParamDefinition {
-    fn from(param: NewParamDefinition) -> Self {
-        let default = param.default_expr();
-        cala_types::tx_template::ParamDefinition {
-            name: param.name,
-            r#type: param.r#type,
-            default,
-            description: param.description,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -410,16 +355,5 @@ mod tests {
     fn fails_when_mandatory_fields_are_missing() {
         let new_tx_template = NewTxTemplate::builder().build();
         assert!(new_tx_template.is_err());
-    }
-
-    #[test]
-    fn build_param_definition() {
-        let definition = NewParamDefinition::builder()
-            .name("name")
-            .r#type(ParamDataType::Json)
-            .default_expr("{'key': 'value'}")
-            .build()
-            .unwrap();
-        assert_eq!(definition.name, "name");
     }
 }

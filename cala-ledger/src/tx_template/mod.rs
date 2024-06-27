@@ -1,7 +1,5 @@
-mod cel_context;
 mod entity;
 mod repo;
-mod tx_params;
 
 pub mod error;
 
@@ -14,6 +12,7 @@ use std::collections::HashMap;
 use tracing::instrument;
 use uuid::Uuid;
 
+pub use crate::param::*;
 use crate::{
     atomic_operation::*,
     entry::NewEntry,
@@ -25,7 +24,6 @@ use crate::{
 pub use entity::*;
 use error::*;
 use repo::*;
-pub use tx_params::*;
 
 pub(crate) struct PreparedTransaction {
     pub transaction: NewTransaction,
@@ -90,7 +88,7 @@ impl TxTemplates {
         &self,
         tx_id: TransactionId,
         code: &str,
-        params: TxParams,
+        params: Params,
     ) -> Result<PreparedTransaction, TxTemplateError> {
         let tmpl = self.repo.find_latest_version(code).await?;
 
