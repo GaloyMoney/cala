@@ -4,7 +4,8 @@ mod limit;
 
 use sqlx::PgPool;
 
-use crate::{atomic_operation::*, outbox::*};
+pub use crate::param::Params;
+use crate::{atomic_operation::*, outbox::*, primitives::AccountId};
 
 pub use control::*;
 use error::*;
@@ -62,5 +63,38 @@ impl Velocities {
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
         self.controls.create_in_tx(op.tx(), new_control).await
+    }
+
+    pub async fn add_limit_to_control(
+        &self,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
+    ) -> Result<(), VelocityError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        self.add_limit_to_control_in_op(&mut op, control, limit)
+            .await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    pub async fn add_limit_to_control_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
+    ) -> Result<(), VelocityError> {
+        self.controls
+            .add_limit_to_control(op.tx(), control, limit)
+            .await
+    }
+
+    pub async fn attach_control_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        control: VelocityControlId,
+        account_id: AccountId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<(), VelocityError> {
+        Ok(())
     }
 }

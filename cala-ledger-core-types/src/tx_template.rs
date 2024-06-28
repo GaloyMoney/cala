@@ -1,8 +1,8 @@
 use cel_interpreter::CelExpression;
 use serde::{Deserialize, Serialize};
 
-pub use super::param::*;
-use super::primitives::*;
+pub use crate::param::*;
+use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TxTemplateValues {
