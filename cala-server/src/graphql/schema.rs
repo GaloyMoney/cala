@@ -601,7 +601,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let params = input.params.map(cala_ledger::tx_template::Params::from);
         let transaction = app
             .ledger()
-            .transaction_post_in_op(
+            .post_transaction_in_op(
                 &mut op,
                 input.transaction_id.into(),
                 &input.tx_template_code,
