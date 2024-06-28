@@ -137,6 +137,7 @@ pub mod journal;
 pub mod migrate;
 pub mod transaction;
 pub mod tx_template;
+pub mod velocity;
 
 mod ledger;
 pub mod outbox;

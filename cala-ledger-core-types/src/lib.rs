@@ -13,3 +13,4 @@ pub mod param;
 pub mod primitives;
 pub mod transaction;
 pub mod tx_template;
+pub mod velocity;

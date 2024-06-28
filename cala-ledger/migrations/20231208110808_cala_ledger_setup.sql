@@ -191,6 +191,27 @@ CREATE TABLE cala_balance_history (
   FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
 );
 
+CREATE TABLE cala_velocity_limits (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  name VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id)
+);
+CREATE INDEX idx_cala_velocity_limits_name ON cala_velocity_limits (name);
+
+
+CREATE TABLE cala_velocity_limit_events (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id, sequence),
+  FOREIGN KEY (data_source_id, id) REFERENCES cala_velocity_limits(data_source_id, id)
+);
+
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,
