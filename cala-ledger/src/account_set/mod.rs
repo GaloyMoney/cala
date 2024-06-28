@@ -487,7 +487,7 @@ fn entries_for_add_balance(
 ) {
     use rust_decimal::Decimal;
 
-    if balance.settled_cr_balance != Decimal::ZERO {
+    if balance.settled.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -497,13 +497,13 @@ fn entries_for_add_balance(
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.settled_cr_balance)
+            .units(balance.settled.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.settled_dr_balance != Decimal::ZERO {
+    if balance.settled.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -513,13 +513,13 @@ fn entries_for_add_balance(
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.settled_dr_balance)
+            .units(balance.settled.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.pending_cr_balance != Decimal::ZERO {
+    if balance.pending.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -529,13 +529,13 @@ fn entries_for_add_balance(
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.pending_cr_balance)
+            .units(balance.pending.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.pending_dr_balance != Decimal::ZERO {
+    if balance.pending.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -545,13 +545,13 @@ fn entries_for_add_balance(
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.pending_dr_balance)
+            .units(balance.pending.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbrance_cr_balance != Decimal::ZERO {
+    if balance.encumbrance.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -561,13 +561,13 @@ fn entries_for_add_balance(
             .layer(Layer::Encumbrance)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.encumbrance_cr_balance)
+            .units(balance.encumbrance.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbrance_dr_balance != Decimal::ZERO {
+    if balance.encumbrance.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -577,7 +577,7 @@ fn entries_for_add_balance(
             .layer(Layer::Encumbrance)
             .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.encumbrance_dr_balance)
+            .units(balance.encumbrance.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
@@ -592,7 +592,7 @@ fn entries_for_remove_balance(
 ) {
     use rust_decimal::Decimal;
 
-    if balance.settled_cr_balance != Decimal::ZERO {
+    if balance.settled.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -602,13 +602,13 @@ fn entries_for_remove_balance(
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_SETTLED_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.settled_cr_balance)
+            .units(balance.settled.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.settled_dr_balance != Decimal::ZERO {
+    if balance.settled.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -618,13 +618,13 @@ fn entries_for_remove_balance(
             .layer(Layer::Settled)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_SETTLED_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.settled_dr_balance)
+            .units(balance.settled.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.pending_cr_balance != Decimal::ZERO {
+    if balance.pending.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -634,13 +634,13 @@ fn entries_for_remove_balance(
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_PENDING_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.pending_cr_balance)
+            .units(balance.pending.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.pending_dr_balance != Decimal::ZERO {
+    if balance.pending.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -650,13 +650,13 @@ fn entries_for_remove_balance(
             .layer(Layer::Pending)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_PENDING_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.pending_dr_balance)
+            .units(balance.pending.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbrance_cr_balance != Decimal::ZERO {
+    if balance.encumbrance.cr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -666,13 +666,13 @@ fn entries_for_remove_balance(
             .layer(Layer::Encumbrance)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_ENCUMBRANCE_DR")
             .direction(DebitOrCredit::Debit)
-            .units(balance.encumbrance_cr_balance)
+            .units(balance.encumbrance.cr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");
         entries.push(entry);
     }
-    if balance.encumbrance_dr_balance != Decimal::ZERO {
+    if balance.encumbrance.dr_balance != Decimal::ZERO {
         let entry = NewEntry::builder()
             .id(EntryId::new())
             .journal_id(balance.journal_id)
@@ -682,7 +682,7 @@ fn entries_for_remove_balance(
             .layer(Layer::Encumbrance)
             .entry_type("ACCOUNT_SET_REMOVE_MEMBER_ENCUMBRANCE_CR")
             .direction(DebitOrCredit::Credit)
-            .units(balance.encumbrance_dr_balance)
+            .units(balance.encumbrance.dr_balance)
             .transaction_id(UNASSIGNED_TRANSACTION_ID)
             .build()
             .expect("Couldn't build entry");

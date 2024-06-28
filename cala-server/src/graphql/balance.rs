@@ -61,22 +61,22 @@ impl From<cala_ledger::balance::AccountBalance> for Balance {
             currency: balance.details.currency.into(),
             version: balance.details.version,
             settled: BalanceAmount {
-                dr_balance: (balance.details.settled_dr_balance, currency).into(),
-                cr_balance: (balance.details.settled_cr_balance, currency).into(),
+                dr_balance: (balance.details.settled.dr_balance, currency).into(),
+                cr_balance: (balance.details.settled.cr_balance, currency).into(),
                 normal_balance: (balance.settled(), currency).into(),
-                entry_id: balance.details.settled_entry_id.into(),
+                entry_id: balance.details.settled.entry_id.into(),
             },
             pending: BalanceAmount {
-                dr_balance: (balance.details.pending_dr_balance, currency).into(),
-                cr_balance: (balance.details.pending_cr_balance, currency).into(),
+                dr_balance: (balance.details.pending.dr_balance, currency).into(),
+                cr_balance: (balance.details.pending.cr_balance, currency).into(),
                 normal_balance: (balance.pending(), currency).into(),
-                entry_id: balance.details.pending_entry_id.into(),
+                entry_id: balance.details.pending.entry_id.into(),
             },
             encumbrance: BalanceAmount {
-                dr_balance: (balance.details.encumbrance_dr_balance, currency).into(),
-                cr_balance: (balance.details.encumbrance_cr_balance, currency).into(),
+                dr_balance: (balance.details.encumbrance.dr_balance, currency).into(),
+                cr_balance: (balance.details.encumbrance.cr_balance, currency).into(),
                 normal_balance: (balance.encumbrance(), currency).into(),
-                entry_id: balance.details.encumbrance_entry_id.into(),
+                entry_id: balance.details.encumbrance.entry_id.into(),
             },
         }
     }
