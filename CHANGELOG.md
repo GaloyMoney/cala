@@ -1,3 +1,14 @@
+# [cala release v0.2.25](https://github.com/GaloyMoney/cala/releases/tag/0.2.25)
+
+
+### Documentation
+
+- Api reference update: 43591ec3fbc9a3a71dd51f1ddcabf34a97c023a4
+
+### Miscellaneous Tasks
+
+- Available balance (#146)
+
 # [cala release v0.2.24](https://github.com/GaloyMoney/cala/releases/tag/0.2.24)
 
 
