@@ -13,6 +13,7 @@ crate::entity_id! { TxTemplateId }
 crate::entity_id! { TransactionId }
 crate::entity_id! { EntryId }
 crate::entity_id! { VelocityLimitId }
+crate::entity_id! { VelocityControlId }
 
 pub type BalanceId = (JournalId, AccountId, Currency);
 impl From<&AccountSetId> for AccountId {

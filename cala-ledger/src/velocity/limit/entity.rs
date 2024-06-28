@@ -192,17 +192,17 @@ impl NewBalanceLimitBuilder {
         validate_expression(
             self.layer
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'layer' not set"),
         )?;
         validate_expression(
             self.amount
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'amount' not set"),
         )?;
         validate_expression(
             self.enforcement_direction
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'enforcement_direction' not set"),
         )?;
         Ok(())
     }
