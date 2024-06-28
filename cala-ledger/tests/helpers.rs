@@ -62,7 +62,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .unwrap(),
     ];
     let entries = vec![
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_BTC_DR'")
             .account_id("params.sender")
             .layer("SETTLED")
@@ -71,7 +71,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'BTC'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_BTC_CR'")
             .account_id("params.recipient")
             .layer("SETTLED")
@@ -80,7 +80,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'BTC'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_USD_DR'")
             .account_id("params.sender")
             .layer("SETTLED")
@@ -89,7 +89,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'USD'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_USD_CR'")
             .account_id("params.recipient")
             .layer("SETTLED")
@@ -98,7 +98,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'USD'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_USD_PENDING_DR'")
             .account_id("params.sender")
             .layer("PENDING")
@@ -107,7 +107,7 @@ pub fn test_template(code: &str) -> NewTxTemplate {
             .currency("'USD'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_USD_PENDING_CR'")
             .account_id("params.recipient")
             .layer("PENDING")
@@ -121,8 +121,8 @@ pub fn test_template(code: &str) -> NewTxTemplate {
         .id(uuid::Uuid::new_v4())
         .code(code)
         .params(params)
-        .tx_input(
-            NewTxInput::builder()
+        .transaction(
+            NewTxTemplateTransaction::builder()
                 .effective("params.effective")
                 .journal_id("params.journal_id")
                 .metadata(r#"{"foo": "bar"}"#)

@@ -497,31 +497,32 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
-        let mut new_tx_input_builder = cala_ledger::tx_template::NewTxInput::builder();
-        let TxTemplateTxInput {
+        let mut new_tx_template_transaction_builder =
+            cala_ledger::tx_template::NewTxTemplateTransaction::builder();
+        let TxTemplateTransactionInput {
             effective,
             journal_id,
             correlation_id,
             external_id,
             description,
             metadata,
-        } = input.tx_input;
-        new_tx_input_builder
+        } = input.transaction;
+        new_tx_template_transaction_builder
             .effective(effective)
             .journal_id(journal_id);
         if let Some(correlation_id) = correlation_id {
-            new_tx_input_builder.correlation_id(correlation_id);
+            new_tx_template_transaction_builder.correlation_id(correlation_id);
         };
         if let Some(external_id) = external_id {
-            new_tx_input_builder.external_id(external_id);
+            new_tx_template_transaction_builder.external_id(external_id);
         };
         if let Some(description) = description {
-            new_tx_input_builder.description(description);
+            new_tx_template_transaction_builder.description(description);
         };
         if let Some(metadata) = metadata {
-            new_tx_input_builder.metadata(metadata);
+            new_tx_template_transaction_builder.metadata(metadata);
         }
-        let new_tx_input = new_tx_input_builder.build()?;
+        let new_transaction = new_tx_template_transaction_builder.build()?;
 
         let mut new_params = Vec::new();
         if let Some(params) = input.params {
@@ -550,7 +551,8 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
                 currency,
                 description,
             } = entry;
-            let mut new_entry_input_builder = cala_ledger::tx_template::NewEntryInput::builder();
+            let mut new_entry_input_builder =
+                cala_ledger::tx_template::NewTxTemplateEntry::builder();
             new_entry_input_builder
                 .entry_type(entry_type)
                 .account_id(account_id)
@@ -569,7 +571,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         new_tx_template_builder
             .id(input.tx_template_id)
             .code(input.code)
-            .tx_input(new_tx_input)
+            .transaction(new_transaction)
             .params(new_params)
             .entries(new_entries);
         if let Some(desc) = input.description {

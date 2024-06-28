@@ -231,16 +231,6 @@ enum DebitOrCredit {
 
 scalar Decimal
 
-type EntryInput {
-	entryType: Expression!
-	accountId: Expression!
-	layer: Expression!
-	direction: Expression!
-	units: Expression!
-	currency: Expression!
-	description: Expression
-}
-
 scalar Expression
 
 
@@ -441,23 +431,14 @@ type TransactionPostPayload {
 	transaction: Transaction!
 }
 
-type TxInput {
-	effective: Expression!
-	journalId: Expression!
-	correlationId: Expression
-	externalId: Expression
-	description: Expression
-	metadata: Expression
-}
-
 type TxTemplate {
 	id: ID!
 	txTemplateId: UUID!
 	version: Int!
 	code: String!
 	params: [ParamDefinition!]
-	txInput: TxInput!
-	entries: [EntryInput!]!
+	transaction: TxTemplateTransaction!
+	entries: [TxTemplateEntry!]!
 	description: String
 	metadata: JSON
 	createdAt: Timestamp!
@@ -468,7 +449,7 @@ input TxTemplateCreateInput {
 	txTemplateId: UUID!
 	code: String!
 	params: [ParamDefinitionInput!]
-	txInput: TxTemplateTxInput!
+	transaction: TxTemplateTransactionInput!
 	entries: [TxTemplateEntryInput!]!
 	description: String
 	metadata: JSON
@@ -476,6 +457,16 @@ input TxTemplateCreateInput {
 
 type TxTemplateCreatePayload {
 	txTemplate: TxTemplate!
+}
+
+type TxTemplateEntry {
+	entryType: Expression!
+	accountId: Expression!
+	layer: Expression!
+	direction: Expression!
+	units: Expression!
+	currency: Expression!
+	description: Expression
 }
 
 input TxTemplateEntryInput {
@@ -488,7 +479,16 @@ input TxTemplateEntryInput {
 	description: Expression
 }
 
-input TxTemplateTxInput {
+type TxTemplateTransaction {
+	effective: Expression!
+	journalId: Expression!
+	correlationId: Expression
+	externalId: Expression
+	description: Expression
+	metadata: Expression
+}
+
+input TxTemplateTransactionInput {
 	effective: Expression!
 	journalId: Expression!
 	correlationId: Expression

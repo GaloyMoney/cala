@@ -54,7 +54,7 @@
 //!     ];
 //!
 //!     let entries = vec![
-//!         NewEntryInput::builder()
+//!         NewTxTemplateEntry::builder()
 //!             .entry_type("'INCOME_DR'")
 //!             .account_id("params.sender_account_id")
 //!             .layer("SETTLED")
@@ -62,7 +62,7 @@
 //!             .units("params.units")
 //!             .currency("'BTC'")
 //!             .build()?,
-//!         NewEntryInput::builder()
+//!         NewTxTemplateEntry::builder()
 //!             .entry_type("'INCOME_CR'")
 //!             .account_id(format!("uuid('{}')", main_account_id))
 //!             .layer("SETTLED")
@@ -77,8 +77,8 @@
 //!         .id(uuid::Uuid::new_v4())
 //!         .code(tx_code)
 //!         .params(params)
-//!         .tx_input(
-//!             NewTxInput::builder()
+//!         .transaction(
+//!             NewTxTemplateTransaction::builder()
 //!                 .effective("date()")
 //!                 .journal_id(format!("uuid('{}')", journal_id))
 //!                 .build()?,
@@ -107,7 +107,7 @@
 //!     params.insert("sender_account_id", sender_account_id);
 //!     params.insert("units", Decimal::ONE);
 //!     // Create the transaction via the template
-//!     cala.transaction_post(TransactionId::new(), "GENERAL_INCOME", params)
+//!     cala.post_transaction(TransactionId::new(), "GENERAL_INCOME", params)
 //!         .await?;
 //!
 //!     let account_balance = cala

@@ -17,7 +17,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
           description: "Effective date for transaction."
         }
       ]
-      txInput: {
+      transaction: {
         journalId: $journalId
         effective: "params.effective"
       }
@@ -64,7 +64,7 @@ mutation CreateDepositAndWithdrawalTxTemplates($depositTemplateId: UUID!, $depos
           description: "Effective date for transaction."
         }
       ]
-      txInput: {
+      transaction: {
         journalId: $journalId
         effective: "params.effective"
       }

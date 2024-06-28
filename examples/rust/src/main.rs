@@ -82,12 +82,12 @@ async fn main() -> anyhow::Result<()> {
     journal.update(builder);
     cala.journals().persist(&mut journal).await?;
 
-    let tx_input = NewTxInput::builder()
+    let transaction = NewTxTemplateTransaction::builder()
         .journal_id(format!("uuid('{}')", journal_id))
         .effective("date('2022-11-01')")
         .build()?;
     let entries = vec![
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_DR'")
             .account_id("param.recipient")
             .layer("'SETTLED'")
@@ -96,7 +96,7 @@ async fn main() -> anyhow::Result<()> {
             .currency("'BTC'")
             .build()
             .unwrap(),
-        NewEntryInput::builder()
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_CR'")
             .account_id("param.sender")
             .layer("'SETTLED'")
@@ -111,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
     let new_tx_template = NewTxTemplate::builder()
         .id(tx_template_id)
         .code(format!("CODE_{}", example_suffix))
-        .tx_input(tx_input)
+        .transaction(transaction)
         .entries(entries)
         .build()
         .unwrap();

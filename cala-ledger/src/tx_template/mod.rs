@@ -94,7 +94,7 @@ impl TxTemplates {
 
         let ctx = params.into_context(tmpl.params.as_ref())?;
 
-        let journal_id: Uuid = tmpl.tx_input.journal_id.try_evaluate(&ctx)?;
+        let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
 
         let entries = self.prep_entries(&tmpl, tx_id, JournalId::from(journal_id), &ctx)?;
 
@@ -106,25 +106,25 @@ impl TxTemplates {
 
         tx_builder.journal_id(journal_id);
 
-        let effective: NaiveDate = tmpl.tx_input.effective.try_evaluate(&ctx)?;
+        let effective: NaiveDate = tmpl.transaction.effective.try_evaluate(&ctx)?;
         tx_builder.effective(effective);
 
-        if let Some(correlation_id) = tmpl.tx_input.correlation_id.as_ref() {
+        if let Some(correlation_id) = tmpl.transaction.correlation_id.as_ref() {
             let correlation_id: String = correlation_id.try_evaluate(&ctx)?;
             tx_builder.correlation_id(correlation_id);
         }
 
-        if let Some(external_id) = tmpl.tx_input.external_id.as_ref() {
+        if let Some(external_id) = tmpl.transaction.external_id.as_ref() {
             let external_id: String = external_id.try_evaluate(&ctx)?;
             tx_builder.external_id(external_id);
         }
 
-        if let Some(description) = tmpl.tx_input.description.as_ref() {
+        if let Some(description) = tmpl.transaction.description.as_ref() {
             let description: String = description.try_evaluate(&ctx)?;
             tx_builder.description(description);
         }
 
-        if let Some(metadata) = tmpl.tx_input.metadata.as_ref() {
+        if let Some(metadata) = tmpl.transaction.metadata.as_ref() {
             let metadata: serde_json::Value = metadata.try_evaluate(&ctx)?;
             tx_builder.metadata(metadata);
         }

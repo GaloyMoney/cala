@@ -279,7 +279,7 @@ impl From<TxTemplateValues> for proto::TxTemplate {
             version,
             code,
             params,
-            tx_input,
+            transaction,
             entries,
             description,
             metadata,
@@ -295,7 +295,7 @@ impl From<TxTemplateValues> for proto::TxTemplate {
             version,
             code,
             params,
-            tx_input: Some(tx_input.into()),
+            transaction: Some(transaction.into()),
             entries: entries.into_iter().map(|entry| entry.into()).collect(),
             description,
             metadata: metadata.map(|json| {
@@ -305,9 +305,9 @@ impl From<TxTemplateValues> for proto::TxTemplate {
     }
 }
 
-impl From<EntryInput> for proto::EntryInput {
+impl From<TxTemplateEntry> for proto::TxTemplateEntry {
     fn from(
-        EntryInput {
+        TxTemplateEntry {
             entry_type,
             account_id,
             layer,
@@ -315,9 +315,9 @@ impl From<EntryInput> for proto::EntryInput {
             currency,
             units,
             description,
-        }: EntryInput,
+        }: TxTemplateEntry,
     ) -> Self {
-        proto::EntryInput {
+        proto::TxTemplateEntry {
             entry_type: String::from(entry_type),
             account_id: String::from(account_id),
             layer: String::from(layer),
@@ -363,18 +363,18 @@ impl From<ParamDataType> for proto::ParamDataType {
     }
 }
 
-impl From<TxInput> for proto::TxInput {
+impl From<TxTemplateTransaction> for proto::TxTemplateTransaction {
     fn from(
-        TxInput {
+        TxTemplateTransaction {
             effective,
             journal_id,
             correlation_id,
             external_id,
             description,
             metadata,
-        }: TxInput,
+        }: TxTemplateTransaction,
     ) -> Self {
-        proto::TxInput {
+        proto::TxTemplateTransaction {
             effective: String::from(effective),
             journal_id: String::from(journal_id),
             correlation_id: correlation_id.map(String::from),
