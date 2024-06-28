@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use rand::distributions::{Alphanumeric, DistString};
 
 use cala_ledger::{account::*, journal::*, tx_template::*};

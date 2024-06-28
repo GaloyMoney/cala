@@ -19,6 +19,7 @@ use crate::{
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
+    velocity::Velocities,
 };
 #[cfg(feature = "import")]
 mod import_deps {
@@ -37,6 +38,7 @@ pub struct CalaLedger {
     transactions: Transactions,
     tx_templates: TxTemplates,
     entries: Entries,
+    velocities: Velocities,
     balances: Balances,
     outbox: Outbox,
     #[allow(clippy::type_complexity)]
@@ -76,6 +78,7 @@ impl CalaLedger {
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, outbox.clone());
         let balances = Balances::new(&pool, outbox.clone());
+        let velocities = Velocities::new(&pool, outbox.clone());
         let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts, &entries, &balances);
         Ok(Self {
             accounts,
@@ -86,6 +89,7 @@ impl CalaLedger {
             transactions,
             entries,
             balances,
+            velocities,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             pool,
         })
@@ -101,6 +105,10 @@ impl CalaLedger {
 
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
+    }
+
+    pub fn velocities(&self) -> &Velocities {
+        &self.velocities
     }
 
     pub fn account_sets(&self) -> &AccountSets {
