@@ -299,7 +299,7 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
             version,
             code,
             params,
-            tx_input,
+            transaction,
             entries,
             description,
             metadata,
@@ -309,11 +309,12 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
             .into_iter()
             .map(ParamDefinition::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        let tx_input =
-            TxInput::try_from(tx_input.ok_or(CalaLedgerOutboxClientError::MissingField)?)?;
+        let transaction = TxTemplateTransaction::try_from(
+            transaction.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+        )?;
         let entries = entries
             .into_iter()
-            .map(EntryInput::try_from)
+            .map(TxTemplateEntry::try_from)
             .collect::<Result<Vec<_>, _>>()?;
 
         let res = Self {
@@ -321,7 +322,7 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
             version,
             code,
             params: Some(params),
-            tx_input,
+            transaction,
             entries,
             description,
             metadata: metadata.map(serde_json::to_value).transpose()?,
@@ -350,17 +351,17 @@ impl TryFrom<proto::ParamDefinition> for ParamDefinition {
     }
 }
 
-impl TryFrom<proto::TxInput> for TxInput {
+impl TryFrom<proto::TxTemplateTransaction> for TxTemplateTransaction {
     type Error = CalaLedgerOutboxClientError;
     fn try_from(
-        proto::TxInput {
+        proto::TxTemplateTransaction {
             effective,
             journal_id,
             correlation_id,
             external_id,
             description,
             metadata,
-        }: proto::TxInput,
+        }: proto::TxTemplateTransaction,
     ) -> Result<Self, Self::Error> {
         let res = Self {
             effective: CelExpression::try_from(effective)?,
@@ -374,10 +375,10 @@ impl TryFrom<proto::TxInput> for TxInput {
     }
 }
 
-impl TryFrom<proto::EntryInput> for EntryInput {
+impl TryFrom<proto::TxTemplateEntry> for TxTemplateEntry {
     type Error = CalaLedgerOutboxClientError;
     fn try_from(
-        proto::EntryInput {
+        proto::TxTemplateEntry {
             entry_type,
             account_id,
             layer,
@@ -385,7 +386,7 @@ impl TryFrom<proto::EntryInput> for EntryInput {
             units,
             currency,
             description,
-        }: proto::EntryInput,
+        }: proto::TxTemplateEntry,
     ) -> Result<Self, Self::Error> {
         let res = Self {
             entry_type: CelExpression::try_from(entry_type)?,

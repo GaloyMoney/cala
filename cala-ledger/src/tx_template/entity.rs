@@ -118,8 +118,8 @@ pub struct NewTxTemplate {
     pub(super) description: Option<String>,
     #[builder(setter(strip_option), default)]
     pub(super) params: Option<Vec<NewParamDefinition>>,
-    pub(super) tx_input: NewTxInput,
-    pub(super) entries: Vec<NewEntryInput>,
+    pub(super) transaction: NewTxTemplateTransaction,
+    pub(super) entries: Vec<NewTxTemplateEntry>,
     #[builder(setter(custom), default)]
     pub(super) metadata: Option<serde_json::Value>,
 }
@@ -141,7 +141,7 @@ impl NewTxTemplate {
                     params: self
                         .params
                         .map(|p| p.into_iter().map(|p| p.into()).collect()),
-                    tx_input: self.tx_input.into(),
+                    transaction: self.transaction.into(),
                     entries: self.entries.into_iter().map(|e| e.into()).collect(),
                     metadata: self.metadata,
                 },
@@ -162,7 +162,7 @@ impl NewTxTemplateBuilder {
 
 #[derive(Clone, Debug, Builder)]
 #[builder(build_fn(validate = "Self::validate"))]
-pub struct NewEntryInput {
+pub struct NewTxTemplateEntry {
     #[builder(setter(into))]
     entry_type: String,
     #[builder(setter(into))]
@@ -179,12 +179,12 @@ pub struct NewEntryInput {
     description: Option<String>,
 }
 
-impl NewEntryInput {
-    pub fn builder() -> NewEntryInputBuilder {
-        NewEntryInputBuilder::default()
+impl NewTxTemplateEntry {
+    pub fn builder() -> NewTxTemplateEntryBuilder {
+        NewTxTemplateEntryBuilder::default()
     }
 }
-impl NewEntryInputBuilder {
+impl NewTxTemplateEntryBuilder {
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.entry_type
@@ -220,9 +220,9 @@ impl NewEntryInputBuilder {
     }
 }
 
-impl From<NewEntryInput> for cala_types::tx_template::EntryInput {
-    fn from(input: NewEntryInput) -> Self {
-        cala_types::tx_template::EntryInput {
+impl From<NewTxTemplateEntry> for cala_types::tx_template::TxTemplateEntry {
+    fn from(input: NewTxTemplateEntry) -> Self {
+        cala_types::tx_template::TxTemplateEntry {
             entry_type: CelExpression::try_from(input.entry_type)
                 .expect("always a valid entry type"),
             account_id: CelExpression::try_from(input.account_id)
@@ -241,7 +241,7 @@ impl From<NewEntryInput> for cala_types::tx_template::EntryInput {
 /// Contains the transaction-level details needed to create a `Transaction`.
 #[derive(Clone, Debug, Serialize, Builder, Deserialize)]
 #[builder(build_fn(validate = "Self::validate"))]
-pub struct NewTxInput {
+pub struct NewTxTemplateTransaction {
     #[builder(setter(into))]
     effective: String,
     #[builder(setter(into))]
@@ -256,13 +256,13 @@ pub struct NewTxInput {
     metadata: Option<String>,
 }
 
-impl NewTxInput {
-    pub fn builder() -> NewTxInputBuilder {
-        NewTxInputBuilder::default()
+impl NewTxTemplateTransaction {
+    pub fn builder() -> NewTxTemplateTransactionBuilder {
+        NewTxTemplateTransactionBuilder::default()
     }
 }
 
-impl NewTxInputBuilder {
+impl NewTxTemplateTransactionBuilder {
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.effective
@@ -281,18 +281,18 @@ impl NewTxInputBuilder {
     }
 }
 
-impl From<NewTxInput> for cala_types::tx_template::TxInput {
+impl From<NewTxTemplateTransaction> for cala_types::tx_template::TxTemplateTransaction {
     fn from(
-        NewTxInput {
+        NewTxTemplateTransaction {
             effective,
             journal_id,
             correlation_id,
             external_id,
             description,
             metadata,
-        }: NewTxInput,
+        }: NewTxTemplateTransaction,
     ) -> Self {
-        cala_types::tx_template::TxInput {
+        cala_types::tx_template::TxTemplateTransaction {
             effective: CelExpression::try_from(effective).expect("always a valid effective date"),
             journal_id: CelExpression::try_from(journal_id).expect("always a valid journal id"),
             correlation_id: correlation_id
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn it_builds() {
         let journal_id = Uuid::new_v4();
-        let entries = vec![NewEntryInput::builder()
+        let entries = vec![NewTxTemplateEntry::builder()
             .entry_type("'TEST_DR'")
             .account_id("param.recipient")
             .layer("'Settled'")
@@ -338,8 +338,8 @@ mod tests {
         let new_tx_template = NewTxTemplate::builder()
             .id(TxTemplateId::new())
             .code("CODE")
-            .tx_input(
-                NewTxInput::builder()
+            .transaction(
+                NewTxTemplateTransaction::builder()
                     .effective("date('2022-11-01')")
                     .journal_id(format!("uuid('{journal_id}')"))
                     .build()

@@ -10,14 +10,14 @@ pub struct TxTemplateValues {
     pub version: u32,
     pub code: String,
     pub params: Option<Vec<ParamDefinition>>,
-    pub tx_input: TxInput,
-    pub entries: Vec<EntryInput>,
+    pub transaction: TxTemplateTransaction,
+    pub entries: Vec<TxTemplateEntry>,
     pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct EntryInput {
+pub struct TxTemplateEntry {
     pub entry_type: CelExpression,
     pub account_id: CelExpression,
     pub layer: CelExpression,
@@ -28,7 +28,7 @@ pub struct EntryInput {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TxInput {
+pub struct TxTemplateTransaction {
     pub effective: CelExpression,
     pub journal_id: CelExpression,
     pub correlation_id: Option<CelExpression>,

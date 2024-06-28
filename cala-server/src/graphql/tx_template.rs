@@ -9,8 +9,8 @@ pub struct TxTemplate {
     version: u32,
     code: String,
     params: Option<Vec<ParamDefinition>>,
-    tx_input: TxInput,
-    entries: Vec<EntryInput>,
+    transaction: TxTemplateTransaction,
+    entries: Vec<TxTemplateEntry>,
     description: Option<String>,
     metadata: Option<JSON>,
     created_at: Timestamp,
@@ -26,7 +26,7 @@ pub(super) struct ParamDefinition {
 }
 
 #[derive(Clone, SimpleObject)]
-pub(super) struct EntryInput {
+pub(super) struct TxTemplateEntry {
     entry_type: Expression,
     account_id: Expression,
     layer: Expression,
@@ -37,7 +37,7 @@ pub(super) struct EntryInput {
 }
 
 #[derive(Clone, SimpleObject)]
-pub(super) struct TxInput {
+pub(super) struct TxTemplateTransaction {
     effective: Expression,
     journal_id: Expression,
     correlation_id: Option<Expression>,
@@ -51,14 +51,14 @@ pub(super) struct TxTemplateCreateInput {
     pub tx_template_id: UUID,
     pub code: String,
     pub params: Option<Vec<ParamDefinitionInput>>,
-    pub tx_input: TxTemplateTxInput,
+    pub transaction: TxTemplateTransactionInput,
     pub entries: Vec<TxTemplateEntryInput>,
     pub description: Option<String>,
     pub metadata: Option<JSON>,
 }
 
 #[derive(InputObject)]
-pub(super) struct TxTemplateTxInput {
+pub(super) struct TxTemplateTransactionInput {
     pub effective: Expression,
     pub journal_id: Expression,
     pub correlation_id: Option<Expression>,
@@ -102,8 +102,12 @@ impl From<cala_ledger::tx_template::TxTemplate> for TxTemplate {
         let created_at = entity.created_at();
         let modified_at = entity.modified_at();
         let values = entity.into_values();
-        let tx_input = TxInput::from(values.tx_input);
-        let entries = values.entries.into_iter().map(EntryInput::from).collect();
+        let transaction = TxTemplateTransaction::from(values.transaction);
+        let entries = values
+            .entries
+            .into_iter()
+            .map(TxTemplateEntry::from)
+            .collect();
         let params = values
             .params
             .map(|params| params.into_iter().map(ParamDefinition::from).collect());
@@ -112,7 +116,7 @@ impl From<cala_ledger::tx_template::TxTemplate> for TxTemplate {
             version: values.version,
             tx_template_id: UUID::from(values.id),
             code: values.code,
-            tx_input,
+            transaction,
             entries,
             params,
             description: values.description,
@@ -123,16 +127,16 @@ impl From<cala_ledger::tx_template::TxTemplate> for TxTemplate {
     }
 }
 
-impl From<cala_ledger::tx_template::TxInput> for TxInput {
+impl From<cala_ledger::tx_template::TxTemplateTransaction> for TxTemplateTransaction {
     fn from(
-        cala_ledger::tx_template::TxInput {
+        cala_ledger::tx_template::TxTemplateTransaction {
             effective,
             journal_id,
             correlation_id,
             external_id,
             description,
             metadata,
-        }: cala_ledger::tx_template::TxInput,
+        }: cala_ledger::tx_template::TxTemplateTransaction,
     ) -> Self {
         Self {
             effective: Expression::from(effective),
@@ -145,9 +149,9 @@ impl From<cala_ledger::tx_template::TxInput> for TxInput {
     }
 }
 
-impl From<cala_ledger::tx_template::EntryInput> for EntryInput {
+impl From<cala_ledger::tx_template::TxTemplateEntry> for TxTemplateEntry {
     fn from(
-        cala_ledger::tx_template::EntryInput {
+        cala_ledger::tx_template::TxTemplateEntry {
             entry_type,
             account_id,
             layer,
@@ -155,7 +159,7 @@ impl From<cala_ledger::tx_template::EntryInput> for EntryInput {
             units,
             currency,
             description,
-        }: cala_ledger::tx_template::EntryInput,
+        }: cala_ledger::tx_template::TxTemplateEntry,
     ) -> Self {
         Self {
             entry_type: Expression::from(entry_type),
