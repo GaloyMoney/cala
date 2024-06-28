@@ -8,7 +8,7 @@ use sqlx::{Acquire, PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-pub use cala_types::balance::BalanceSnapshot;
+pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
@@ -192,18 +192,24 @@ impl Balances {
                 account_id,
                 entry_id,
                 currency: entry.currency,
-                settled_dr_balance: Decimal::ZERO,
-                settled_cr_balance: Decimal::ZERO,
-                settled_entry_id: entry_id,
-                settled_modified_at: time,
-                pending_dr_balance: Decimal::ZERO,
-                pending_cr_balance: Decimal::ZERO,
-                pending_entry_id: entry_id,
-                pending_modified_at: time,
-                encumbrance_dr_balance: Decimal::ZERO,
-                encumbrance_cr_balance: Decimal::ZERO,
-                encumbrance_entry_id: entry_id,
-                encumbrance_modified_at: time,
+                settled: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                pending: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                encumbrance: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
                 version: 0,
                 modified_at: time,
                 created_at: time,
@@ -222,38 +228,38 @@ impl Balances {
         snapshot.entry_id = entry.id;
         match entry.layer {
             Layer::Settled => {
-                snapshot.settled_entry_id = entry.id;
-                snapshot.settled_modified_at = time;
+                snapshot.settled.entry_id = entry.id;
+                snapshot.settled.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.settled_dr_balance += entry.units;
+                        snapshot.settled.dr_balance += entry.units;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.settled_cr_balance += entry.units;
+                        snapshot.settled.cr_balance += entry.units;
                     }
                 }
             }
             Layer::Pending => {
-                snapshot.pending_entry_id = entry.id;
-                snapshot.pending_modified_at = time;
+                snapshot.pending.entry_id = entry.id;
+                snapshot.pending.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.pending_dr_balance += entry.units;
+                        snapshot.pending.dr_balance += entry.units;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.pending_cr_balance += entry.units;
+                        snapshot.pending.cr_balance += entry.units;
                     }
                 }
             }
             Layer::Encumbrance => {
-                snapshot.encumbrance_entry_id = entry.id;
-                snapshot.encumbrance_modified_at = time;
+                snapshot.encumbrance.entry_id = entry.id;
+                snapshot.encumbrance.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.encumbrance_dr_balance += entry.units;
+                        snapshot.encumbrance.dr_balance += entry.units;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.encumbrance_cr_balance += entry.units;
+                        snapshot.encumbrance.cr_balance += entry.units;
                     }
                 }
             }

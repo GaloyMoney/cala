@@ -1,6 +1,6 @@
 use rust_decimal::prelude::ToPrimitive;
 
-use cala_types::balance::BalanceSnapshot;
+use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 
 use crate::primitives::*;
 
@@ -462,18 +462,9 @@ impl From<BalanceSnapshot> for proto::Balance {
             created_at,
             modified_at,
             entry_id,
-            settled_dr_balance,
-            settled_cr_balance,
-            settled_entry_id,
-            settled_modified_at,
-            pending_dr_balance,
-            pending_cr_balance,
-            pending_entry_id,
-            pending_modified_at,
-            encumbrance_dr_balance,
-            encumbrance_cr_balance,
-            encumbrance_entry_id,
-            encumbrance_modified_at,
+            settled,
+            pending,
+            encumbrance,
         }: BalanceSnapshot,
     ) -> Self {
         proto::Balance {
@@ -484,18 +475,27 @@ impl From<BalanceSnapshot> for proto::Balance {
             created_at: Some(created_at.into()),
             modified_at: Some(modified_at.into()),
             entry_id: entry_id.to_string(),
-            settled_dr_balance: settled_dr_balance.to_string(),
-            settled_cr_balance: settled_cr_balance.to_string(),
-            settled_entry_id: settled_entry_id.to_string(),
-            settled_modified_at: Some(settled_modified_at.into()),
-            pending_dr_balance: pending_dr_balance.to_string(),
-            pending_cr_balance: pending_cr_balance.to_string(),
-            pending_entry_id: pending_entry_id.to_string(),
-            pending_modified_at: Some(pending_modified_at.into()),
-            encumbrance_dr_balance: encumbrance_dr_balance.to_string(),
-            encumbrance_cr_balance: encumbrance_cr_balance.to_string(),
-            encumbrance_entry_id: encumbrance_entry_id.to_string(),
-            encumbrance_modified_at: Some(encumbrance_modified_at.into()),
+            settled: Some(proto::BalanceAmount::from(settled)),
+            pending: Some(proto::BalanceAmount::from(pending)),
+            encumbrance: Some(proto::BalanceAmount::from(encumbrance)),
+        }
+    }
+}
+
+impl From<BalanceAmount> for proto::BalanceAmount {
+    fn from(
+        BalanceAmount {
+            dr_balance,
+            cr_balance,
+            entry_id,
+            modified_at,
+        }: BalanceAmount,
+    ) -> Self {
+        proto::BalanceAmount {
+            dr_balance: dr_balance.to_string(),
+            cr_balance: cr_balance.to_string(),
+            entry_id: entry_id.to_string(),
+            modified_at: Some(modified_at.into()),
         }
     }
 }

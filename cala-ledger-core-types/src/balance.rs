@@ -13,16 +13,42 @@ pub struct BalanceSnapshot {
     pub created_at: DateTime<Utc>,
     pub modified_at: DateTime<Utc>,
     pub entry_id: EntryId,
-    pub settled_dr_balance: Decimal,
-    pub settled_cr_balance: Decimal,
-    pub settled_entry_id: EntryId,
-    pub settled_modified_at: DateTime<Utc>,
-    pub pending_dr_balance: Decimal,
-    pub pending_cr_balance: Decimal,
-    pub pending_entry_id: EntryId,
-    pub pending_modified_at: DateTime<Utc>,
-    pub encumbrance_dr_balance: Decimal,
-    pub encumbrance_cr_balance: Decimal,
-    pub encumbrance_entry_id: EntryId,
-    pub encumbrance_modified_at: DateTime<Utc>,
+    pub settled: BalanceAmount,
+    pub pending: BalanceAmount,
+    pub encumbrance: BalanceAmount,
+}
+
+impl BalanceSnapshot {
+    pub fn available(&self, layer: Layer) -> BalanceAmount {
+        match layer {
+            Layer::Settled => self.settled.clone(),
+            Layer::Pending => self.settled.rollup(&self.pending),
+            Layer::Encumbrance => self.settled.rollup(&self.pending).rollup(&self.encumbrance),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct BalanceAmount {
+    pub dr_balance: Decimal,
+    pub cr_balance: Decimal,
+    pub entry_id: EntryId,
+    pub modified_at: DateTime<Utc>,
+}
+
+impl BalanceAmount {
+    fn rollup(&self, other: &Self) -> Self {
+        let (modified_at, entry_id) = if self.modified_at >= other.modified_at {
+            (self.modified_at, self.entry_id)
+        } else {
+            (other.modified_at, other.entry_id)
+        };
+
+        Self {
+            dr_balance: self.dr_balance + other.dr_balance,
+            cr_balance: self.cr_balance + other.cr_balance,
+            entry_id,
+            modified_at,
+        }
+    }
 }

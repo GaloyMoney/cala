@@ -246,16 +246,14 @@ message Balance {
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp modified_at = 6;
   string entry_id = 7;
-  string settled_dr_balance = 8;
-  string settled_cr_balance = 9;
-  string settled_entry_id = 10;
-  google.protobuf.Timestamp settled_modified_at = 11;
-  string pending_dr_balance = 12;
-  string pending_cr_balance = 13;
-  string pending_entry_id = 14;
-  google.protobuf.Timestamp pending_modified_at = 15;
-  string encumbrance_dr_balance = 16;
-  string encumbrance_cr_balance = 17;
-  string encumbrance_entry_id = 18;
-  google.protobuf.Timestamp encumbrance_modified_at = 19;
+  BalanceAmount settled = 8;
+  BalanceAmount pending = 9;
+  BalanceAmount encumbrance = 10;
+}
+
+message BalanceAmount {
+  string dr_balance = 1;
+  string cr_balance = 2;
+  string entry_id = 3;
+  google.protobuf.Timestamp modified_at = 4;
 }

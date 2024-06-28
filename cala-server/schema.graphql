@@ -199,6 +199,7 @@ type Balance {
 	pending: BalanceAmount!
 	encumbrance: BalanceAmount!
 	version: Int!
+	available(layer: Layer!): BalanceAmount!
 }
 
 type BalanceAmount {
@@ -304,6 +305,12 @@ input JournalUpdateInput {
 
 type JournalUpdatePayload {
 	journal: Journal!
+}
+
+enum Layer {
+	SETTLED
+	PENDING
+	ENCUMBRANCE
 }
 
 type Money {

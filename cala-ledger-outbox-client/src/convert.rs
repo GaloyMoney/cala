@@ -496,18 +496,9 @@ impl TryFrom<proto::Balance> for BalanceSnapshot {
             created_at,
             modified_at,
             entry_id,
-            settled_dr_balance,
-            settled_cr_balance,
-            settled_entry_id,
-            settled_modified_at,
-            pending_dr_balance,
-            pending_cr_balance,
-            pending_entry_id,
-            pending_modified_at,
-            encumbrance_dr_balance,
-            encumbrance_cr_balance,
-            encumbrance_entry_id,
-            encumbrance_modified_at,
+            settled,
+            pending,
+            encumbrance,
         }: proto::Balance,
     ) -> Result<Self, Self::Error> {
         let res = Self {
@@ -522,22 +513,30 @@ impl TryFrom<proto::Balance> for BalanceSnapshot {
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?
                 .into(),
             entry_id: entry_id.parse()?,
-            settled_dr_balance: settled_dr_balance.parse()?,
-            settled_cr_balance: settled_cr_balance.parse()?,
-            settled_entry_id: settled_entry_id.parse()?,
-            settled_modified_at: settled_modified_at
-                .ok_or(CalaLedgerOutboxClientError::MissingField)?
-                .into(),
-            pending_dr_balance: pending_dr_balance.parse()?,
-            pending_cr_balance: pending_cr_balance.parse()?,
-            pending_entry_id: pending_entry_id.parse()?,
-            pending_modified_at: pending_modified_at
-                .ok_or(CalaLedgerOutboxClientError::MissingField)?
-                .into(),
-            encumbrance_dr_balance: encumbrance_dr_balance.parse()?,
-            encumbrance_cr_balance: encumbrance_cr_balance.parse()?,
-            encumbrance_entry_id: encumbrance_entry_id.parse()?,
-            encumbrance_modified_at: encumbrance_modified_at
+            settled: BalanceAmount::try_from(
+                settled.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            )?,
+            pending: BalanceAmount::try_from(
+                pending.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            )?,
+            encumbrance: BalanceAmount::try_from(
+                encumbrance.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            )?,
+        };
+        Ok(res)
+    }
+}
+
+impl TryFrom<proto::BalanceAmount> for BalanceAmount {
+    type Error = CalaLedgerOutboxClientError;
+
+    fn try_from(amount: proto::BalanceAmount) -> Result<Self, Self::Error> {
+        let res = Self {
+            dr_balance: amount.dr_balance.parse()?,
+            cr_balance: amount.cr_balance.parse()?,
+            entry_id: amount.entry_id.parse()?,
+            modified_at: amount
+                .modified_at
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?
                 .into(),
         };
