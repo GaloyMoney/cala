@@ -5,7 +5,6 @@ repository = "https://github.com/GaloyMoney/cala"
 version = "0.2.22-dev"
 edition = "2021"
 license = "Apache-2.0"
-categories = ["client", "outbox"]
 
 [features]
 
