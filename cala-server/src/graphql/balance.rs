@@ -1,7 +1,7 @@
 use async_graphql::*;
 
 use super::{convert::ToGlobalId, primitives::*};
-use cala_ledger::primitives::*;
+use cala_ledger::primitives::{AccountId, Currency, JournalId};
 
 #[derive(SimpleObject)]
 pub(super) struct Money {
@@ -27,6 +27,7 @@ pub(super) struct BalanceAmount {
 }
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub(super) struct Balance {
     pub id: ID,
     pub journal_id: UUID,
@@ -37,6 +38,22 @@ pub(super) struct Balance {
     pub pending: BalanceAmount,
     pub encumbrance: BalanceAmount,
     pub version: u32,
+    #[graphql(skip)]
+    pub(super) balance: cala_ledger::balance::AccountBalance,
+}
+
+#[ComplexObject]
+impl Balance {
+    async fn available(&self, layer: Layer) -> BalanceAmount {
+        let amount = self.balance.details.available(layer.into());
+        let currency = self.balance.details.currency;
+        BalanceAmount {
+            dr_balance: (amount.dr_balance, currency).into(),
+            cr_balance: (amount.cr_balance, currency).into(),
+            normal_balance: (self.balance.available(layer.into()), currency).into(),
+            entry_id: amount.entry_id.into(),
+        }
+    }
 }
 
 impl ToGlobalId for (JournalId, AccountId, Currency) {
@@ -78,6 +95,7 @@ impl From<cala_ledger::balance::AccountBalance> for Balance {
                 normal_balance: (balance.encumbrance(), currency).into(),
                 entry_id: balance.details.encumbrance.entry_id.into(),
             },
+            balance,
         }
     }
 }

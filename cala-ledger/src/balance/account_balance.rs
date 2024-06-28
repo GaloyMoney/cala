@@ -34,4 +34,12 @@ impl AccountBalance {
             self.details.encumbrance.dr_balance - self.details.encumbrance.cr_balance
         }
     }
+
+    pub fn available(&self, layer: Layer) -> Decimal {
+        match layer {
+            Layer::Settled => self.settled(),
+            Layer::Pending => self.pending() + self.settled(),
+            Layer::Encumbrance => self.encumbrance() + self.pending() + self.settled(),
+        }
+    }
 }

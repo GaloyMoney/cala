@@ -17,6 +17,14 @@ impl Default for DebitOrCredit {
 }
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "cala_ledger::primitives::Layer")]
+pub(super) enum Layer {
+    Settled,
+    Pending,
+    Encumbrance,
+}
+
+#[derive(Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(remote = "cala_ledger::primitives::Status")]
 pub(super) enum Status {
     Active,
