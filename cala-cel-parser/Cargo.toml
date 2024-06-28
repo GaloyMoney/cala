@@ -6,7 +6,7 @@ version = "0.2.22-dev"
 authors = ["Justin Carter <justin@galoy.io>"]
 edition = "2021"
 license = "Apache-2.0"
-categories = ["parsing", "cel"]
+categories = ["parsing", "compilers"]
 
 [features]
 
