@@ -24,8 +24,14 @@ impl EntityEvent for VelocityLimitEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct VelocityLimit {
-    _values: VelocityLimitValues,
+    values: VelocityLimitValues,
     pub(super) _events: EntityEvents<VelocityLimitEvent>,
+}
+
+impl VelocityLimit {
+    pub fn id(&self) -> VelocityLimitId {
+        self.values.id
+    }
 }
 
 impl Entity for VelocityLimit {
@@ -40,7 +46,7 @@ impl TryFrom<EntityEvents<VelocityLimitEvent>> for VelocityLimit {
         for event in events.iter() {
             match event {
                 VelocityLimitEvent::Initialized { values } => {
-                    builder = builder._values(values.clone());
+                    builder = builder.values(values.clone());
                 }
             }
         }

@@ -1,7 +1,8 @@
 use cel_interpreter::CelExpression;
 use serde::{Deserialize, Serialize};
 
-use crate::{param::*, primitives::*};
+pub use crate::param::*;
+use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VelocityLimitValues {

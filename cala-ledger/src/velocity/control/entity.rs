@@ -24,8 +24,14 @@ impl EntityEvent for VelocityControlEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct VelocityControl {
-    _values: VelocityControlValues,
+    values: VelocityControlValues,
     pub(super) _events: EntityEvents<VelocityControlEvent>,
+}
+
+impl VelocityControl {
+    pub fn id(&self) -> VelocityControlId {
+        self.values.id
+    }
 }
 
 impl Entity for VelocityControl {
@@ -40,7 +46,7 @@ impl TryFrom<EntityEvents<VelocityControlEvent>> for VelocityControl {
         for event in events.iter() {
             match event {
                 VelocityControlEvent::Initialized { values } => {
-                    builder = builder._values(values.clone());
+                    builder = builder.values(values.clone());
                 }
             }
         }
