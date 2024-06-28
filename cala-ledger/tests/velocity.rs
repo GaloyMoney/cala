@@ -26,8 +26,16 @@ async fn create_control() -> anyhow::Result<()> {
                 .expect("limit"),
         )
         .build()
-        .expect("build control");
+        .expect("build limit");
 
-    velocity.create_limit(limit).await?;
+    let _limit = velocity.create_limit(limit).await?;
+
+    let control = NewVelocityControl::builder()
+        .id(VelocityControlId::new())
+        .name("test")
+        .description("test")
+        .build()
+        .expect("build control");
+    let _control = velocity.create_control(control).await?;
     Ok(())
 }
