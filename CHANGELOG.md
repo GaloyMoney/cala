@@ -1,3 +1,16 @@
+# [cala release v0.2.26](https://github.com/GaloyMoney/cala/releases/tag/0.2.26)
+
+
+### Documentation
+
+- Api reference update: 51d11f1cf72f00a76aa40c6148fd248b450343bb
+
+### Miscellaneous Tasks
+
+- Bump clap from 4.5.7 to 4.5.8 (#150)
+- Bump serde_with from 3.8.1 to 3.8.2 (#151)
+- Drop Input suffix from Velocity Limit (#147)
+
 # [cala release v0.2.25](https://github.com/GaloyMoney/cala/releases/tag/0.2.25)
 
 
