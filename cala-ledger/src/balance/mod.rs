@@ -1,4 +1,5 @@
 mod account_balance;
+mod cursor;
 pub mod error;
 mod repo;
 
@@ -15,9 +16,11 @@ use crate::{
     atomic_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
+    query::*,
 };
 
 pub use account_balance::*;
+pub use cursor::*;
 use error::BalanceError;
 use repo::*;
 
@@ -70,6 +73,15 @@ impl Balances {
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all(ids).await
+    }
+
+    pub async fn list_as_of(
+        &self,
+        id: BalanceId,
+        as_of: chrono::NaiveDate,
+        query: PaginatedQueryArgs<BalanceHistoryAsOfCursor>,
+    ) -> Result<PaginatedQueryRet<AccountBalance, BalanceHistoryAsOfCursor>, BalanceError> {
+        unimplemented!()
     }
 
     pub(crate) async fn update_balances_in_op(

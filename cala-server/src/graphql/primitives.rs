@@ -160,8 +160,13 @@ impl From<NaiveDate> for Date {
         Self(value)
     }
 }
+impl From<Date> for NaiveDate {
+    fn from(value: Date) -> Self {
+        value.0
+    }
+}
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct CurrencyCode(cala_types::primitives::Currency);
 scalar!(CurrencyCode);

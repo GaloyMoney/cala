@@ -200,6 +200,7 @@ type Balance {
 	encumbrance: BalanceAmount!
 	version: Int!
 	available(layer: Layer!): BalanceAmount!
+	historyAsOf(asOf: Date!, first: Int!, after: String): BalanceConnection!
 }
 
 type BalanceAmount {
@@ -207,6 +208,35 @@ type BalanceAmount {
 	crBalance: Money!
 	normalBalance: Money!
 	entryId: UUID!
+}
+
+type BalanceConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [BalanceEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Balance!]!
+}
+
+"""
+An edge in a connection.
+"""
+type BalanceEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Balance!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 
