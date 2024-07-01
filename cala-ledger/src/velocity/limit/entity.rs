@@ -58,13 +58,13 @@ pub struct NewVelocityLimit {
     pub(super) name: String,
     #[builder(setter(into))]
     description: String,
-    window: Vec<NewPartitionKeyInput>,
+    window: Vec<NewPartitionKey>,
     #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
     currency: Option<Currency>,
     #[builder(setter(strip_option), default)]
     params: Option<Vec<NewParamDefinition>>,
-    limit: NewLimitInput,
+    limit: NewLimit,
 }
 
 impl NewVelocityLimit {
@@ -85,7 +85,7 @@ impl NewVelocityLimit {
                     window: self
                         .window
                         .into_iter()
-                        .map(|input| PartitionKeyInput {
+                        .map(|input| PartitionKey {
                             alias: input.alias,
                             value: CelExpression::try_from(input.value).expect("already validated"),
                         })
@@ -96,7 +96,7 @@ impl NewVelocityLimit {
                     params: self
                         .params
                         .map(|params| params.into_iter().map(ParamDefinition::from).collect()),
-                    limit: LimitInput {
+                    limit: Limit {
                         timestamp_source: limit
                             .timestamp_source
                             .map(CelExpression::try_from)
@@ -105,7 +105,7 @@ impl NewVelocityLimit {
                         balance: limit
                             .balance
                             .into_iter()
-                            .map(|input| BalanceLimitInput {
+                            .map(|input| BalanceLimit {
                                 layer: CelExpression::try_from(input.layer)
                                     .expect("already validated"),
                                 amount: CelExpression::try_from(input.amount)
@@ -132,18 +132,18 @@ impl NewVelocityLimitBuilder {
 
 #[derive(Clone, Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
-pub struct NewPartitionKeyInput {
+pub struct NewPartitionKey {
     #[builder(setter(into))]
     alias: String,
     #[builder(setter(into))]
     value: String,
 }
-impl NewPartitionKeyInput {
-    pub fn builder() -> NewPartitionKeyInputBuilder {
-        NewPartitionKeyInputBuilder::default()
+impl NewPartitionKey {
+    pub fn builder() -> NewPartitionKeyBuilder {
+        NewPartitionKeyBuilder::default()
     }
 }
-impl NewPartitionKeyInputBuilder {
+impl NewPartitionKeyBuilder {
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.value
@@ -156,17 +156,17 @@ impl NewPartitionKeyInputBuilder {
 
 #[derive(Clone, Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
-pub struct NewLimitInput {
+pub struct NewLimit {
     #[builder(setter(strip_option, into), default)]
     timestamp_source: Option<String>,
-    balance: Vec<NewBalanceLimitInput>,
+    balance: Vec<NewBalanceLimit>,
 }
-impl NewLimitInput {
-    pub fn builder() -> NewLimitInputBuilder {
-        NewLimitInputBuilder::default()
+impl NewLimit {
+    pub fn builder() -> NewLimitBuilder {
+        NewLimitBuilder::default()
     }
 }
-impl NewLimitInputBuilder {
+impl NewLimitBuilder {
     fn validate(&self) -> Result<(), String> {
         validate_optional_expression(&self.timestamp_source)
     }
@@ -174,7 +174,7 @@ impl NewLimitInputBuilder {
 
 #[derive(Clone, Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
-pub struct NewBalanceLimitInput {
+pub struct NewBalanceLimit {
     #[builder(setter(into))]
     layer: String,
     #[builder(setter(into))]
@@ -182,12 +182,12 @@ pub struct NewBalanceLimitInput {
     #[builder(setter(into))]
     enforcement_direction: String,
 }
-impl NewBalanceLimitInput {
-    pub fn builder() -> NewBalanceLimitInputBuilder {
-        NewBalanceLimitInputBuilder::default()
+impl NewBalanceLimit {
+    pub fn builder() -> NewBalanceLimitBuilder {
+        NewBalanceLimitBuilder::default()
     }
 }
-impl NewBalanceLimitInputBuilder {
+impl NewBalanceLimitBuilder {
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.layer

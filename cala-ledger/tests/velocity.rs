@@ -19,12 +19,7 @@ async fn create_control() -> anyhow::Result<()> {
         .description("test")
         .window(vec![])
         .currency(None)
-        .limit(
-            NewLimitInput::builder()
-                .balance(vec![])
-                .build()
-                .expect("limit"),
-        )
+        .limit(NewLimit::builder().balance(vec![]).build().expect("limit"))
         .build()
         .expect("build control");
 
