@@ -8,27 +8,27 @@ pub struct VelocityLimitValues {
     pub id: VelocityLimitId,
     pub name: String,
     pub description: String,
-    pub window: Vec<PartitionKeyInput>,
+    pub window: Vec<PartitionKey>,
     pub condition: Option<CelExpression>,
     pub currency: Option<Currency>,
     pub params: Option<Vec<ParamDefinition>>,
-    pub limit: LimitInput,
+    pub limit: Limit,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct PartitionKeyInput {
+pub struct PartitionKey {
     pub alias: String,
     pub value: CelExpression,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LimitInput {
+pub struct Limit {
     pub timestamp_source: Option<CelExpression>,
-    pub balance: Vec<BalanceLimitInput>,
+    pub balance: Vec<BalanceLimit>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BalanceLimitInput {
+pub struct BalanceLimit {
     pub layer: CelExpression,
     pub amount: CelExpression,
     pub enforcement_direction: CelExpression,
