@@ -64,6 +64,26 @@ impl Balances {
             .await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_as_of", skip(self), err)]
+    pub async fn find_as_of(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        as_of: DateTime<Utc>,
+        up_until: Option<DateTime<Utc>>,
+    ) -> Result<AccountBalance, BalanceError> {
+        match self
+            .repo
+            .find_as_of(journal_id, account_id, currency, as_of, up_until)
+            .await?
+        {
+            (Some(last_before), Some(up_until)) => Ok(up_until.derive_as_of(last_before)),
+            (None, Some(up_until)) => Ok(up_until),
+            _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
+        }
+    }
+
     #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
     pub async fn find_all(
         &self,

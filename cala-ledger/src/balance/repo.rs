@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
@@ -84,6 +85,85 @@ impl BalanceRepo {
         } else {
             Err(BalanceError::NotFound(journal_id, account_id, currency))
         }
+    }
+
+    pub(super) async fn find_as_of(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        as_of: DateTime<Utc>,
+        up_until: Option<DateTime<Utc>>,
+    ) -> Result<(Option<AccountBalance>, Option<AccountBalance>), BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+        WITH last_before_as_of AS (
+            SELECT
+              true AS last_before, false AS up_until, h.values,
+              a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
+            FROM cala_balance_history h
+            JOIN cala_accounts a
+            ON h.data_source_id = a.data_source_id
+            AND h.account_id = a.id
+            WHERE h.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND h.journal_id = $1
+            AND h.account_id = $2
+            AND h.currency = $3
+            AND h.recorded_at < $4
+            ORDER BY h.recorded_at DESC
+            LIMIT 1
+        ),
+        last_before_or_equal_up_until AS (
+            SELECT 
+              false AS last_before, true AS up_until, h.values,
+              a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
+            FROM cala_balance_history h
+            JOIN cala_accounts a
+            ON h.data_source_id = a.data_source_id
+            AND h.account_id = a.id
+            WHERE h.data_source_id = '00000000-0000-0000-0000-000000000000'
+            AND h.journal_id = $1
+            AND h.account_id = $2
+            AND h.currency = $3
+            AND h.recorded_at <= COALESCE($5, NOW())
+            ORDER BY h.recorded_at DESC
+            LIMIT 1
+        )
+        SELECT * FROM last_before_as_of
+        UNION ALL
+        SELECT * FROM last_before_or_equal_up_until
+        "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency.code(),
+            as_of,
+            up_until,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut last_before = None;
+        let mut up_until = None;
+        for row in rows {
+            if row.last_before.expect("last_before is not null") {
+                let details: BalanceSnapshot =
+                    serde_json::from_value(row.values.expect("values is not null"))
+                        .expect("Failed to deserialize balance snapshot");
+                last_before = Some(AccountBalance {
+                    balance_type: row.normal_balance_type,
+                    details,
+                });
+            } else {
+                let details: BalanceSnapshot =
+                    serde_json::from_value(row.values.expect("values is not null"))
+                        .expect("Failed to deserialize balance snapshot");
+                up_until = Some(AccountBalance {
+                    balance_type: row.normal_balance_type,
+                    details,
+                });
+            }
+        }
+        Ok((last_before, up_until))
     }
 
     pub(super) async fn find_all(
