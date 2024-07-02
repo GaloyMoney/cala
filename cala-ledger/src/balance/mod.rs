@@ -64,21 +64,21 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_as_of", skip(self), err)]
-    pub async fn find_as_of(
+    #[instrument(name = "cala_ledger.balance.find_since", skip(self), err)]
+    pub async fn find_since(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-        as_of: DateTime<Utc>,
+        since: DateTime<Utc>,
         up_until: Option<DateTime<Utc>>,
     ) -> Result<AccountBalance, BalanceError> {
         match self
             .repo
-            .find_as_of(journal_id, account_id, currency, as_of, up_until)
+            .find_since(journal_id, account_id, currency, since, up_until)
             .await?
         {
-            (Some(last_before), Some(up_until)) => Ok(up_until.derive_as_of(last_before)),
+            (Some(last_before), Some(up_until)) => Ok(up_until.derive_since(last_before)),
             (None, Some(up_until)) => Ok(up_until),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }

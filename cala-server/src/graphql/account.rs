@@ -61,23 +61,23 @@ impl Account {
         Ok(balance.map(Balance::from))
     }
 
-    async fn balance_as_of(
+    async fn balance_since(
         &self,
         ctx: &Context<'_>,
         journal_id: UUID,
         currency: CurrencyCode,
-        as_of: Timestamp,
+        since: Timestamp,
         up_until: Option<Timestamp>,
     ) -> async_graphql::Result<Option<Balance>> {
         let app = ctx.data_unchecked::<CalaApp>();
         match app
             .ledger()
             .balances()
-            .find_as_of(
+            .find_since(
                 JournalId::from(journal_id),
                 AccountId::from(self.account_id),
                 Currency::from(currency),
-                as_of.into_inner(),
+                since.into_inner(),
                 up_until.map(|ts| ts.into_inner()),
             )
             .await

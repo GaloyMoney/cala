@@ -87,17 +87,17 @@ impl BalanceRepo {
         }
     }
 
-    pub(super) async fn find_as_of(
+    pub(super) async fn find_since(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-        as_of: DateTime<Utc>,
+        since: DateTime<Utc>,
         up_until: Option<DateTime<Utc>>,
     ) -> Result<(Option<AccountBalance>, Option<AccountBalance>), BalanceError> {
         let rows = sqlx::query!(
             r#"
-        WITH last_before_as_of AS (
+        WITH last_before_since AS (
             SELECT
               true AS last_before, false AS up_until, h.values,
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
@@ -129,14 +129,14 @@ impl BalanceRepo {
             ORDER BY h.recorded_at DESC
             LIMIT 1
         )
-        SELECT * FROM last_before_as_of
+        SELECT * FROM last_before_since
         UNION ALL
         SELECT * FROM last_before_or_equal_up_until
         "#,
             journal_id as JournalId,
             account_id as AccountId,
             currency.code(),
-            as_of,
+            since,
             up_until,
         )
         .fetch_all(&self.pool)
