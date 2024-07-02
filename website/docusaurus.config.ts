@@ -140,10 +140,8 @@ const config: Config = {
       respectPrefersColorScheme: false, // system dark mode switch
     },
     liveCodeBlock: {
-      /**
-       * The position of the live playground, above or under the editor
-       * Possible values: "top" | "bottom"
-       */
+      // The position of the live playground, above or under the editor
+      // Possible values: "top" | "bottom"
       playgroundPosition: 'bottom',
     },
     algolia: {
@@ -151,6 +149,11 @@ const config: Config = {
       apiKey: '470bd6518378e8367534ce5d7ddf767b',
       indexName: 'cala',
       contextualSearch: false, // only false works
+      // Optional: Specify domains where the navigation should occur through
+      // window.location instead on history.push. Useful when our Algolia config
+      // crawls multiple documentation sites and we want to navigate with
+      //window.location.href to them.
+      externalUrlRegex: 'cala\\.sh/api-reference\\.html',
     },
   } satisfies Preset.ThemeConfig,
 
