@@ -1,3 +1,22 @@
+# [cala release v0.2.27](https://github.com/GaloyMoney/cala/releases/tag/0.2.27)
+
+
+### Documentation
+
+- Open api reference search hits in external window (#152)
+- Api reference update: 3dba1f351bc3198af7cb6b6cca4b6dd36e6a8111
+
+### Miscellaneous Tasks
+
+- Bump serde_json from 1.0.118 to 1.0.120 (#153)
+- Bump napi-derive from 2.16.6 to 2.16.8 (#154)
+- Balance_as_of (#155)
+- Bump napi from 2.16.7 to 2.16.8 (#141)
+
+### Refactor
+
+- As-of -> since
+
 # [cala release v0.2.26](https://github.com/GaloyMoney/cala/releases/tag/0.2.26)
 
 
