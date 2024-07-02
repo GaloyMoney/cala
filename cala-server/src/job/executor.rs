@@ -16,6 +16,7 @@ pub struct JobExecutor {
     poller_handle: Option<Arc<tokio::task::JoinHandle<()>>>,
     running_jobs: Arc<RwLock<HashMap<JobId, JobHandle>>>,
     jobs: JobRepo,
+    encryption: crate::integration::EncryptionConfig,
 }
 
 impl JobExecutor {
@@ -24,6 +25,7 @@ impl JobExecutor {
         config: JobExecutorConfig,
         registry: JobRegistry,
         jobs: &JobRepo,
+        encryption: crate::integration::EncryptionConfig,
     ) -> Self {
         Self {
             pool: pool.clone(),
@@ -32,6 +34,7 @@ impl JobExecutor {
             registry: Arc::new(registry),
             running_jobs: Arc::new(RwLock::new(HashMap::new())),
             jobs: jobs.clone(),
+            encryption,
         }
     }
 
@@ -67,6 +70,7 @@ impl JobExecutor {
     pub async fn start_poll(&mut self) -> Result<(), JobError> {
         let pool = self.pool.clone();
         let poll_interval = self.config.poll_interval;
+        let encryption = self.encryption.clone();
         let pg_interval = PgInterval::try_from(poll_interval * 4)
             .map_err(|e| JobError::InvalidPollInterval(e.to_string()))?;
         let running_jobs = Arc::clone(&self.running_jobs);
@@ -84,6 +88,7 @@ impl JobExecutor {
                     pg_interval.clone(),
                     &running_jobs,
                     &jobs,
+                    &encryption,
                 )
                 .await;
                 tokio::time::sleep(poll_interval).await;
@@ -109,6 +114,7 @@ impl JobExecutor {
         pg_interval: PgInterval,
         running_jobs: &Arc<RwLock<HashMap<JobId, JobHandle>>>,
         jobs: &JobRepo,
+        encryption: &crate::integration::EncryptionConfig,
     ) -> Result<(), JobError> {
         let span = tracing::Span::current();
         span.record("keep_alive", *keep_alive);
@@ -174,6 +180,7 @@ impl JobExecutor {
                     job,
                     row.state_json,
                     jobs.clone(),
+                    encryption.clone(),
                 )
                 .await;
             }
@@ -193,6 +200,7 @@ impl JobExecutor {
         job: Job,
         job_payload: Option<serde_json::Value>,
         repo: JobRepo,
+        encryption: crate::integration::EncryptionConfig,
     ) -> Result<(), JobError> {
         let id = job.id;
         let runner = registry.init_job(job)?;
@@ -200,7 +208,7 @@ impl JobExecutor {
         let pool = pool.clone();
         let handle = tokio::spawn(async move {
             {
-                let _ = Self::execute_job(id, pool, job_payload, runner, repo).await;
+                let _ = Self::execute_job(id, pool, job_payload, runner, repo, encryption).await;
             }
             all_jobs.write().await.remove(&id);
         });
@@ -217,9 +225,10 @@ impl JobExecutor {
         payload: Option<serde_json::Value>,
         mut runner: Box<dyn JobRunner>,
         repo: JobRepo,
+        encryption: crate::integration::EncryptionConfig,
     ) -> Result<(), JobError> {
         let current_job_pool = pool.clone();
-        let current_job = CurrentJob::new(id, current_job_pool, payload);
+        let current_job = CurrentJob::new(id, current_job_pool, payload, encryption);
         match runner
             .run(current_job)
             .await
