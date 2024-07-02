@@ -160,6 +160,11 @@ impl From<NaiveDate> for Date {
         Self(value)
     }
 }
+impl From<Date> for NaiveDate {
+    fn from(value: Date) -> Self {
+        value.0
+    }
+}
 
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]

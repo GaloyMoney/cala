@@ -190,6 +190,7 @@ CREATE TABLE cala_balance_history (
   FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency),
   FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
 );
+CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
 CREATE TABLE cala_velocity_limits (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',

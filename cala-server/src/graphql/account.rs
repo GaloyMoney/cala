@@ -61,6 +61,33 @@ impl Account {
         Ok(balance.map(Balance::from))
     }
 
+    async fn balance_as_of(
+        &self,
+        ctx: &Context<'_>,
+        journal_id: UUID,
+        currency: CurrencyCode,
+        as_of: Timestamp,
+        up_until: Option<Timestamp>,
+    ) -> async_graphql::Result<Option<Balance>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        match app
+            .ledger()
+            .balances()
+            .find_as_of(
+                JournalId::from(journal_id),
+                AccountId::from(self.account_id),
+                Currency::from(currency),
+                as_of.into_inner(),
+                up_until.map(|ts| ts.into_inner()),
+            )
+            .await
+        {
+            Ok(balance) => Ok(Some(balance.into())),
+            Err(cala_ledger::balance::error::BalanceError::NotFound(_, _, _)) => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     async fn sets(
         &self,
         ctx: &Context<'_>,
