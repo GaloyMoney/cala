@@ -124,25 +124,25 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         Ok(balance.map(Balance::from))
     }
 
-    async fn balance_since(
+    async fn balance_in_range(
         &self,
         ctx: &Context<'_>,
         journal_id: UUID,
         account_id: UUID,
         currency: CurrencyCode,
-        since: Timestamp,
-        up_until: Option<Timestamp>,
+        from: Timestamp,
+        until: Option<Timestamp>,
     ) -> async_graphql::Result<Option<Balance>> {
         let app = ctx.data_unchecked::<CalaApp>();
         match app
             .ledger()
             .balances()
-            .find_since(
+            .find_in_range(
                 JournalId::from(journal_id),
                 AccountId::from(account_id),
                 Currency::from(currency),
-                since.into_inner(),
-                up_until.map(|ts| ts.into_inner()),
+                from.into_inner(),
+                until.map(|ts| ts.into_inner()),
             )
             .await
         {

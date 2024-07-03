@@ -65,7 +65,7 @@ impl Balances {
     }
 
     #[instrument(name = "cala_ledger.balance.find_since", skip(self), err)]
-    pub async fn find_since(
+    pub async fn find_in_range(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
