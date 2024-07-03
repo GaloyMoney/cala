@@ -9,7 +9,11 @@ use cala_ledger::{
 use crate::app::CalaApp;
 
 use super::{
-    account_set::*, balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*,
+    account_set::*,
+    balance::{Balance, RangedBalance},
+    convert::ToGlobalId,
+    loader::LedgerDataLoader,
+    primitives::*,
     schema::DbOp,
 };
 
@@ -61,24 +65,24 @@ impl Account {
         Ok(balance.map(Balance::from))
     }
 
-    async fn balance_since(
+    async fn balance_in_range(
         &self,
         ctx: &Context<'_>,
         journal_id: UUID,
         currency: CurrencyCode,
-        since: Timestamp,
-        up_until: Option<Timestamp>,
-    ) -> async_graphql::Result<Option<Balance>> {
+        from: Timestamp,
+        until: Option<Timestamp>,
+    ) -> async_graphql::Result<Option<RangedBalance>> {
         let app = ctx.data_unchecked::<CalaApp>();
         match app
             .ledger()
             .balances()
-            .find_since(
+            .find_in_range(
                 JournalId::from(journal_id),
                 AccountId::from(self.account_id),
                 Currency::from(currency),
-                since.into_inner(),
-                up_until.map(|ts| ts.into_inner()),
+                from.into_inner(),
+                until.map(|ts| ts.into_inner()),
             )
             .await
         {

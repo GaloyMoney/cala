@@ -65,21 +65,21 @@ impl Balances {
     }
 
     #[instrument(name = "cala_ledger.balance.find_since", skip(self), err)]
-    pub async fn find_since(
+    pub async fn find_in_range(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-        since: DateTime<Utc>,
-        up_until: Option<DateTime<Utc>>,
-    ) -> Result<AccountBalance, BalanceError> {
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
+    ) -> Result<BalanceRange, BalanceError> {
         match self
             .repo
-            .find_since(journal_id, account_id, currency, since, up_until)
+            .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (Some(last_before), Some(up_until)) => Ok(up_until.derive_since(last_before)),
-            (None, Some(up_until)) => Ok(up_until),
+            (Some(start), Some(end)) => Ok(BalanceRange::new(start, end)),
+            (None, Some(end)) => Ok(BalanceRange::new(end.clone(), end)),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }

@@ -42,6 +42,13 @@ pub(super) struct Balance {
     pub(super) balance: cala_ledger::balance::AccountBalance,
 }
 
+#[derive(SimpleObject)]
+pub(super) struct RangedBalance {
+    pub start: Balance,
+    pub end: Balance,
+    pub diff: Balance,
+}
+
 #[ComplexObject]
 impl Balance {
     async fn available(&self, layer: Layer) -> BalanceAmount {
@@ -96,6 +103,16 @@ impl From<cala_ledger::balance::AccountBalance> for Balance {
                 entry_id: balance.details.encumbrance.entry_id.into(),
             },
             balance,
+        }
+    }
+}
+
+impl From<cala_ledger::balance::BalanceRange> for RangedBalance {
+    fn from(ranged_balance: cala_ledger::balance::BalanceRange) -> Self {
+        Self {
+            start: Balance::from(ranged_balance.start),
+            diff: Balance::from(ranged_balance.diff),
+            end: Balance::from(ranged_balance.end),
         }
     }
 }

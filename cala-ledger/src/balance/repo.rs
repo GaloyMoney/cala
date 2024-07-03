@@ -87,19 +87,19 @@ impl BalanceRepo {
         }
     }
 
-    pub(super) async fn find_since(
+    pub(super) async fn find_range(
         &self,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-        since: DateTime<Utc>,
-        up_until: Option<DateTime<Utc>>,
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
     ) -> Result<(Option<AccountBalance>, Option<AccountBalance>), BalanceError> {
         let rows = sqlx::query!(
             r#"
-        WITH last_before_since AS (
+        WITH first AS (
             SELECT
-              true AS last_before, false AS up_until, h.values,
+              true AS first, false AS last, h.values,
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
             FROM cala_balance_history h
             JOIN cala_accounts a
@@ -109,13 +109,13 @@ impl BalanceRepo {
             AND h.journal_id = $1
             AND h.account_id = $2
             AND h.currency = $3
-            AND h.recorded_at < $4
+            AND h.recorded_at >= $4
             ORDER BY h.recorded_at DESC
             LIMIT 1
         ),
-        last_before_or_equal_up_until AS (
+        last AS (
             SELECT 
-              false AS last_before, true AS up_until, h.values,
+              false AS first, true AS last, h.values,
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
             FROM cala_balance_history h
             JOIN cala_accounts a
@@ -129,27 +129,27 @@ impl BalanceRepo {
             ORDER BY h.recorded_at DESC
             LIMIT 1
         )
-        SELECT * FROM last_before_since
+        SELECT * FROM first
         UNION ALL
-        SELECT * FROM last_before_or_equal_up_until
+        SELECT * FROM last
         "#,
             journal_id as JournalId,
             account_id as AccountId,
             currency.code(),
-            since,
-            up_until,
+            from,
+            until,
         )
         .fetch_all(&self.pool)
         .await?;
 
-        let mut last_before = None;
-        let mut up_until = None;
+        let mut first = None;
+        let mut last = None;
         for row in rows {
-            if row.last_before.expect("last_before is not null") {
+            if row.first.expect("last_before is not null") {
                 let details: BalanceSnapshot =
                     serde_json::from_value(row.values.expect("values is not null"))
                         .expect("Failed to deserialize balance snapshot");
-                last_before = Some(AccountBalance {
+                first = Some(AccountBalance {
                     balance_type: row.normal_balance_type,
                     details,
                 });
@@ -157,13 +157,13 @@ impl BalanceRepo {
                 let details: BalanceSnapshot =
                     serde_json::from_value(row.values.expect("values is not null"))
                         .expect("Failed to deserialize balance snapshot");
-                up_until = Some(AccountBalance {
+                last = Some(AccountBalance {
                     balance_type: row.normal_balance_type,
                     details,
                 });
             }
         }
-        Ok((last_before, up_until))
+        Ok((first, last))
     }
 
     pub(super) async fn find_all(
