@@ -12,7 +12,6 @@ type Account {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
-	balanceSince(journalId: UUID!, currency: CurrencyCode!, since: Timestamp!, upUntil: Timestamp): Balance
 	sets(first: Int!, after: String): AccountSetConnection!
 }
 
@@ -389,12 +388,18 @@ type Query {
 	accountSet(id: UUID!): AccountSet
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
-	balanceSince(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!, since: Timestamp!, upUntil: Timestamp): Balance
+	balanceInRange(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	transaction(id: UUID!): Transaction
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!
+}
+
+type RangedBalance {
+	start: Balance!
+	end: Balance!
+	diff: Balance!
 }
 
 input RemoveFromAccountSetInput {

@@ -72,14 +72,14 @@ impl Balances {
         currency: Currency,
         from: DateTime<Utc>,
         until: Option<DateTime<Utc>>,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<BalanceRange, BalanceError> {
         match self
             .repo
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
             (Some(start), Some(end)) => Ok(BalanceRange::new(start, end)),
-            (None, Some(up_until)) => Ok(up_until),
+            (None, Some(end)) => Ok(BalanceRange::new(end.clone(), end)),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }

@@ -132,7 +132,7 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         currency: CurrencyCode,
         from: Timestamp,
         until: Option<Timestamp>,
-    ) -> async_graphql::Result<Option<Balance>> {
+    ) -> async_graphql::Result<Option<RangedBalance>> {
         let app = ctx.data_unchecked::<CalaApp>();
         match app
             .ledger()
