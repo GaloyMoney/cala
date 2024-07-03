@@ -1,3 +1,14 @@
+# [cala release v0.2.28](https://github.com/GaloyMoney/cala/releases/tag/0.2.28)
+
+
+### Documentation
+
+- Api reference update: 946c0d765dd038b56ccd982ecfb2ab6f12d954bd
+
+### Miscellaneous Tasks
+
+- Balance in range query (#157)
+
 # [cala release v0.2.27](https://github.com/GaloyMoney/cala/releases/tag/0.2.27)
 
 
