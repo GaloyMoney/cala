@@ -11,7 +11,7 @@ pub struct AccountBalance {
 }
 
 impl AccountBalance {
-    pub(super) fn derive_since(mut self, since: Self) -> Self {
+    pub(super) fn derive_diff(mut self, since: &Self) -> Self {
         self.details.settled = BalanceAmount {
             dr_balance: self.details.settled.dr_balance - since.details.settled.dr_balance,
             cr_balance: self.details.settled.cr_balance - since.details.settled.cr_balance,
@@ -59,6 +59,22 @@ impl AccountBalance {
             Layer::Settled => self.settled(),
             Layer::Pending => self.pending() + self.settled(),
             Layer::Encumbrance => self.encumbrance() + self.pending() + self.settled(),
+        }
+    }
+}
+
+pub struct BalanceRange {
+    pub start: AccountBalance,
+    pub diff: AccountBalance,
+    pub end: AccountBalance,
+}
+
+impl BalanceRange {
+    pub fn new(start: AccountBalance, end: AccountBalance) -> Self {
+        Self {
+            start: start.clone(),
+            diff: start.derive_diff(&end),
+            end,
         }
     }
 }
