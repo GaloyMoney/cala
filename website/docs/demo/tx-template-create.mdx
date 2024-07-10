@@ -54,7 +54,7 @@ mutation CreateDepositAndWithdrawalTxTemplates(
           description: "Effective date for transaction."
         }
       ]
-      txInput: { journalId: $journalId, effective: "params.effective" }
+      transaction: { journalId: $journalId, effective: "params.effective" }
       entries: [
         {
           accountId: $assetAccountId
@@ -98,7 +98,7 @@ mutation CreateDepositAndWithdrawalTxTemplates(
           description: "Effective date for transaction."
         }
       ]
-      txInput: { journalId: $journalId, effective: "params.effective" }
+      transaction: { journalId: $journalId, effective: "params.effective" }
       entries: [
         {
           accountId: $assetAccountId
@@ -128,12 +128,12 @@ mutation CreateDepositAndWithdrawalTxTemplates(
 
 ### Variables
 
-* **depositTemplateId**: A unique identifier for the deposit transaction template. This ensures that the template is uniquely recognized within the system.
-* **depositTemplateCode**: A code that describes the deposit transaction template. This provides an easy reference for users.
-* **withdrawalTemplateId**: A unique identifier for the withdrawal transaction template. This ensures that the template is uniquely recognized within the system.
-* **withdrawalTemplateCode**: A code that describes the withdrawal transaction template. This provides an easy reference for users.
-* **journalId**: The identifier for the journal where the transactions will be logged. This links the transaction to the correct financial journal.
-* **assetAccountId**: The identifier for the asset account involved in the transactions. This specifies which account will be debited or credited during the transaction.
+- **depositTemplateId**: A unique identifier for the deposit transaction template. This ensures that the template is uniquely recognized within the system.
+- **depositTemplateCode**: A code that describes the deposit transaction template. This provides an easy reference for users.
+- **withdrawalTemplateId**: A unique identifier for the withdrawal transaction template. This ensures that the template is uniquely recognized within the system.
+- **withdrawalTemplateCode**: A code that describes the withdrawal transaction template. This provides an easy reference for users.
+- **journalId**: The identifier for the journal where the transactions will be logged. This links the transaction to the correct financial journal.
+- **assetAccountId**: The identifier for the asset account involved in the transactions. This specifies which account will be debited or credited during the transaction.
 
 ```json
 {
