@@ -20,7 +20,7 @@ docker-compose up -d cala-server
 ## GraphQL Demo
 * open the local GraphQL playground: <br />
 http://localhost:2252/graphql
-* continue with the [GraphQL API demo](/docs/create-journal-and-accounts)
+* continue with the [GraphQL API Demo](/docs/create-journal-and-accounts)
 
 ## Cleanup
 * run in the directory where the docker-compose.yml file is

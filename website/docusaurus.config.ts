@@ -79,7 +79,7 @@ const config: Config = {
         },
         {
           href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
-          label: 'Rust crate docs',
+          label: 'Rust Crate Docs',
           position: 'left',
         },
         {
@@ -100,7 +100,7 @@ const config: Config = {
               to: '/docs',
             },
             {
-              label: 'GraphQL API demo',
+              label: 'GraphQL API Demo',
               to: '/docs/create-journal-and-accounts',
             },
           ],

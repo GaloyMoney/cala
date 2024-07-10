@@ -29,3 +29,6 @@ A transaction template is a predefined structure for a specific type of transact
 
 ## UUID (Universally Unique Identifier)
 A UUID is a 128-bit number used to uniquely identify information in computer systems. In Cala, it is used to uniquely identify accounts, journals, and transactions.
+
+## Account Set
+An Account Set is a grouping of accounts within a financial system, designed to facilitate the management and reporting of related financial activities. Each Account Set is associated with a specific journal and consists of multiple accounts, each contributing to the collective balance of the set. Account Sets allow for the application of transaction templates and the tracking of consolidated balances, aiding in detailed financial analysis and reporting. In Cala, each Account Set has a unique identifier (`accountSetId`).
