@@ -348,8 +348,10 @@ impl AccountSets {
         &self,
         id: AccountSetId,
         args: PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
-    {
+    ) -> Result<
+        PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
+        AccountSetError,
+    > {
         self.repo.list_children(id, args).await
     }
 
@@ -358,8 +360,10 @@ impl AccountSets {
         op: &mut AtomicOperation<'_>,
         id: AccountSetId,
         args: PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
-    {
+    ) -> Result<
+        PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
+        AccountSetError,
+    > {
         self.repo.list_children_in_tx(op.tx(), id, args).await
     }
 

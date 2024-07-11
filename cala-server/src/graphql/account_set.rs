@@ -95,7 +95,7 @@ impl AccountSet {
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for id in ids.entities.iter() {
+                        for (id, ..) in ids.entities.iter() {
                             match id {
                                 AccountSetMemberId::Account(id) => account_ids.push(*id),
                                 AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
@@ -115,7 +115,7 @@ impl AccountSet {
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for id in ids.entities.iter() {
+                        for (id, ..) in ids.entities.iter() {
                             match id {
                                 AccountSetMemberId::Account(id) => account_ids.push(*id),
                                 AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
@@ -130,20 +130,20 @@ impl AccountSet {
                     }
                 };
                 let mut connection = Connection::new(false, ids.has_next_page);
-                connection
-                    .edges
-                    .extend(ids.entities.into_iter().map(|id| match id {
+                connection.edges.extend(ids.entities.into_iter().map(
+                    |(id, created_at)| match id {
                         AccountSetMemberId::Account(id) => {
                             let entity = accounts.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(&entity);
+                            let cursor = AccountSetMemberCursor::from(created_at);
                             Edge::new(cursor, AccountSetMember::Account(entity))
                         }
                         AccountSetMemberId::AccountSet(id) => {
                             let entity = sets.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(&entity);
+                            let cursor = AccountSetMemberCursor::from(created_at);
                             Edge::new(cursor, AccountSetMember::AccountSet(entity))
                         }
-                    }));
+                    },
+                ));
                 Ok::<_, async_graphql::Error>(connection)
             },
         )
@@ -420,18 +420,10 @@ impl From<AccountSetMemberCursor> for cala_ledger::account_set::AccountSetMember
     }
 }
 
-impl From<&super::account::Account> for AccountSetMemberCursor {
-    fn from(account: &super::account::Account) -> Self {
+impl From<chrono::DateTime<chrono::Utc>> for AccountSetMemberCursor {
+    fn from(created_at: chrono::DateTime<chrono::Utc>) -> Self {
         Self {
-            member_created_at: account.created_at.clone(),
-        }
-    }
-}
-
-impl From<&AccountSet> for AccountSetMemberCursor {
-    fn from(set: &AccountSet) -> Self {
-        Self {
-            member_created_at: set.created_at.clone(),
+            member_created_at: Timestamp::from(created_at),
         }
     }
 }

@@ -47,8 +47,10 @@ impl AccountSetRepo {
         &self,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
-    {
+    ) -> Result<
+        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
+        AccountSetError,
+    > {
         self.list_children_in_executor(&self.pool, id, args).await
     }
 
@@ -57,8 +59,10 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
-    {
+    ) -> Result<
+        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
+        AccountSetError,
+    > {
         self.list_children_in_executor(&mut **db, id, args).await
     }
 
@@ -67,8 +71,10 @@ impl AccountSetRepo {
         executor: impl Executor<'_, Database = Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
-    {
+    ) -> Result<
+        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
+        AccountSetError,
+    > {
         let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
@@ -121,20 +127,22 @@ impl AccountSetRepo {
 
         for row in rows.into_iter() {
             if let Some(member_account_id) = row.member_account_id {
-                account_ids.push(AccountSetMemberId::Account(AccountId::from(
-                    member_account_id,
-                )));
+                account_ids.push((
+                    AccountSetMemberId::Account(AccountId::from(member_account_id)),
+                    row.created_at.expect("created at should always be present"),
+                ));
             } else if let Some(member_account_set_id) = row.member_account_set_id {
-                account_set_ids.push(AccountSetMemberId::AccountSet(AccountSetId::from(
-                    member_account_set_id,
-                )));
+                account_set_ids.push((
+                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
+                    row.created_at.expect("created at should always be present"),
+                ));
             }
         }
         let ids = account_ids
             .into_iter()
             .take(args.first)
             .chain(account_set_ids.into_iter().take(args.first))
-            .collect();
+            .collect::<Vec<_>>();
 
         Ok(query::PaginatedQueryRet {
             entities: ids,
