@@ -37,6 +37,7 @@
       nativeBuildInputs = with pkgs;
         [
           rustToolchain
+          opentofu
           alejandra
           sqlx-cli
           cargo-nextest

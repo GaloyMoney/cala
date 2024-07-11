@@ -11,7 +11,19 @@ setup-db:
 	cd cala-ledger && cargo sqlx migrate run
 	cd cala-server && cargo sqlx migrate run --ignore-missing
 
-reset-deps: clean-deps start-deps setup-db
+reset-tf-state:
+	rm -rf tf/terraform.tfstate
+	rm -rf tf/.terraform
+	rm -rf tf/.terraform.lock.hcl
+
+run-tf:
+	cd tf && tofu init && tofu apply -auto-approve
+
+run-tf-in-tilt:
+	make reset-tf-state
+	make run-tf || true
+
+reset-deps: reset-tf-state clean-deps start-deps setup-db
 
 run-server:
 	cargo run --bin cala-server -- --config ./bats/cala.yml
