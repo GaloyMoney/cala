@@ -138,11 +138,12 @@ impl AccountSetRepo {
                 ));
             }
         }
-        let ids = account_ids
+        let mut ids = account_ids
             .into_iter()
             .take(args.first)
             .chain(account_set_ids.into_iter().take(args.first))
             .collect::<Vec<_>>();
+        ids.sort_by_key(|(_, created_at)| std::cmp::Reverse(*created_at));
 
         Ok(query::PaginatedQueryRet {
             entities: ids,

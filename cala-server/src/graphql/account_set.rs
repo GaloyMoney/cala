@@ -95,7 +95,7 @@ impl AccountSet {
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for (id, ..) in ids.entities.iter() {
+                        for (id, _) in ids.entities.iter() {
                             match id {
                                 AccountSetMemberId::Account(id) => account_ids.push(*id),
                                 AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
@@ -115,7 +115,7 @@ impl AccountSet {
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for (id, ..) in ids.entities.iter() {
+                        for (id, _) in ids.entities.iter() {
                             match id {
                                 AccountSetMemberId::Account(id) => account_ids.push(*id),
                                 AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
