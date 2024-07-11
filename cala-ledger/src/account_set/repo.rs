@@ -69,6 +69,7 @@ impl AccountSetRepo {
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
     ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
     {
+        let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
             WITH member_accounts AS (
@@ -101,10 +102,9 @@ impl AccountSetRepo {
             UNION ALL
             SELECT * FROM member_sets
             ORDER BY created_at DESC
-            LIMIT $3
           "#,
             id as AccountSetId,
-            args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>,
+            after,
             args.first as i64 + 1,
         )
         .fetch_all(executor)
@@ -116,19 +116,26 @@ impl AccountSetRepo {
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
-        let ids = rows
+        let mut account_ids = Vec::new();
+        let mut account_set_ids = Vec::new();
+
+        for row in rows.into_iter() {
+            if let Some(member_account_id) = row.member_account_id {
+                account_ids.push(AccountSetMemberId::Account(AccountId::from(
+                    member_account_id,
+                )));
+            } else if let Some(member_account_set_id) = row.member_account_set_id {
+                account_set_ids.push(AccountSetMemberId::AccountSet(AccountSetId::from(
+                    member_account_set_id,
+                )));
+            }
+        }
+        let ids = account_ids
             .into_iter()
             .take(args.first)
-            .map(|row| {
-                if let Some(member_account_id) = row.member_account_id {
-                    AccountSetMemberId::Account(AccountId::from(member_account_id))
-                } else if let Some(member_account_set_id) = row.member_account_set_id {
-                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id))
-                } else {
-                    unreachable!()
-                }
-            })
-            .collect::<Vec<_>>();
+            .chain(account_set_ids.into_iter().take(args.first))
+            .collect();
+
         Ok(query::PaginatedQueryRet {
             entities: ids,
             has_next_page,
