@@ -83,8 +83,8 @@ impl AccountSetRepo {
                 transitive IS FALSE
                 AND account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
             ), member_sets AS (
               SELECT
                 member_account_set_id AS member_id,
@@ -95,13 +95,16 @@ impl AccountSetRepo {
               WHERE
                 account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
+            ), all_members AS (
+              SELECT * FROM member_accounts
+              UNION ALL
+              SELECT * FROM member_sets
             )
-            SELECT * FROM member_accounts
-            UNION ALL
-            SELECT * FROM member_sets
+            SELECT * FROM all_members
             ORDER BY created_at DESC
+            LIMIT $3
           "#,
             id as AccountSetId,
             after,
@@ -116,29 +119,24 @@ impl AccountSetRepo {
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
-        let mut account_ids = Vec::new();
-        let mut account_set_ids = Vec::new();
 
-        for row in rows.into_iter() {
-            if let Some(member_account_id) = row.member_account_id {
-                account_ids.push((
-                    AccountSetMemberId::Account(AccountId::from(member_account_id)),
-                    row.created_at.expect("created at should always be present"),
-                ));
-            } else if let Some(member_account_set_id) = row.member_account_set_id {
-                account_set_ids.push((
-                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
-                    row.created_at.expect("created at should always be present"),
-                ));
-            }
-        }
-        let mut ids = account_ids
+        let account_set_members = rows
             .into_iter()
             .take(args.first)
-            .chain(account_set_ids.into_iter().take(args.first))
-            .collect::<Vec<_>>();
-        ids.sort_by_key(|(_, created_at)| std::cmp::Reverse(*created_at));
-        let account_set_members = ids.into_iter().map(AccountSetMember::from).collect();
+            .map(
+                |row| match (row.member_account_id, row.member_account_set_id) {
+                    (Some(member_account_id), _) => AccountSetMember::from((
+                        AccountSetMemberId::Account(AccountId::from(member_account_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    (_, Some(member_account_set_id)) => AccountSetMember::from((
+                        AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    _ => unreachable!(),
+                },
+            )
+            .collect::<Vec<AccountSetMember>>();
 
         Ok(query::PaginatedQueryRet {
             entities: account_set_members,
