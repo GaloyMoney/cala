@@ -343,7 +343,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = cala_ledger::query::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[0].created_at)),
+        after: Some(AccountSetMemberCursor::from(ret.entities[0].clone())),
     };
 
     let ret = cala
@@ -363,7 +363,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = cala_ledger::query::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[1].created_at)),
+        after: Some(AccountSetMemberCursor::from(ret.entities[1].clone())),
     };
 
     let ret = cala
