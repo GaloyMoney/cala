@@ -341,13 +341,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(account_one.id())
     );
 
-    let after_cursor = AccountSetMemberCursor {
-        member_created_at: ret.entities[0].created_at,
-    };
-
     let query_args = cala_ledger::query::PaginatedQueryArgs {
         first: 2,
-        after: Some(after_cursor),
+        after: Some(AccountSetMemberCursor::from(ret.entities[0].created_at)),
     };
 
     let ret = cala
@@ -365,13 +361,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(set_one.id())
     );
 
-    let after_cursor = AccountSetMemberCursor {
-        member_created_at: ret.entities[1].created_at,
-    };
-
     let query_args = cala_ledger::query::PaginatedQueryArgs {
         first: 2,
-        after: Some(after_cursor),
+        after: Some(AccountSetMemberCursor::from(ret.entities[1].created_at)),
     };
 
     let ret = cala

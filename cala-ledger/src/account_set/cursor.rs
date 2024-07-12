@@ -20,3 +20,9 @@ impl From<&AccountSetValues> for AccountSetByNameCursor {
 pub struct AccountSetMemberCursor {
     pub member_created_at: chrono::DateTime<chrono::Utc>,
 }
+
+impl From<chrono::DateTime<chrono::Utc>> for AccountSetMemberCursor {
+    fn from(member_created_at: chrono::DateTime<chrono::Utc>) -> Self {
+        Self { member_created_at }
+    }
+}
