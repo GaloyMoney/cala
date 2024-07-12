@@ -134,12 +134,12 @@ impl AccountSet {
                     |member| match member.id {
                         AccountSetMemberId::Account(id) => {
                             let entity = accounts.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(member.created_at);
+                            let cursor = AccountSetMemberCursor::from(member);
                             Edge::new(cursor, AccountSetMember::Account(entity))
                         }
                         AccountSetMemberId::AccountSet(id) => {
                             let entity = sets.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(member.created_at);
+                            let cursor = AccountSetMemberCursor::from(member);
                             Edge::new(cursor, AccountSetMember::AccountSet(entity))
                         }
                     },
@@ -420,10 +420,10 @@ impl From<AccountSetMemberCursor> for cala_ledger::account_set::AccountSetMember
     }
 }
 
-impl From<chrono::DateTime<chrono::Utc>> for AccountSetMemberCursor {
-    fn from(created_at: chrono::DateTime<chrono::Utc>) -> Self {
+impl From<cala_types::account_set::AccountSetMember> for AccountSetMemberCursor {
+    fn from(member: cala_types::account_set::AccountSetMember) -> Self {
         Self {
-            member_created_at: Timestamp::from(created_at),
+            member_created_at: Timestamp::from(member.created_at),
         }
     }
 }
