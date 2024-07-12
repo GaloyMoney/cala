@@ -261,3 +261,121 @@ async fn account_set_update() -> anyhow::Result<()> {
     assert_eq!(updated_name, account_set.values().name);
     Ok(())
 }
+
+#[tokio::test]
+async fn members_pagination() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
+
+    let (one, two) = helpers::test_accounts();
+    let account_one = cala.accounts().create(one).await.unwrap();
+    let account_two = cala.accounts().create(two).await.unwrap();
+
+    let set_one = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("SET ONE")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let set_one = cala.account_sets().create(set_one).await.unwrap();
+    let set_two = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("SET TWO")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let set_two = cala.account_sets().create(set_two).await.unwrap();
+
+    let parent = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("parent")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let parent = cala.account_sets().create(parent).await.unwrap();
+
+    cala.account_sets()
+        .add_member(parent.id(), account_two.id())
+        .await
+        .unwrap();
+
+    cala.account_sets()
+        .add_member(parent.id(), set_one.id())
+        .await
+        .unwrap();
+
+    cala.account_sets()
+        .add_member(parent.id(), account_one.id())
+        .await
+        .unwrap();
+
+    cala.account_sets()
+        .add_member(parent.id(), set_two.id())
+        .await
+        .unwrap();
+
+    let query_args = cala_ledger::query::PaginatedQueryArgs {
+        first: 2,
+        after: None,
+    };
+
+    let ret = cala
+        .account_sets()
+        .list_members(parent.id(), query_args)
+        .await?;
+
+    assert_eq!(ret.entities.len(), 2);
+    assert_eq!(ret.has_next_page, true);
+    assert_eq!(
+        ret.entities[0].id.clone(),
+        AccountSetMemberId::from(set_two.id())
+    );
+    assert_eq!(
+        ret.entities[1].id.clone(),
+        AccountSetMemberId::from(account_one.id())
+    );
+
+    let query_args = cala_ledger::query::PaginatedQueryArgs {
+        first: 2,
+        after: Some(AccountSetMemberCursor::from(ret.entities[0].clone())),
+    };
+
+    let ret = cala
+        .account_sets()
+        .list_members(parent.id(), query_args)
+        .await?;
+    assert_eq!(ret.entities.len(), 2);
+    assert_eq!(ret.has_next_page, true);
+    assert_eq!(
+        ret.entities[0].id.clone(),
+        AccountSetMemberId::from(account_one.id())
+    );
+    assert_eq!(
+        ret.entities[1].id.clone(),
+        AccountSetMemberId::from(set_one.id())
+    );
+
+    let query_args = cala_ledger::query::PaginatedQueryArgs {
+        first: 2,
+        after: Some(AccountSetMemberCursor::from(ret.entities[1].clone())),
+    };
+
+    let ret = cala
+        .account_sets()
+        .list_members(parent.id(), query_args)
+        .await?;
+    assert_eq!(ret.entities.len(), 1);
+    assert_eq!(ret.has_next_page, false);
+    assert_eq!(
+        ret.entities[0].id.clone(),
+        AccountSetMemberId::from(account_two.id())
+    );
+
+    Ok(())
+}

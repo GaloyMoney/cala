@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
@@ -13,7 +14,13 @@ pub struct AccountSetValues {
     pub normal_balance_type: DebitOrCredit,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
+pub struct AccountSetMember {
+    pub id: AccountSetMemberId,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "id")]
 pub enum AccountSetMemberId {
     Account(AccountId),
@@ -29,5 +36,11 @@ impl From<AccountId> for AccountSetMemberId {
 impl From<AccountSetId> for AccountSetMemberId {
     fn from(id: AccountSetId) -> Self {
         Self::AccountSet(id)
+    }
+}
+
+impl From<(AccountSetMemberId, DateTime<Utc>)> for AccountSetMember {
+    fn from((id, created_at): (AccountSetMemberId, DateTime<Utc>)) -> Self {
+        Self { id, created_at }
     }
 }

@@ -47,7 +47,7 @@ impl AccountSetRepo {
         &self,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
         self.list_children_in_executor(&self.pool, id, args).await
     }
@@ -57,7 +57,7 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
         self.list_children_in_executor(&mut **db, id, args).await
     }
@@ -67,8 +67,9 @@ impl AccountSetRepo {
         executor: impl Executor<'_, Database = Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
+        let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
             WITH member_accounts AS (
@@ -82,8 +83,8 @@ impl AccountSetRepo {
                 transitive IS FALSE
                 AND account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
             ), member_sets AS (
               SELECT
                 member_account_set_id AS member_id,
@@ -94,17 +95,19 @@ impl AccountSetRepo {
               WHERE
                 account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
+            ), all_members AS (
+              SELECT * FROM member_accounts
+              UNION ALL
+              SELECT * FROM member_sets
             )
-            SELECT * FROM member_accounts
-            UNION ALL
-            SELECT * FROM member_sets
+            SELECT * FROM all_members
             ORDER BY created_at DESC
             LIMIT $3
           "#,
             id as AccountSetId,
-            args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>,
+            after,
             args.first as i64 + 1,
         )
         .fetch_all(executor)
@@ -116,21 +119,27 @@ impl AccountSetRepo {
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
-        let ids = rows
+
+        let account_set_members = rows
             .into_iter()
             .take(args.first)
-            .map(|row| {
-                if let Some(member_account_id) = row.member_account_id {
-                    AccountSetMemberId::Account(AccountId::from(member_account_id))
-                } else if let Some(member_account_set_id) = row.member_account_set_id {
-                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id))
-                } else {
-                    unreachable!()
-                }
-            })
-            .collect::<Vec<_>>();
+            .map(
+                |row| match (row.member_account_id, row.member_account_set_id) {
+                    (Some(member_account_id), _) => AccountSetMember::from((
+                        AccountSetMemberId::Account(AccountId::from(member_account_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    (_, Some(member_account_set_id)) => AccountSetMember::from((
+                        AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    _ => unreachable!(),
+                },
+            )
+            .collect::<Vec<AccountSetMember>>();
+
         Ok(query::PaginatedQueryRet {
-            entities: ids,
+            entities: account_set_members,
             has_next_page,
             end_cursor,
         })
