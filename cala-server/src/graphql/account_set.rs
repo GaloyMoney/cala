@@ -85,61 +85,61 @@ impl AccountSet {
                     after: after.map(cala_ledger::account_set::AccountSetMemberCursor::from),
                 };
 
-                let (ids, mut accounts, mut sets) = match ctx.data_opt::<DbOp>() {
+                let (members, mut accounts, mut sets) = match ctx.data_opt::<DbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         let account_sets = app.ledger().account_sets();
                         let accounts = app.ledger().accounts();
-                        let ids = account_sets
+                        let members = account_sets
                             .list_members_in_op(&mut op, account_set_id, query_args)
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for (id, _) in ids.entities.iter() {
-                            match id {
-                                AccountSetMemberId::Account(id) => account_ids.push(*id),
-                                AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
+                        for member in members.entities.iter() {
+                            match member.id {
+                                AccountSetMemberId::Account(id) => account_ids.push(id),
+                                AccountSetMemberId::AccountSet(id) => set_ids.push(id),
                             }
                         }
                         (
-                            ids,
+                            members,
                             accounts.find_all_in_op(&mut op, &account_ids).await?,
                             account_sets.find_all_in_op(&mut op, &set_ids).await?,
                         )
                     }
                     None => {
-                        let ids = app
+                        let members = app
                             .ledger()
                             .account_sets()
                             .list_members(account_set_id, query_args)
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
-                        for (id, _) in ids.entities.iter() {
-                            match id {
-                                AccountSetMemberId::Account(id) => account_ids.push(*id),
-                                AccountSetMemberId::AccountSet(id) => set_ids.push(*id),
+                        for member in members.entities.iter() {
+                            match member.id {
+                                AccountSetMemberId::Account(id) => account_ids.push(id),
+                                AccountSetMemberId::AccountSet(id) => set_ids.push(id),
                             }
                         }
                         let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
                         (
-                            ids,
+                            members,
                             loader.load_many(account_ids).await?,
                             loader.load_many(set_ids).await?,
                         )
                     }
                 };
-                let mut connection = Connection::new(false, ids.has_next_page);
-                connection.edges.extend(ids.entities.into_iter().map(
-                    |(id, created_at)| match id {
+                let mut connection = Connection::new(false, members.has_next_page);
+                connection.edges.extend(members.entities.into_iter().map(
+                    |member| match member.id {
                         AccountSetMemberId::Account(id) => {
                             let entity = accounts.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(created_at);
+                            let cursor = AccountSetMemberCursor::from(member.created_at);
                             Edge::new(cursor, AccountSetMember::Account(entity))
                         }
                         AccountSetMemberId::AccountSet(id) => {
                             let entity = sets.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(created_at);
+                            let cursor = AccountSetMemberCursor::from(member.created_at);
                             Edge::new(cursor, AccountSetMember::AccountSet(entity))
                         }
                     },

@@ -47,10 +47,8 @@ impl AccountSetRepo {
         &self,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<
-        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
-        AccountSetError,
-    > {
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
+    {
         self.list_children_in_executor(&self.pool, id, args).await
     }
 
@@ -59,10 +57,8 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<
-        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
-        AccountSetError,
-    > {
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
+    {
         self.list_children_in_executor(&mut **db, id, args).await
     }
 
@@ -71,10 +67,8 @@ impl AccountSetRepo {
         executor: impl Executor<'_, Database = Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<
-        query::PaginatedQueryRet<(AccountSetMemberId, DateTime<Utc>), AccountSetMemberCursor>,
-        AccountSetError,
-    > {
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
+    {
         let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
@@ -144,9 +138,10 @@ impl AccountSetRepo {
             .chain(account_set_ids.into_iter().take(args.first))
             .collect::<Vec<_>>();
         ids.sort_by_key(|(_, created_at)| std::cmp::Reverse(*created_at));
+        let account_set_members = ids.into_iter().map(AccountSetMember::from).collect();
 
         Ok(query::PaginatedQueryRet {
-            entities: ids,
+            entities: account_set_members,
             has_next_page,
             end_cursor,
         })
