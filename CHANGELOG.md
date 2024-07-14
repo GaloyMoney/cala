@@ -1,3 +1,22 @@
+# [cala release v0.2.29](https://github.com/GaloyMoney/cala/releases/tag/0.2.29)
+
+
+### Bug Fixes
+
+- Members query in account set  (#165)
+
+### Documentation
+
+- Add account set page to website demo (#163)
+- Add plugin-google-gtag and analytics to website (#156)
+- Api reference update: d8ab630af31ef4b468a5ab46d639af8df5f57356
+
+### Miscellaneous Tasks
+
+- Bump serde_with from 3.8.2 to 3.8.3 (#158)
+- Bump serde from 1.0.203 to 1.0.204 (#160)
+- Bump uuid from 1.9.1 to 1.10.0 (#162)
+
 # [cala release v0.2.28](https://github.com/GaloyMoney/cala/releases/tag/0.2.28)
 
 
