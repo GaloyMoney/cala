@@ -4,11 +4,17 @@ title: Create Transaction Templates
 slug: /docs/tx-template-create
 ---
 
+import {
+  GraphQLBody,
+  GraphQLVariables,
+  GraphQLResponse,
+} from "../../src/components/GraphQLDisplay";
+
 This functionality allows a user (an administrator or financial manager) to define templates for recurring transaction types - specifically deposits and withdrawals. By defining these templates, the user ensures consistency, accuracy, and efficiency in transaction processing.
 
 ## Process
 
-### Creation of Deposit Transaction Template
+### Deposit Transaction Template
 
 - **Identification and Description**: The template is uniquely identified by a `txTemplateId` and a descriptive code. The description explains that this template is for an ACH credit into a customer's account.
 
@@ -17,7 +23,7 @@ This functionality allows a user (an administrator or financial manager) to defi
 - **Transaction and Entries Definition**:
   The transaction input specifies which journal to log this transaction under and when it becomes effective. Entries detail the movement of funds, specifying which account to debit and which to credit, in what amount, and under what transaction conditions, e.g., `currency` and transaction type (`entryType`).
 
-### Creation of Withdrawal Transaction Template
+### Withdrawal Transaction Template
 
 - **Identification and Description**: Similarly, this template has its unique identifier and code, and is described for use in ACH debits from a customer's account.
 
@@ -27,104 +33,7 @@ This functionality allows a user (an administrator or financial manager) to defi
 
 ### GraphQL Request Body
 
-```graphql
-mutation CreateDepositAndWithdrawalTxTemplates(
-  $depositTemplateId: UUID!
-  $depositTemplateCode: String!
-  $withdrawalTemplateId: UUID!
-  $withdrawalTemplateCode: String!
-  $journalId: Expression!
-  $assetAccountId: Expression!
-) {
-  depositTemplate: txTemplateCreate(
-    input: {
-      txTemplateId: $depositTemplateId
-      code: $depositTemplateCode
-      description: "An ACH credit into a customer account."
-      params: [
-        { name: "account", type: UUID, description: "Deposit account ID." }
-        {
-          name: "amount"
-          type: DECIMAL
-          description: "Amount with decimal, e.g. `1.23`."
-        }
-        {
-          name: "effective"
-          type: DATE
-          description: "Effective date for transaction."
-        }
-      ]
-      transaction: { journalId: $journalId, effective: "params.effective" }
-      entries: [
-        {
-          accountId: $assetAccountId
-          units: "params.amount"
-          currency: "'USD'"
-          entryType: "'ACH_DR'"
-          direction: "DEBIT"
-          layer: "SETTLED"
-        }
-        {
-          accountId: "params.account"
-          units: "params.amount"
-          currency: "'USD'"
-          entryType: "'ACH_CR'"
-          direction: "CREDIT"
-          layer: "SETTLED"
-        }
-      ]
-    }
-  ) {
-    txTemplate {
-      txTemplateId
-    }
-  }
-
-  withdrawalTemplate: txTemplateCreate(
-    input: {
-      txTemplateId: $withdrawalTemplateId
-      code: $withdrawalTemplateCode
-      description: "An ACH debit into a customer account."
-      params: [
-        { name: "account", type: UUID, description: "Withdraw account ID." }
-        {
-          name: "amount"
-          type: DECIMAL
-          description: "Amount with decimal, e.g. `1.23`."
-        }
-        {
-          name: "effective"
-          type: DATE
-          description: "Effective date for transaction."
-        }
-      ]
-      transaction: { journalId: $journalId, effective: "params.effective" }
-      entries: [
-        {
-          accountId: $assetAccountId
-          units: "params.amount"
-          currency: "'USD'"
-          entryType: "'ACH_CR'"
-          direction: "CREDIT"
-          layer: "SETTLED"
-        }
-        {
-          accountId: "params.account"
-          units: "params.amount"
-          currency: "'USD'"
-          entryType: "'ACH_DR'"
-          direction: "DEBIT"
-          layer: "SETTLED"
-        }
-      ]
-    }
-  ) {
-    txTemplate {
-      txTemplateId
-    }
-  }
-}
-```
+<GraphQLBody queryPath="/gql/tx-template-create.gql" />
 
 ### Variables
 
@@ -135,37 +44,13 @@ mutation CreateDepositAndWithdrawalTxTemplates(
 - **journalId**: The identifier for the journal where the transactions will be logged. This links the transaction to the correct financial journal.
 - **assetAccountId**: The identifier for the asset account involved in the transactions. This specifies which account will be debited or credited during the transaction.
 
-```json
-{
-  "depositTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c",
-  "depositTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
-  "withdrawalTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
-  "withdrawalTemplateCode": "withdrawal-241ef9dd-8c6c-4fb8-b9fb-931083f2b728",
-  "assetAccountId": "uuid('2e40175d-35c2-4b6f-9c01-cc2309934d25')",
-  "journalId": "uuid('bcc24f47-990c-457d-88cb-76332450ac77')"
-}
-```
+<GraphQLVariables variablesPath="/gql/variables/txTemplateCreate.json" />
 
-## Response
+### Response
 
 Upon successful submission of the GraphQL mutations, the system creates these templates and returns their IDs in the response. This confirms that the templates are ready for use in future transactions.
 
-```json
-{
-  "data": {
-    "depositTemplate": {
-      "txTemplate": {
-        "txTemplateId": "ea1c7224-ca09-409f-b581-3551beead58c"
-      }
-    },
-    "withdrawalTemplate": {
-      "txTemplate": {
-        "txTemplateId": "241ef9dd-8c6c-4fb8-b9fb-931083f2b728"
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/txTemplateCreateResponse.json" />
 
 ## Significance
 

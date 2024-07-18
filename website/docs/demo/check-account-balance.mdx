@@ -4,6 +4,12 @@ title: Check the Balance of an Account
 slug: /docs/check-account-balance
 ---
 
+import {
+  GraphQLBody,
+  GraphQLVariables,
+  GraphQLResponse,
+} from "../../src/components/GraphQLDisplay";
+
 The functionality is essential for users (e.g., account holders, financial managers) to view the balance of a specific account in a particular journal and currency. This allows for real-time financial monitoring and decision-making based on up-to-date account information.
 
 ## Process
@@ -14,62 +20,24 @@ The functionality is essential for users (e.g., account holders, financial manag
 - **Journal ID**: The `journalId` specifies which journal to check for the account's balance. This is important because an account may have different balances in different journals due to various types of transactions.
 - **Currency**: The `currency` parameter ensures that the balance is provided in the desired currency, in this case, USD. This is crucial for accuracy and relevance, especially in multi-currency environments.
 
-```
-{
-  "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
-  "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
-  "currency": "USD"
-}
-```
+<GraphQLVariables variablesPath="/gql/variables/accountWithBalance.json" />
 
 ### GraphQL Request Body
 
 The `accountWithBalance` query is executed with the provided inputs. The query fetches the account's name and its settled balance in the specified journal and currency.
 
-```graphql
-query accountWithBalance(
-  $accountId: UUID!
-  $journalId: UUID!
-  $currency: CurrencyCode!
-) {
-  account(id: $accountId) {
-    name
-    balance(journalId: $journalId, currency: $currency) {
-      settled {
-        normalBalance {
-          units
-        }
-      }
-    }
-  }
-}
-```
+<GraphQLBody queryPath="/gql/account-with-balance.gql" />
 
 The system retrieves the settled balance from the specified journal for the given account.
 
-## Response
+### Response
 
 The response includes the account's name and its settled balance in the specified currency and journal. This information is returned in a structured JSON format, which includes:
 
 - **Account Name**: "Alice - Checking", confirming that the balance belongs to the correct account.
 - **Settled Balance**: The `normalBalance` `units` show the account's balance as "9.53" USD, indicating the available settled funds in the account.
 
-```json
-{
-  "data": {
-    "account": {
-      "name": "Alice - Checking",
-      "balance": {
-        "settled": {
-          "normalBalance": {
-            "units": "9.53"
-          }
-        }
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/accountWithBalanceResponse.json" />
 
 ## Significance
 
