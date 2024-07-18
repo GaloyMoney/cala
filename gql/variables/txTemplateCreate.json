@@ -1,0 +1,8 @@
+{
+  "depositTemplateId": "e1ae6c67-bd8f-4a8a-af7f-9d84c39ca6d7",
+  "depositTemplateCode": "DEPOSIT-e1ae6c67-bd8f-4a8a-af7f-9d84c39ca6d7",
+  "withdrawalTemplateId": "fcd003c9-2372-47b8-8f06-c5cb5d78a01c",
+  "withdrawalTemplateCode": "WITHDRAWAL-fcd003c9-2372-47b8-8f06-c5cb5d78a01c",
+  "assetAccountId": "uuid('3ec6c31b-d032-40f7-8f09-29258edd3f8b')",
+  "journalId": "uuid('18f8eeb5-740f-4040-89fb-2e6575da2b46')"
+}
