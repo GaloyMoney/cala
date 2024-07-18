@@ -1,0 +1,15 @@
+mutation addToAccountSet($input: AddToAccountSetInput!) {
+  addToAccountSet(input: $input) {
+   accountSet{
+      accountSetId
+      name
+      balance(currency: "USD") {
+        settled {
+          normalBalance {
+            units
+          }
+        }
+      }
+    }
+  }
+}
