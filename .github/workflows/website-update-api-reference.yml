@@ -20,11 +20,8 @@ jobs:
           npm install spectaql
           npx spectaql spectaql-config.yml -t static -f api-reference.html
 
-      - name: Generate the website demo json files
+      - name: Generate the website demo files
         run: nix develop -c make e2e
-
-      - name: Copy the bats/gql/ files to the website/static/gql/ folder
-        run: cp -r bats/gql/* website/static/gql/
 
       - name: Commit the API reference and website demo changes
         run: |

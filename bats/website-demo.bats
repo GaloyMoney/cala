@@ -32,10 +32,12 @@ save_json() {
       "name": "General Ledger"
     }
   }')
-  exec_graphql 'journal-create' "$variables"
+  gql_request='journal-create'
+  exec_graphql "$gql_request" "$variables"
   [[ "$output" != "null" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/journalCreate.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/journalCreateResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # create liability account
   liability_account_id=$(random_uuid)
@@ -47,10 +49,12 @@ save_json() {
       "normalBalanceType": "CREDIT"
     }
   }')
-  exec_graphql 'account-create' "$variables"
+  gql_request='account-create'
+  exec_graphql "$gql_request" "$variables"
   [[ "$output" != "null" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/accountCreateChecking.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/accountCreateCheckingResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # create asset account
   asset_account_id=$(random_uuid)
@@ -62,10 +66,11 @@ save_json() {
       "normalBalanceType": "DEBIT"
     }
   }')
-  exec_graphql 'account-create' "$variables"
+  exec_graphql "$gql_request" "$variables"
   [[ "$output" != "null" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/accountCreateDebit.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/accountCreateDebitResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # create transaction templates
   deposit_template_id=$(random_uuid)
@@ -78,9 +83,11 @@ save_json() {
     "assetAccountId": ("uuid(\u0027" + $assetAccountId + "\u0027)"),
     "journalId": ("uuid(\u0027" + $journalId + "\u0027)")
   }')
-  exec_graphql 'tx-template-create' "$variables"
+  gql_request='tx-template-create'
+  exec_graphql "$gql_request" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/variables/txTemplateCreate.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/txTemplateCreateResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # post transaction
   transaction_id=$(random_uuid)
@@ -95,11 +102,13 @@ save_json() {
       }
     }
   }')
-  exec_graphql 'transaction-post' "$variables"
+  gql_request='transaction-post'
+  exec_graphql "$gql_request" "$variables"
   correlation_id=$(graphql_output '.data.transactionPost.transaction.correlationId')
   [[ $correlation_id == $transaction_id ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/transactionPost.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/transactionPostResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # check account balance
   variables=$(jq -n --arg journalId "$journal_id" --arg accountId "$liability_account_id" '{
@@ -107,11 +116,13 @@ save_json() {
     "journalId": $journalId,
     "currency": "USD"
   }')
-  exec_graphql 'account-with-balance' "$variables"
+  gql_request='account-with-balance'
+  exec_graphql "$gql_request" "$variables"
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/accountWithBalance.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/accountWithBalanceResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # create account set
   account_set_id=$(random_uuid)
@@ -123,12 +134,13 @@ save_json() {
       "normalBalanceType": "CREDIT"
     }
   }')
-
-  exec_graphql 'account-set-create' "$variables"
+  gql_request='account-set-create'
+  exec_graphql "$gql_request" "$variables"
   res=$(graphql_output '.data.accountSetCreate.accountSet.accountSetId')
   [[ "$res" != "null" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/accountSetCreate.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/accountSetCreateResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # add account to account set
   variables=$(jq -n --arg account_set_id "$account_set_id" --arg member_id "$liability_account_id" '{
@@ -138,11 +150,13 @@ save_json() {
       "memberType": "ACCOUNT"
     }
   }')
-  exec_graphql 'add-to-account-set' "$variables"
+  gql_request='add-to-account-set'
+  exec_graphql "$gql_request" "$variables"
   balance=$(graphql_output '.data.addToAccountSet.accountSet.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/addToAccountSet.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/addToAccountSetResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 
   # balance check for account set
   variables=$(jq -n --arg journalId "$journal_id" --arg accountSetId "$account_set_id" '{
@@ -150,9 +164,11 @@ save_json() {
     "journalId": $journalId,
     "currency": "USD"
   }')
-  exec_graphql 'account-set-with-balance' "$variables"
+  gql_request='account-set-with-balance'
+  exec_graphql "$gql_request" "$variables"
   balance=$(graphql_output '.data.accountSet.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
   save_json "${REPO_ROOT}/website/static/gql/variables/accountSetWithBalance.json" "$variables"
   save_json "${REPO_ROOT}/website/static/gql/responses/accountSetWithBalanceResponse.json" "$output"
+  cp "${REPO_ROOT}/bats/gql/${gql_request}.gql" "${REPO_ROOT}/website/static/gql/"
 }
