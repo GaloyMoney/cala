@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  update-api-reference:
+  update-api-reference-and-website-demo-files:
     runs-on: ubuntu-latest
     steps:
       - uses: DeterminateSystems/nix-installer-action@v12
@@ -20,12 +20,15 @@ jobs:
           npm install spectaql
           npx spectaql spectaql-config.yml -t static -f api-reference.html
 
-      - name: Deploy the API reference
+      - name: Generate the website demo files
+        run: nix develop -c make e2e
+
+      - name: Commit the API reference and website demo changes
         run: |
           git config --local user.name 'github-actions[bot]'
           git config --local user.email 'github-actions[bot]@users.noreply.github.com'
-          git add website/static/api-reference.html
-          git commit -m "docs: api reference update: $GITHUB_SHA"
+          git add website/static
+          git commit -m "docs: api reference and website examples update: $GITHUB_SHA"
           git push origin HEAD:main
 
       - name: Install Website Dependencies

@@ -4,6 +4,12 @@ title: Post a Transaction
 slug: /docs/transaction-post
 ---
 
+import {
+  GraphQLBody,
+  GraphQLVariables,
+  GraphQLResponse,
+} from "../../src/components/GraphQLDisplay";
+
 This functionality allows to execute financial transactions based on predefined parameters and templates. The specific transaction being posted here is based on a deposit template, which facilitates adding funds to a user's account.
 
 ## Process
@@ -14,53 +20,21 @@ This functionality allows to execute financial transactions based on predefined 
 - **Template Code**: The `txTemplateCode` specifies the template to use for the transaction, in this case, a deposit. This ensures that the transaction adheres to predefined rules and parameters for deposits.
 - **Parameters**: The `params` specify the particular details for the transaction, such as the account to which the deposit is made, the amount of the deposit, and the effective date of the transaction. These details are crucial for the accurate execution of the transaction according to the user’s needs and timing requirements.
 
-```json
-{
-  "input": {
-    "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
-    "txTemplateCode": "DEPOSIT-ea1c7224-ca09-409f-b581-3551beead58c",
-    "params": {
-      "account": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
-      "amount": "9.53",
-      "effective": "2022-09-21"
-    }
-  }
-}
-```
+<GraphQLVariables variablesPath="/gql/variables/transactionPost.json" />
 
 ### GraphQL Request Body
 
 The `transactionPost` mutation is called with the inputs below. This mutation processes the transaction based on the provided template and parameters.
 
-```graphql
-mutation transactionPost($input: TransactionInput!) {
-  transactionPost(input: $input) {
-    transaction {
-      transactionId
-      correlationId
-    }
-  }
-}
-```
+<GraphQLBody queryPath="/gql/transaction-post.gql" />
 
 The system validates the input data against the specified template, calculates any necessary values or triggers other business logic as defined by the template, and logs the transaction in the appropriate accounts.
 
-## Response
+### Response
 
 Upon successful processing of the mutation, the system returns the transaction ID and a correlation ID. The correlation ID can be used to track the transaction through other systems or logs for auditing or debugging purposes. This ensures traceability and accountability of the transaction.
 
-```json
-{
-  "data": {
-    "transactionPost": {
-      "transaction": {
-        "transactionId": "204d087b-5b6d-4544-9203-6674d54528d3",
-        "correlationId": "204d087b-5b6d-4544-9203-6674d54528d3"
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/transactionPostResponse.json" />
 
 ## Significance
 
