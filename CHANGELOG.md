@@ -1,3 +1,18 @@
+# [cala release v0.2.30](https://github.com/GaloyMoney/cala/releases/tag/0.2.30)
+
+
+### Documentation
+
+- Api reference update: 6004a972cd7bdcc70a56590a02dbb18e0dfccf32
+
+### Miscellaneous Tasks
+
+- Add balance_in_range to account_set (#173)
+- Add website-demo.bats to generate json variables and response files (#172)
+- Bump clap from 4.5.8 to 4.5.9 (#164)
+- Bump thiserror from 1.0.61 to 1.0.62 (#166)
+- Bump rust_decimal_macros from 1.34.2 to 1.35.0 (#167)
+
 # [cala release v0.2.29](https://github.com/GaloyMoney/cala/releases/tag/0.2.29)
 
 
