@@ -50459,7 +50459,7 @@ var src = __webpack_require__(6312);
 // EXTERNAL MODULE: ./node_modules/mermaid/dist/createText-ca0c5216.js + 53 modules
 var createText_ca0c5216 = __webpack_require__(191);
 // EXTERNAL MODULE: ./node_modules/khroma/dist/methods/is_dark.js + 2 modules
-var is_dark = __webpack_require__(3219);
+var is_dark = __webpack_require__(8457);
 // EXTERNAL MODULE: ./node_modules/khroma/dist/methods/lighten.js
 var lighten = __webpack_require__(8041);
 // EXTERNAL MODULE: ./node_modules/khroma/dist/methods/darken.js
