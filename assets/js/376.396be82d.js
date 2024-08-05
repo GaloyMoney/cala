@@ -11,7 +11,7 @@ exports.modules = {
 /* harmony export */ });
 /* harmony import */ var _mermaid_6dc72991_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(9702);
 /* harmony import */ var d3__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(6312);
-/* harmony import */ var khroma__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(8457);
+/* harmony import */ var khroma__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(3219);
 /* harmony import */ var khroma__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(8041);
 /* harmony import */ var khroma__WEBPACK_IMPORTED_MODULE_7__ = __webpack_require__(5263);
 /* harmony import */ var dayjs__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(4353);
