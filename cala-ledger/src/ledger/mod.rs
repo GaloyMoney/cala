@@ -169,7 +169,7 @@ impl CalaLedger {
             .await?;
 
         let span = tracing::Span::current();
-        span.record("transaction_id", &transaction.id().to_string());
+        span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
 
         let entries = self

@@ -66,9 +66,9 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
 }
 
 pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display) {
-    Span::current().record("error", &tracing::field::display("true"));
-    Span::current().record("error.level", &tracing::field::display(level));
-    Span::current().record("error.message", &tracing::field::display(error));
+    Span::current().record("error", tracing::field::display("true"));
+    Span::current().record("error.level", tracing::field::display(level));
+    Span::current().record("error.message", tracing::field::display(error));
 }
 
 #[cfg(feature = "http")]
