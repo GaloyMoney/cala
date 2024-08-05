@@ -1,3 +1,20 @@
+# [cala release v0.2.31](https://github.com/GaloyMoney/cala/releases/tag/0.2.31)
+
+
+### Bug Fixes
+
+- Pull and rebase before push to avoid bot conflicts (#175)
+
+### Documentation
+
+- Api reference and website examples update: 2054b0d14362aa298f90a107c173a1613271cd3a
+
+### Miscellaneous Tasks
+
+- Bump serde_with from 3.8.3 to 3.9.0 (#169)
+- Bump napi-derive from 2.16.8 to 2.16.10 (#174)
+- Bump async-graphql from 7.0.6 to 7.0.7 (#170)
+
 # [cala release v0.2.30](https://github.com/GaloyMoney/cala/releases/tag/0.2.30)
 
 
