@@ -151,6 +151,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -166,13 +169,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           non_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
@@ -216,6 +212,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
@@ -232,13 +231,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           deletions as (
             DELETE FROM cala_account_set_member_accounts
@@ -278,6 +270,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -293,13 +288,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           set_insert AS (
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
@@ -352,7 +340,11 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        let rows = sqlx::query!(r#"
+        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+            .execute(&mut **db)
+            .await?;
+        let rows = sqlx::query!(
+            r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
             FROM cala_account_set_member_account_sets m
@@ -367,13 +359,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           member_accounts_deletion AS (
             DELETE FROM cala_account_set_member_accounts
