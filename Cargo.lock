@@ -1810,7 +1810,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c2a198fb6b0eada2a8df47933734e6d35d350665a33a3593d7164fa52c75c19"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.5",
 ]
 
 [[package]]
@@ -1982,9 +1982,9 @@ checksum = "e1c0f5d67ee408a4685b61f5ab7e58605c8ae3f2b4189f0127d804ff13d5560a"
 
 [[package]]
 name = "napi-derive"
-version = "2.16.10"
+version = "2.16.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b13934cae1f98599ae96d461d14ce3a9199215de1e9a9a201b64b118b3dfa329"
+checksum = "150d87c4440b9f4815cb454918db498b5aae9a57aa743d20783fe75381181d01"
 dependencies = [
  "cfg-if",
  "convert_case",
@@ -1996,9 +1996,9 @@ dependencies = [
 
 [[package]]
 name = "napi-derive-backend"
-version = "1.0.72"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "632d41c6057955f455824a7585ce19bc69b2c83472d16581e8f0175fcf4759b7"
+checksum = "0cd81b794fc1d6051acf8c4f3cb4f82833b0621272a232b4ff0cf3df1dbddb61"
 dependencies = [
  "convert_case",
  "once_cell",
@@ -2451,7 +2451,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80b776a1b2dc779f5ee0641f8ade0125bc1298dd41a9a0c16d8bd57b42d222b1"
 dependencies = [
  "bytes",
- "heck 0.4.1",
+ "heck 0.5.0",
  "itertools 0.12.1",
  "log",
  "multimap",
@@ -2508,7 +2508,7 @@ version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "598b7365952c2ed4e32902de0533653aafbe5ae3da436e8e2335c7d375a1cef3"
 dependencies = [
- "heck 0.4.1",
+ "heck 0.5.0",
  "prost",
  "prost-build",
  "prost-types",
