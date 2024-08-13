@@ -1,3 +1,21 @@
+# [cala release v0.2.32](https://github.com/GaloyMoney/cala/releases/tag/0.2.32)
+
+
+### Bug Fixes
+
+- Lock account set table when adding / removing members (#188)
+
+### Documentation
+
+- Api reference and website examples update to 6ebb671473ba843b736ee7e4213044e9a007ea1c
+
+### Miscellaneous Tasks
+
+- Bump thiserror from 1.0.62 to 1.0.63 (#180)
+- Bump clap from 4.5.9 to 4.5.15 (#183)
+- Bump serde_json from 1.0.120 to 1.0.124 (#184)
+- Bump async-trait from 0.1.80 to 0.1.81 (#159)
+
 # [cala release v0.2.31](https://github.com/GaloyMoney/cala/releases/tag/0.2.31)
 
 
