@@ -1,3 +1,14 @@
+# [cala release v0.2.34](https://github.com/GaloyMoney/cala/releases/tag/0.2.34)
+
+
+### Bug Fixes
+
+- Use advisory lock for account set manipulations
+
+### Documentation
+
+- Api reference and website examples update to b4de8e982bd4318d230c32bb3f99e9b3810b4db8
+
 # [cala release v0.2.33](https://github.com/GaloyMoney/cala/releases/tag/0.2.33)
 
 
