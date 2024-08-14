@@ -1,3 +1,15 @@
+# [cala release v0.2.33](https://github.com/GaloyMoney/cala/releases/tag/0.2.33)
+
+
+### Bug Fixes
+
+- Sqlx-prepare
+- More exclusive lock on adding / removing account set members
+
+### Documentation
+
+- Api reference and website examples update to cee2e78c72059c1cc470e75e1c5cf9a04dfa1f2c
+
 # [cala release v0.2.32](https://github.com/GaloyMoney/cala/releases/tag/0.2.32)
 
 
