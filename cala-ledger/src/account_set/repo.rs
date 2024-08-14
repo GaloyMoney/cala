@@ -151,7 +151,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+        sqlx::query!("LOCK TABLE cala_account_sets IN ACCESS EXCLUSIVE MODE")
             .execute(&mut **db)
             .await?;
         let rows = sqlx::query!(r#"
@@ -212,7 +212,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+        sqlx::query!("LOCK TABLE cala_account_sets IN ACCESS EXCLUSIVE MODE")
             .execute(&mut **db)
             .await?;
         let rows = sqlx::query!(
@@ -270,7 +270,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+        sqlx::query!("LOCK TABLE cala_account_sets IN ACCESS EXCLUSIVE MODE")
             .execute(&mut **db)
             .await?;
         let rows = sqlx::query!(r#"
@@ -340,7 +340,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("LOCK TABLE cala_account_sets IN SHARE MODE")
+        sqlx::query!("LOCK TABLE cala_account_sets IN ACCESS EXCLUSIVE MODE")
             .execute(&mut **db)
             .await?;
         let rows = sqlx::query!(
