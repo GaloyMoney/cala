@@ -78,8 +78,7 @@ impl Balances {
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (Some(start), Some(end)) => Ok(BalanceRange::new(start, end)),
-            (None, Some(end)) => Ok(BalanceRange::new(end.clone(), end)),
+            (start, Some(end)) => Ok(BalanceRange::new(start, end)),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }

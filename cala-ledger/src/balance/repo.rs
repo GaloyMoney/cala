@@ -109,8 +109,8 @@ impl BalanceRepo {
             AND h.journal_id = $1
             AND h.account_id = $2
             AND h.currency = $3
-            AND h.recorded_at >= $4
-            ORDER BY h.recorded_at
+            AND h.recorded_at < $4
+            ORDER BY h.recorded_at DESC, h.version DESC
             LIMIT 1
         ),
         last AS (
@@ -126,7 +126,7 @@ impl BalanceRepo {
             AND h.account_id = $2
             AND h.currency = $3
             AND h.recorded_at <= COALESCE($5, NOW())
-            ORDER BY h.recorded_at DESC
+            ORDER BY h.recorded_at DESC, h.version DESC
             LIMIT 1
         )
         SELECT * FROM first
