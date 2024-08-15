@@ -1,3 +1,14 @@
+# [cala release v0.2.36](https://github.com/GaloyMoney/cala/releases/tag/0.2.36)
+
+
+### Bug Fixes
+
+- Balance in range query (#189)
+
+### Documentation
+
+- Api reference and website examples update to 335fcd2919c6f3e1364de5bab436a1c403f927ec
+
 # [cala release v0.2.35](https://github.com/GaloyMoney/cala/releases/tag/0.2.35)
 
 
