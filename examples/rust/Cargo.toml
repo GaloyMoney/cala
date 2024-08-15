@@ -1,6 +1,6 @@
 [package]
 name = "cala-ledger-example-rust"
-version = "0.2.35-dev"
+version = "0.2.35"
 edition = "2021"
 workspace = "../../"
 

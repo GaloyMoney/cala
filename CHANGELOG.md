@@ -1,3 +1,14 @@
+# [cala release v0.2.35](https://github.com/GaloyMoney/cala/releases/tag/0.2.35)
+
+
+### Bug Fixes
+
+- Correct ordering for find_in_range
+
+### Documentation
+
+- Api reference and website examples update to 0aa97bf767af5449ad2424def293d21fc6e8f981
+
 # [cala release v0.2.34](https://github.com/GaloyMoney/cala/releases/tag/0.2.34)
 
 
