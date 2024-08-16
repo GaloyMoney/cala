@@ -35,7 +35,7 @@ opentelemetry_sdk = { version = "0.22.1", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.15.0", features = ["http-proto", "reqwest-client"] }
 opentelemetry-http = "0.11.1"
 opentelemetry-semantic-conventions = "0.14.0"
-tokio = { version = "1.38", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.39", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.14", features = ["sync"] }
 serde = { version = "1.0.207", features = ["derive"] }
 serde_yaml = "0.9.32"
