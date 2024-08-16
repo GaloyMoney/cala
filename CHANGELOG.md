@@ -1,3 +1,15 @@
+# [cala release v0.2.38](https://github.com/GaloyMoney/cala/releases/tag/0.2.38)
+
+
+### Documentation
+
+- Api reference and website examples update to d034d4be06042201ced335c5f4879143479ad256
+
+### Miscellaneous Tasks
+
+- Bump grpc deps (#193)
+- Bump flake
+
 # [cala release v0.2.37](https://github.com/GaloyMoney/cala/releases/tag/0.2.37)
 
 
