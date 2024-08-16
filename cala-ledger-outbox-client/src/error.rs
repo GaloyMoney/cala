@@ -15,6 +15,8 @@ pub enum CalaLedgerOutboxClientError {
     Serde(#[from] serde_json::Error),
     #[error("CalaLedgerOutboxError - MissingField")]
     MissingField,
+    #[error("CalaLedgerOutboxError - UnknownEnumValue")]
+    UnknownEnumValue(#[from] prost::UnknownEnumValue),
     #[error("CalaLedgerOutboxError - CelError: {0}")]
     CelError(#[from] cel_interpreter::CelError),
     #[error("CalaLedgerOutboxError - ChronoError: {0}")]
