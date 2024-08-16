@@ -456,6 +456,7 @@ impl TryFrom<proto::Entry> for EntryValues {
     fn try_from(
         proto::Entry {
             id,
+            version,
             journal_id,
             transaction_id,
             entry_type,
@@ -470,6 +471,7 @@ impl TryFrom<proto::Entry> for EntryValues {
     ) -> Result<Self, Self::Error> {
         let res = Self {
             id: id.parse()?,
+            version,
             journal_id: journal_id.parse()?,
             transaction_id: transaction_id.parse()?,
             account_id: account_id.parse()?,
