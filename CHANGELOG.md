@@ -1,3 +1,20 @@
+# [cala release v0.2.37](https://github.com/GaloyMoney/cala/releases/tag/0.2.37)
+
+
+### Documentation
+
+- Api reference and website examples update to 23cdd46976f0ab68ce8b5959642bb7c914c4ef96
+
+### Miscellaneous Tasks
+
+- Bump serde from 1.0.207 to 1.0.208 (#191)
+- Bump napi from 2.16.8 to 2.16.9 (#192)
+- Bump clap from 4.5.15 to 4.5.16 (#190)
+- Bump async-graphql-axum from 7.0.6 to 7.0.7 (#186)
+- Bump tokio from 1.38.0 to 1.39.2 (#179)
+- Bump napi-derive from 2.16.10 to 2.16.11 (#185)
+- Bump serde from 1.0.204 to 1.0.207 (#187)
+
 # [cala release v0.2.36](https://github.com/GaloyMoney/cala/releases/tag/0.2.36)
 
 
