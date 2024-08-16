@@ -131,6 +131,10 @@ impl CalaLedger {
         &self.transactions
     }
 
+    pub fn entries(&self) -> &Entries {
+        &self.entries
+    }
+
     pub async fn post_transaction(
         &self,
         tx_id: TransactionId,

@@ -8,7 +8,11 @@ use sqlx::PgPool;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{
+    atomic_operation::*,
+    outbox::*,
+    primitives::{AccountId, DataSource},
+};
 
 pub use entity::*;
 use error::*;
@@ -45,6 +49,15 @@ impl Entries {
                 }),
         );
         Ok(entries)
+    }
+
+    pub async fn list_for_account(
+        &self,
+        account_id: AccountId,
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
+    ) -> Result<Vec<Entry>, EntryError> {
+        self.repo.list_for_account(account_id, from, until).await
     }
 
     #[cfg(feature = "import")]

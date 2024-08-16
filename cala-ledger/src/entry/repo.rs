@@ -3,21 +3,23 @@ use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use tracing::instrument;
 
-use super::{entity::*, error::*};
-use crate::entity::EntityEvents;
 #[cfg(feature = "import")]
-use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId};
+use crate::primitives::DataSourceId;
+use crate::{
+    entity::*,
+    primitives::{AccountId, EntryId, JournalId},
+};
+
+use super::{entity::*, error::*};
 
 #[derive(Debug, Clone)]
 pub(crate) struct EntryRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl EntryRepo {
     pub(crate) fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
+        Self { pool: pool.clone() }
     }
 
     #[instrument(
@@ -46,6 +48,39 @@ impl EntryRepo {
         query.execute(&mut **db).await?;
         EntityEvents::batch_persist(db, entries.into_iter().map(|n| n.initial_events())).await?;
         Ok(entry_values)
+    }
+
+    pub(crate) async fn list_for_account(
+        &self,
+        account_id: AccountId,
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
+    ) -> Result<Vec<Entry>, EntryError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"SELECT a.id, e.sequence, e.event,
+               a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+               FROM cala_entries a
+               JOIN cala_entry_events e
+               ON a.data_source_id = e.data_source_id
+               AND a.id = e.id
+               WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
+               AND a.account_id = $1
+               AND a.created_at >= $2
+               AND ($3::timestamptz IS NULL OR a.created_at <= $3)
+               ORDER BY a.id, e.sequence
+            "#,
+            account_id as AccountId,
+            from,
+            until
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let n = rows.len();
+        let entries = EntityEvents::load_n(rows, n)?.0;
+
+        Ok(entries)
     }
 
     #[cfg(feature = "import")]

@@ -14,6 +14,7 @@ type Account {
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
 	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	sets(first: Int!, after: String): AccountSetConnection!
+	entries(from: Timestamp!, until: Timestamp): [Entry!]!
 }
 
 type AccountConnection {
@@ -76,6 +77,7 @@ type AccountSet {
 	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
+	entries(from: Timestamp!, until: Timestamp): [Entry!]!
 }
 
 type AccountSetConnection {
@@ -233,6 +235,23 @@ enum DebitOrCredit {
 }
 
 scalar Decimal
+
+type Entry {
+	id: ID!
+	entryId: UUID!
+	transactionId: UUID!
+	journalId: UUID!
+	accountId: UUID!
+	entryType: String!
+	sequence: Int!
+	layer: Layer!
+	units: Decimal!
+	currency: CurrencyCode!
+	direction: DebitOrCredit!
+	description: String
+	createdAt: Timestamp!
+	modifiedAt: Timestamp!
+}
 
 scalar Expression
 
