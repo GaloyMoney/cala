@@ -2,7 +2,7 @@
 name = "cala-ledger-core-types"
 repository = "https://github.com/GaloyMoney/cala"
 description = "Core types for cala"
-version = "0.2.37"
+version = "0.2.38-dev"
 edition = "2021"
 license = "Apache-2.0"
 
@@ -11,7 +11,7 @@ license = "Apache-2.0"
 fail-on-warnings = []
 
 [dependencies]
-cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.2.37" }
+cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.2.38-dev" }
 
 serde = { workspace = true }
 serde_json = { workspace = true }
