@@ -1,3 +1,14 @@
+# [cala release v0.2.39](https://github.com/GaloyMoney/cala/releases/tag/0.2.39)
+
+
+### Documentation
+
+- Api reference and website examples update to 583540e1187a541ee0dc21b04931fcfccd17c4c8
+
+### Miscellaneous Tasks
+
+- Add missing entry.version
+
 # [cala release v0.2.38](https://github.com/GaloyMoney/cala/releases/tag/0.2.38)
 
 
