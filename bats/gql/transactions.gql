@@ -1,0 +1,12 @@
+query Transaction($after: String) {
+  transactions(first: 2, after: $after) {
+    nodes {
+      transactionId
+      createdAt
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

@@ -116,4 +116,20 @@ teardown_file() {
   exec_graphql 'account-with-balance' "$variables"
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
+
+  # list transactions
+  exec_graphql 'transactions' '{}'
+  first_ts=$(graphql_output '.data.transactions.nodes[1].createdAt')
+
+  variables=$(jq -n \
+    --arg end_cursor "$end_cursor" \
+    '{
+      "after": $end_cursor
+    }'
+  )
+
+  exec_graphql 'transactions' "$variables"
+  second_ts=$(graphql_output '.data.transactions.nodes[0].createdAt')
+
+  [[ $(date -d "$second_ts" +%s) -lt $(date -d "$first_ts" +%s) ]] || exit 1
 }
