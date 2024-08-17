@@ -1,6 +1,6 @@
-pub mod error;
-
+mod cursor;
 mod entity;
+pub mod error;
 mod repo;
 
 #[cfg(feature = "import")]
@@ -12,8 +12,9 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{atomic_operation::*, outbox::*, primitives::DataSource, query::*};
 
+pub use cursor::*;
 pub use entity::*;
 use error::*;
 use repo::*;
@@ -66,6 +67,14 @@ impl Transactions {
         transaction_ids: &[TransactionId],
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
         self.repo.find_all(transaction_ids).await
+    }
+
+    pub async fn list(
+        &self,
+        args: PaginatedQueryArgs<TransactionByCreatedAtCursor>,
+    ) -> Result<PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>, TransactionError>
+    {
+        self.repo.list(args).await
     }
 
     #[cfg(feature = "import")]

@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH transactions AS (\n          SELECT id, created_at\n          FROM cala_transactions\n          WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)\n          ORDER BY created_at DESC, id\n          LIMIT $3\n        )\n        SELECT t.id, e.sequence, e.event,\n            t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n        FROM transactions t\n        JOIN cala_transaction_events e ON t.id = e.id\n        ORDER BY t.created_at DESC, t.id, e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0e44016cb9b10212697b3191e93792d578c9d03c794499dfd4cb9a1ac75b22d6"
+}

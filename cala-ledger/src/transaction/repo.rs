@@ -9,9 +9,10 @@ use crate::primitives::DataSourceId;
 use crate::{
     entity::*,
     primitives::{JournalId, TransactionId, TxTemplateId},
+    query::*,
 };
 
-use super::{entity::*, error::*};
+use super::{entity::*, error::*, Transaction, TransactionByCreatedAtCursor};
 
 #[derive(Debug, Clone)]
 pub(super) struct TransactionRepo {
@@ -122,6 +123,50 @@ impl TransactionRepo {
             Err(EntityError::NoEntityEventsPresent) => Err(TransactionError::CouldNotFindById(id)),
             Err(e) => Err(e.into()),
         }
+    }
+
+    pub async fn list(
+        &self,
+        args: PaginatedQueryArgs<TransactionByCreatedAtCursor>,
+    ) -> Result<PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>, TransactionError>
+    {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"
+        WITH transactions AS (
+          SELECT id, created_at
+          FROM cala_transactions
+          WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)
+          ORDER BY created_at DESC, id
+          LIMIT $3
+        )
+        SELECT t.id, e.sequence, e.event,
+            t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+        FROM transactions t
+        JOIN cala_transaction_events e ON t.id = e.id
+        ORDER BY t.created_at DESC, t.id, e.sequence"#,
+            args.after.as_ref().map(|c| c.created_at),
+            args.after.as_ref().map(|c| c.id) as Option<TransactionId>,
+            args.first as i64 + 1
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let (entities, has_next_page) = EntityEvents::load_n::<Transaction>(rows, args.first)?;
+
+        let mut end_cursor = None;
+        if let Some(last) = entities.last() {
+            end_cursor = Some(TransactionByCreatedAtCursor {
+                created_at: last.created_at(),
+                id: last.values().id,
+            });
+        }
+
+        Ok(PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     #[cfg(feature = "import")]

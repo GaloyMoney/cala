@@ -393,6 +393,7 @@ type Query {
 	balanceInRange(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	transaction(id: UUID!): Transaction
 	transactionByExternalId(externalId: String!): Transaction
+	transactions(first: Int!, after: String): TransactionConnection!
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
 	jobs(first: Int!, after: String): JobConnection!
@@ -435,6 +436,35 @@ type Transaction {
 	metadata: JSON
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
+}
+
+type TransactionConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [TransactionEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Transaction!]!
+}
+
+"""
+An edge in a connection.
+"""
+type TransactionEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Transaction!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 input TransactionInput {

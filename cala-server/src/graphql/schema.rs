@@ -181,6 +181,43 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         }
     }
 
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<TransactionByCreatedAtCursor, Transaction, EmptyFields, EmptyFields>>
+    {
+        let app = ctx.data_unchecked::<CalaApp>();
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let result = app
+                    .ledger()
+                    .transactions()
+                    .list(cala_ledger::query::PaginatedQueryArgs {
+                        first,
+                        after: after
+                            .map(cala_ledger::transaction::TransactionByCreatedAtCursor::from),
+                    })
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = TransactionByCreatedAtCursor::from(&entity);
+                        Edge::new(cursor, Transaction::from(entity))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
+    }
+
     async fn tx_template(
         &self,
         ctx: &Context<'_>,
