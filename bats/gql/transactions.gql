@@ -1,5 +1,5 @@
 query Transaction($after: String) {
-  transactions(first: 2, after: $after) {
+  transactions(first: 1, after: $after) {
     nodes {
       transactionId
       createdAt

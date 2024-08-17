@@ -117,9 +117,31 @@ teardown_file() {
   balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
 
+  #post a transaction to make transaction count 2
+  transaction_id=$(random_uuid)
+  variables=$(
+    jq -n \
+    --arg transaction_id "$transaction_id" \
+    --arg account_id "$liability_account_id" \
+    --arg depositTemplateId "$deposit_template_id" \
+    '{
+      "input": {
+        "transactionId": $transaction_id,
+        "txTemplateCode": ("DEPOSIT-" + $depositTemplateId),
+        "params": {
+          "account": $account_id,
+          "amount": "9.53",
+          "effective": "2022-09-21"
+        }
+      }
+    }'
+  )
+  exec_graphql 'transaction-post' "$variables"
+
   # list transactions
   exec_graphql 'transactions' '{}'
-  first_ts=$(graphql_output '.data.transactions.nodes[1].createdAt')
+  first_ts=$(graphql_output '.data.transactions.nodes[0].createdAt')
+  end_cursor=$(graphql_output '.data.transactions.pageInfo.endCursor')
 
   variables=$(jq -n \
     --arg end_cursor "$end_cursor" \
