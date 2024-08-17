@@ -2,6 +2,7 @@ mutation transactionPost($input: TransactionInput!) {
   transactionPost(input: $input) {
     transaction {
       transactionId
+      createdAt
       correlationId
     }
   }

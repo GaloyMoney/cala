@@ -120,6 +120,7 @@ teardown_file() {
     }'
   )
   exec_graphql 'transaction-post' "$variables"
+  first_tx_created_at=$(graphql_output '.data.transactionPost.transaction.createdAt')
 
   variables=$(jq -n \
     --arg journalId "$journal_id" \
@@ -133,5 +134,52 @@ teardown_file() {
   exec_graphql 'account-set-with-balance' "$variables"
   balance=$(graphql_output '.data.accountSet.balance.settled.normalBalance.units')
   [[ $balance == "9.53" ]] || exit 1
+
+  transaction_id=$(random_uuid)
+  variables=$(
+    jq -n \
+    --arg transaction_id "$transaction_id" \
+    --arg account_id "$liability_account_id" \
+    --arg depositTemplateId "$deposit_template_id" \
+    '{
+      "input": {
+        "transactionId": $transaction_id,
+        "txTemplateCode": ("DEPOSIT-" + $depositTemplateId),
+        "params": {
+          "account": $account_id,
+          "amount": "9.53",
+          "effective": "2022-09-21"
+        }
+      }
+    }'
+  )
+  exec_graphql 'transaction-post' "$variables"
+  second_tx_created_at=$(graphql_output '.data.transactionPost.transaction.createdAt')
+
+  variables=$(jq -n \
+    --arg accountSetId "$liability_account_id" \
+    --arg from "$first_tx_created_at" \
+    '{
+      "id": $accountSetId,
+      "from": $from
+    }'
+  )
+  exec_graphql 'account-with-entries' "$variables"
+
+  entries_count=$(graphql_output '.data.account.entries | length')
+  [[ $entries_count == 2 ]] || exit 1
+
+  variables=$(jq -n \
+    --arg accountSetId "$liability_account_id" \
+    --arg from "$second_tx_created_at" \
+    '{
+      "id": $accountSetId,
+      "from": $from
+    }'
+  )
+  exec_graphql 'account-with-entries' "$variables"
+
+  entries_count=$(graphql_output '.data.account.entries | length')
+  [[ $entries_count == 1 ]] || exit 1
 
 }

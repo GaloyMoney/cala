@@ -1,0 +1,10 @@
+query AccountWithEntries($id: UUID!, $from: Timestamp!, $until: Timestamp) {
+  account(id: $id) {
+    name
+    entries(from: $from, until: $until) {
+      units
+      currency
+      transactionId
+    }
+  }
+}
