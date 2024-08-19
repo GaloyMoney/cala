@@ -153,5 +153,5 @@ teardown_file() {
   exec_graphql 'transactions' "$variables"
   second_ts=$(graphql_output '.data.transactions.nodes[0].createdAt')
 
-  [[ $(bc <<< "$(date -d "$second_ts" +%s.%N) < $(date -d "$first_ts" +%s.%N)") -eq 1 ]] || exit 1
+  [[ $(bc <<< "$(date -d "$second_ts" +%s.%N) <= $(date -d "$first_ts" +%s.%N)") -eq 1 ]] || exit 1
 }

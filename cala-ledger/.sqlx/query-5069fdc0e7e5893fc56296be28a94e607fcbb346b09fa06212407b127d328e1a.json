@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        WITH transactions AS (\n          SELECT id, created_at\n          FROM cala_transactions\n          WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)\n          ORDER BY created_at DESC, id\n          LIMIT $3\n        )\n        SELECT t.id, e.sequence, e.event,\n            t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n        FROM transactions t\n        JOIN cala_transaction_events e ON t.id = e.id\n        ORDER BY t.created_at DESC, t.id, e.sequence",
+  "query": "\n        WITH transactions AS (\n          SELECT id, created_at\n          FROM cala_transactions\n          WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)\n          ORDER BY created_at DESC, id DESC\n          LIMIT $3\n        )\n        SELECT t.id, e.sequence, e.event,\n            t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n        FROM transactions t\n        JOIN cala_transaction_events e ON t.id = e.id\n        ORDER BY t.created_at DESC, t.id DESC , e.sequence",
   "describe": {
     "columns": [
       {
@@ -44,5 +44,5 @@
       false
     ]
   },
-  "hash": "0e44016cb9b10212697b3191e93792d578c9d03c794499dfd4cb9a1ac75b22d6"
+  "hash": "5069fdc0e7e5893fc56296be28a94e607fcbb346b09fa06212407b127d328e1a"
 }

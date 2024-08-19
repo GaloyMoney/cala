@@ -137,14 +137,14 @@ impl TransactionRepo {
           SELECT id, created_at
           FROM cala_transactions
           WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)
-          ORDER BY created_at DESC, id
+          ORDER BY created_at DESC, id DESC
           LIMIT $3
         )
         SELECT t.id, e.sequence, e.event,
             t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
         FROM transactions t
         JOIN cala_transaction_events e ON t.id = e.id
-        ORDER BY t.created_at DESC, t.id, e.sequence"#,
+        ORDER BY t.created_at DESC, t.id DESC , e.sequence"#,
             args.after.as_ref().map(|c| c.created_at),
             args.after.as_ref().map(|c| c.id) as Option<TransactionId>,
             args.first as i64 + 1
