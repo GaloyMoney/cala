@@ -1,9 +1,14 @@
-use async_graphql::{types::connection::*, *};
+use async_graphql::{dataloader::DataLoader, types::connection::*, *};
 use serde::{Deserialize, Serialize};
 
-use super::{convert::ToGlobalId, primitives::*};
+use cala_ledger::primitives::TransactionId;
+
+use super::{
+    convert::ToGlobalId, loader::LedgerDataLoader, primitives::*, transaction::Transaction,
+};
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 pub struct Entry {
     id: ID,
     entry_id: UUID,
@@ -19,6 +24,19 @@ pub struct Entry {
     description: Option<String>,
     created_at: Timestamp,
     modified_at: Timestamp,
+}
+
+#[ComplexObject]
+impl Entry {
+    async fn transaction(&self, ctx: &Context<'_>) -> async_graphql::Result<Transaction> {
+        let transaction_id = TransactionId::from(self.transaction_id);
+        let ctx = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        let transaction = ctx
+            .load_one(transaction_id)
+            .await?
+            .expect("a transaction should always exist for an entry");
+        Ok(transaction)
+    }
 }
 
 impl ToGlobalId for cala_ledger::EntryId {

@@ -251,6 +251,7 @@ type Entry {
 	description: String
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
+	transaction: Transaction!
 }
 
 type EntryConnection {
