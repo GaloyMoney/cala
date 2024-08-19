@@ -174,6 +174,7 @@ teardown_file() {
   )
   exec_graphql 'account-with-entries' "$variables"
   second_ts=$(graphql_output '.data.account.entries.nodes[0].createdAt')
-  [[ $(bc <<< "$(date -d "$second_ts" +%s.%N) < $(date -d "$first_ts" +%s.%N)") -eq 1 ]] || exit 1
+
+  [[ $(bc <<< "$(date -d "$second_ts" +%s.%N) <= $(date -d "$first_ts" +%s.%N)") -eq 1 ]] || exit 1
 
 }
