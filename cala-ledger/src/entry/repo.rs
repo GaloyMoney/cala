@@ -8,9 +8,10 @@ use crate::primitives::DataSourceId;
 use crate::{
     entity::*,
     primitives::{AccountId, EntryId, JournalId},
+    query::{PaginatedQueryArgs, PaginatedQueryRet},
 };
 
-use super::{entity::*, error::*};
+use super::{entity::*, error::*, EntryByCreatedAtCursor};
 
 #[derive(Debug, Clone)]
 pub(crate) struct EntryRepo {
@@ -50,7 +51,7 @@ impl EntryRepo {
         Ok(entry_values)
     }
 
-    pub(crate) async fn list_for_account(
+    pub(crate) async fn ranged_list_for_account(
         &self,
         account_id: AccountId,
         from: DateTime<Utc>,
@@ -81,6 +82,53 @@ impl EntryRepo {
         let entries = EntityEvents::load_n(rows, n)?.0;
 
         Ok(entries)
+    }
+
+    pub(crate) async fn list_for_account(
+        &self,
+        account_id: AccountId,
+        args: PaginatedQueryArgs<EntryByCreatedAtCursor>,
+    ) -> Result<PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
+        let rows = sqlx::query_as!(
+            GenericEvent,
+            r#"
+             WITH entries AS (
+                SELECT id, created_at
+                FROM cala_entries
+                WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)
+                AND account_id = $4
+                ORDER BY created_at DESC, id
+                LIMIT $3
+              )
+             SELECT a.id, e.sequence, e.event,
+             a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+             FROM entries a
+             JOIN cala_entry_events e ON a.id = e.id
+             ORDER BY a.created_at DESC, a.id, e.sequence
+            "#,
+            args.after.as_ref().map(|c| c.created_at),
+            args.after.as_ref().map(|c| c.id) as Option<EntryId>,
+            args.first as i64 + 1,
+            account_id as AccountId,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let (entities, has_next_page) = EntityEvents::load_n::<Entry>(rows, args.first)?;
+
+        let mut end_cursor = None;
+        if let Some(last) = entities.last() {
+            end_cursor = Some(EntryByCreatedAtCursor {
+                created_at: last.created_at(),
+                id: last.values().id,
+            });
+        }
+
+        Ok(PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     #[cfg(feature = "import")]

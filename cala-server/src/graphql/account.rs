@@ -12,7 +12,7 @@ use super::{
     account_set::*,
     balance::{Balance, RangedBalance},
     convert::ToGlobalId,
-    entry::Entry,
+    entry::*,
     loader::LedgerDataLoader,
     primitives::*,
     schema::DbOp,
@@ -141,7 +141,7 @@ impl Account {
         .await
     }
 
-    async fn entries(
+    async fn ranged_entries(
         &self,
         ctx: &Context<'_>,
         from: Timestamp,
@@ -152,13 +152,51 @@ impl Account {
         let entries = app
             .ledger()
             .entries()
-            .list_for_account(
+            .ranged_list_for_account(
                 account_id,
                 from.into_inner(),
                 until.map(|ts| ts.into_inner()),
             )
             .await?;
         Ok(entries.into_iter().map(Entry::from).collect())
+    }
+
+    async fn entries(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<EntryByCreatedAtCursor, Entry, EmptyFields, EmptyFields>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let account_id = AccountId::from(self.account_id);
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let query_args = cala_ledger::query::PaginatedQueryArgs {
+                    first,
+                    after: after.map(cala_ledger::entry::EntryByCreatedAtCursor::from),
+                };
+
+                let result = app
+                    .ledger()
+                    .entries()
+                    .list_for_account(account_id, query_args)
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = EntryByCreatedAtCursor::from(&entity);
+                        Edge::new(cursor, Entry::from(entity))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
     }
 }
 

@@ -1,4 +1,5 @@
-use async_graphql::*;
+use async_graphql::{types::connection::*, *};
+use serde::{Deserialize, Serialize};
 
 use super::{convert::ToGlobalId, primitives::*};
 
@@ -51,6 +52,49 @@ impl From<cala_ledger::entry::Entry> for Entry {
             description: values.description,
             created_at: Timestamp::from(created_at),
             modified_at: Timestamp::from(modified_at),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub(super) struct EntryByCreatedAtCursor {
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub id: cala_ledger::primitives::EntryId,
+}
+
+impl CursorType for EntryByCreatedAtCursor {
+    type Error = String;
+
+    fn encode_cursor(&self) -> String {
+        use base64::{engine::general_purpose, Engine as _};
+        let json = serde_json::to_string(&self).expect("could not serialize token");
+        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
+    }
+
+    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+        use base64::{engine::general_purpose, Engine as _};
+        let bytes = general_purpose::STANDARD_NO_PAD
+            .decode(s.as_bytes())
+            .map_err(|e| e.to_string())?;
+        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+        serde_json::from_str(&json).map_err(|e| e.to_string())
+    }
+}
+
+impl From<&cala_ledger::entry::Entry> for EntryByCreatedAtCursor {
+    fn from(entry: &cala_ledger::entry::Entry) -> Self {
+        Self {
+            created_at: entry.created_at(),
+            id: entry.values().id,
+        }
+    }
+}
+
+impl From<EntryByCreatedAtCursor> for cala_ledger::entry::EntryByCreatedAtCursor {
+    fn from(cursor: EntryByCreatedAtCursor) -> Self {
+        Self {
+            id: cursor.id,
+            created_at: cursor.created_at,
         }
     }
 }
