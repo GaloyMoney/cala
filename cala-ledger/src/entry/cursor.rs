@@ -9,6 +9,7 @@ use super::Entry;
 pub struct EntryByCreatedAtCursor {
     pub created_at: DateTime<Utc>,
     pub id: EntryId,
+    pub sequence: u32,
 }
 
 impl From<&Entry> for EntryByCreatedAtCursor {
@@ -16,6 +17,7 @@ impl From<&Entry> for EntryByCreatedAtCursor {
         Self {
             created_at: entry.created_at(),
             id: entry.values().id,
+            sequence: entry.values().sequence,
         }
     }
 }

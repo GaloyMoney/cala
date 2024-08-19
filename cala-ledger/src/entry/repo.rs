@@ -88,6 +88,7 @@ impl EntryRepo {
             end_cursor = Some(EntryByCreatedAtCursor {
                 created_at: last.created_at(),
                 id: last.values().id,
+                sequence: last.values().sequence,
             });
         }
 

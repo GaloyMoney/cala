@@ -59,6 +59,7 @@ impl From<cala_ledger::entry::Entry> for Entry {
 #[derive(Serialize, Deserialize)]
 pub(super) struct EntryByCreatedAtCursor {
     pub created_at: chrono::DateTime<chrono::Utc>,
+    pub sequence: u32,
     pub id: cala_ledger::primitives::EntryId,
 }
 
@@ -86,6 +87,7 @@ impl From<&cala_ledger::entry::Entry> for EntryByCreatedAtCursor {
         Self {
             created_at: entry.created_at(),
             id: entry.values().id,
+            sequence: entry.values().sequence,
         }
     }
 }
@@ -95,6 +97,7 @@ impl From<EntryByCreatedAtCursor> for cala_ledger::entry::EntryByCreatedAtCursor
         Self {
             id: cursor.id,
             created_at: cursor.created_at,
+            sequence: cursor.sequence,
         }
     }
 }
