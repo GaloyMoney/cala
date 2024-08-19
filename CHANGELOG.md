@@ -1,3 +1,15 @@
+# [cala release v0.2.40](https://github.com/GaloyMoney/cala/releases/tag/0.2.40)
+
+
+### Documentation
+
+- Api reference and website examples update to f75aa46579c54f19bdb4258b38fd2e380f2db0d2
+
+### Miscellaneous Tasks
+
+- Add audit ignore
+- Bump sqlx
+
 # [cala release v0.2.39](https://github.com/GaloyMoney/cala/releases/tag/0.2.39)
 
 
