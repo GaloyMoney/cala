@@ -120,7 +120,6 @@ teardown_file() {
     }'
   )
   exec_graphql 'transaction-post' "$variables"
-  first_tx_created_at=$(graphql_output '.data.transactionPost.transaction.createdAt')
 
   variables=$(jq -n \
     --arg journalId "$journal_id" \
@@ -154,32 +153,27 @@ teardown_file() {
     }'
   )
   exec_graphql 'transaction-post' "$variables"
-  second_tx_created_at=$(graphql_output '.data.transactionPost.transaction.createdAt')
 
   variables=$(jq -n \
-    --arg accountSetId "$liability_account_id" \
-    --arg from "$first_tx_created_at" \
+    --arg id "$liability_account_id" \
     '{
-      "id": $accountSetId,
-      "from": $from
+      "id": $id,
     }'
   )
   exec_graphql 'account-with-entries' "$variables"
-
-  entries_count=$(graphql_output '.data.account.entries | length')
-  [[ $entries_count == 2 ]] || exit 1
+  end_cursor=$(graphql_output .data.account.entries.pageInfo.endCursor)
+  first_ts=$(graphql_output '.data.account.entries.nodes[0].createdAt')
 
   variables=$(jq -n \
-    --arg accountSetId "$liability_account_id" \
-    --arg from "$second_tx_created_at" \
+    --arg id "$liability_account_id" \
+    --arg after "$end_cursor" \
     '{
-      "id": $accountSetId,
-      "from": $from
+      "id": $id,
+      "after": $after
     }'
   )
   exec_graphql 'account-with-entries' "$variables"
-
-  entries_count=$(graphql_output '.data.account.entries | length')
-  [[ $entries_count == 1 ]] || exit 1
+  second_ts=$(graphql_output '.data.account.entries.nodes[0].createdAt')
+  [[ $(bc <<< "$(date -d "$second_ts" +%s.%N) < $(date -d "$first_ts" +%s.%N)") -eq 1 ]] || exit 1
 
 }

@@ -1,10 +1,18 @@
-query AccountWithEntries($id: UUID!, $from: Timestamp!, $until: Timestamp) {
+query AccountWithEntries($id: UUID!, $after: String) {
   account(id: $id) {
     name
-    entries(from: $from, until: $until) {
-      units
-      currency
-      transactionId
+    entries(first: 1, after: $after) {
+      nodes {
+        transactionId
+        units
+        currency
+        createdAt
+      }
+
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
     }
   }
 }
