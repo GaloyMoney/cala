@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n             WITH entries AS (\n                SELECT id, created_at\n                FROM cala_entries\n                WHERE (created_at, id) < ($1, $2) OR ($1 IS NULL AND $2 IS NULL)\n                AND account_id = $4\n                ORDER BY created_at DESC, id\n                LIMIT $3\n              )\n             SELECT a.id, e.sequence, e.event,\n             a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at\n             FROM entries a\n             JOIN cala_entry_events e ON a.id = e.id\n             ORDER BY a.created_at DESC, a.id, e.sequence\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "158e6da351e2631bd3fbad77bd0e3d61989665b6e09ae6013feac635387ad55d"
+}

@@ -141,26 +141,6 @@ impl Account {
         .await
     }
 
-    async fn ranged_entries(
-        &self,
-        ctx: &Context<'_>,
-        from: Timestamp,
-        until: Option<Timestamp>,
-    ) -> async_graphql::Result<Vec<Entry>> {
-        let app = ctx.data_unchecked::<CalaApp>();
-        let account_id = AccountId::from(self.account_id);
-        let entries = app
-            .ledger()
-            .entries()
-            .ranged_list_for_account(
-                account_id,
-                from.into_inner(),
-                until.map(|ts| ts.into_inner()),
-            )
-            .await?;
-        Ok(entries.into_iter().map(Entry::from).collect())
-    }
-
     async fn entries(
         &self,
         ctx: &Context<'_>,

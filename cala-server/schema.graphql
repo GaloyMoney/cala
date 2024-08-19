@@ -14,7 +14,7 @@ type Account {
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
 	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	sets(first: Int!, after: String): AccountSetConnection!
-	entries(from: Timestamp!, until: Timestamp): [Entry!]!
+	entries(first: Int!, after: String): EntryConnection!
 }
 
 type AccountConnection {
@@ -77,7 +77,7 @@ type AccountSet {
 	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
-	entries(from: Timestamp!, until: Timestamp): [Entry!]!
+	entries(first: Int!, after: String): EntryConnection!
 }
 
 type AccountSetConnection {
@@ -251,6 +251,35 @@ type Entry {
 	description: String
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
+}
+
+type EntryConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EntryEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Entry!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EntryEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Entry!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
 }
 
 scalar Expression

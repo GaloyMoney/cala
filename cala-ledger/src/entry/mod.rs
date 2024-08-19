@@ -54,17 +54,6 @@ impl Entries {
         Ok(entries)
     }
 
-    pub async fn ranged_list_for_account(
-        &self,
-        account_id: AccountId,
-        from: DateTime<Utc>,
-        until: Option<DateTime<Utc>>,
-    ) -> Result<Vec<Entry>, EntryError> {
-        self.repo
-            .ranged_list_for_account(account_id, from, until)
-            .await
-    }
-
     pub async fn list_for_account(
         &self,
         account_id: AccountId,

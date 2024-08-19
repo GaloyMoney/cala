@@ -51,39 +51,6 @@ impl EntryRepo {
         Ok(entry_values)
     }
 
-    pub(crate) async fn ranged_list_for_account(
-        &self,
-        account_id: AccountId,
-        from: DateTime<Utc>,
-        until: Option<DateTime<Utc>>,
-    ) -> Result<Vec<Entry>, EntryError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-               a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-               FROM cala_entries a
-               JOIN cala_entry_events e
-               ON a.data_source_id = e.data_source_id
-               AND a.id = e.id
-               WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-               AND a.account_id = $1
-               AND a.created_at >= $2
-               AND ($3::timestamptz IS NULL OR a.created_at <= $3)
-               ORDER BY a.id, e.sequence
-            "#,
-            account_id as AccountId,
-            from,
-            until
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let n = rows.len();
-        let entries = EntityEvents::load_n(rows, n)?.0;
-
-        Ok(entries)
-    }
-
     pub(crate) async fn list_for_account(
         &self,
         account_id: AccountId,
