@@ -1,3 +1,14 @@
+# [cala release v0.2.41](https://github.com/GaloyMoney/cala/releases/tag/0.2.41)
+
+
+### Bug Fixes
+
+- Connect traces in graphql server
+
+### Documentation
+
+- Api reference and website examples update to 963f601fe48db7b01b46db7fa42389c0b62cc74a
+
 # [cala release v0.2.40](https://github.com/GaloyMoney/cala/releases/tag/0.2.40)
 
 
