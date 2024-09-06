@@ -1,3 +1,19 @@
+# [cala release v0.2.43](https://github.com/GaloyMoney/cala/releases/tag/0.2.43)
+
+
+### Documentation
+
+- Api reference and website examples update to ac43986a3fe0b96202ebd8e6fc00429622d25b46
+
+### Miscellaneous Tasks
+
+- Bump serde_json from 1.0.124 to 1.0.128 (#204)
+- Bump rust_decimal_macros from 1.35.0 to 1.36.0 (#198)
+- Bump sqlx from 0.8.0 to 0.8.2 (#203)
+- Bump rust_decimal from 1.35.0 to 1.36.0 (#199)
+- Bump tokio from 1.39.2 to 1.40.0 (#202)
+- Bump pg images
+
 # [cala release v0.2.42](https://github.com/GaloyMoney/cala/releases/tag/0.2.42)
 
 
