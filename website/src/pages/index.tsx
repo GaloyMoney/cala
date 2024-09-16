@@ -37,6 +37,21 @@ export default function Home(): JSX.Element {
       <HomepageHeader />
       <main>
         <HomepageFeatures />
+
+        <div class="container padding-horiz--md">
+          <div class="row vert-p">
+            <div class="col col--4 padding-horiz--md vert-p">
+              <h2>
+                The open source core banking ledger
+              </h2>
+              <p>Cala is an extensible accounting ledger designed for building modern banking applications at enterprise scale.</p>
+            </div>
+            <div class="col col--8">
+              <img src="img/cala.webp" />
+            </div>
+          </div>
+
+        </div>
       </main>
     </Layout>
   );
