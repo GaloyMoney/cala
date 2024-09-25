@@ -54,10 +54,10 @@ const config: Config = {
     // social card
     image: 'img/galoy.png',
     navbar: {
-      title: '',
+      title: 'Cala',
       logo: {
         alt: 'Cala Logo',
-        src: 'img/logo.svg',
+        src: 'img/galoy.png',
       },
       items: [
         {
