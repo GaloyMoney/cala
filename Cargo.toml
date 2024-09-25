@@ -17,7 +17,7 @@ anyhow = "1.0.86"
 async-graphql = { version = "7.0.7", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
 async-graphql-axum = "7.0.7"
 async-trait = "0.1.81"
-axum = { version = "0.7.5", features = ["macros"] }
+axum = { version = "0.7.6", features = ["macros"] }
 axum-extra = { version = "0.9.3", default-features = false, features = ["tracing", "typed-header"] }
 base64 = { version = "0.22.1" }
 cached = { version = "0.51", features = ["async"] }
