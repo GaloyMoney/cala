@@ -117,6 +117,7 @@ impl NewEntry {
     pub(super) fn to_values(&self) -> EntryValues {
         EntryValues {
             id: self.id,
+            version: 1,
             transaction_id: self.transaction_id,
             journal_id: self.journal_id,
             account_id: self.account_id,
@@ -136,6 +137,7 @@ impl NewEntry {
             [EntryEvent::Initialized {
                 values: EntryValues {
                     id: self.id,
+                    version: 1,
                     transaction_id: self.transaction_id,
                     journal_id: self.journal_id,
                     account_id: self.account_id,

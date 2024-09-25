@@ -1,3 +1,231 @@
+# [cala release v0.2.44](https://github.com/GaloyMoney/cala/releases/tag/0.2.44)
+
+
+### Documentation
+
+- Improve descriptions, make them not clickable (#210)
+- Api reference and website examples update to a6eb83982dea4402fb2206d55e12080d85cd79c1
+
+### Miscellaneous Tasks
+
+- Bump flake
+- Bump micromatch from 4.0.5 to 4.0.8 in /website (#215)
+- Bump body-parser and express in /website (#219)
+- Bump webpack from 5.91.0 to 5.94.0 in /website (#220)
+- Bump anyhow from 1.0.86 to 1.0.89 (#222)
+- Bump axum from 0.7.5 to 0.7.6 (#221)
+- Bump tonic-health from 0.12.1 to 0.12.2 (#209)
+- Bump napi from 2.16.9 to 2.16.11 (#213)
+- Bump clap from 4.5.16 to 4.5.18 (#212)
+- Bump derive_builder from 0.20.0 to 0.20.1 (#207)
+- Bump prost from 0.13.1 to 0.13.3 (#214)
+- Bump tonic-build from 0.12.1 to 0.12.2 (#205)
+- Bump tokio-stream from 0.1.15 to 0.1.16 (#206)
+
+# [cala release v0.2.43](https://github.com/GaloyMoney/cala/releases/tag/0.2.43)
+
+
+### Documentation
+
+- Api reference and website examples update to ac43986a3fe0b96202ebd8e6fc00429622d25b46
+
+### Miscellaneous Tasks
+
+- Bump serde_json from 1.0.124 to 1.0.128 (#204)
+- Bump rust_decimal_macros from 1.35.0 to 1.36.0 (#198)
+- Bump sqlx from 0.8.0 to 0.8.2 (#203)
+- Bump rust_decimal from 1.35.0 to 1.36.0 (#199)
+- Bump tokio from 1.39.2 to 1.40.0 (#202)
+- Bump pg images
+
+# [cala release v0.2.42](https://github.com/GaloyMoney/cala/releases/tag/0.2.42)
+
+
+### Documentation
+
+- Api reference and website examples update to a783e53d38e1152ac8b1b4fafcd465739ff4e671
+
+### Miscellaneous Tasks
+
+- Add version
+
+# [cala release v0.2.41](https://github.com/GaloyMoney/cala/releases/tag/0.2.41)
+
+
+### Bug Fixes
+
+- Connect traces in graphql server
+
+### Documentation
+
+- Api reference and website examples update to 963f601fe48db7b01b46db7fa42389c0b62cc74a
+
+# [cala release v0.2.40](https://github.com/GaloyMoney/cala/releases/tag/0.2.40)
+
+
+### Documentation
+
+- Api reference and website examples update to f75aa46579c54f19bdb4258b38fd2e380f2db0d2
+
+### Miscellaneous Tasks
+
+- Add audit ignore
+- Bump sqlx
+
+# [cala release v0.2.39](https://github.com/GaloyMoney/cala/releases/tag/0.2.39)
+
+
+### Documentation
+
+- Api reference and website examples update to 583540e1187a541ee0dc21b04931fcfccd17c4c8
+
+### Miscellaneous Tasks
+
+- Add missing entry.version
+
+# [cala release v0.2.38](https://github.com/GaloyMoney/cala/releases/tag/0.2.38)
+
+
+### Documentation
+
+- Api reference and website examples update to d034d4be06042201ced335c5f4879143479ad256
+
+### Miscellaneous Tasks
+
+- Bump grpc deps (#193)
+- Bump flake
+
+# [cala release v0.2.37](https://github.com/GaloyMoney/cala/releases/tag/0.2.37)
+
+
+### Documentation
+
+- Api reference and website examples update to 23cdd46976f0ab68ce8b5959642bb7c914c4ef96
+
+### Miscellaneous Tasks
+
+- Bump serde from 1.0.207 to 1.0.208 (#191)
+- Bump napi from 2.16.8 to 2.16.9 (#192)
+- Bump clap from 4.5.15 to 4.5.16 (#190)
+- Bump async-graphql-axum from 7.0.6 to 7.0.7 (#186)
+- Bump tokio from 1.38.0 to 1.39.2 (#179)
+- Bump napi-derive from 2.16.10 to 2.16.11 (#185)
+- Bump serde from 1.0.204 to 1.0.207 (#187)
+
+# [cala release v0.2.36](https://github.com/GaloyMoney/cala/releases/tag/0.2.36)
+
+
+### Bug Fixes
+
+- Balance in range query (#189)
+
+### Documentation
+
+- Api reference and website examples update to 335fcd2919c6f3e1364de5bab436a1c403f927ec
+
+# [cala release v0.2.35](https://github.com/GaloyMoney/cala/releases/tag/0.2.35)
+
+
+### Bug Fixes
+
+- Correct ordering for find_in_range
+
+### Documentation
+
+- Api reference and website examples update to 0aa97bf767af5449ad2424def293d21fc6e8f981
+
+# [cala release v0.2.34](https://github.com/GaloyMoney/cala/releases/tag/0.2.34)
+
+
+### Bug Fixes
+
+- Use advisory lock for account set manipulations
+
+### Documentation
+
+- Api reference and website examples update to b4de8e982bd4318d230c32bb3f99e9b3810b4db8
+
+# [cala release v0.2.33](https://github.com/GaloyMoney/cala/releases/tag/0.2.33)
+
+
+### Bug Fixes
+
+- Sqlx-prepare
+- More exclusive lock on adding / removing account set members
+
+### Documentation
+
+- Api reference and website examples update to cee2e78c72059c1cc470e75e1c5cf9a04dfa1f2c
+
+# [cala release v0.2.32](https://github.com/GaloyMoney/cala/releases/tag/0.2.32)
+
+
+### Bug Fixes
+
+- Lock account set table when adding / removing members (#188)
+
+### Documentation
+
+- Api reference and website examples update to 6ebb671473ba843b736ee7e4213044e9a007ea1c
+
+### Miscellaneous Tasks
+
+- Bump thiserror from 1.0.62 to 1.0.63 (#180)
+- Bump clap from 4.5.9 to 4.5.15 (#183)
+- Bump serde_json from 1.0.120 to 1.0.124 (#184)
+- Bump async-trait from 0.1.80 to 0.1.81 (#159)
+
+# [cala release v0.2.31](https://github.com/GaloyMoney/cala/releases/tag/0.2.31)
+
+
+### Bug Fixes
+
+- Pull and rebase before push to avoid bot conflicts (#175)
+
+### Documentation
+
+- Api reference and website examples update: 2054b0d14362aa298f90a107c173a1613271cd3a
+
+### Miscellaneous Tasks
+
+- Bump serde_with from 3.8.3 to 3.9.0 (#169)
+- Bump napi-derive from 2.16.8 to 2.16.10 (#174)
+- Bump async-graphql from 7.0.6 to 7.0.7 (#170)
+
+# [cala release v0.2.30](https://github.com/GaloyMoney/cala/releases/tag/0.2.30)
+
+
+### Documentation
+
+- Api reference update: 6004a972cd7bdcc70a56590a02dbb18e0dfccf32
+
+### Miscellaneous Tasks
+
+- Add balance_in_range to account_set (#173)
+- Add website-demo.bats to generate json variables and response files (#172)
+- Bump clap from 4.5.8 to 4.5.9 (#164)
+- Bump thiserror from 1.0.61 to 1.0.62 (#166)
+- Bump rust_decimal_macros from 1.34.2 to 1.35.0 (#167)
+
+# [cala release v0.2.29](https://github.com/GaloyMoney/cala/releases/tag/0.2.29)
+
+
+### Bug Fixes
+
+- Members query in account set  (#165)
+
+### Documentation
+
+- Add account set page to website demo (#163)
+- Add plugin-google-gtag and analytics to website (#156)
+- Api reference update: d8ab630af31ef4b468a5ab46d639af8df5f57356
+
+### Miscellaneous Tasks
+
+- Bump serde_with from 3.8.2 to 3.8.3 (#158)
+- Bump serde from 1.0.203 to 1.0.204 (#160)
+- Bump uuid from 1.9.1 to 1.10.0 (#162)
+
 # [cala release v0.2.28](https://github.com/GaloyMoney/cala/releases/tag/0.2.28)
 
 

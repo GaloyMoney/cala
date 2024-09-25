@@ -6,6 +6,7 @@ use super::primitives::*;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EntryValues {
     pub id: EntryId,
+    pub version: u32,
     pub transaction_id: TransactionId,
     pub journal_id: JournalId,
     pub account_id: AccountId,

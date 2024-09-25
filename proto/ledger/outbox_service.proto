@@ -216,16 +216,17 @@ message EntryCreated {
 
 message Entry {
   string id = 1; 
-  string transaction_id = 2;
-  string journal_id = 3;
-  string account_id = 4;
-  string entry_type = 5;
-  uint32 sequence = 6;
-  Layer layer = 7;
-  string units = 8;
-  string currency = 9;
-  DebitOrCredit direction = 10;
-  optional string description = 11;
+  uint32 version = 2;
+  string transaction_id = 3;
+  string journal_id = 4;
+  string account_id = 5;
+  string entry_type = 6;
+  uint32 sequence = 7;
+  Layer layer = 8;
+  string units = 9;
+  string currency = 10;
+  DebitOrCredit direction = 11;
+  optional string description = 12;
 }
 
 message BalanceCreated {

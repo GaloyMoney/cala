@@ -1,0 +1,14 @@
+{
+  "data": {
+    "account": {
+      "name": "Alice - Checking",
+      "balance": {
+        "settled": {
+          "normalBalance": {
+            "units": "9.53"
+          }
+        }
+      }
+    }
+  }
+}

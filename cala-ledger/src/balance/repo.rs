@@ -109,8 +109,8 @@ impl BalanceRepo {
             AND h.journal_id = $1
             AND h.account_id = $2
             AND h.currency = $3
-            AND h.recorded_at >= $4
-            ORDER BY h.recorded_at DESC
+            AND h.recorded_at < $4
+            ORDER BY h.recorded_at DESC, h.version DESC
             LIMIT 1
         ),
         last AS (
@@ -126,7 +126,7 @@ impl BalanceRepo {
             AND h.account_id = $2
             AND h.currency = $3
             AND h.recorded_at <= COALESCE($5, NOW())
-            ORDER BY h.recorded_at DESC
+            ORDER BY h.recorded_at DESC, h.version DESC
             LIMIT 1
         )
         SELECT * FROM first
@@ -145,7 +145,7 @@ impl BalanceRepo {
         let mut first = None;
         let mut last = None;
         for row in rows {
-            if row.first.expect("last_before is not null") {
+            if row.first.expect("first is not null") {
                 let details: BalanceSnapshot =
                     serde_json::from_value(row.values.expect("values is not null"))
                         .expect("Failed to deserialize balance snapshot");

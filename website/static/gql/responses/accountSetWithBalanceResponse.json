@@ -1,0 +1,15 @@
+{
+  "data": {
+    "accountSet": {
+      "name": "Account Set",
+      "journalId": "a2e1b4c6-05eb-44ab-97f9-99fe59a9fd81",
+      "balance": {
+        "settled": {
+          "normalBalance": {
+            "units": "9.53"
+          }
+        }
+      }
+    }
+  }
+}

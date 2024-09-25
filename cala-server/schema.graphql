@@ -73,6 +73,7 @@ type AccountSet {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(currency: CurrencyCode!): Balance
+	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
 }

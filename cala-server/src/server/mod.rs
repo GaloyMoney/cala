@@ -7,6 +7,7 @@ use axum_extra::headers::HeaderMap;
 use cala_ledger::{AtomicOperation, CalaLedger};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::{app::CalaApp, extension::*, graphql};
 
@@ -35,6 +36,7 @@ pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     Ok(())
 }
 
+#[instrument(name = "cala_server.graphql", skip_all, fields(error, error.level, error.message))]
 pub async fn graphql_handler<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     headers: HeaderMap,
     schema: Extension<Schema<graphql::CoreQuery<Q>, graphql::CoreMutation<M>, EmptySubscription>>,

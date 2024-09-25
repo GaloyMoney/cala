@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH member_accounts AS (\n              SELECT\n                member_account_id AS member_id,\n                member_account_id,\n                NULL::uuid AS member_account_set_id,\n                created_at\n              FROM cala_account_set_member_accounts\n              WHERE\n                transitive IS FALSE\n                AND account_set_id = $1\n                AND (created_at < $2 OR $2 IS NULL)\n              ORDER BY created_at DESC\n              LIMIT $3\n            ), member_sets AS (\n              SELECT\n                member_account_set_id AS member_id,\n                NULL::uuid AS member_account_id,\n                member_account_set_id,\n                created_at\n              FROM cala_account_set_member_account_sets\n              WHERE\n                account_set_id = $1\n                AND (created_at < $2 OR $2 IS NULL)\n              ORDER BY created_at DESC\n              LIMIT $3\n            ), all_members AS (\n              SELECT * FROM member_accounts\n              UNION ALL\n              SELECT * FROM member_sets\n            )\n            SELECT * FROM all_members\n            ORDER BY created_at DESC\n            LIMIT $3\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_account_set_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "52884ebc5f4d5fd2259e02e1110560e940a06ed4311bc9a371d5c5df448f75bf"
+}

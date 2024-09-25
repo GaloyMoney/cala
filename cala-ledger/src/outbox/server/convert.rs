@@ -421,6 +421,7 @@ impl From<EntryValues> for proto::Entry {
     fn from(
         EntryValues {
             id,
+            version,
             journal_id,
             transaction_id,
             account_id,
@@ -438,6 +439,7 @@ impl From<EntryValues> for proto::Entry {
         let units = units.to_f64().expect("could not convert units to f64");
         proto::Entry {
             id: id.to_string(),
+            version,
             journal_id: journal_id.to_string(),
             transaction_id: transaction_id.to_string(),
             account_id: account_id.to_string(),

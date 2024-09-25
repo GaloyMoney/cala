@@ -4,6 +4,12 @@ title: Create a Journal and Accounts
 slug: /docs/create-journal-and-accounts
 ---
 
+import {
+  GraphQLBody,
+  GraphQLVariables,
+  GraphQLResponse,
+} from "../../src/components/GraphQLDisplay";
+
 Create different types of accounts (journal, checking, and debit accounts) through the GraphQL API.
 
 ## Create a Journal
@@ -12,46 +18,20 @@ Initiate the creation of a journal, specifically a "General Ledger," which is fu
 
 ### Variables
 
-The GraphQL mutation request input contains the unique ID and the name of the journal. The system creates a journal entity with these details.
+<GraphQLVariables variablesPath="/gql/variables/journalCreate.json" />
 
-```json
-{
-  "input": {
-    "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
-    "name": "General Ledger"
-  }
-}
-```
+The GraphQL mutation request input contains the unique ID and the name of the journal. The system creates a journal entity with these details.
 
 ### GraphQL Request Body
 
-```graphql
-mutation journalCreate($input: JournalCreateInput!) {
-  journalCreate(input: $input) {
-    journal {
-      journalId
-      name
-    }
-  }
-}
-```
+<GraphQLBody queryPath="/gql/journal-create.gql" />
 
 ### Response
 
-The system returns the details of the newly created journal, including its ID and name, confirming the successful creation.
+The system returns the details of the newly created journal, including
+its ID and name, confirming the successful creation.
 
-```json
-{
-  "data": {
-    "journalCreate": {
-      "journal": {
-        "journalId": "bcc24f47-990c-457d-88cb-76332450ac77",
-        "name": "General Ledger"
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/journalCreateResponse.json" />
 
 ## Create a Checking Account
 
@@ -62,46 +42,16 @@ The `normalBalanceType` indicates whether the account is a debit or credit type,
 
 ### Variables
 
-```json
-{
-  "input": {
-    "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
-    "name": "Alice - Checking",
-    "code": "ALICE.CHECKING-3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
-    "normalBalanceType": "CREDIT"
-  }
-}
-```
+<GraphQLVariables variablesPath="/gql/variables/accountCreateChecking.json" />
 
-### GraphQL body
+### GraphQL Request Body
 
-```graphql
-mutation accountCreate($input: AccountCreateInput!) {
-  accountCreate(input: $input) {
-    account {
-      accountId
-      name
-    }
-  }
-}
-```
-
+<GraphQLBody queryPath="/gql/account-create.gql" />
 ### Response
 
 The response confirms the creation of the checking account with the specified details, ensuring the account is ready for transactional activities.
 
-```json
-{
-  "data": {
-    "accountCreate": {
-      "account": {
-        "accountId": "3a7d421b-7f5a-43ca-ba6f-5f3e6ee67237",
-        "name": "Alice - Checking"
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/accountCreateCheckingResponse.json" />
 
 ## Create a Debit Account
 
@@ -111,43 +61,15 @@ Similar to the previous account creation, the mutation includes unique identifie
 
 ### Variables
 
-```
-{
-  "input": {
-    "accountId": "2e40175d-35c2-4b6f-9c01-cc2309934d25",
-    "name": "Assets",
-    "code": "ASSET-2e40175d-35c2-4b6f-9c01-cc2309934d25",
-    "normalBalanceType": "DEBIT"
-  }
-}
-```
+<GraphQLVariables variablesPath="/gql/variables/accountCreateDebit.json" />
 
 ### GraphQL Request Body
 
-```graphql
-mutation accountCreate($input: AccountCreateInput!) {
-  accountCreate(input: $input) {
-    account {
-      accountId
-      name
-    }
-  }
-}
-```
+<GraphQLBody queryPath="/gql/account-create.gql" />
 
 ### Response
 
-The response shows the successful creation of the debit account, confirming that it's set up to track asset-related transactions.
+The response shows the successful creation of the debit account, confirming that
+it's set up to track asset-related transactions.
 
-```json
-{
-  "data": {
-    "accountCreate": {
-      "account": {
-        "accountId": "2e40175d-35c2-4b6f-9c01-cc2309934d25",
-        "name": "Assets"
-      }
-    }
-  }
-}
-```
+<GraphQLResponse responsePath="/gql/responses/accountCreateDebitResponse.json" />

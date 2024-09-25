@@ -70,11 +70,41 @@ pub struct BalanceRange {
 }
 
 impl BalanceRange {
-    pub fn new(start: AccountBalance, end: AccountBalance) -> Self {
-        Self {
-            start: start.clone(),
-            diff: start.derive_diff(&end),
-            end,
+    pub fn new(start: Option<AccountBalance>, end: AccountBalance) -> Self {
+        match start {
+            Some(start) => Self {
+                end: end.clone(),
+                diff: end.derive_diff(&start),
+                start,
+            },
+            None => {
+                use chrono::{TimeZone, Utc};
+                let zero_time = Utc.timestamp_opt(0, 0).single().expect("0 timestamp");
+                let zero_entry = EntryId::from(super::UNASSIGNED_ENTRY_ID);
+                let zero_amount = BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id: zero_entry,
+                    modified_at: zero_time,
+                };
+                Self {
+                    diff: end.clone(),
+                    end: end.clone(),
+                    start: AccountBalance {
+                        balance_type: end.balance_type,
+                        details: BalanceSnapshot {
+                            version: 0,
+                            created_at: zero_time,
+                            modified_at: zero_time,
+                            entry_id: zero_entry,
+                            settled: zero_amount.clone(),
+                            pending: zero_amount.clone(),
+                            encumbrance: zero_amount,
+                            ..end.details
+                        },
+                    },
+                }
+            }
         }
     }
 }

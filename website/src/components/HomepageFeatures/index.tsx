@@ -50,8 +50,8 @@ const FeatureList: FeatureItem[] = [
     image: require("@site/static/img/Cala-icons_embeds.png").default,
     description: (
       <>
-        Cala is fully embeddable, allowing it to seamlessly integrate into any
-        software, enhancing your existing systems.
+        Cala is fully embeddable, capable of being used as a library not
+        requiring its own runtime.
       </>
     ),
     link: "https://docs.rs/cala-ledger/latest/cala_ledger/",
@@ -61,7 +61,8 @@ const FeatureList: FeatureItem[] = [
     image: require("@site/static/img/Cala-icons_cloud-or-own.png").default,
     description: (
       <>
-        Can serve you in the cloud, on your own server or locally as you need.
+        Can serve as a standalone application in the cloud, on your own server,
+        or locally as you need.
       </>
     ),
     link: "https://github.com/GaloyMoney/cala?tab=readme-ov-file#cala",
@@ -93,11 +94,7 @@ function Feature({ title, image, description, link }: FeatureItem) {
             {title}
           </a>
         </Heading>
-        <p>
-          <a href={link} className="noUnderline">
-            {description}
-          </a>
-        </p>
+        <p>{description}</p>
       </div>
     </div>
   );

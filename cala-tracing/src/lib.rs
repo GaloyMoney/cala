@@ -1,11 +1,11 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
-use opentelemetry::{global, KeyValue};
+use opentelemetry::{trace::TracerProvider, KeyValue};
 use opentelemetry_sdk::{
-    propagation::TraceContextPropagator,
-    resource::{EnvResourceDetector, OsResourceDetector, ProcessResourceDetector},
-    trace, Resource,
+    resource::{EnvResourceDetector, SdkProvidedResourceDetector},
+    trace::Config,
+    Resource,
 };
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_NAMESPACE};
 use serde::{Deserialize, Serialize};
@@ -29,13 +29,13 @@ impl Default for TracingConfig {
 }
 
 pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
-    global::set_text_map_propagator(TraceContextPropagator::new());
-    let tracer = opentelemetry_otlp::new_pipeline()
+    let provider = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(opentelemetry_otlp::new_exporter().tonic())
-        .with_trace_config(trace::config().with_resource(telemetry_resource(&config)))
+        .with_trace_config(Config::default().with_resource(telemetry_resource(&config)))
         .install_batch(opentelemetry_sdk::runtime::Tokio)?;
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+    let telemetry =
+        tracing_opentelemetry::layer().with_tracer(provider.tracer(config.service_name));
 
     let fmt_layer = fmt::layer().json();
     let filter_layer = EnvFilter::try_from_default_env()
@@ -45,7 +45,7 @@ pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
         .with(filter_layer)
         .with(fmt_layer)
         .with(telemetry)
-        .try_init()?;
+        .init();
 
     Ok(())
 }
@@ -55,8 +55,7 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
         Duration::from_secs(3),
         vec![
             Box::new(EnvResourceDetector::new()),
-            Box::new(OsResourceDetector),
-            Box::new(ProcessResourceDetector),
+            Box::new(SdkProvidedResourceDetector),
         ],
     )
     .merge(&Resource::new(vec![
@@ -66,32 +65,21 @@ fn telemetry_resource(config: &TracingConfig) -> Resource {
 }
 
 pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display) {
-    Span::current().record("error", &tracing::field::display("true"));
-    Span::current().record("error.level", &tracing::field::display(level));
-    Span::current().record("error.message", &tracing::field::display(error));
+    Span::current().record("error", tracing::field::display("true"));
+    Span::current().record("error.level", tracing::field::display(level));
+    Span::current().record("error.message", tracing::field::display(error));
 }
 
 #[cfg(feature = "http")]
 pub mod http {
     pub fn extract_tracing(headers: &axum_extra::headers::HeaderMap) {
+        use opentelemetry::propagation::text_map_propagator::TextMapPropagator;
         use opentelemetry_http::HeaderExtractor;
+        use opentelemetry_sdk::propagation::TraceContextPropagator;
         use tracing_opentelemetry::OpenTelemetrySpanExt;
-        // http in opentelemetry_http is not on the same version as in axum_extra
-        // Change this when opentelemetry_http has http >= v1.x
-        let mut map = http::HeaderMap::new();
-        for (key, value) in headers.iter() {
-            if let Ok(key) = http::HeaderName::from_bytes(key.as_str().as_bytes()) {
-                if let Ok(s) = value.to_str() {
-                    if let Ok(v) = http::HeaderValue::from_str(s) {
-                        map.insert(key, v);
-                    }
-                }
-            }
-        }
-        let extractor = HeaderExtractor(&map);
-        let ctx = opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.extract(&extractor)
-        });
+        let extractor = HeaderExtractor(headers);
+        let propagator = TraceContextPropagator::new();
+        let ctx = propagator.extract(&extractor);
         tracing::Span::current().set_parent(ctx)
     }
 }

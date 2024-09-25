@@ -13,6 +13,8 @@ use crate::{
 
 use super::{cursor::*, entity::*, error::*, AccountSetByNameCursor};
 
+const ADDVISORY_LOCK_ID: i64 = 123456;
+
 #[derive(Debug, Clone)]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
@@ -47,7 +49,7 @@ impl AccountSetRepo {
         &self,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
         self.list_children_in_executor(&self.pool, id, args).await
     }
@@ -57,7 +59,7 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
         self.list_children_in_executor(&mut **db, id, args).await
     }
@@ -67,8 +69,9 @@ impl AccountSetRepo {
         executor: impl Executor<'_, Database = Postgres>,
         id: AccountSetId,
         args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMemberId, AccountSetMemberCursor>, AccountSetError>
+    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
     {
+        let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
             WITH member_accounts AS (
@@ -82,8 +85,8 @@ impl AccountSetRepo {
                 transitive IS FALSE
                 AND account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
             ), member_sets AS (
               SELECT
                 member_account_set_id AS member_id,
@@ -94,17 +97,19 @@ impl AccountSetRepo {
               WHERE
                 account_set_id = $1
                 AND (created_at < $2 OR $2 IS NULL)
-                ORDER BY created_at DESC
-                LIMIT $3
+              ORDER BY created_at DESC
+              LIMIT $3
+            ), all_members AS (
+              SELECT * FROM member_accounts
+              UNION ALL
+              SELECT * FROM member_sets
             )
-            SELECT * FROM member_accounts
-            UNION ALL
-            SELECT * FROM member_sets
+            SELECT * FROM all_members
             ORDER BY created_at DESC
             LIMIT $3
           "#,
             id as AccountSetId,
-            args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>,
+            after,
             args.first as i64 + 1,
         )
         .fetch_all(executor)
@@ -116,21 +121,27 @@ impl AccountSetRepo {
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
-        let ids = rows
+
+        let account_set_members = rows
             .into_iter()
             .take(args.first)
-            .map(|row| {
-                if let Some(member_account_id) = row.member_account_id {
-                    AccountSetMemberId::Account(AccountId::from(member_account_id))
-                } else if let Some(member_account_set_id) = row.member_account_set_id {
-                    AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id))
-                } else {
-                    unreachable!()
-                }
-            })
-            .collect::<Vec<_>>();
+            .map(
+                |row| match (row.member_account_id, row.member_account_set_id) {
+                    (Some(member_account_id), _) => AccountSetMember::from((
+                        AccountSetMemberId::Account(AccountId::from(member_account_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    (_, Some(member_account_set_id)) => AccountSetMember::from((
+                        AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
+                        row.created_at.expect("created at should always be present"),
+                    )),
+                    _ => unreachable!(),
+                },
+            )
+            .collect::<Vec<AccountSetMember>>();
+
         Ok(query::PaginatedQueryRet {
-            entities: ids,
+            entities: account_set_members,
             has_next_page,
             end_cursor,
         })
@@ -142,6 +153,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -157,13 +171,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           non_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
@@ -207,6 +214,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
@@ -223,13 +233,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           deletions as (
             DELETE FROM cala_account_set_member_accounts
@@ -269,6 +272,9 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
+            .execute(&mut **db)
+            .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
@@ -284,13 +290,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           set_insert AS (
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
@@ -343,7 +342,11 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        let rows = sqlx::query!(r#"
+        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
+            .execute(&mut **db)
+            .await?;
+        let rows = sqlx::query!(
+            r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
             FROM cala_account_set_member_account_sets m
@@ -358,13 +361,6 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
                 AND p.data_source_id = m.data_source_id
-          ),
-          locked_sets AS (
-            SELECT 1
-            FROM cala_account_sets
-            WHERE (id IN (SELECT account_set_id FROM parents
-                          UNION ALL SELECT account_set_id FROM (VALUES ($1), ($2)) AS t(account_set_id)))
-            FOR UPDATE
           ),
           member_accounts_deletion AS (
             DELETE FROM cala_account_set_member_accounts

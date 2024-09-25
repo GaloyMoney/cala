@@ -9,7 +9,7 @@ use self::config::{Config, EnvOverride};
 use crate::{extension::*, job::JobRegistry};
 
 #[derive(Parser)]
-#[clap(long_about = None)]
+#[clap(version, long_about = None)]
 struct Cli {
     #[clap(short, long, env = "CALA_CONFIG", value_name = "FILE")]
     config: Option<PathBuf>,

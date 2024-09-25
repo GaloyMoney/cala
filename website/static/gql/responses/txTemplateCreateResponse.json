@@ -1,0 +1,14 @@
+{
+  "data": {
+    "depositTemplate": {
+      "txTemplate": {
+        "txTemplateId": "c3c581f2-bab6-4e25-a65b-2febb0262f56"
+      }
+    },
+    "withdrawalTemplate": {
+      "txTemplate": {
+        "txTemplateId": "eb0d7533-8c6d-45d4-b7a6-96b11b62d5c3"
+      }
+    }
+  }
+}
