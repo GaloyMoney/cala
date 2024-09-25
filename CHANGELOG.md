@@ -1,3 +1,27 @@
+# [cala release v0.2.44](https://github.com/GaloyMoney/cala/releases/tag/0.2.44)
+
+
+### Documentation
+
+- Improve descriptions, make them not clickable (#210)
+- Api reference and website examples update to a6eb83982dea4402fb2206d55e12080d85cd79c1
+
+### Miscellaneous Tasks
+
+- Bump flake
+- Bump micromatch from 4.0.5 to 4.0.8 in /website (#215)
+- Bump body-parser and express in /website (#219)
+- Bump webpack from 5.91.0 to 5.94.0 in /website (#220)
+- Bump anyhow from 1.0.86 to 1.0.89 (#222)
+- Bump axum from 0.7.5 to 0.7.6 (#221)
+- Bump tonic-health from 0.12.1 to 0.12.2 (#209)
+- Bump napi from 2.16.9 to 2.16.11 (#213)
+- Bump clap from 4.5.16 to 4.5.18 (#212)
+- Bump derive_builder from 0.20.0 to 0.20.1 (#207)
+- Bump prost from 0.13.1 to 0.13.3 (#214)
+- Bump tonic-build from 0.12.1 to 0.12.2 (#205)
+- Bump tokio-stream from 0.1.15 to 0.1.16 (#206)
+
 # [cala release v0.2.43](https://github.com/GaloyMoney/cala/releases/tag/0.2.43)
 
 
