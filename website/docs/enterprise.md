@@ -4,7 +4,19 @@ title: Enterprise Solutions
 slug: /enterprise
 ---
 
-![The Open Source Core Banking Ledger - Core Ledger, API, Extensions, Integrations](/img/enterprise-integrations-banner.png)
+<div class="container padding-horiz--md">
+  <div class="row vert-p">
+    <div class="col col--4 padding-horiz--md vert-p">
+      <h2>
+        The open source core banking ledger
+      </h2>
+      <p>Cala is an extensible accounting ledger designed for building modern banking applications at enterprise scale.</p>
+    </div>
+    <div class="col col--8">
+      <img src="img/enterprise-banner.webp"/>
+    </div>
+  </div>
+</div>
 
 ## Empower Your Business with Scalable Payment Infrastructure
 
