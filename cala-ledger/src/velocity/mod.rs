@@ -83,7 +83,7 @@ impl Velocities {
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<(), VelocityError> {
-        self.controls
+        self.limits
             .add_limit_to_control(op.tx(), control, limit)
             .await
     }
