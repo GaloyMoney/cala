@@ -244,6 +244,16 @@ CREATE TABLE cala_velocity_control_limits (
   FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
 );
 
+CREATE TABLE cala_velocity_account_controls (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  account_id UUID NOT NULL,
+  velocity_control_id UUID NOT NULL,
+  values JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
+  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id)
+);
+
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,

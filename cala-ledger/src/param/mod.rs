@@ -8,7 +8,7 @@ pub use cala_types::param::*;
 
 use error::*;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Params {
     values: HashMap<String, CelValue>,
 }
@@ -45,10 +45,6 @@ impl Params {
                 }
             }
             ctx.add_variable("params", cel_map);
-        }
-
-        if !self.values.is_empty() {
-            return Err(ParamError::TooManyParameters);
         }
 
         Ok(ctx)

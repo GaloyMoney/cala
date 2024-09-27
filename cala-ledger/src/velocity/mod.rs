@@ -1,3 +1,4 @@
+mod account_control;
 mod control;
 pub mod error;
 mod limit;
@@ -7,6 +8,7 @@ use sqlx::PgPool;
 pub use crate::param::Params;
 use crate::{atomic_operation::*, outbox::*, primitives::AccountId};
 
+use account_control::*;
 pub use control::*;
 use error::*;
 pub use limit::*;
@@ -17,6 +19,7 @@ pub struct Velocities {
     pool: PgPool,
     limits: VelocityLimitRepo,
     controls: VelocityControlRepo,
+    account_controls: AccountControls,
 }
 
 impl Velocities {
@@ -24,6 +27,7 @@ impl Velocities {
         Self {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
+            account_controls: AccountControls::new(pool),
             pool: pool.clone(),
             outbox,
         }
@@ -88,13 +92,30 @@ impl Velocities {
             .await
     }
 
-    pub async fn attach_control_in_op(
+    pub async fn attach_control_to_account(
+        &self,
+        control: VelocityControlId,
+        account_id: AccountId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<(), VelocityError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        self.attach_control_to_account_in_op(&mut op, control, account_id, params)
+            .await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    pub async fn attach_control_to_account_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
         control: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<(), VelocityError> {
+        let limits = self.limits.list_for_control(control).await?;
+        self.account_controls
+            .attach_control_in_op(op, control, account_id, limits, params)
+            .await?;
         Ok(())
     }
 }

@@ -17,15 +17,10 @@ pub struct VelocityEnforcement {
     pub action: VelocityEnforcementAction,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 pub enum VelocityEnforcementAction {
+    #[default]
     Reject,
-}
-
-impl Default for VelocityEnforcementAction {
-    fn default() -> Self {
-        VelocityEnforcementAction::Reject
-    }
 }
 
 impl From<VelocityEnforcementAction> for VelocityEnforcement {
