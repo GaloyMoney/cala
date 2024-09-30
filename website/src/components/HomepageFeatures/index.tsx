@@ -12,7 +12,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: "GraphQL API",
-    image: require("@site/static/img/graphql-api-logo.png").default,
+    image: require("@site/static/img/icon-graphql.png").default,
     description: (
       <>
         Develop applications efficiently with Cala's GraphQL playground,
@@ -24,7 +24,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Double-Entry Accounting",
-    image: require("@site/static/img/double-entry-accounting-logo.png").default,
+    image: require("@site/static/img/icon-double-entry.png").default,
     description: (
       <>
         Every transaction is recorded accurately on both sides of the ledger
@@ -35,7 +35,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Transaction Templates",
-    image: require("@site/static/img/transaction-templates-logo.png").default,
+    image: require("@site/static/img/icon-templates.png").default,
     description: (
       <>
         Create custom transaction templates for your specific use cases. Tailor
@@ -47,7 +47,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Embeddable",
-    image: require("@site/static/img/embeddable-logo.png").default,
+    image: require("@site/static/img/icon-embeds.png").default,
     description: (
       <>
         Cala is fully embeddable, capable of being used as a library not
@@ -58,7 +58,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Run Anywhere",
-    image: require("@site/static/img/run-anywhere-logo.png").default,
+    image: require("@site/static/img/icon-cloud-or-own.png").default,
     description: (
       <>
         Can serve as a standalone application in the cloud, on your own server,
@@ -69,7 +69,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Open Source Core in Rust",
-    image: require("@site/static/img/rust-logo.png").default,
+    image: require("@site/static/img/icon-rust-foss.png").default,
     description: (
       <>
         Join our community to contribute and innovate with transparency and
