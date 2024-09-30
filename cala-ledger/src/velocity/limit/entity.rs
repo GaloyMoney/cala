@@ -24,8 +24,18 @@ impl EntityEvent for VelocityLimitEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct VelocityLimit {
-    _values: VelocityLimitValues,
+    values: VelocityLimitValues,
     pub(super) _events: EntityEvents<VelocityLimitEvent>,
+}
+
+impl VelocityLimit {
+    pub fn id(&self) -> VelocityLimitId {
+        self.values.id
+    }
+
+    pub fn into_values(self) -> VelocityLimitValues {
+        self.values
+    }
 }
 
 impl Entity for VelocityLimit {
@@ -40,7 +50,7 @@ impl TryFrom<EntityEvents<VelocityLimitEvent>> for VelocityLimit {
         for event in events.iter() {
             match event {
                 VelocityLimitEvent::Initialized { values } => {
-                    builder = builder._values(values.clone());
+                    builder = builder.values(values.clone());
                 }
             }
         }
@@ -192,17 +202,17 @@ impl NewBalanceLimitBuilder {
         validate_expression(
             self.layer
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'layer' not set"),
         )?;
         validate_expression(
             self.amount
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'amount' not set"),
         )?;
         validate_expression(
             self.enforcement_direction
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'enforcement_direction' not set"),
         )?;
         Ok(())
     }

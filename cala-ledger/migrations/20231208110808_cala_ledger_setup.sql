@@ -213,6 +213,48 @@ CREATE TABLE cala_velocity_limit_events (
   FOREIGN KEY (data_source_id, id) REFERENCES cala_velocity_limits(data_source_id, id)
 );
 
+CREATE TABLE cala_velocity_controls (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  name VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id)
+);
+CREATE INDEX idx_cala_velocity_controls_name ON cala_velocity_controls (name);
+
+
+CREATE TABLE cala_velocity_control_events (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  id UUID NOT NULL,
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, id, sequence),
+  FOREIGN KEY (data_source_id, id) REFERENCES cala_velocity_controls(data_source_id, id)
+);
+
+CREATE TABLE cala_velocity_control_limits (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  velocity_control_id UUID NOT NULL,
+  velocity_limit_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, velocity_control_id, velocity_limit_id),
+  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id),
+  FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
+);
+
+CREATE TABLE cala_velocity_account_controls (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  account_id UUID NOT NULL,
+  velocity_control_id UUID NOT NULL,
+  values JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, account_id, velocity_control_id),
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
+  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id)
+);
+
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   sequence BIGSERIAL UNIQUE,
