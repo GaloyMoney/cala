@@ -32,6 +32,10 @@ impl VelocityControl {
     pub fn id(&self) -> VelocityControlId {
         self.values.id
     }
+
+    pub fn into_values(self) -> VelocityControlValues {
+        self.values
+    }
 }
 
 impl Entity for VelocityControl {

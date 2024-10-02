@@ -3,6 +3,8 @@ mod control;
 pub mod error;
 mod limit;
 
+use cala_types::{entry::EntryValues, transaction::TransactionValues};
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 pub use crate::param::Params;
@@ -108,14 +110,34 @@ impl Velocities {
     pub async fn attach_control_to_account_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        control: VelocityControlId,
+        control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<(), VelocityError> {
-        let limits = self.limits.list_for_control(control).await?;
+        let control = self.controls.find_by_id(op.tx(), control_id).await?;
+        let limits = self.limits.list_for_control(op.tx(), control_id).await?;
         self.account_controls
-            .attach_control_in_op(op, control, account_id, limits, params)
+            .attach_control_in_op(op, control.into_values(), account_id, limits, params)
             .await?;
+        Ok(())
+    }
+
+    pub(crate) async fn update_balances_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        created_at: DateTime<Utc>,
+        transaction: &TransactionValues,
+        entries: &Vec<EntryValues>,
+        account_ids: &[AccountId],
+    ) -> Result<(), VelocityError> {
+        let controls = self
+            .account_controls
+            .find_for_enforcement(op, account_ids)
+            .await?;
+
+        for control in controls {
+            //
+        }
         Ok(())
     }
 }

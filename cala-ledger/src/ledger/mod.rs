@@ -186,6 +186,16 @@ impl CalaLedger {
             .fetch_mappings(transaction.values().journal_id, &account_ids)
             .await?;
 
+        self.velocities
+            .update_balances_in_op(
+                op,
+                transaction.created_at(),
+                transaction.values(),
+                &entries,
+                &account_ids,
+            )
+            .await?;
+
         self.balances
             .update_balances_in_op(
                 op,

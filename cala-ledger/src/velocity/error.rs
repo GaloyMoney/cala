@@ -2,6 +2,8 @@ use thiserror::Error;
 
 use cel_interpreter::CelError;
 
+use crate::primitives::VelocityControlId;
+
 #[derive(Error, Debug)]
 pub enum VelocityError {
     #[error("VelocityError - Sqlx: {0}")]
@@ -12,4 +14,6 @@ pub enum VelocityError {
     CelError(#[from] CelError),
     #[error("{0}")]
     ParamError(#[from] crate::param::error::ParamError),
+    #[error("VelocityError - Could not find control by id: {0}")]
+    CouldNotFindControlById(VelocityControlId),
 }

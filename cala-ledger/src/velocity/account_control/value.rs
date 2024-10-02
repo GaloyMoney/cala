@@ -5,12 +5,14 @@ use serde::{Deserialize, Serialize};
 use crate::primitives::{
     AccountId, Currency, DebitOrCredit, Layer, VelocityControlId, VelocityLimitId,
 };
-use cala_types::velocity::PartitionKey;
+use cala_types::velocity::{PartitionKey, VelocityEnforcement};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountVelocityControl {
     pub account_id: AccountId,
     pub control_id: VelocityControlId,
+    pub enforcement: VelocityEnforcement,
+    pub condition: Option<CelExpression>,
     pub velocity_limits: Vec<AccountVelocityLimit>,
 }
 

@@ -5,7 +5,7 @@ use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
     outbox::server::error::OutboxServerError, transaction::error::TransactionError,
-    tx_template::error::TxTemplateError,
+    tx_template::error::TxTemplateError, velocity::error::VelocityError,
 };
 
 #[derive(Error, Debug)]
@@ -34,6 +34,8 @@ pub enum LedgerError {
     EntryError(#[from] EntryError),
     #[error("LedgerError - BalanceError: {0}")]
     BalanceError(#[from] BalanceError),
+    #[error("LedgerError - VelocityError: {0}")]
+    VelocityError(#[from] VelocityError),
 }
 
 impl From<sqlx::Error> for LedgerError {

@@ -4,12 +4,14 @@ mod value;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
+use std::collections::HashMap;
+
 use crate::{
     atomic_operation::*,
     param::Params,
-    primitives::{AccountId, DebitOrCredit, Layer, VelocityControlId},
+    primitives::{AccountId, DebitOrCredit, Layer},
 };
-use cala_types::velocity::VelocityLimitValues;
+use cala_types::velocity::{VelocityControlValues, VelocityLimitValues};
 
 use super::error::VelocityError;
 
@@ -33,7 +35,7 @@ impl AccountControls {
     pub async fn attach_control_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        control: VelocityControlId,
+        control: VelocityControlValues,
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
@@ -70,12 +72,22 @@ impl AccountControls {
 
         let control = AccountVelocityControl {
             account_id,
-            control_id: control,
+            control_id: control.id,
+            condition: control.condition,
+            enforcement: control.enforcement,
             velocity_limits,
         };
 
         self.repo.create_in_tx(op.tx(), control).await?;
 
         Ok(())
+    }
+
+    pub async fn find_for_enforcement(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountVelocityControl>>, VelocityError> {
+        self.repo.find_for_enforcement(op.tx(), account_ids).await
     }
 }
