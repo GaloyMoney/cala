@@ -18,7 +18,7 @@ pub struct AccountVelocityControl {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountVelocityLimit {
-    pub velocity_limit_id: VelocityLimitId,
+    pub limit_id: VelocityLimitId,
     pub window: Vec<PartitionKey>,
     pub condition: Option<CelExpression>,
     pub currency: Option<Currency>,
