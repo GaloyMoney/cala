@@ -39,3 +39,7 @@ a.noUnderline, a.noUnderline:hover, a.noUnderline:focus {
   text-decoration: none;
   color: inherit;
 }
+
+.vert-p {
+  padding: 1em 0;
+}
