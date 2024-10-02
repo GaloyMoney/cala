@@ -152,8 +152,8 @@ impl Velocities {
                 };
                 if control_active {
                     for limit in &control.velocity_limits {
-                        if let Some(currenty) = &limit.currency {
-                            if currenty != &entry.currency {
+                        if let Some(currency) = &limit.currency {
+                            if currency != &entry.currency {
                                 continue;
                             }
                         }
@@ -164,6 +164,9 @@ impl Velocities {
                         } else {
                             true
                         };
+                        if limit_active {
+                            // load balance in window
+                        }
                     }
                 }
             }
