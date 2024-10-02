@@ -269,6 +269,22 @@ impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
     }
 }
 
+impl<'a> TryFrom<CelResult<'a>> for bool {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Bool(b) = val {
+            Ok(b)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Bool,
+            ))
+        }
+    }
+}
+
 impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     type Error = ResultCoercionError;
 

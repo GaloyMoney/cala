@@ -57,6 +57,15 @@ impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
     }
 }
 
+impl Into<CelValue> for DebitOrCredit {
+    fn into(self) -> CelValue {
+        match self {
+            DebitOrCredit::Debit => "DEBIT".into(),
+            DebitOrCredit::Credit => "CREDIT".into(),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
@@ -108,6 +117,16 @@ impl Default for Layer {
     }
 }
 
+impl Into<CelValue> for Layer {
+    fn into(self) -> CelValue {
+        match self {
+            Layer::Settled => "SETTLED".into(),
+            Layer::Pending => "PENDING".into(),
+            Layer::Encumbrance => "ENCUMBRANCE".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 #[serde(into = "&str")]
@@ -128,6 +147,12 @@ impl Currency {
 impl std::fmt::Display for Currency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.code())
+    }
+}
+
+impl Into<CelValue> for Currency {
+    fn into(self) -> CelValue {
+        self.code().into()
     }
 }
 

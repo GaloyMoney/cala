@@ -83,8 +83,10 @@ async fn create_control() -> anyhow::Result<()> {
         .add_limit_to_control(control.id(), deposit_limit.id())
         .await?;
 
-    let (one, _) = helpers::test_accounts();
+    let (one, two) = helpers::test_accounts();
     let one = cala.accounts().create(one).await.unwrap();
+    let _ = cala.accounts().create(two).await.unwrap();
+
     let mut params = Params::new();
     params.insert("withdrawal_limit", Decimal::from(100));
     params.insert("deposit_limit", Decimal::from(100));

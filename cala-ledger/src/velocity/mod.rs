@@ -1,11 +1,13 @@
 mod account_control;
+mod context;
 mod control;
 pub mod error;
 mod limit;
 
-use cala_types::{entry::EntryValues, transaction::TransactionValues};
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+
+use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
 use crate::{atomic_operation::*, outbox::*, primitives::AccountId};
@@ -127,7 +129,7 @@ impl Velocities {
         op: &mut AtomicOperation<'_>,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
-        entries: &Vec<EntryValues>,
+        entries: &[EntryValues],
         account_ids: &[AccountId],
     ) -> Result<(), VelocityError> {
         let controls = self
@@ -135,8 +137,36 @@ impl Velocities {
             .find_for_enforcement(op, account_ids)
             .await?;
 
-        for control in controls {
-            //
+        let empty = Vec::new();
+
+        let mut context = context::EvalContext::new(transaction);
+
+        for entry in entries {
+            for control in controls.get(&entry.account_id).unwrap_or(&empty) {
+                let ctx = context.control_context(entry);
+                let control_active = if let Some(condition) = &control.condition {
+                    let control_active: bool = condition.try_evaluate(&ctx)?;
+                    control_active
+                } else {
+                    true
+                };
+                if control_active {
+                    for limit in &control.velocity_limits {
+                        if let Some(currenty) = &limit.currency {
+                            if currenty != &entry.currency {
+                                continue;
+                            }
+                        }
+
+                        let limit_active = if let Some(condition) = &limit.condition {
+                            let limit_active: bool = condition.try_evaluate(&ctx)?;
+                            limit_active
+                        } else {
+                            true
+                        };
+                    }
+                }
+            }
         }
         Ok(())
     }

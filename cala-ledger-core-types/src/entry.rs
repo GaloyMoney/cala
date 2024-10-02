@@ -18,3 +18,21 @@ pub struct EntryValues {
     pub direction: DebitOrCredit,
     pub description: Option<String>,
 }
+
+mod cel {
+    use cel_interpreter::{CelMap, CelValue};
+
+    impl From<&super::EntryValues> for CelValue {
+        fn from(entry: &super::EntryValues) -> Self {
+            let mut map = CelMap::new();
+            map.insert("id", entry.id);
+            map.insert("entry_type", entry.entry_type.clone());
+            map.insert("sequence", CelValue::UInt(entry.sequence as u64));
+            map.insert("layer", entry.layer);
+            map.insert("direction", entry.direction);
+            map.insert("units", entry.units);
+            map.insert("currency", entry.currency);
+            map.into()
+        }
+    }
+}

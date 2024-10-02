@@ -1,4 +1,4 @@
-use cel_interpreter::CelContext;
+pub use cel_interpreter::CelContext;
 
 pub(crate) fn initialize() -> CelContext {
     let mut ctx = CelContext::new();
