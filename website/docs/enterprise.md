@@ -13,7 +13,7 @@ slug: /enterprise
       <p>Cala is an extensible accounting ledger designed for building modern banking applications at enterprise scale.</p>
     </div>
     <div class="col col--8">
-      <img src="img/enterprise-banner.webp"/>
+      <img src="/img/enterprise-banner.webp"/>
     </div>
   </div>
 </div>
@@ -102,7 +102,7 @@ Galoy is backed by leading investors and trusted by global organizations for bui
 
 ## Get Started with Cala
 
-Ready to enhance your payment systems with cutting-edge technology? Email us at [hi@galoy.io](mailto:hi@galoy.io) to schedule a consultation with our team of experts.
+Ready to enhance your payment systems with cutting-edge technology? Email us at [biz@galoy.io](mailto:biz@galoy.io) to schedule a consultation with our team of experts.
 
 ---
 
