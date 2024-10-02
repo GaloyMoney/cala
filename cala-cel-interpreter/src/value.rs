@@ -1,5 +1,5 @@
 use cel_parser::{ast::Literal, Expression};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -25,9 +25,10 @@ pub enum CelValue {
     Bool(bool),
     Null,
 
-    // Addons
+    // Abstract
     Decimal(Decimal),
     Date(NaiveDate),
+    Timestamp(DateTime<Utc>),
     Uuid(Uuid),
 }
 
@@ -226,6 +227,7 @@ impl From<&CelValue> for CelType {
             CelValue::Decimal(_) => CelType::Decimal,
             CelValue::Date(_) => CelType::Date,
             CelValue::Uuid(_) => CelType::Uuid,
+            CelValue::Timestamp(_) => CelType::Timestamp,
         }
     }
 }

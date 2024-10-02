@@ -11,8 +11,9 @@ pub enum CelType {
     Bool,
     Null,
 
-    // Addons
+    // Abstract
     Date,
+    Timestamp,
     Uuid,
     Decimal,
 }
