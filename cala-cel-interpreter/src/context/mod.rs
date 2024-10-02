@@ -1,19 +1,19 @@
 mod decimal;
 
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::{builtins, error::*, value::*};
 
-const SELF_PACKAGE_NAME: &str = "self";
+const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
 
 type CelFunction = Box<dyn Fn(Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 #[derive(Debug)]
 pub struct CelContext {
-    idents: HashMap<String, ContextItem>,
+    idents: HashMap<Cow<'static, str>, ContextItem>,
 }
 
 impl CelContext {
-    pub fn add_variable(&mut self, name: impl Into<String>, value: impl Into<CelValue>) {
+    pub fn add_variable(&mut self, name: impl Into<Cow<'static, str>>, value: impl Into<CelValue>) {
         self.idents
             .insert(name.into(), ContextItem::Value(value.into()));
     }
@@ -21,22 +21,22 @@ impl CelContext {
     pub fn new() -> Self {
         let mut idents = HashMap::new();
         idents.insert(
-            "date".to_string(),
+            Cow::Borrowed("date"),
             ContextItem::Function(Box::new(builtins::date)),
         );
         idents.insert(
-            "uuid".to_string(),
+            Cow::Borrowed("uuid"),
             ContextItem::Function(Box::new(builtins::uuid)),
         );
         idents.insert(
-            "decimal".to_string(),
+            Cow::Borrowed("decimal"),
             ContextItem::Package(&decimal::CEL_CONTEXT),
         );
         Self { idents }
     }
 
     pub(crate) fn package_self(&self) -> Result<&ContextItem, CelError> {
-        self.lookup(SELF_PACKAGE_NAME)
+        self.lookup(&SELF_PACKAGE_NAME)
     }
 
     pub(crate) fn lookup(&self, name: &str) -> Result<&ContextItem, CelError> {
