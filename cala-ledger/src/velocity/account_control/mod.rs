@@ -16,7 +16,7 @@ use cala_types::velocity::{VelocityControlValues, VelocityLimitValues};
 use super::error::VelocityError;
 
 use repo::*;
-use value::*;
+pub(super) use value::*;
 
 #[derive(Clone)]
 pub struct AccountControls {

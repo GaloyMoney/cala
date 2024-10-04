@@ -14,6 +14,7 @@ pub use crate::param::Params;
 use crate::{atomic_operation::*, outbox::*, primitives::AccountId};
 
 use account_control::*;
+use balance::*;
 pub use control::*;
 use error::*;
 pub use limit::*;
@@ -25,6 +26,7 @@ pub struct Velocities {
     limits: VelocityLimitRepo,
     controls: VelocityControlRepo,
     account_controls: AccountControls,
+    balances: VelocityBalances,
 }
 
 impl Velocities {
@@ -33,6 +35,7 @@ impl Velocities {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
             account_controls: AccountControls::new(pool),
+            balances: VelocityBalances::new(pool),
             pool: pool.clone(),
             outbox,
         }
@@ -138,89 +141,8 @@ impl Velocities {
             .find_for_enforcement(op, account_ids)
             .await?;
 
-        let empty = Vec::new();
-
-        let mut context = context::EvalContext::new(transaction);
-
-        let mut balances_to_load = Vec::new();
-        for entry in entries {
-            for control in controls.get(&entry.account_id).unwrap_or(&empty) {
-                let ctx = context.control_context(entry);
-                let control_active = if let Some(condition) = &control.condition {
-                    let control_active: bool = condition.try_evaluate(&ctx)?;
-                    control_active
-                } else {
-                    true
-                };
-                if control_active {
-                    for limit in &control.velocity_limits {
-                        if let Some(currency) = &limit.currency {
-                            if currency != &entry.currency {
-                                continue;
-                            }
-                        }
-
-                        let limit_active = if let Some(condition) = &limit.condition {
-                            let limit_active: bool = condition.try_evaluate(&ctx)?;
-                            limit_active
-                        } else {
-                            true
-                        };
-                        if limit_active {
-                            let window = determin_window(&limit.window, &ctx);
-                            balances_to_load.push((
-                                entry.account_id,
-                                control.control_id,
-                                limit.limit_id,
-                                window,
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-fn determin_window(
-    keys: &[PartitionKey],
-    ctx: &cel_interpreter::CelContext,
-) -> Result<serde_json::Value, VelocityError> {
-    let mut map = serde_json::Map::new();
-    for key in keys {
-        let value: serde_json::Value = key.value.try_evaluate(ctx)?;
-        map.insert(key.alias.clone(), value);
-    }
-    Ok(map.into())
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn window_determination() {
-        use super::*;
-        use cala_types::velocity::PartitionKey;
-        use cel_interpreter::CelContext;
-        use serde_json::json;
-
-        let keys = vec![
-            PartitionKey {
-                alias: "foo".to_string(),
-                value: "'bar'".parse().expect("Failed to parse"),
-            },
-            PartitionKey {
-                alias: "baz".to_string(),
-                value: "'qux'".parse().expect("Failed to parse"),
-            },
-        ];
-
-        let ctx = CelContext::new();
-        let result = determin_window(&keys, &ctx).unwrap();
-        let expected = json!({
-            "foo": "bar",
-            "baz": "qux",
-        });
-        assert_eq!(expected, result);
+        self.balances
+            .update_balances_in_op(op, created_at, transaction, entries, controls)
+            .await
     }
 }
