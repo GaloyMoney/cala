@@ -1,27 +1,21 @@
 mod repo;
 
 use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
 use sqlx::PgPool;
 
 use std::collections::HashMap;
 
 use cala_types::{
-    balance::BalanceSnapshot,
     entry::EntryValues,
     transaction::TransactionValues,
     velocity::{PartitionKey, Window},
 };
 
-use crate::{
-    atomic_operation::*,
-    outbox::*,
-    primitives::{AccountId, Currency, VelocityControlId, VelocityLimitId},
-};
+use crate::{atomic_operation::*, primitives::AccountId};
 
-use super::{account_control::AccountVelocityControl, error::*};
+use super::{account_control::*, error::*};
 
-use repo::VelocityBalanceRepo;
+use repo::*;
 
 #[derive(Clone)]
 pub(super) struct VelocityBalances {
@@ -47,7 +41,10 @@ impl VelocityBalances {
 
         let mut context = super::context::EvalContext::new(transaction);
 
-        let mut balances_to_load = Vec::new();
+        let mut entries_to_add: HashMap<
+            VelocityBalanceKey,
+            Vec<(&AccountVelocityLimit, &EntryValues)>,
+        > = HashMap::new();
         for entry in entries {
             for control in controls.get(&entry.account_id).unwrap_or(&empty) {
                 let ctx = context.control_context(entry);
@@ -72,25 +69,38 @@ impl VelocityBalances {
                             true
                         };
                         if limit_active {
-                            let window = determin_window(&limit.window, &ctx);
-                            balances_to_load.push((
-                                entry.journal_id,
-                                entry.account_id,
-                                entry.currency,
-                                control.control_id,
-                                limit.limit_id,
-                                window,
-                            ));
+                            let window = determine_window(&limit.window, &ctx)?;
+                            entries_to_add
+                                .entry((
+                                    window,
+                                    entry.currency,
+                                    entry.journal_id,
+                                    entry.account_id,
+                                    control.control_id,
+                                    limit.limit_id,
+                                ))
+                                .or_default()
+                                .push((limit, entry));
                         }
                     }
                 }
             }
         }
+
+        if entries_to_add.is_empty() {
+            return Ok(());
+        }
+
+        let _current_balances = self
+            .repo
+            .find_for_update(op.tx(), entries_to_add.keys())
+            .await?;
+
         Ok(())
     }
 }
 
-fn determin_window(
+fn determine_window(
     keys: &[PartitionKey],
     ctx: &cel_interpreter::CelContext,
 ) -> Result<Window, VelocityError> {
@@ -123,7 +133,7 @@ mod test {
         ];
 
         let ctx = CelContext::new();
-        let result = determin_window(&keys, &ctx).unwrap();
+        let result = determine_window(&keys, &ctx).unwrap();
         let expected = json!({
             "foo": "bar",
             "baz": "qux",

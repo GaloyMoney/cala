@@ -5,12 +5,14 @@ use crate::primitives::VelocityControlId;
 
 #[derive(Debug, Clone)]
 pub struct VelocityLimitRepo {
-    pool: PgPool,
+    _pool: PgPool,
 }
 
 impl VelocityLimitRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+        Self {
+            _pool: pool.clone(),
+        }
     }
 
     pub async fn create_in_tx(

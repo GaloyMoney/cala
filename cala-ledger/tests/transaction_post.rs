@@ -1,9 +1,9 @@
 mod helpers;
 
+use rand::distributions::{Alphanumeric, DistString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{tx_template::*, *};
-use rand::distributions::{Alphanumeric, DistString};
 
 #[tokio::test]
 async fn transaction_post() -> anyhow::Result<()> {
