@@ -123,7 +123,14 @@ impl Velocities {
         let control = self.controls.find_by_id(op.tx(), control_id).await?;
         let limits = self.limits.list_for_control(op.tx(), control_id).await?;
         self.account_controls
-            .attach_control_in_op(op, control.into_values(), account_id, limits, params)
+            .attach_control_in_op(
+                op,
+                control.created_at(),
+                control.into_values(),
+                account_id,
+                limits,
+                params,
+            )
             .await?;
         Ok(())
     }

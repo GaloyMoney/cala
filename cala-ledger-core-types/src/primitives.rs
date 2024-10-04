@@ -57,9 +57,9 @@ impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
     }
 }
 
-impl Into<CelValue> for DebitOrCredit {
-    fn into(self) -> CelValue {
-        match self {
+impl From<DebitOrCredit> for CelValue {
+    fn from(v: DebitOrCredit) -> Self {
+        match v {
             DebitOrCredit::Debit => "DEBIT".into(),
             DebitOrCredit::Credit => "CREDIT".into(),
         }
@@ -117,9 +117,9 @@ impl Default for Layer {
     }
 }
 
-impl Into<CelValue> for Layer {
-    fn into(self) -> CelValue {
-        match self {
+impl From<Layer> for CelValue {
+    fn from(l: Layer) -> Self {
+        match l {
             Layer::Settled => "SETTLED".into(),
             Layer::Pending => "PENDING".into(),
             Layer::Encumbrance => "ENCUMBRANCE".into(),
@@ -150,9 +150,9 @@ impl std::fmt::Display for Currency {
     }
 }
 
-impl Into<CelValue> for Currency {
-    fn into(self) -> CelValue {
-        self.code().into()
+impl From<Currency> for CelValue {
+    fn from(c: Currency) -> Self {
+        c.code().into()
     }
 }
 

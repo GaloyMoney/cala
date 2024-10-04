@@ -303,6 +303,22 @@ impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     }
 }
 
+impl<'a> TryFrom<CelResult<'a>> for DateTime<Utc> {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Timestamp(d) = val {
+            Ok(d)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Timestamp,
+            ))
+        }
+    }
+}
+
 impl<'a> TryFrom<CelResult<'a>> for Uuid {
     type Error = ResultCoercionError;
 

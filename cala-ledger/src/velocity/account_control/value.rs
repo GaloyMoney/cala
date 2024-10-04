@@ -1,4 +1,5 @@
 use cel_interpreter::CelExpression;
+use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -71,4 +72,6 @@ pub struct AccountBalanceLimit {
     pub layer: Layer,
     pub amount: Decimal,
     pub enforcement_direction: DebitOrCredit,
+    pub start: DateTime<Utc>,
+    pub end: Option<DateTime<Utc>>,
 }
