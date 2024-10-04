@@ -42,7 +42,6 @@ impl VelocityBalanceRepo {
         query_builder.push_values(
             keys,
             |mut builder, (window, currency, journal_id, account_id, control_id, limit_id)| {
-                dbg!(window);
                 builder.push_bind(window);
                 builder.push_bind(currency.code());
                 builder.push_bind(journal_id);
@@ -81,7 +80,6 @@ impl VelocityBalanceRepo {
               AND b.latest_version = h.version
         "#
         );
-        dbg!(query_builder.sql());
         let query = query_builder.build();
         let rows = query.fetch_all(&mut **db).await?;
 

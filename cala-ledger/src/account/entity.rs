@@ -246,7 +246,7 @@ impl From<(AccountValues, Vec<String>)> for AccountUpdate {
 }
 
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
-#[derive(Builder, Debug)]
+#[derive(Builder, Debug, Clone)]
 pub struct NewAccount {
     #[builder(setter(into))]
     pub id: AccountId,
@@ -275,27 +275,27 @@ impl NewAccount {
         NewAccountBuilder::default()
     }
 
+    pub(super) fn into_values(self) -> AccountValues {
+        AccountValues {
+            id: self.id,
+            version: 1,
+            code: self.code,
+            name: self.name,
+            external_id: self.external_id,
+            normal_balance_type: self.normal_balance_type,
+            status: self.status,
+            description: self.description,
+            metadata: self.metadata,
+            config: AccountConfig {
+                is_account_set: self.is_account_set,
+                eventually_consistent: false,
+            },
+        }
+    }
+
     pub(super) fn initial_events(self) -> EntityEvents<AccountEvent> {
-        EntityEvents::init(
-            self.id,
-            [AccountEvent::Initialized {
-                values: AccountValues {
-                    id: self.id,
-                    version: 1,
-                    code: self.code,
-                    name: self.name,
-                    external_id: self.external_id,
-                    normal_balance_type: self.normal_balance_type,
-                    status: self.status,
-                    description: self.description,
-                    metadata: self.metadata,
-                    config: AccountConfig {
-                        is_account_set: self.is_account_set,
-                        eventually_consistent: false,
-                    },
-                },
-            }],
-        )
+        let values = self.into_values();
+        EntityEvents::init(values.id, [AccountEvent::Initialized { values }])
     }
 }
 

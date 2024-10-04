@@ -10,6 +10,7 @@ CREATE TABLE cala_accounts (
   external_id VARCHAR,
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
+  latest_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   UNIQUE(data_source_id, code)

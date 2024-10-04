@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
+    balance::BalanceSnapshot,
     entry::EntryValues,
     transaction::TransactionValues,
     velocity::{PartitionKey, Window},
@@ -32,7 +33,7 @@ impl VelocityBalances {
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        _created_at: DateTime<Utc>,
+        created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
         controls: HashMap<AccountId, Vec<AccountVelocityControl>>,
@@ -91,12 +92,53 @@ impl VelocityBalances {
             return Ok(());
         }
 
-        let _current_balances = self
+        let current_balances = self
             .repo
             .find_for_update(op.tx(), entries_to_add.keys())
             .await?;
 
+        let _new_balances = Self::new_snapshots(created_at, current_balances, &entries_to_add)?;
         Ok(())
+    }
+
+    fn new_snapshots<'a>(
+        time: DateTime<Utc>,
+        mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
+        entries_to_add: &'a HashMap<VelocityBalanceKey, Vec<(&AccountVelocityLimit, &EntryValues)>>,
+    ) -> Result<HashMap<&'a VelocityBalanceKey, Vec<BalanceSnapshot>>, VelocityEnforcementError>
+    {
+        let mut res = HashMap::new();
+
+        for (key, entries) in entries_to_add.iter() {
+            let mut latest_balance: Option<BalanceSnapshot> = None;
+            let mut new_balances = Vec::new();
+
+            for (limit, entry) in entries {
+                let balance = match (latest_balance.take(), current_balances.remove(key)) {
+                    (Some(latest), _) => {
+                        new_balances.push(latest.clone());
+                        latest
+                    }
+                    (_, Some(Some(balance))) => balance,
+                    (_, Some(None)) => {
+                        let new_snapshot =
+                            crate::balance::Balances::new_snapshot(time, entry.account_id, entry);
+                        limit.enforce(&new_snapshot)?;
+                        latest_balance = Some(new_snapshot);
+                        continue;
+                    }
+                    _ => unreachable!(),
+                };
+                let new_snapshot = crate::balance::Balances::update_snapshot(time, balance, entry);
+                limit.enforce(&new_snapshot)?;
+                new_balances.push(new_snapshot);
+            }
+            if let Some(latest) = latest_balance.take() {
+                new_balances.push(latest)
+            }
+            res.insert(key, new_balances);
+        }
+        Ok(res)
     }
 }
 

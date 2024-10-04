@@ -16,4 +16,12 @@ pub enum VelocityError {
     ParamError(#[from] crate::param::error::ParamError),
     #[error("VelocityError - Could not find control by id: {0}")]
     CouldNotFindControlById(VelocityControlId),
+    #[error("VelocityError - VelocityEnforcement: {0}")]
+    Enforcement(#[from] VelocityEnforcementError),
+}
+
+#[derive(Error, Debug)]
+pub enum VelocityEnforcementError {
+    #[error("VelocityEnforcement - LimitExceeded")]
+    LimitExceeded,
 }

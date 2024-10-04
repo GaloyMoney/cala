@@ -2,7 +2,7 @@ use rust_decimal::Decimal;
 
 use crate::{balance::BalanceSnapshot, primitives::*};
 
-#[derive(Debug, sqlx::Type, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, sqlx::Type, PartialEq, Eq, Hash)]
 #[sqlx(transparent)]
 pub struct Window(serde_json::Value);
 

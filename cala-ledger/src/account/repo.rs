@@ -26,14 +26,15 @@ impl AccountRepo {
     ) -> Result<Account, AccountError> {
         let id = new_account.id;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type, eventually_consistent)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
+            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type, eventually_consistent, latest_values)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             id as AccountId,
             new_account.code,
             new_account.name,
             new_account.external_id,
             new_account.normal_balance_type as DebitOrCredit,
-            new_account.eventually_consistent
+            new_account.eventually_consistent,
+            serde_json::to_value(&new_account.clone().into_values()).expect("Failed to serialize account values"),
         )
         .execute(&mut **db)
         .await?;
@@ -50,13 +51,14 @@ impl AccountRepo {
     ) -> Result<(), AccountError> {
         sqlx::query!(
             r#"UPDATE cala_accounts
-            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5
+            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5, latest_values = $6
             WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'"#,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
             account.values().normal_balance_type as DebitOrCredit,
+            serde_json::to_value(account.values()).expect("Failed to serialize account values"),
         )
         .execute(&mut **db)
         .await?;

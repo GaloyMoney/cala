@@ -159,8 +159,8 @@ impl Balances {
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
         let mut new_balances = Vec::new();
+        let empty = Vec::new();
         for entry in entries.iter() {
-            let empty = Vec::new();
             for account_id in mappings
                 .get(&entry.account_id)
                 .unwrap_or(&empty)
@@ -198,7 +198,7 @@ impl Balances {
         new_balances
     }
 
-    fn new_snapshot(
+    pub(crate) fn new_snapshot(
         time: DateTime<Utc>,
         account_id: AccountId,
         entry: &EntryValues,
@@ -237,7 +237,7 @@ impl Balances {
         )
     }
 
-    fn update_snapshot(
+    pub(crate) fn update_snapshot(
         time: DateTime<Utc>,
         mut snapshot: BalanceSnapshot,
         entry: &EntryValues,
