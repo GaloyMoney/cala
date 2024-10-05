@@ -100,7 +100,7 @@ async fn balances() -> anyhow::Result<()> {
     let recipient_account = cala.accounts().create(receiver).await.unwrap();
 
     let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
-    let new_template = helpers::test_template(&tx_code);
+    let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 
     let before_account_set = NewAccountSet::builder()

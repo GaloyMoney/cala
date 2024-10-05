@@ -1,4 +1,4 @@
-use cel_interpreter::CelExpression;
+use cel_interpreter::{CelContext, CelExpression};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use cala_types::{
 
 use crate::{
     primitives::{AccountId, Currency, DebitOrCredit, Layer, VelocityControlId, VelocityLimitId},
-    velocity::error::VelocityEnforcementError,
+    velocity::error::*,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -32,31 +32,48 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
-    pub fn enforce(&self, _balance: &BalanceSnapshot) -> Result<(), VelocityEnforcementError> {
-        // return Err(VelocityEnforcementError::LimitExceeded);
-        // let mut spent = Decimal::ZERO;
-        // let mut remaining = Decimal::ZERO;
-        // for limit in &self.limit.balance {
-        //     let layer = limit.layer;
-        //     let amount = limit.amount;
-        //     let enforcement_direction = limit.enforcement_direction;
-        //     let balance = balance.get(layer).unwrap_or(&Decimal::ZERO);
-        //     match enforcement_direction {
-        //         DebitOrCredit::Debit => {
-        //             spent += balance;
-        //             remaining += amount - balance;
-        //         }
-        //         DebitOrCredit::Credit => {
-        //             spent += amount - balance;
-        //             remaining += balance;
-        //         }
-        //     }
-        // }
-        // if spent > Decimal::ZERO {
-        //     if spent > self.limit.balance.iter().map(|l| l.amount).sum() {
-        //         return Err(VelocityError::LimitExceeded);
-        //     }
-        // }
+    pub fn enforce(
+        &self,
+        ctx: &CelContext,
+        time: DateTime<Utc>,
+        snapshot: &BalanceSnapshot,
+    ) -> Result<(), VelocityError> {
+        if let Some(currency) = &self.currency {
+            if currency != &snapshot.currency {
+                return Ok(());
+            }
+        }
+        let time = if let Some(source) = &self.limit.timestamp_source {
+            source.try_evaluate(ctx)?
+        } else {
+            time
+        };
+        for limit in self.limit.balance.iter() {
+            if limit.start > time {
+                continue;
+            }
+            if let Some(end) = limit.end {
+                if end <= time {
+                    continue;
+                }
+            }
+            let balance =
+                crate::balance::BalanceWithDirection::new(limit.enforcement_direction, snapshot);
+            let requested = balance.available(limit.layer);
+
+            if requested > limit.amount {
+                return Err(LimitExceededError {
+                    account_id: snapshot.account_id,
+                    currency: snapshot.currency.code().to_string(),
+                    limit_id: self.limit_id,
+                    layer: limit.layer,
+                    limit: limit.amount,
+                    requested,
+                }
+                .into());
+            }
+        }
+
         Ok(())
     }
 }

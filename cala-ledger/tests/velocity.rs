@@ -92,14 +92,15 @@ async fn create_control() -> anyhow::Result<()> {
     let recipient_account = cala.accounts().create(receiver).await.unwrap();
 
     let mut params = Params::new();
-    params.insert("withdrawal_limit", Decimal::from(100));
-    params.insert("deposit_limit", Decimal::from(100));
+    let limit = Decimal::ONE_HUNDRED;
+    params.insert("withdrawal_limit", limit);
+    params.insert("deposit_limit", limit);
     velocity
         .attach_control_to_account(control.id(), sender_account.id(), params)
         .await?;
 
     let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
-    let new_template = helpers::test_template(&tx_code);
+    let new_template = helpers::velocity_template(&tx_code);
 
     cala.tx_templates().create(new_template).await.unwrap();
 
@@ -107,10 +108,12 @@ async fn create_control() -> anyhow::Result<()> {
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
+    params.insert("amount", limit + Decimal::ONE);
 
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
-        .await
-        .unwrap();
+    let res = cala
+        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+        .await;
+    assert!(res.is_err());
 
     Ok(())
 }

@@ -6,11 +6,18 @@ use cala_types::balance::*;
 /// Representation of account's balance tracked in 3 distinct layers.
 #[derive(Debug, Clone)]
 pub struct AccountBalance {
-    pub(super) balance_type: DebitOrCredit,
+    balance_type: DebitOrCredit,
     pub details: BalanceSnapshot,
 }
 
 impl AccountBalance {
+    pub(crate) fn new(balance_type: DebitOrCredit, details: BalanceSnapshot) -> Self {
+        Self {
+            balance_type,
+            details,
+        }
+    }
+
     pub(super) fn derive_diff(mut self, since: &Self) -> Self {
         self.details.settled = BalanceAmount {
             dr_balance: self.details.settled.dr_balance - since.details.settled.dr_balance,
@@ -31,7 +38,50 @@ impl AccountBalance {
     }
 
     pub fn pending(&self) -> Decimal {
-        if self.balance_type == DebitOrCredit::Credit {
+        BalanceWithDirection {
+            direction: self.balance_type,
+            details: &self.details,
+        }
+        .pending()
+    }
+
+    pub fn settled(&self) -> Decimal {
+        BalanceWithDirection {
+            direction: self.balance_type,
+            details: &self.details,
+        }
+        .settled()
+    }
+
+    pub fn encumbrance(&self) -> Decimal {
+        BalanceWithDirection {
+            direction: self.balance_type,
+            details: &self.details,
+        }
+        .encumbrance()
+    }
+
+    pub fn available(&self, layer: Layer) -> Decimal {
+        BalanceWithDirection {
+            direction: self.balance_type,
+            details: &self.details,
+        }
+        .available(layer)
+    }
+}
+
+pub(crate) struct BalanceWithDirection<'a> {
+    direction: DebitOrCredit,
+    details: &'a BalanceSnapshot,
+}
+
+impl<'a> BalanceWithDirection<'a> {
+    pub fn new(direction: DebitOrCredit, details: &'a BalanceSnapshot) -> Self {
+        Self { direction, details }
+    }
+
+    pub fn pending(&self) -> Decimal {
+        if self.direction == DebitOrCredit::Credit {
             self.details.pending.cr_balance - self.details.pending.dr_balance
         } else {
             self.details.pending.dr_balance - self.details.pending.cr_balance
@@ -39,7 +89,7 @@ impl AccountBalance {
     }
 
     pub fn settled(&self) -> Decimal {
-        if self.balance_type == DebitOrCredit::Credit {
+        if self.direction == DebitOrCredit::Credit {
             self.details.settled.cr_balance - self.details.settled.dr_balance
         } else {
             self.details.settled.dr_balance - self.details.settled.cr_balance
@@ -47,7 +97,7 @@ impl AccountBalance {
     }
 
     pub fn encumbrance(&self) -> Decimal {
-        if self.balance_type == DebitOrCredit::Credit {
+        if self.direction == DebitOrCredit::Credit {
             self.details.encumbrance.cr_balance - self.details.encumbrance.dr_balance
         } else {
             self.details.encumbrance.dr_balance - self.details.encumbrance.cr_balance

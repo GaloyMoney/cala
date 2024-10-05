@@ -37,7 +37,7 @@ pub fn test_accounts() -> (NewAccount, NewAccount) {
     (sender_account, recipient_account)
 }
 
-pub fn test_template(code: &str) -> NewTxTemplate {
+pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
     let params = vec![
         NewParamDefinition::builder()
             .name("recipient")
@@ -126,6 +126,90 @@ pub fn test_template(code: &str) -> NewTxTemplate {
                 .effective("params.effective")
                 .journal_id("params.journal_id")
                 .metadata(r#"{"foo": "bar"}"#)
+                .build()
+                .unwrap(),
+        )
+        .entries(entries)
+        .build()
+        .unwrap()
+}
+
+pub fn velocity_template(code: &str) -> NewTxTemplate {
+    let params = vec![
+        NewParamDefinition::builder()
+            .name("recipient")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("sender")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("journal_id")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("amount")
+            .r#type(ParamDataType::Decimal)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("currency")
+            .r#type(ParamDataType::String)
+            .default_expr("'USD'")
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("layer")
+            .r#type(ParamDataType::String)
+            .default_expr("'SETTLED'")
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("meta")
+            .r#type(ParamDataType::Json)
+            .default_expr(r#"{"foo": "bar"}"#)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("effective")
+            .r#type(ParamDataType::Date)
+            .default_expr("date()")
+            .build()
+            .unwrap(),
+    ];
+    let entries = vec![
+        NewTxTemplateEntry::builder()
+            .entry_type("'TEST_DR'")
+            .account_id("params.sender")
+            .layer("params.layer")
+            .direction("DEBIT")
+            .units("params.amount")
+            .currency("params.currency")
+            .build()
+            .unwrap(),
+        NewTxTemplateEntry::builder()
+            .entry_type("'TEST_CR'")
+            .account_id("params.recipient")
+            .layer("params.layer")
+            .direction("CREDIT")
+            .units("params.amount")
+            .currency("params.currency")
+            .build()
+            .unwrap(),
+    ];
+    NewTxTemplate::builder()
+        .id(uuid::Uuid::new_v4())
+        .code(code)
+        .params(params)
+        .transaction(
+            NewTxTemplateTransaction::builder()
+                .effective("params.effective")
+                .journal_id("params.journal_id")
+                .metadata("params.meta")
                 .build()
                 .unwrap(),
         )

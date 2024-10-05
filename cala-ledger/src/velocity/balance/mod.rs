@@ -97,16 +97,17 @@ impl VelocityBalances {
             .find_for_update(op.tx(), entries_to_add.keys())
             .await?;
 
-        let _new_balances = Self::new_snapshots(created_at, current_balances, &entries_to_add)?;
+        let _new_balances =
+            Self::new_snapshots(context, created_at, current_balances, &entries_to_add)?;
         Ok(())
     }
 
     fn new_snapshots<'a>(
+        mut context: super::context::EvalContext,
         time: DateTime<Utc>,
         mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
         entries_to_add: &'a HashMap<VelocityBalanceKey, Vec<(&AccountVelocityLimit, &EntryValues)>>,
-    ) -> Result<HashMap<&'a VelocityBalanceKey, Vec<BalanceSnapshot>>, VelocityEnforcementError>
-    {
+    ) -> Result<HashMap<&'a VelocityBalanceKey, Vec<BalanceSnapshot>>, VelocityError> {
         let mut res = HashMap::new();
 
         for (key, entries) in entries_to_add.iter() {
@@ -114,6 +115,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
+                let ctx = context.control_context(entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
@@ -123,14 +125,14 @@ impl VelocityBalances {
                     (_, Some(None)) => {
                         let new_snapshot =
                             crate::balance::Balances::new_snapshot(time, entry.account_id, entry);
-                        limit.enforce(&new_snapshot)?;
+                        limit.enforce(&ctx, time, &new_snapshot)?;
                         latest_balance = Some(new_snapshot);
                         continue;
                     }
                     _ => unreachable!(),
                 };
                 let new_snapshot = crate::balance::Balances::update_snapshot(time, balance, entry);
-                limit.enforce(&new_snapshot)?;
+                limit.enforce(&ctx, time, &new_snapshot)?;
                 new_balances.push(new_snapshot);
             }
             if let Some(latest) = latest_balance.take() {

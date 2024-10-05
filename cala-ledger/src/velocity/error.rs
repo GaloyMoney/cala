@@ -1,8 +1,9 @@
+use rust_decimal::Decimal;
 use thiserror::Error;
 
 use cel_interpreter::CelError;
 
-use crate::primitives::VelocityControlId;
+use crate::primitives::*;
 
 #[derive(Error, Debug)]
 pub enum VelocityError {
@@ -16,12 +17,17 @@ pub enum VelocityError {
     ParamError(#[from] crate::param::error::ParamError),
     #[error("VelocityError - Could not find control by id: {0}")]
     CouldNotFindControlById(VelocityControlId),
-    #[error("VelocityError - VelocityEnforcement: {0}")]
-    Enforcement(#[from] VelocityEnforcementError),
+    #[error("VelocityError - Enforcement: {0}")]
+    Enforcement(#[from] LimitExceededError),
 }
 
 #[derive(Error, Debug)]
-pub enum VelocityEnforcementError {
-    #[error("VelocityEnforcement - LimitExceeded")]
-    LimitExceeded,
+#[error("Velocity limit exceeded for account {account_id} in currency {currency}: Limit ({limit_id}): {limit}, Requested: {requested}")]
+pub struct LimitExceededError {
+    pub account_id: AccountId,
+    pub currency: String,
+    pub limit_id: VelocityLimitId,
+    pub layer: Layer,
+    pub limit: Decimal,
+    pub requested: Decimal,
 }
