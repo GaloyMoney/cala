@@ -97,8 +97,13 @@ impl VelocityBalances {
             .find_for_update(op.tx(), entries_to_add.keys())
             .await?;
 
-        let _new_balances =
+        let new_balances =
             Self::new_snapshots(context, created_at, current_balances, &entries_to_add)?;
+
+        self.repo
+            .insert_new_snapshots(op.tx(), new_balances)
+            .await?;
+
         Ok(())
     }
 

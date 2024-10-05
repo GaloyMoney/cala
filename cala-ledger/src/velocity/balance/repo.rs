@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use cala_types::{balance::BalanceSnapshot, velocity::Window};
 
-use crate::primitives::*;
+use crate::{primitives::*, velocity::error::VelocityError};
 
 pub(super) type VelocityBalanceKey = (
     Window,
@@ -31,7 +31,7 @@ impl VelocityBalanceRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
-    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, sqlx::Error> {
+    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
         let mut query_builder = QueryBuilder::new(
             r#"
             WITH inputs AS (
@@ -105,5 +105,13 @@ impl VelocityBalanceRepo {
             );
         }
         Ok(ret)
+    }
+
+    pub(crate) async fn insert_new_snapshots(
+        &self,
+        _db: &mut Transaction<'_, Postgres>,
+        _new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
+    ) -> Result<(), VelocityError> {
+        unimplemented!()
     }
 }

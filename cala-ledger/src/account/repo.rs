@@ -232,8 +232,8 @@ impl AccountRepo {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, latest_values)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
@@ -241,7 +241,8 @@ impl AccountRepo {
             account.values().external_id,
             account.values().normal_balance_type as DebitOrCredit,
             account.values().config.eventually_consistent,
-            recorded_at
+            recorded_at,
+            serde_json::to_value(account.values()).expect("Failed to serialize account values"),
         )
         .execute(&mut **db)
         .await?;
