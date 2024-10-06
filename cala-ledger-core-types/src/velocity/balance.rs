@@ -6,6 +6,12 @@ use crate::{balance::BalanceSnapshot, primitives::*};
 #[sqlx(transparent)]
 pub struct Window(serde_json::Value);
 
+impl Window {
+    pub fn inner(&self) -> &serde_json::Value {
+        &self.0
+    }
+}
+
 impl From<serde_json::Map<String, serde_json::Value>> for Window {
     fn from(map: serde_json::Map<String, serde_json::Value>) -> Self {
         Window(map.into())

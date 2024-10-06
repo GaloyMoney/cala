@@ -108,8 +108,12 @@ async fn create_control() -> anyhow::Result<()> {
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
-    params.insert("amount", limit + Decimal::ONE);
+    params.insert("amount", limit);
 
+    let _ = cala
+        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+        .await?;
+    params.insert("amount", Decimal::ONE);
     let res = cala
         .post_transaction(TransactionId::new(), &tx_code, params.clone())
         .await;

@@ -109,9 +109,86 @@ impl VelocityBalanceRepo {
 
     pub(crate) async fn insert_new_snapshots(
         &self,
-        _db: &mut Transaction<'_, Postgres>,
-        _new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
+        db: &mut Transaction<'_, Postgres>,
+        new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
     ) -> Result<(), VelocityError> {
-        unimplemented!()
+        dbg!("insert_new_snapshots");
+        dbg!(&new_balances);
+        let mut query_builder = QueryBuilder::new(
+            r#"
+        WITH new_snapshots AS (
+            INSERT INTO cala_velocity_balance_history (
+                journal_id, account_id, currency, velocity_control_id, velocity_limit_id, partition_window, latest_entry_id, version, values
+            )
+        "#,
+        );
+
+        query_builder.push_values(
+            new_balances.into_iter().flat_map(|(key, snapshots)| {
+                snapshots.into_iter().map(move |snapshot| (key, snapshot))
+            }),
+            |mut builder, (key, b)| {
+                let (
+                    window,
+                    currency,
+                    journal_id,
+                    account_id,
+                    velocity_control_id,
+                    velocity_limit_id,
+                ) = key;
+                builder.push_bind(journal_id);
+                builder.push_bind(account_id);
+                builder.push_bind(currency.code());
+                builder.push_bind(velocity_control_id);
+                builder.push_bind(velocity_limit_id);
+                builder.push_bind(window.inner());
+                builder.push_bind(b.entry_id);
+                builder.push_bind(b.version as i32);
+                builder.push_bind(
+                    serde_json::to_value(b).expect("Failed to serialize balance snapshot"),
+                );
+            },
+        );
+
+        query_builder.push(
+          r#"
+          RETURNING *
+          ),
+          ranked_balances AS (
+              SELECT *,
+                  ROW_NUMBER() OVER (
+                      PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id ORDER BY version
+                  ) AS rn,
+                  MAX(version) OVER (
+                      PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id
+                  ) AS max
+              FROM new_snapshots
+          ),
+          initial_balances AS (
+              INSERT INTO cala_velocity_current_balances (
+                  journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
+                  partition_window, latest_version
+              )
+              SELECT 
+                  journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
+                  partition_window, version
+              FROM ranked_balances
+              WHERE version = rn AND rn = max
+          )
+          UPDATE cala_velocity_current_balances c
+          SET latest_version = n.version
+          FROM ranked_balances n
+          WHERE c.journal_id = n.journal_id
+              AND c.account_id = n.account_id
+              AND c.currency = n.currency
+              AND c.velocity_control_id = n.velocity_control_id
+              AND c.velocity_limit_id = n.velocity_limit_id
+              AND c.partition_window = n.partition_window
+              AND c.data_source_id = '00000000-0000-0000-0000-000000000000'
+              AND version = max AND version != rn
+          "#,
+        );
+        query_builder.build().execute(&mut **db).await?;
+        Ok(())
     }
 }
