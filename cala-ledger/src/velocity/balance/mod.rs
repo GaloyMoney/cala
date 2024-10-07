@@ -60,6 +60,7 @@ impl VelocityBalances {
         Ok(())
     }
 
+    #[allow(clippy::type_complexity)]
     fn balances_to_check<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
