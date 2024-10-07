@@ -247,6 +247,12 @@ impl From<&Literal> for CelValue {
     }
 }
 
+impl From<DateTime<Utc>> for CelValue {
+    fn from(d: DateTime<Utc>) -> Self {
+        CelValue::Timestamp(d)
+    }
+}
+
 impl TryFrom<&CelValue> for Arc<String> {
     type Error = CelError;
 

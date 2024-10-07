@@ -55,7 +55,7 @@ impl EvalContext {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use rust_decimal::Decimal;
     use serde_json::json;
 
