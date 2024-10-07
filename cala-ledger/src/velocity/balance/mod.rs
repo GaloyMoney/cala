@@ -38,16 +38,48 @@ impl VelocityBalances {
         entries: &[EntryValues],
         controls: HashMap<AccountId, Vec<AccountVelocityControl>>,
     ) -> Result<(), VelocityError> {
-        let empty = Vec::new();
-
         let mut context = super::context::EvalContext::new(transaction);
 
+        let entries_to_enforce =
+            Self::determin_entries_to_enforce(&mut context, entries, &controls)?;
+
+        if entries_to_enforce.is_empty() {
+            return Ok(());
+        }
+
+        let current_balances = self
+            .repo
+            .find_for_update(op.tx(), entries_to_enforce.keys())
+            .await?;
+
+        let new_balances =
+            Self::new_snapshots(context, created_at, current_balances, &entries_to_enforce)?;
+
+        self.repo
+            .insert_new_snapshots(op.tx(), new_balances)
+            .await?;
+
+        Ok(())
+    }
+
+    fn determin_entries_to_enforce<'a>(
+        context: &mut super::context::EvalContext,
+        entries: &'a [EntryValues],
+        controls: &'a HashMap<AccountId, Vec<AccountVelocityControl>>,
+    ) -> Result<
+        HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
+        VelocityError,
+    > {
         let mut entries_to_add: HashMap<
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
         for entry in entries {
-            for control in controls.get(&entry.account_id).unwrap_or(&empty) {
+            let controls = match controls.get(&entry.account_id) {
+                Some(control) => control,
+                None => continue,
+            };
+            for control in controls {
                 let ctx = context.control_context(entry);
                 let control_active = if let Some(condition) = &control.condition {
                     let control_active: bool = condition.try_evaluate(&ctx)?;
@@ -88,23 +120,7 @@ impl VelocityBalances {
             }
         }
 
-        if entries_to_add.is_empty() {
-            return Ok(());
-        }
-
-        let current_balances = self
-            .repo
-            .find_for_update(op.tx(), entries_to_add.keys())
-            .await?;
-
-        let new_balances =
-            Self::new_snapshots(context, created_at, current_balances, &entries_to_add)?;
-
-        self.repo
-            .insert_new_snapshots(op.tx(), new_balances)
-            .await?;
-
-        Ok(())
+        Ok(entries_to_add)
     }
 
     fn new_snapshots<'a>(
