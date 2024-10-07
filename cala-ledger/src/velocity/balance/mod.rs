@@ -6,6 +6,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
+    account::AccountValues,
     balance::BalanceSnapshot,
     entry::EntryValues,
     transaction::TransactionValues,
@@ -36,12 +37,13 @@ impl VelocityBalances {
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
-        controls: HashMap<AccountId, Vec<AccountVelocityControl>>,
+        controls: HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
     ) -> Result<(), VelocityError> {
-        let mut context = super::context::EvalContext::new(transaction);
+        let mut context =
+            super::context::EvalContext::new(transaction, controls.values().map(|v| &v.0));
 
         let entries_to_enforce =
-            Self::determin_entries_to_enforce(&mut context, entries, &controls)?;
+            Self::determine_entries_to_enforce(&mut context, entries, &controls)?;
 
         if entries_to_enforce.is_empty() {
             return Ok(());
@@ -62,10 +64,10 @@ impl VelocityBalances {
         Ok(())
     }
 
-    fn determin_entries_to_enforce<'a>(
+    fn determine_entries_to_enforce<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
-        controls: &'a HashMap<AccountId, Vec<AccountVelocityControl>>,
+        controls: &'a HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
     ) -> Result<
         HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
         VelocityError,
@@ -79,8 +81,8 @@ impl VelocityBalances {
                 Some(control) => control,
                 None => continue,
             };
-            for control in controls {
-                let ctx = context.control_context(entry);
+            for control in controls.1.iter() {
+                let ctx = context.context_for_entry(entry);
                 let control_active = if let Some(condition) = &control.condition {
                     let control_active: bool = condition.try_evaluate(&ctx)?;
                     control_active
@@ -136,7 +138,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.control_context(entry);
+                let ctx = context.context_for_entry(entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());

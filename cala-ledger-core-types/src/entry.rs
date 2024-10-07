@@ -26,7 +26,7 @@ mod cel {
         fn from(entry: &super::EntryValues) -> Self {
             let mut map = CelMap::new();
             map.insert("id", entry.id);
-            map.insert("entry_type", entry.entry_type.clone());
+            map.insert("entryType", entry.entry_type.clone());
             map.insert("sequence", CelValue::UInt(entry.sequence as u64));
             map.insert("layer", entry.layer);
             map.insert("direction", entry.direction);
