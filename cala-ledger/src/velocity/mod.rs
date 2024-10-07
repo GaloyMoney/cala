@@ -1,14 +1,20 @@
 mod account_control;
+mod balance;
+mod context;
 mod control;
 pub mod error;
 mod limit;
 
+use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+
+use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
 use crate::{atomic_operation::*, outbox::*, primitives::AccountId};
 
 use account_control::*;
+use balance::*;
 pub use control::*;
 use error::*;
 pub use limit::*;
@@ -20,6 +26,7 @@ pub struct Velocities {
     limits: VelocityLimitRepo,
     controls: VelocityControlRepo,
     account_controls: AccountControls,
+    balances: VelocityBalances,
 }
 
 impl Velocities {
@@ -28,6 +35,7 @@ impl Velocities {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
             account_controls: AccountControls::new(pool),
+            balances: VelocityBalances::new(pool),
             pool: pool.clone(),
             outbox,
         }
@@ -108,14 +116,40 @@ impl Velocities {
     pub async fn attach_control_to_account_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        control: VelocityControlId,
+        control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<(), VelocityError> {
-        let limits = self.limits.list_for_control(control).await?;
+        let control = self.controls.find_by_id(op.tx(), control_id).await?;
+        let limits = self.limits.list_for_control(op.tx(), control_id).await?;
         self.account_controls
-            .attach_control_in_op(op, control, account_id, limits, params)
+            .attach_control_in_op(
+                op,
+                control.created_at(),
+                control.into_values(),
+                account_id,
+                limits,
+                params,
+            )
             .await?;
         Ok(())
+    }
+
+    pub(crate) async fn update_balances_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        created_at: DateTime<Utc>,
+        transaction: &TransactionValues,
+        entries: &[EntryValues],
+        account_ids: &[AccountId],
+    ) -> Result<(), VelocityError> {
+        let controls = self
+            .account_controls
+            .find_for_enforcement(op, account_ids)
+            .await?;
+
+        self.balances
+            .update_balances_in_op(op, created_at, transaction, entries, controls)
+            .await
     }
 }

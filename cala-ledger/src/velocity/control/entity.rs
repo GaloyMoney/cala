@@ -25,12 +25,22 @@ impl EntityEvent for VelocityControlEvent {
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct VelocityControl {
     values: VelocityControlValues,
-    pub(super) _events: EntityEvents<VelocityControlEvent>,
+    pub(super) events: EntityEvents<VelocityControlEvent>,
 }
 
 impl VelocityControl {
     pub fn id(&self) -> VelocityControlId {
         self.values.id
+    }
+
+    pub fn into_values(self) -> VelocityControlValues {
+        self.values
+    }
+
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .entity_first_persisted_at
+            .expect("No events for account")
     }
 }
 
@@ -50,7 +60,7 @@ impl TryFrom<EntityEvents<VelocityControlEvent>> for VelocityControl {
                 }
             }
         }
-        builder._events(events).build()
+        builder.events(events).build()
     }
 }
 

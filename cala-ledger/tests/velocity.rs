@@ -1,5 +1,6 @@
 mod helpers;
 
+use rand::distributions::{Alphanumeric, DistString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{velocity::*, *};
@@ -12,6 +13,9 @@ async fn create_control() -> anyhow::Result<()> {
         .exec_migrations(false)
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
+
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
 
     let velocity = cala.velocities();
 
@@ -83,13 +87,37 @@ async fn create_control() -> anyhow::Result<()> {
         .add_limit_to_control(control.id(), deposit_limit.id())
         .await?;
 
-    let (one, _) = helpers::test_accounts();
-    let one = cala.accounts().create(one).await.unwrap();
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
     let mut params = Params::new();
-    params.insert("withdrawal_limit", Decimal::from(100));
-    params.insert("deposit_limit", Decimal::from(100));
+    let limit = Decimal::ONE_HUNDRED;
+    params.insert("withdrawal_limit", limit);
+    params.insert("deposit_limit", limit);
     velocity
-        .attach_control_to_account(control.id(), one.id(), params)
+        .attach_control_to_account(control.id(), sender_account.id(), params)
         .await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let new_template = helpers::velocity_template(&tx_code);
+
+    cala.tx_templates().create(new_template).await.unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("amount", limit);
+
+    let _ = cala
+        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+        .await?;
+    params.insert("amount", Decimal::ONE);
+    let res = cala
+        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+        .await;
+    assert!(res.is_err());
+
     Ok(())
 }

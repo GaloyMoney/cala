@@ -15,3 +15,22 @@ pub struct TransactionValues {
     pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
+
+mod cel {
+    use cel_interpreter::{CelMap, CelValue};
+
+    impl From<&super::TransactionValues> for CelValue {
+        fn from(tx: &super::TransactionValues) -> Self {
+            let mut map = CelMap::new();
+            map.insert("id", tx.id);
+            map.insert("journal_id", tx.journal_id);
+            map.insert("tx_template_id", tx.tx_template_id);
+            map.insert("effective", tx.effective);
+            map.insert("correlation_id", tx.correlation_id.clone());
+            if let Some(metadata) = &tx.metadata {
+                map.insert("metadata", metadata.clone());
+            }
+            map.into()
+        }
+    }
+}

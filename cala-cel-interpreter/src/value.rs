@@ -1,5 +1,5 @@
 use cel_parser::{ast::Literal, Expression};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -25,9 +25,10 @@ pub enum CelValue {
     Bool(bool),
     Null,
 
-    // Addons
+    // Abstract
     Decimal(Decimal),
     Date(NaiveDate),
+    Timestamp(DateTime<Utc>),
     Uuid(Uuid),
 }
 
@@ -226,6 +227,7 @@ impl From<&CelValue> for CelType {
             CelValue::Decimal(_) => CelType::Decimal,
             CelValue::Date(_) => CelType::Date,
             CelValue::Uuid(_) => CelType::Uuid,
+            CelValue::Timestamp(_) => CelType::Timestamp,
         }
     }
 }
@@ -269,6 +271,22 @@ impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
     }
 }
 
+impl<'a> TryFrom<CelResult<'a>> for bool {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Bool(b) = val {
+            Ok(b)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Bool,
+            ))
+        }
+    }
+}
+
 impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     type Error = ResultCoercionError;
 
@@ -280,6 +298,22 @@ impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
                 format!("{expr:?}"),
                 CelType::from(&val),
                 CelType::Date,
+            ))
+        }
+    }
+}
+
+impl<'a> TryFrom<CelResult<'a>> for DateTime<Utc> {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Timestamp(d) = val {
+            Ok(d)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Timestamp,
             ))
         }
     }

@@ -8,7 +8,7 @@ start-deps:
 	docker compose up -d integration-deps
 
 setup-db:
-	cd cala-ledger && cargo sqlx migrate run
+	cd cala-ledger && cargo sqlx migrate run || cargo sqlx migrate run
 	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db

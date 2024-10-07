@@ -156,6 +156,7 @@ fn evaluate_member<'a>(
     use ast::Member::*;
     match member {
         Attribute(name) => match target {
+            EvalType::Value(CelValue::Map(map)) => Ok(EvalType::Value(map.get(name))),
             EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
                 Ok(EvalType::Value(map.get(name)))
             }
@@ -379,10 +380,12 @@ mod tests {
 
     #[test]
     fn lookup() {
-        let expression = "params.hello".parse::<CelExpression>().unwrap();
-        let mut context = CelContext::new();
+        let expression = "params.hello.world".parse::<CelExpression>().unwrap();
+        let mut hello = CelMap::new();
+        hello.insert("world", 42);
         let mut params = CelMap::new();
-        params.insert("hello", 42);
+        params.insert("hello", hello);
+        let mut context = CelContext::new();
         context.add_variable("params", params);
         assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Int(42));
     }

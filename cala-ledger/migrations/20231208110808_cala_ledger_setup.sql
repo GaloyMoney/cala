@@ -10,6 +10,7 @@ CREATE TABLE cala_accounts (
   external_id VARCHAR,
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
+  latest_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
   UNIQUE(data_source_id, code)
@@ -253,6 +254,40 @@ CREATE TABLE cala_velocity_account_controls (
   UNIQUE(data_source_id, account_id, velocity_control_id),
   FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
   FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id)
+);
+
+CREATE TABLE cala_velocity_current_balances (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
+  currency VARCHAR NOT NULL,
+  velocity_control_id UUID NOT NULL,
+  velocity_limit_id UUID NOT NULL,
+  partition_window JSONB NOT NULL,
+  latest_version INT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
+  FOREIGN KEY (data_source_id, journal_id) REFERENCES cala_journals(data_source_id, id),
+  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
+  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id),
+  FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
+);
+
+CREATE TABLE cala_velocity_balance_history (
+  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
+  currency VARCHAR NOT NULL,
+  velocity_control_id UUID NOT NULL,
+  velocity_limit_id UUID NOT NULL,
+  partition_window JSONB NOT NULL,
+  latest_entry_id UUID NOT NULL,
+  version INT NOT NULL,
+  values JSONB NOT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id, version),
+  FOREIGN KEY (data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
+  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
 );
 
 CREATE TABLE cala_outbox_events (

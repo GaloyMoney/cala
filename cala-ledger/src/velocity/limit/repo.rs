@@ -5,12 +5,14 @@ use crate::primitives::VelocityControlId;
 
 #[derive(Debug, Clone)]
 pub struct VelocityLimitRepo {
-    pool: PgPool,
+    _pool: PgPool,
 }
 
 impl VelocityLimitRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+        Self {
+            _pool: pool.clone(),
+        }
     }
 
     pub async fn create_in_tx(
@@ -52,6 +54,7 @@ impl VelocityLimitRepo {
 
     pub async fn list_for_control(
         &self,
+        db: &mut Transaction<'_, Postgres>,
         control: VelocityControlId,
     ) -> Result<Vec<VelocityLimitValues>, VelocityError> {
         let rows = sqlx::query_as!(
@@ -71,7 +74,7 @@ impl VelocityLimitRepo {
             ORDER BY l.id, e.sequence"#,
             control as VelocityControlId,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut **db)
         .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n(rows, n)?

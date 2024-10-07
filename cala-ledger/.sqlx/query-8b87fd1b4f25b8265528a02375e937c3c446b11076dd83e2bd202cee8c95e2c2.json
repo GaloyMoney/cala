@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT values FROM cala_velocity_account_controls\n            WHERE data_source_id = '00000000-0000-0000-0000-000000000000' AND account_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8b87fd1b4f25b8265528a02375e937c3c446b11076dd83e2bd202cee8c95e2c2"
+}
