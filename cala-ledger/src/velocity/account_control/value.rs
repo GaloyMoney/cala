@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use cala_types::{
     balance::BalanceSnapshot,
-    velocity::{PartitionKey, VelocityEnforcement},
+    entry::EntryValues,
+    velocity::{PartitionKey, VelocityEnforcement, Window},
 };
 
 use crate::{
@@ -22,6 +23,17 @@ pub struct AccountVelocityControl {
     pub velocity_limits: Vec<AccountVelocityLimit>,
 }
 
+impl AccountVelocityControl {
+    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, VelocityError> {
+        if let Some(condition) = &self.condition {
+            let result: bool = condition.try_evaluate(ctx)?;
+            Ok(result)
+        } else {
+            Ok(true)
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountVelocityLimit {
     pub limit_id: VelocityLimitId,
@@ -32,6 +44,33 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
+    pub fn window_for_enforcement(
+        &self,
+        ctx: &CelContext,
+        entry: &EntryValues,
+    ) -> Result<Option<Window>, VelocityError> {
+        if let Some(currency) = &self.currency {
+            if currency != &entry.currency {
+                return Ok(None);
+            }
+        }
+
+        if let Some(condition) = &self.condition {
+            let result: bool = condition.try_evaluate(ctx)?;
+            if !result {
+                return Ok(None);
+            }
+        }
+
+        let mut map = serde_json::Map::new();
+        for key in self.window.iter() {
+            let value: serde_json::Value = key.value.try_evaluate(ctx)?;
+            map.insert(key.alias.clone(), value);
+        }
+
+        Ok(Some(map.into()))
+    }
+
     pub fn enforce(
         &self,
         ctx: &CelContext,

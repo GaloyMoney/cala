@@ -42,8 +42,7 @@ impl VelocityBalances {
         let mut context =
             super::context::EvalContext::new(transaction, controls.values().map(|v| &v.0));
 
-        let entries_to_enforce =
-            Self::determine_entries_to_enforce(&mut context, entries, &controls)?;
+        let entries_to_enforce = Self::balances_to_check(&mut context, entries, &controls)?;
 
         if entries_to_enforce.is_empty() {
             return Ok(());
@@ -64,7 +63,7 @@ impl VelocityBalances {
         Ok(())
     }
 
-    fn determine_entries_to_enforce<'a>(
+    fn balances_to_check<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
         controls: &'a HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
@@ -72,7 +71,7 @@ impl VelocityBalances {
         HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
         VelocityError,
     > {
-        let mut entries_to_add: HashMap<
+        let mut balances_to_check: HashMap<
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
@@ -83,29 +82,11 @@ impl VelocityBalances {
             };
             for control in controls.1.iter() {
                 let ctx = context.context_for_entry(entry);
-                let control_active = if let Some(condition) = &control.condition {
-                    let control_active: bool = condition.try_evaluate(&ctx)?;
-                    control_active
-                } else {
-                    true
-                };
-                if control_active {
-                    for limit in &control.velocity_limits {
-                        if let Some(currency) = &limit.currency {
-                            if currency != &entry.currency {
-                                continue;
-                            }
-                        }
 
-                        let limit_active = if let Some(condition) = &limit.condition {
-                            let limit_active: bool = condition.try_evaluate(&ctx)?;
-                            limit_active
-                        } else {
-                            true
-                        };
-                        if limit_active {
-                            let window = Self::determine_window(&limit.window, &ctx)?;
-                            entries_to_add
+                if control.needs_enforcement(&ctx)? {
+                    for limit in &control.velocity_limits {
+                        if let Some(window) = limit.window_for_enforcement(&ctx, entry)? {
+                            balances_to_check
                                 .entry((
                                     window,
                                     entry.currency,
@@ -122,7 +103,7 @@ impl VelocityBalances {
             }
         }
 
-        Ok(entries_to_add)
+        Ok(balances_to_check)
     }
 
     fn new_snapshots<'a>(
@@ -181,13 +162,18 @@ impl VelocityBalances {
 
 #[cfg(test)]
 mod test {
+    use rust_decimal::Decimal;
+    use serde_json::json;
+
+    use cala_types::{account::AccountConfig, velocity::*};
+    use cel_interpreter::{CelContext, CelExpression};
+
+    use crate::{primitives::*, velocity::context::EvalContext};
+
+    use super::*;
+
     #[test]
     fn window_determination() {
-        use super::*;
-        use cala_types::velocity::PartitionKey;
-        use cel_interpreter::CelContext;
-        use serde_json::json;
-
         let keys = vec![
             PartitionKey {
                 alias: "foo".to_string(),
@@ -206,5 +192,75 @@ mod test {
             "baz": "qux",
         });
         assert_eq!(Window::from(expected), result);
+    }
+
+    fn transaction(metadata: Option<serde_json::Value>) -> TransactionValues {
+        TransactionValues {
+            id: TransactionId::new(),
+            version: 1,
+            journal_id: JournalId::new(),
+            tx_template_id: TxTemplateId::new(),
+            entry_ids: vec![],
+            effective: chrono::Utc::now().date_naive(),
+            correlation_id: "correlation_id".to_string(),
+            external_id: Some("external_id".to_string()),
+            description: None,
+            metadata,
+        }
+    }
+
+    fn account(metadata: Option<serde_json::Value>) -> AccountValues {
+        AccountValues {
+            id: AccountId::new(),
+            version: 1,
+            code: "code".to_string(),
+            name: "name".to_string(),
+            normal_balance_type: DebitOrCredit::Credit,
+            status: Status::Active,
+            external_id: None,
+            description: None,
+            metadata,
+            config: AccountConfig {
+                is_account_set: false,
+                eventually_consistent: false,
+            },
+        }
+    }
+
+    fn account_control(
+        account_id: AccountId,
+        control_condition: Option<CelExpression>,
+    ) -> AccountVelocityControl {
+        AccountVelocityControl {
+            account_id,
+            control_id: VelocityControlId::new(),
+            enforcement: VelocityEnforcement {
+                action: VelocityEnforcementAction::Reject,
+            },
+            condition: control_condition,
+            velocity_limits: vec![AccountVelocityLimit {
+                limit_id: VelocityLimitId::new(),
+                window: vec![],
+                condition: None,
+                currency: None,
+                limit: AccountLimit {
+                    balance: vec![],
+                    timestamp_source: None,
+                },
+            }],
+        }
+    }
+
+    #[test]
+    fn entry_determiniation() {
+        let account = account(None);
+        let mut context = EvalContext::new(&transaction(None), std::iter::once(&account));
+        let control = account_control(account.id, None);
+        let controls = std::iter::once((account.id, (account, vec![control]))).collect();
+
+        let result = VelocityBalances::balances_to_check(&mut context, &[], &controls)
+            .expect("Failed to determine entries");
+
+        assert!(result.is_empty());
     }
 }
