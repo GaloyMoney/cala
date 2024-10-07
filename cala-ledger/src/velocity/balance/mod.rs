@@ -104,7 +104,7 @@ impl VelocityBalances {
                             true
                         };
                         if limit_active {
-                            let window = determine_window(&limit.window, &ctx)?;
+                            let window = Self::determine_window(&limit.window, &ctx)?;
                             entries_to_add
                                 .entry((
                                     window,
@@ -165,18 +165,18 @@ impl VelocityBalances {
         }
         Ok(res)
     }
-}
 
-fn determine_window(
-    keys: &[PartitionKey],
-    ctx: &cel_interpreter::CelContext,
-) -> Result<Window, VelocityError> {
-    let mut map = serde_json::Map::new();
-    for key in keys {
-        let value: serde_json::Value = key.value.try_evaluate(ctx)?;
-        map.insert(key.alias.clone(), value);
+    fn determine_window(
+        keys: &[PartitionKey],
+        ctx: &cel_interpreter::CelContext,
+    ) -> Result<Window, VelocityError> {
+        let mut map = serde_json::Map::new();
+        for key in keys {
+            let value: serde_json::Value = key.value.try_evaluate(ctx)?;
+            map.insert(key.alias.clone(), value);
+        }
+        Ok(map.into())
     }
-    Ok(map.into())
 }
 
 #[cfg(test)]
@@ -200,7 +200,7 @@ mod test {
         ];
 
         let ctx = CelContext::new();
-        let result = determine_window(&keys, &ctx).unwrap();
+        let result = VelocityBalances::determine_window(&keys, &ctx).unwrap();
         let expected = json!({
             "foo": "bar",
             "baz": "qux",
