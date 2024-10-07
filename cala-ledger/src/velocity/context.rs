@@ -53,3 +53,95 @@ impl EvalContext {
         ctx
     }
 }
+
+#[cfg(test)]
+mod test {
+    use rust_decimal::Decimal;
+    use serde_json::json;
+
+    use cala_types::account::AccountConfig;
+    use cel_interpreter::CelExpression;
+
+    use crate::{primitives::*, velocity::context::EvalContext};
+
+    use super::*;
+
+    fn transaction() -> TransactionValues {
+        TransactionValues {
+            id: TransactionId::new(),
+            version: 1,
+            journal_id: JournalId::new(),
+            tx_template_id: TxTemplateId::new(),
+            entry_ids: vec![],
+            effective: chrono::Utc::now().date_naive(),
+            correlation_id: "correlation_id".to_string(),
+            external_id: Some("external_id".to_string()),
+            description: None,
+            metadata: Some(serde_json::json!({
+                "tx": "metadata",
+                "test": true,
+            })),
+        }
+    }
+
+    fn account() -> AccountValues {
+        AccountValues {
+            id: AccountId::new(),
+            version: 1,
+            code: "code".to_string(),
+            name: "name".to_string(),
+            normal_balance_type: DebitOrCredit::Credit,
+            status: Status::Active,
+            external_id: None,
+            description: None,
+            metadata: Some(json!({
+                "account": "metadata",
+                "test": true,
+            })),
+            config: AccountConfig {
+                is_account_set: false,
+                eventually_consistent: false,
+            },
+        }
+    }
+
+    fn entry(account_id: AccountId, tx: &TransactionValues) -> EntryValues {
+        EntryValues {
+            id: EntryId::new(),
+            version: 1,
+            transaction_id: tx.id,
+            journal_id: tx.journal_id,
+            account_id,
+            entry_type: "TEST".to_string(),
+            sequence: 1,
+            layer: Layer::Settled,
+            currency: "USD".parse().unwrap(),
+            direction: DebitOrCredit::Credit,
+            units: Decimal::from(100),
+            description: None,
+        }
+    }
+
+    #[test]
+    fn context_for_entry() {
+        let account = account();
+        let tx = transaction();
+        let entry = entry(account.id, &tx);
+        let mut context = EvalContext::new(&tx, std::iter::once(&account));
+        let ctx = context.context_for_entry(&entry);
+
+        let expr: CelExpression = "context.vars.transaction.id".parse().unwrap();
+        let result: uuid::Uuid = expr.try_evaluate(&ctx).unwrap();
+        assert!(result == tx.id.into());
+
+        let expr: CelExpression = "context.vars.account.metadata.test".parse().unwrap();
+        let result: bool = expr.try_evaluate(&ctx).unwrap();
+        assert!(result == true);
+
+        let expr: CelExpression = "context.vars.entry.units == decimal('100')"
+            .parse()
+            .unwrap();
+        let result: bool = expr.try_evaluate(&ctx).unwrap();
+        assert!(result);
+    }
+}

@@ -6,11 +6,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
-    account::AccountValues,
-    balance::BalanceSnapshot,
-    entry::EntryValues,
+    account::AccountValues, balance::BalanceSnapshot, entry::EntryValues,
     transaction::TransactionValues,
-    velocity::{PartitionKey, Window},
 };
 
 use crate::{atomic_operation::*, primitives::AccountId};
@@ -145,122 +142,5 @@ impl VelocityBalances {
             res.insert(key, new_balances);
         }
         Ok(res)
-    }
-
-    fn determine_window(
-        keys: &[PartitionKey],
-        ctx: &cel_interpreter::CelContext,
-    ) -> Result<Window, VelocityError> {
-        let mut map = serde_json::Map::new();
-        for key in keys {
-            let value: serde_json::Value = key.value.try_evaluate(ctx)?;
-            map.insert(key.alias.clone(), value);
-        }
-        Ok(map.into())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use rust_decimal::Decimal;
-    use serde_json::json;
-
-    use cala_types::{account::AccountConfig, velocity::*};
-    use cel_interpreter::{CelContext, CelExpression};
-
-    use crate::{primitives::*, velocity::context::EvalContext};
-
-    use super::*;
-
-    #[test]
-    fn window_determination() {
-        let keys = vec![
-            PartitionKey {
-                alias: "foo".to_string(),
-                value: "'bar'".parse().expect("Failed to parse"),
-            },
-            PartitionKey {
-                alias: "baz".to_string(),
-                value: "'qux'".parse().expect("Failed to parse"),
-            },
-        ];
-
-        let ctx = CelContext::new();
-        let result = VelocityBalances::determine_window(&keys, &ctx).unwrap();
-        let expected = json!({
-            "foo": "bar",
-            "baz": "qux",
-        });
-        assert_eq!(Window::from(expected), result);
-    }
-
-    fn transaction(metadata: Option<serde_json::Value>) -> TransactionValues {
-        TransactionValues {
-            id: TransactionId::new(),
-            version: 1,
-            journal_id: JournalId::new(),
-            tx_template_id: TxTemplateId::new(),
-            entry_ids: vec![],
-            effective: chrono::Utc::now().date_naive(),
-            correlation_id: "correlation_id".to_string(),
-            external_id: Some("external_id".to_string()),
-            description: None,
-            metadata,
-        }
-    }
-
-    fn account(metadata: Option<serde_json::Value>) -> AccountValues {
-        AccountValues {
-            id: AccountId::new(),
-            version: 1,
-            code: "code".to_string(),
-            name: "name".to_string(),
-            normal_balance_type: DebitOrCredit::Credit,
-            status: Status::Active,
-            external_id: None,
-            description: None,
-            metadata,
-            config: AccountConfig {
-                is_account_set: false,
-                eventually_consistent: false,
-            },
-        }
-    }
-
-    fn account_control(
-        account_id: AccountId,
-        control_condition: Option<CelExpression>,
-    ) -> AccountVelocityControl {
-        AccountVelocityControl {
-            account_id,
-            control_id: VelocityControlId::new(),
-            enforcement: VelocityEnforcement {
-                action: VelocityEnforcementAction::Reject,
-            },
-            condition: control_condition,
-            velocity_limits: vec![AccountVelocityLimit {
-                limit_id: VelocityLimitId::new(),
-                window: vec![],
-                condition: None,
-                currency: None,
-                limit: AccountLimit {
-                    balance: vec![],
-                    timestamp_source: None,
-                },
-            }],
-        }
-    }
-
-    #[test]
-    fn entry_determiniation() {
-        let account = account(None);
-        let mut context = EvalContext::new(&transaction(None), std::iter::once(&account));
-        let control = account_control(account.id, None);
-        let controls = std::iter::once((account.id, (account, vec![control]))).collect();
-
-        let result = VelocityBalances::balances_to_check(&mut context, &[], &controls)
-            .expect("Failed to determine entries");
-
-        assert!(result.is_empty());
     }
 }
