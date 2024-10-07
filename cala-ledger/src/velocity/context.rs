@@ -136,7 +136,7 @@ mod test {
 
         let expr: CelExpression = "context.vars.account.metadata.test".parse().unwrap();
         let result: bool = expr.try_evaluate(&ctx).unwrap();
-        assert!(result == true);
+        assert!(result);
 
         let expr: CelExpression = "context.vars.entry.units == decimal('100')"
             .parse()
