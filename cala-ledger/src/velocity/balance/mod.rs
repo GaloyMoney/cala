@@ -6,10 +6,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
-    balance::BalanceSnapshot,
-    entry::EntryValues,
+    account::AccountValues, balance::BalanceSnapshot, entry::EntryValues,
     transaction::TransactionValues,
-    velocity::{PartitionKey, Window},
 };
 
 use crate::{atomic_operation::*, primitives::AccountId};
@@ -36,42 +34,57 @@ impl VelocityBalances {
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
-        controls: HashMap<AccountId, Vec<AccountVelocityControl>>,
+        controls: HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
     ) -> Result<(), VelocityError> {
-        let empty = Vec::new();
+        let mut context =
+            super::context::EvalContext::new(transaction, controls.values().map(|v| &v.0));
 
-        let mut context = super::context::EvalContext::new(transaction);
+        let entries_to_enforce = Self::balances_to_check(&mut context, entries, &controls)?;
 
-        let mut entries_to_add: HashMap<
+        if entries_to_enforce.is_empty() {
+            return Ok(());
+        }
+
+        let current_balances = self
+            .repo
+            .find_for_update(op.tx(), entries_to_enforce.keys())
+            .await?;
+
+        let new_balances =
+            Self::new_snapshots(context, created_at, current_balances, &entries_to_enforce)?;
+
+        self.repo
+            .insert_new_snapshots(op.tx(), new_balances)
+            .await?;
+
+        Ok(())
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn balances_to_check<'a>(
+        context: &mut super::context::EvalContext,
+        entries: &'a [EntryValues],
+        controls: &'a HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
+    ) -> Result<
+        HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
+        VelocityError,
+    > {
+        let mut balances_to_check: HashMap<
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
         for entry in entries {
-            for control in controls.get(&entry.account_id).unwrap_or(&empty) {
-                let ctx = context.control_context(entry);
-                let control_active = if let Some(condition) = &control.condition {
-                    let control_active: bool = condition.try_evaluate(&ctx)?;
-                    control_active
-                } else {
-                    true
-                };
-                if control_active {
-                    for limit in &control.velocity_limits {
-                        if let Some(currency) = &limit.currency {
-                            if currency != &entry.currency {
-                                continue;
-                            }
-                        }
+            let (_, controls) = match controls.get(&entry.account_id) {
+                Some(control) => control,
+                None => continue,
+            };
+            for control in controls.iter() {
+                let ctx = context.context_for_entry(entry);
 
-                        let limit_active = if let Some(condition) = &limit.condition {
-                            let limit_active: bool = condition.try_evaluate(&ctx)?;
-                            limit_active
-                        } else {
-                            true
-                        };
-                        if limit_active {
-                            let window = determine_window(&limit.window, &ctx)?;
-                            entries_to_add
+                if control.needs_enforcement(&ctx)? {
+                    for limit in &control.velocity_limits {
+                        if let Some(window) = limit.window_for_enforcement(&ctx, entry)? {
+                            balances_to_check
                                 .entry((
                                     window,
                                     entry.currency,
@@ -88,23 +101,7 @@ impl VelocityBalances {
             }
         }
 
-        if entries_to_add.is_empty() {
-            return Ok(());
-        }
-
-        let current_balances = self
-            .repo
-            .find_for_update(op.tx(), entries_to_add.keys())
-            .await?;
-
-        let new_balances =
-            Self::new_snapshots(context, created_at, current_balances, &entries_to_add)?;
-
-        self.repo
-            .insert_new_snapshots(op.tx(), new_balances)
-            .await?;
-
-        Ok(())
+        Ok(balances_to_check)
     }
 
     fn new_snapshots<'a>(
@@ -120,7 +117,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.control_context(entry);
+                let ctx = context.context_for_entry(entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
@@ -146,47 +143,5 @@ impl VelocityBalances {
             res.insert(key, new_balances);
         }
         Ok(res)
-    }
-}
-
-fn determine_window(
-    keys: &[PartitionKey],
-    ctx: &cel_interpreter::CelContext,
-) -> Result<Window, VelocityError> {
-    let mut map = serde_json::Map::new();
-    for key in keys {
-        let value: serde_json::Value = key.value.try_evaluate(ctx)?;
-        map.insert(key.alias.clone(), value);
-    }
-    Ok(map.into())
-}
-
-#[cfg(test)]
-mod test {
-    #[test]
-    fn window_determination() {
-        use super::*;
-        use cala_types::velocity::PartitionKey;
-        use cel_interpreter::CelContext;
-        use serde_json::json;
-
-        let keys = vec![
-            PartitionKey {
-                alias: "foo".to_string(),
-                value: "'bar'".parse().expect("Failed to parse"),
-            },
-            PartitionKey {
-                alias: "baz".to_string(),
-                value: "'qux'".parse().expect("Failed to parse"),
-            },
-        ];
-
-        let ctx = CelContext::new();
-        let result = determine_window(&keys, &ctx).unwrap();
-        let expected = json!({
-            "foo": "bar",
-            "baz": "qux",
-        });
-        assert_eq!(Window::from(expected), result);
     }
 }

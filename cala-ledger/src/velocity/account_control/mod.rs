@@ -7,12 +7,16 @@ use sqlx::PgPool;
 
 use std::collections::HashMap;
 
+use cala_types::{
+    account::AccountValues,
+    velocity::{VelocityControlValues, VelocityLimitValues},
+};
+
 use crate::{
     atomic_operation::*,
     param::Params,
     primitives::{AccountId, DebitOrCredit, Layer},
 };
-use cala_types::velocity::{VelocityControlValues, VelocityLimitValues};
 
 use super::error::VelocityError;
 
@@ -101,7 +105,8 @@ impl AccountControls {
         &self,
         op: &mut AtomicOperation<'_>,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountVelocityControl>>, VelocityError> {
+    ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
+    {
         self.repo.find_for_enforcement(op.tx(), account_ids).await
     }
 }

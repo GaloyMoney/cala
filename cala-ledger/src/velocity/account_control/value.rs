@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 
 use cala_types::{
     balance::BalanceSnapshot,
-    velocity::{PartitionKey, VelocityEnforcement},
+    entry::EntryValues,
+    velocity::{PartitionKey, VelocityEnforcement, Window},
 };
 
 use crate::{
@@ -22,6 +23,17 @@ pub struct AccountVelocityControl {
     pub velocity_limits: Vec<AccountVelocityLimit>,
 }
 
+impl AccountVelocityControl {
+    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, VelocityError> {
+        if let Some(condition) = &self.condition {
+            let result: bool = condition.try_evaluate(ctx)?;
+            Ok(result)
+        } else {
+            Ok(true)
+        }
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountVelocityLimit {
     pub limit_id: VelocityLimitId,
@@ -32,6 +44,33 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
+    pub fn window_for_enforcement(
+        &self,
+        ctx: &CelContext,
+        entry: &EntryValues,
+    ) -> Result<Option<Window>, VelocityError> {
+        if let Some(currency) = &self.currency {
+            if currency != &entry.currency {
+                return Ok(None);
+            }
+        }
+
+        if let Some(condition) = &self.condition {
+            let result: bool = condition.try_evaluate(ctx)?;
+            if !result {
+                return Ok(None);
+            }
+        }
+
+        let mut map = serde_json::Map::new();
+        for key in self.window.iter() {
+            let value: serde_json::Value = key.value.try_evaluate(ctx)?;
+            map.insert(key.alias.clone(), value);
+        }
+
+        Ok(Some(map.into()))
+    }
+
     pub fn enforce(
         &self,
         ctx: &CelContext,
@@ -91,4 +130,161 @@ pub struct AccountBalanceLimit {
     pub enforcement_direction: DebitOrCredit,
     pub start: DateTime<Utc>,
     pub end: Option<DateTime<Utc>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::primitives::*;
+
+    use super::*;
+
+    #[test]
+    fn control_needs_enforcement_when_no_condition_given() {
+        let control = AccountVelocityControl {
+            account_id: AccountId::new(),
+            control_id: VelocityControlId::new(),
+            enforcement: VelocityEnforcement::default(),
+            condition: None,
+            velocity_limits: vec![],
+        };
+        let ctx = crate::cel_context::initialize();
+        assert!(control.needs_enforcement(&ctx).unwrap());
+    }
+
+    #[test]
+    fn control_needs_enforcement_when_condition_is_true() {
+        let mut control = AccountVelocityControl {
+            account_id: AccountId::new(),
+            control_id: VelocityControlId::new(),
+            enforcement: VelocityEnforcement::default(),
+            condition: Some("true".parse().unwrap()),
+            velocity_limits: vec![],
+        };
+        let ctx = crate::cel_context::initialize();
+        assert!(control.needs_enforcement(&ctx).unwrap());
+        control.condition = Some("1 == 2".parse().unwrap());
+        assert!(!control.needs_enforcement(&ctx).unwrap());
+    }
+
+    fn entry() -> EntryValues {
+        EntryValues {
+            id: EntryId::new(),
+            version: 1,
+            transaction_id: TransactionId::new(),
+            journal_id: JournalId::new(),
+            account_id: AccountId::new(),
+            entry_type: "TEST_ENTRY_TYPE".to_string(),
+            sequence: 1,
+            layer: Layer::Settled,
+            currency: "USD".parse().unwrap(),
+            direction: DebitOrCredit::Credit,
+            units: Decimal::from(100),
+            description: None,
+        }
+    }
+
+    #[test]
+    fn limit_needs_enforcement_when_no_condition_given() {
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            condition: None,
+            currency: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![],
+            },
+        };
+        let ctx = crate::cel_context::initialize();
+        let entry = entry();
+        assert!(limit
+            .window_for_enforcement(&ctx, &entry)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn limit_does_not_need_enforcement_when_currency_does_not_match() {
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            condition: None,
+            currency: Some("EUR".parse().unwrap()),
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![],
+            },
+        };
+        let ctx = crate::cel_context::initialize();
+        let mut entry = entry();
+        assert!(limit
+            .window_for_enforcement(&ctx, &entry)
+            .unwrap()
+            .is_none());
+
+        entry.currency = "EUR".parse().unwrap();
+        assert!(limit
+            .window_for_enforcement(&ctx, &entry)
+            .unwrap()
+            .is_some());
+    }
+
+    #[test]
+    fn limit_needs_enforcement_when_condition_is_true() {
+        let mut limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: Some("true".parse().unwrap()),
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![],
+            },
+        };
+        let ctx = crate::cel_context::initialize();
+        let entry = entry();
+        assert!(limit
+            .window_for_enforcement(&ctx, &entry)
+            .unwrap()
+            .is_some());
+        limit.condition = Some("1 == 2".parse().unwrap());
+        assert!(limit
+            .window_for_enforcement(&ctx, &entry)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn limit_interpolates_window() {
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![
+                PartitionKey {
+                    alias: "entry_type".to_string(),
+                    value: "entry.entryType".parse().unwrap(),
+                },
+                PartitionKey {
+                    alias: "entry_sequence".to_string(),
+                    value: "entry.sequence".parse().unwrap(),
+                },
+            ],
+            condition: None,
+            currency: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![],
+            },
+        };
+        let entry = entry();
+        let mut ctx = crate::cel_context::initialize();
+        ctx.add_variable("entry", &entry);
+        let window = limit.window_for_enforcement(&ctx, &entry).unwrap();
+        assert_eq!(
+            window.unwrap(),
+            Window::from(serde_json::json!({
+                "entry_type": "TEST_ENTRY_TYPE",
+                "entry_sequence": 1
+            }))
+        );
+    }
 }
