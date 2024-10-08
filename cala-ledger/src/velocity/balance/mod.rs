@@ -74,11 +74,11 @@ impl VelocityBalances {
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
         for entry in entries {
-            let controls = match controls.get(&entry.account_id) {
+            let (_, controls) = match controls.get(&entry.account_id) {
                 Some(control) => control,
                 None => continue,
             };
-            for control in controls.1.iter() {
+            for control in controls.iter() {
                 let ctx = context.context_for_entry(entry);
 
                 if control.needs_enforcement(&ctx)? {
