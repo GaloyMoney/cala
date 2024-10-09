@@ -44,10 +44,10 @@ impl std::fmt::Display for CelExpression {
     }
 }
 
-#[derive(Debug)]
 enum EvalType<'a> {
     Value(CelValue),
     ContextItem(&'a ContextItem),
+    MemberFn(&'a CelValue, &'a CelMemberFunction),
 }
 
 impl<'a> EvalType<'a> {
@@ -124,7 +124,7 @@ fn evaluate_expression_inner<'a>(
             }
             Ok(EvalType::Value(CelValue::from(map)))
         }
-        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup(name)?)),
+        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup_ident(name)?)),
         Literal(val) => Ok(EvalType::Value(CelValue::from(val))),
         Arithmetic(op, left, right) => {
             let left = evaluate_expression(left, ctx)?;
@@ -156,12 +156,17 @@ fn evaluate_member<'a>(
     use ast::Member::*;
     match member {
         Attribute(name) => match target {
-            EvalType::Value(CelValue::Map(map)) => Ok(EvalType::Value(map.get(name))),
+            EvalType::Value(CelValue::Map(map)) if map.contains_key(name) => {
+                Ok(EvalType::Value(map.get(name)))
+            }
             EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
                 Ok(EvalType::Value(map.get(name)))
             }
             EvalType::ContextItem(ContextItem::Package(p)) => {
                 Ok(EvalType::ContextItem(p.lookup(name)?))
+            }
+            EvalType::ContextItem(ContextItem::Value(v)) => {
+                Ok(EvalType::MemberFn(v, ctx.lookup_member_fn(v, name)?))
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -175,6 +180,13 @@ fn evaluate_member<'a>(
             }
             EvalType::ContextItem(ContextItem::Package(p)) => {
                 evaluate_member(EvalType::ContextItem(p.package_self()?), member, ctx)
+            }
+            EvalType::MemberFn(v, f) => {
+                let mut args = Vec::new();
+                for e in exprs {
+                    args.push(evaluate_expression(e, ctx)?.try_value()?)
+                }
+                Ok(EvalType::Value(f(v, args)?))
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -417,6 +429,20 @@ mod tests {
             .unwrap();
         let context = CelContext::new();
         assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(3.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn function_on_timestamp() -> anyhow::Result<()> {
+        use chrono::{DateTime, Utc};
+
+        let time: DateTime<Utc> = "1940-12-21T00:00:00Z".parse().unwrap();
+        let mut context = CelContext::new();
+        context.add_variable("now", time);
+
+        let expression = "now.format('%d/%m/%Y')".parse::<CelExpression>().unwrap();
+        assert_eq!(expression.evaluate(&context)?, CelValue::from("21/12/1940"));
+
         Ok(())
     }
 }

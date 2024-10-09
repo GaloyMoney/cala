@@ -7,7 +7,7 @@ use crate::builtins;
 use super::*;
 
 lazy_static! {
-    pub static ref CEL_CONTEXT: CelContext = {
+    pub static ref CEL_PACKAGE: CelPackage = {
         let mut idents = HashMap::new();
         idents.insert(
             SELF_PACKAGE_NAME,
@@ -17,6 +17,7 @@ lazy_static! {
             Cow::Borrowed("Add"),
             ContextItem::Function(Box::new(builtins::decimal::add)),
         );
-        CelContext { idents }
+
+        CelPackage::new(CelContext { idents }, HashMap::new())
     };
 }
