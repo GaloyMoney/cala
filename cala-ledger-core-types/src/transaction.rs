@@ -26,6 +26,7 @@ mod cel {
         fn from(tx: &super::TransactionValues) -> Self {
             let mut map = CelMap::new();
             map.insert("id", tx.id);
+            map.insert("createdAt", tx.created_at);
             map.insert("journalId", tx.journal_id);
             map.insert("txTemplateId", tx.tx_template_id);
             map.insert("effective", tx.effective);

@@ -32,6 +32,8 @@ mod cel {
         fn from(account: &super::AccountValues) -> Self {
             let mut map = CelMap::new();
             map.insert("id", account.id);
+            map.insert("createdAt", account.created_at);
+            map.insert("modifiedAt", account.modified_at);
             map.insert("code", account.code.clone());
             map.insert("name", account.name.clone());
             map.insert("externalId", account.code.clone());
