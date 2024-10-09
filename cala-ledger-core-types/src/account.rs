@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
@@ -6,6 +7,8 @@ use super::primitives::*;
 pub struct AccountValues {
     pub id: AccountId,
     pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
     pub code: String,
     pub name: String,
     pub normal_balance_type: DebitOrCredit,

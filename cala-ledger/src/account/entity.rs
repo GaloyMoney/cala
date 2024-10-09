@@ -66,18 +66,21 @@ impl Account {
     }
 
     pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
+        let mut builder = builder.into();
+        if builder.modified_at.is_none() {
+            builder.modified_at(chrono::Utc::now());
+        }
+
         let AccountUpdateValues {
             external_id,
+            modified_at,
             code,
             name,
             normal_balance_type,
             description,
             status,
             metadata,
-        } = builder
-            .into()
-            .build()
-            .expect("AccountUpdateValues always exist");
+        } = builder.build().expect("AccountUpdateValues always exist");
 
         let mut updated_fields = Vec::new();
 
@@ -124,6 +127,8 @@ impl Account {
             }
         }
 
+        self.values.modified_at = modified_at;
+
         if !updated_fields.is_empty() {
             self.events.push(AccountEvent::Updated {
                 values: self.values.clone(),
@@ -133,15 +138,11 @@ impl Account {
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.events
-            .entity_first_persisted_at
-            .expect("No events for account")
+        self.values.created_at
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.events
-            .latest_event_persisted_at
-            .expect("No events for account")
+        self.values.modified_at
     }
 
     pub fn metadata<T: serde::de::DeserializeOwned>(&self) -> Result<Option<T>, serde_json::Error> {
@@ -178,6 +179,8 @@ impl TryFrom<EntityEvents<AccountEvent>> for Account {
 #[derive(Debug, Builder, Default)]
 #[builder(name = "AccountUpdate", default)]
 pub struct AccountUpdateValues {
+    #[builder(private)]
+    modified_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(strip_option, into))]
     pub external_id: Option<String>,
     #[builder(setter(strip_option, into))]
@@ -207,6 +210,7 @@ impl AccountUpdate {
 impl From<(AccountValues, Vec<String>)> for AccountUpdate {
     fn from((values, fields): (AccountValues, Vec<String>)) -> Self {
         let mut builder = AccountUpdate::default();
+        builder.modified_at(values.modified_at);
         for field in fields {
             match field.as_str() {
                 "external_id" => {
@@ -250,6 +254,8 @@ impl From<(AccountValues, Vec<String>)> for AccountUpdate {
 pub struct NewAccount {
     #[builder(setter(into))]
     pub id: AccountId,
+    #[builder(private)]
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) code: String,
     #[builder(setter(into))]
@@ -272,13 +278,17 @@ pub struct NewAccount {
 
 impl NewAccount {
     pub fn builder() -> NewAccountBuilder {
-        NewAccountBuilder::default()
+        let mut builder = NewAccountBuilder::default();
+        builder.created_at(chrono::Utc::now());
+        builder
     }
 
     pub(super) fn into_values(self) -> AccountValues {
         AccountValues {
             id: self.id,
             version: 1,
+            created_at: self.created_at,
+            modified_at: self.created_at,
             code: self.code,
             name: self.name,
             external_id: self.external_id,

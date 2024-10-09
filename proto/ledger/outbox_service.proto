@@ -65,14 +65,16 @@ message AccountUpdated {
 message Account {
   string id = 1;
   uint32 version = 2;
-  string code = 3;
-  string name = 4;
-  DebitOrCredit normal_balance_type = 5;
-  Status status = 6;
-  optional string external_id = 7;
-  optional string description = 8;
-  optional google.protobuf.Struct metadata = 9;
-  AccountConfig config = 10;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string code = 5;
+  string name = 6;
+  DebitOrCredit normal_balance_type = 7;
+  Status status = 8;
+  optional string external_id = 9;
+  optional string description = 10;
+  optional google.protobuf.Struct metadata = 11;
+  AccountConfig config = 12;
 }
 
 message AccountConfig {

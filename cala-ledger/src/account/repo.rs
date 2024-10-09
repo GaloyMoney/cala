@@ -62,7 +62,10 @@ impl AccountRepo {
         )
         .execute(&mut **db)
         .await?;
-        account.events.persist(db).await?;
+        account
+            .events
+            .persist_at(db, account.values().modified_at)
+            .await?;
         Ok(())
     }
 
@@ -241,7 +244,7 @@ impl AccountRepo {
             account.values().external_id,
             account.values().normal_balance_type as DebitOrCredit,
             account.values().config.eventually_consistent,
-            recorded_at,
+            account.values().created_at,
             serde_json::to_value(account.values()).expect("Failed to serialize account values"),
         )
         .execute(&mut **db)

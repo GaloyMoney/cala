@@ -210,6 +210,14 @@ impl TryFrom<proto::Account> for AccountValues {
         let res = Self {
             id: account.id.parse()?,
             version: account.version,
+            created_at: account
+                .created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: account
+                .modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
             code: account.code,
             name: account.name,
             external_id: account.external_id,

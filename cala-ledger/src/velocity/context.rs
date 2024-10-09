@@ -90,6 +90,8 @@ mod tests {
         AccountValues {
             id: AccountId::new(),
             version: 1,
+            created_at: chrono::Utc::now(),
+            modified_at: chrono::Utc::now(),
             code: "code".to_string(),
             name: "name".to_string(),
             normal_balance_type: DebitOrCredit::Credit,

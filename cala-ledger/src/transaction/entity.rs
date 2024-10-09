@@ -66,15 +66,11 @@ impl Transaction {
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.events
-            .entity_first_persisted_at
-            .expect("No persisted events")
+        self.values.created_at
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
-        self.events
-            .latest_event_persisted_at
-            .expect("No events for account")
+        self.values.modified_at
     }
 }
 

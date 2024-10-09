@@ -168,6 +168,8 @@ impl From<AccountValues> for proto::Account {
         AccountValues {
             id,
             version,
+            created_at,
+            modified_at,
             code,
             name,
             external_id,
@@ -183,6 +185,8 @@ impl From<AccountValues> for proto::Account {
         proto::Account {
             id: id.to_string(),
             version,
+            created_at: Some(created_at.into()),
+            modified_at: Some(modified_at.into()),
             code,
             name,
             external_id,
