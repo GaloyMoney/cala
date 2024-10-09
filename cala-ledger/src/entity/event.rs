@@ -62,6 +62,14 @@ where
         self.persist_inner(db, None, None).await
     }
 
+    pub async fn persist_at(
+        &mut self,
+        db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        recorded_at: DateTime<Utc>,
+    ) -> Result<usize, sqlx::Error> {
+        self.persist_inner(db, None, Some(recorded_at)).await
+    }
+
     pub async fn persisted_at(
         &mut self,
         db: &mut sqlx::Transaction<'_, sqlx::Postgres>,

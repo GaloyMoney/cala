@@ -422,6 +422,8 @@ impl TryFrom<proto::Transaction> for TransactionValues {
         proto::Transaction {
             id,
             version,
+            created_at,
+            modified_at,
             journal_id,
             tx_template_id,
             entry_ids,
@@ -435,6 +437,12 @@ impl TryFrom<proto::Transaction> for TransactionValues {
         let res = Self {
             id: id.parse()?,
             version,
+            created_at: created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
             journal_id: journal_id.parse()?,
             tx_template_id: tx_template_id.parse()?,
             entry_ids: entry_ids

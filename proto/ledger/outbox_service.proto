@@ -199,14 +199,16 @@ message TransactionCreated {
 message Transaction {
   string id = 1;
   uint32 version = 2;
-  string journal_id = 3;
-  string tx_template_id = 4;
-  repeated string entry_ids = 7;
-  string effective = 5;
-  string correlation_id = 6;
-  optional string external_id = 8;
-  optional string description = 9;
-  optional google.protobuf.Struct metadata = 10;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string journal_id = 5;
+  string tx_template_id = 6;
+  string effective = 7;
+  string correlation_id = 8;
+  repeated string entry_ids = 9;
+  optional string external_id = 10;
+  optional string description = 11;
+  optional google.protobuf.Struct metadata = 12;
 }
 
 message EntryCreated {

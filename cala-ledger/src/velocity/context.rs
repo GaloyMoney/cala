@@ -70,6 +70,8 @@ mod tests {
         TransactionValues {
             id: TransactionId::new(),
             version: 1,
+            created_at: chrono::Utc::now(),
+            modified_at: chrono::Utc::now(),
             journal_id: JournalId::new(),
             tx_template_id: TxTemplateId::new(),
             entry_ids: vec![],

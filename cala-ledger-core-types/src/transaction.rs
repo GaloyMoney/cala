@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 use super::primitives::*;
@@ -6,6 +7,8 @@ use super::primitives::*;
 pub struct TransactionValues {
     pub id: TransactionId,
     pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
     pub journal_id: JournalId,
     pub tx_template_id: TxTemplateId,
     pub entry_ids: Vec<EntryId>,

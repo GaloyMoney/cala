@@ -103,6 +103,8 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 pub(crate) struct NewTransaction {
     #[builder(setter(custom))]
     pub(super) id: TransactionId,
+    #[builder(private)]
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) journal_id: JournalId,
     #[builder(setter(into))]
@@ -121,7 +123,9 @@ pub(crate) struct NewTransaction {
 
 impl NewTransaction {
     pub fn builder() -> NewTransactionBuilder {
-        NewTransactionBuilder::default()
+        let mut builder = NewTransactionBuilder::default();
+        builder.created_at(chrono::Utc::now());
+        builder
     }
     #[allow(dead_code)]
     pub(super) fn initial_events(self) -> EntityEvents<TransactionEvent> {
@@ -131,6 +135,8 @@ impl NewTransaction {
                 values: TransactionValues {
                     id: self.id,
                     version: 1,
+                    created_at: self.created_at,
+                    modified_at: self.created_at,
                     journal_id: self.journal_id,
                     tx_template_id: self.tx_template_id,
                     effective: self.effective,
