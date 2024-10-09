@@ -47,27 +47,6 @@ pub struct CelMap {
     inner: HashMap<CelKey, CelValue>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct CelArray {
-    inner: Vec<CelValue>,
-}
-
-impl CelArray {
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
-    }
-
-    pub fn push(&mut self, elem: impl Into<CelValue>) {
-        self.inner.push(elem.into());
-    }
-}
-
-impl Default for CelArray {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl CelMap {
     pub fn new() -> Self {
         Self {
@@ -84,6 +63,10 @@ impl CelMap {
             .get(&key.into())
             .cloned()
             .unwrap_or(CelValue::Null)
+    }
+
+    pub fn contains_key(&self, key: impl Into<CelKey>) -> bool {
+        self.inner.contains_key(&key.into())
     }
 }
 
@@ -106,6 +89,27 @@ impl From<HashMap<String, CelValue>> for CelMap {
 impl From<CelMap> for CelValue {
     fn from(m: CelMap) -> Self {
         CelValue::Map(Arc::from(m))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CelArray {
+    inner: Vec<CelValue>,
+}
+
+impl CelArray {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn push(&mut self, elem: impl Into<CelValue>) {
+        self.inner.push(elem.into());
+    }
+}
+
+impl Default for CelArray {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

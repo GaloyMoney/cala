@@ -44,14 +44,14 @@ impl std::fmt::Display for CelExpression {
     }
 }
 
-#[derive(Debug)]
 enum EvalType<'a> {
     Value(CelValue),
     ContextItem(&'a ContextItem),
+    MemberFn(&'a CelValue, &'a CelMemberFunction),
 }
 
 impl<'a> EvalType<'a> {
-    fn try_bool(&self) -> Result<bool, CelError> {
+    fn try_into_bool(self) -> Result<bool, CelError> {
         if let EvalType::Value(val) = self {
             val.try_bool()
         } else {
@@ -61,13 +61,13 @@ impl<'a> EvalType<'a> {
         }
     }
 
-    fn try_key(&self) -> Result<CelKey, CelError> {
+    fn try_into_key(self) -> Result<CelKey, CelError> {
         if let EvalType::Value(val) = self {
             match val {
-                CelValue::Int(i) => Ok(CelKey::Int(*i)),
-                CelValue::UInt(u) => Ok(CelKey::UInt(*u)),
-                CelValue::Bool(b) => Ok(CelKey::Bool(*b)),
-                CelValue::String(s) => Ok(CelKey::String(s.clone())),
+                CelValue::Int(i) => Ok(CelKey::Int(i)),
+                CelValue::UInt(u) => Ok(CelKey::UInt(u)),
+                CelValue::Bool(b) => Ok(CelKey::Bool(b)),
+                CelValue::String(s) => Ok(CelKey::String(s)),
                 _ => Err(CelError::Unexpected(
                     "Expression didn't resolve to a valid key".to_string(),
                 )),
@@ -79,9 +79,9 @@ impl<'a> EvalType<'a> {
         }
     }
 
-    fn try_value(&self) -> Result<CelValue, CelError> {
+    fn try_into_value(self) -> Result<CelValue, CelError> {
         if let EvalType::Value(val) = self {
-            Ok(val.clone())
+            Ok(val)
         } else {
             Err(CelError::Unexpected("Couldn't unwrap value".to_string()))
         }
@@ -105,7 +105,7 @@ fn evaluate_expression_inner<'a>(
     use Expression::*;
     match expr {
         Ternary(cond, left, right) => {
-            if evaluate_expression(cond, ctx)?.try_bool()? {
+            if evaluate_expression(cond, ctx)?.try_into_bool()? {
                 evaluate_expression(left, ctx)
             } else {
                 evaluate_expression(right, ctx)
@@ -120,19 +120,19 @@ fn evaluate_expression_inner<'a>(
             for (k, v) in entries {
                 let key = evaluate_expression(k, ctx)?;
                 let value = evaluate_expression(v, ctx)?;
-                map.insert(key.try_key()?, value.try_value()?)
+                map.insert(key.try_into_key()?, value.try_into_value()?)
             }
             Ok(EvalType::Value(CelValue::from(map)))
         }
-        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup(name)?)),
+        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup_ident(name)?)),
         Literal(val) => Ok(EvalType::Value(CelValue::from(val))),
         Arithmetic(op, left, right) => {
             let left = evaluate_expression(left, ctx)?;
             let right = evaluate_expression(right, ctx)?;
             Ok(EvalType::Value(evaluate_arithmetic(
                 *op,
-                left.try_value()?,
-                right.try_value()?,
+                left.try_into_value()?,
+                right.try_into_value()?,
             )?))
         }
         Relation(op, left, right) => {
@@ -140,8 +140,8 @@ fn evaluate_expression_inner<'a>(
             let right = evaluate_expression(right, ctx)?;
             Ok(EvalType::Value(evaluate_relation(
                 *op,
-                left.try_value()?,
-                right.try_value()?,
+                left.try_into_value()?,
+                right.try_into_value()?,
             )?))
         }
         e => Err(CelError::Unexpected(format!("unimplemented {e:?}"))),
@@ -156,12 +156,17 @@ fn evaluate_member<'a>(
     use ast::Member::*;
     match member {
         Attribute(name) => match target {
-            EvalType::Value(CelValue::Map(map)) => Ok(EvalType::Value(map.get(name))),
+            EvalType::Value(CelValue::Map(map)) if map.contains_key(name) => {
+                Ok(EvalType::Value(map.get(name)))
+            }
             EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
                 Ok(EvalType::Value(map.get(name)))
             }
             EvalType::ContextItem(ContextItem::Package(p)) => {
                 Ok(EvalType::ContextItem(p.lookup(name)?))
+            }
+            EvalType::ContextItem(ContextItem::Value(v)) => {
+                Ok(EvalType::MemberFn(v, ctx.lookup_member_fn(v, name)?))
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -169,12 +174,19 @@ fn evaluate_member<'a>(
             EvalType::ContextItem(ContextItem::Function(f)) => {
                 let mut args = Vec::new();
                 for e in exprs {
-                    args.push(evaluate_expression(e, ctx)?.try_value()?)
+                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
                 }
                 Ok(EvalType::Value(f(args)?))
             }
             EvalType::ContextItem(ContextItem::Package(p)) => {
                 evaluate_member(EvalType::ContextItem(p.package_self()?), member, ctx)
+            }
+            EvalType::MemberFn(v, f) => {
+                let mut args = Vec::new();
+                for e in exprs {
+                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
+                }
+                Ok(EvalType::Value(f(v, args)?))
             }
             _ => Err(CelError::IllegalTarget),
         },
@@ -417,6 +429,20 @@ mod tests {
             .unwrap();
         let context = CelContext::new();
         assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(3.into()));
+        Ok(())
+    }
+
+    #[test]
+    fn function_on_timestamp() -> anyhow::Result<()> {
+        use chrono::{DateTime, Utc};
+
+        let time: DateTime<Utc> = "1940-12-21T00:00:00Z".parse().unwrap();
+        let mut context = CelContext::new();
+        context.add_variable("now", time);
+
+        let expression = "now.format('%d/%m/%Y')".parse::<CelExpression>().unwrap();
+        assert_eq!(expression.evaluate(&context)?, CelValue::from("21/12/1940"));
+
         Ok(())
     }
 }

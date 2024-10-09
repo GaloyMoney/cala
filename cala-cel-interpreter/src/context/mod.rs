@@ -1,12 +1,19 @@
 mod decimal;
+mod package;
+mod timestamp;
 
 use std::{borrow::Cow, collections::HashMap};
 
-use crate::{builtins, error::*, value::*};
+use crate::{builtins, cel_type::CelType, error::*, value::*};
+
+use package::CelPackage;
 
 const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
 
 type CelFunction = Box<dyn Fn(Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+pub(crate) type CelMemberFunction =
+    Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+
 #[derive(Debug)]
 pub struct CelContext {
     idents: HashMap<Cow<'static, str>, ContextItem>,
@@ -30,19 +37,36 @@ impl CelContext {
         );
         idents.insert(
             Cow::Borrowed("decimal"),
-            ContextItem::Package(&decimal::CEL_CONTEXT),
+            ContextItem::Package(&decimal::CEL_PACKAGE),
         );
+
+        idents.insert(
+            Cow::Borrowed("timestamp"),
+            ContextItem::Package(&timestamp::CEL_PACKAGE),
+        );
+
         Self { idents }
     }
 
-    pub(crate) fn package_self(&self) -> Result<&ContextItem, CelError> {
-        self.lookup(&SELF_PACKAGE_NAME)
-    }
-
-    pub(crate) fn lookup(&self, name: &str) -> Result<&ContextItem, CelError> {
+    pub(crate) fn lookup_ident(&self, name: &str) -> Result<&ContextItem, CelError> {
         self.idents
             .get(name)
             .ok_or_else(|| CelError::UnknownIdent(name.to_string()))
+    }
+
+    pub(crate) fn lookup_member_fn(
+        &self,
+        value: &CelValue,
+        name: &str,
+    ) -> Result<&CelMemberFunction, CelError> {
+        let package_name = CelType::from(value).package_name();
+        let package = if let Some(ContextItem::Package(package)) = self.idents.get(package_name) {
+            package
+        } else {
+            return Err(CelError::UnknownPackage(package_name));
+        };
+
+        package.lookup_member(value, name)
     }
 }
 impl Default for CelContext {
@@ -54,7 +78,7 @@ impl Default for CelContext {
 pub(crate) enum ContextItem {
     Value(CelValue),
     Function(CelFunction),
-    Package(&'static CelContext),
+    Package(&'static CelPackage),
 }
 
 impl std::fmt::Debug for ContextItem {

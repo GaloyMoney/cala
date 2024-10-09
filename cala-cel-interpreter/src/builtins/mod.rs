@@ -1,8 +1,11 @@
+pub(crate) mod decimal;
+pub(crate) mod timestamp;
+
 use chrono::{NaiveDate, Utc};
 
 use std::sync::Arc;
 
-use super::{cel_type::*, value::*};
+use super::value::*;
 use crate::error::*;
 
 pub(crate) fn date(args: Vec<CelValue>) -> Result<CelValue, CelError> {
@@ -20,30 +23,6 @@ pub(crate) fn uuid(args: Vec<CelValue>) -> Result<CelValue, CelError> {
         s.parse()
             .map_err(|e| CelError::UuidError(format!("{e:?}")))?,
     ))
-}
-
-pub(crate) mod decimal {
-    use rust_decimal::Decimal;
-
-    use super::*;
-
-    pub fn cast(args: Vec<CelValue>) -> Result<CelValue, CelError> {
-        match args.first() {
-            Some(CelValue::Decimal(d)) => Ok(CelValue::Decimal(*d)),
-            Some(CelValue::String(s)) => Ok(CelValue::Decimal(
-                s.parse()
-                    .map_err(|e| CelError::DecimalError(format!("{e:?}")))?,
-            )),
-            Some(v) => Err(CelError::BadType(CelType::Decimal, CelType::from(v))),
-            None => Err(CelError::MissingArgument),
-        }
-    }
-
-    pub fn add(args: Vec<CelValue>) -> Result<CelValue, CelError> {
-        let a: &Decimal = assert_arg(args.first())?;
-        let b: &Decimal = assert_arg(args.get(1))?;
-        Ok(CelValue::Decimal(a + b))
-    }
 }
 
 fn assert_arg<'a, T: TryFrom<&'a CelValue, Error = CelError>>(
