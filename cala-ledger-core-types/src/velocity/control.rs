@@ -18,6 +18,7 @@ pub struct VelocityEnforcement {
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum VelocityEnforcementAction {
     #[default]
     Reject,

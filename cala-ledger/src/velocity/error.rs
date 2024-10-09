@@ -22,12 +22,13 @@ pub enum VelocityError {
 }
 
 #[derive(Error, Debug)]
-#[error("Velocity limit exceeded for account {account_id} in currency {currency}: Limit ({limit_id}): {limit}, Requested: {requested}")]
+#[error("Velocity limit {limit_id} exceeded for account {account_id} - Limit: {currency} {limit}, Requested: {requested}")]
 pub struct LimitExceededError {
     pub account_id: AccountId,
-    pub currency: String,
+    pub currency: Currency,
     pub limit_id: VelocityLimitId,
     pub layer: Layer,
+    pub direction: DebitOrCredit,
     pub limit: Decimal,
     pub requested: Decimal,
 }

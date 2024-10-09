@@ -103,7 +103,8 @@ impl AccountVelocityLimit {
             if requested > limit.amount {
                 return Err(LimitExceededError {
                     account_id: snapshot.account_id,
-                    currency: snapshot.currency.code().to_string(),
+                    currency: snapshot.currency,
+                    direction: limit.enforcement_direction,
                     limit_id: self.limit_id,
                     layer: limit.layer,
                     limit: limit.amount,
@@ -177,8 +178,8 @@ mod tests {
             sequence: 1,
             layer: Layer::Settled,
             currency: "USD".parse().unwrap(),
-            direction: DebitOrCredit::Credit,
-            units: Decimal::from(100),
+            direction: DebitOrCredit::Debit,
+            units: Decimal::ONE,
             description: None,
         }
     }
@@ -286,5 +287,168 @@ mod tests {
                 "entry_sequence": 1
             }))
         );
+    }
+
+    #[test]
+    fn enforce_restricts_debit() {
+        let ctx = crate::cel_context::initialize();
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    layer: Layer::Settled,
+                    amount: Decimal::ONE,
+                    enforcement_direction: DebitOrCredit::Debit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let mut entry = entry();
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+        entry.units = Decimal::ONE_HUNDRED;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_err());
+        entry.direction = DebitOrCredit::Credit;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn enforce_ignores_when_currency_does_not_match() {
+        let ctx = crate::cel_context::initialize();
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: Some("EUR".parse().unwrap()),
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    layer: Layer::Settled,
+                    amount: Decimal::ONE,
+                    enforcement_direction: DebitOrCredit::Debit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let mut entry = entry();
+        entry.units = Decimal::ONE_HUNDRED;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn enforce_acts_on_available_balance_per_layer() {
+        let ctx = crate::cel_context::initialize();
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    layer: Layer::Pending,
+                    amount: Decimal::ONE,
+                    enforcement_direction: DebitOrCredit::Debit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let mut entry = entry();
+        entry.units = Decimal::ONE_HUNDRED;
+        entry.layer = Layer::Settled;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_err());
+        entry.layer = Layer::Pending;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_err());
+
+        entry.layer = Layer::Encumbrance;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn enforce_is_time_aware() {
+        let mut ctx = crate::cel_context::initialize();
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: Some("time".parse().unwrap()),
+                balance: vec![AccountBalanceLimit {
+                    layer: Layer::Settled,
+                    amount: Decimal::ONE,
+                    enforcement_direction: DebitOrCredit::Debit,
+                    start: time,
+                    end: Some(time + chrono::Duration::minutes(1)),
+                }],
+            },
+        };
+        let mut entry = entry();
+        entry.units = Decimal::ONE_HUNDRED;
+        ctx.add_variable("time", time);
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_err());
+        ctx.add_variable("time", time - chrono::Duration::minutes(1));
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+        ctx.add_variable("time", time + chrono::Duration::minutes(2));
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn enforce_restricts_credit() {
+        let ctx = crate::cel_context::initialize();
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    layer: Layer::Settled,
+                    amount: Decimal::ONE,
+                    enforcement_direction: DebitOrCredit::Credit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let mut entry = entry();
+        entry.direction = DebitOrCredit::Credit;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_ok());
+        entry.units = Decimal::ONE_HUNDRED;
+        let new_snapshot = crate::balance::Balances::new_snapshot(time, entry.account_id, &entry);
+        let res = limit.enforce(&ctx, time, &new_snapshot);
+        assert!(res.is_err());
     }
 }
