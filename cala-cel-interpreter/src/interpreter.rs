@@ -51,7 +51,7 @@ enum EvalType<'a> {
 }
 
 impl<'a> EvalType<'a> {
-    fn try_bool(&self) -> Result<bool, CelError> {
+    fn try_into_bool(self) -> Result<bool, CelError> {
         if let EvalType::Value(val) = self {
             val.try_bool()
         } else {
@@ -61,13 +61,13 @@ impl<'a> EvalType<'a> {
         }
     }
 
-    fn try_key(&self) -> Result<CelKey, CelError> {
+    fn try_into_key(self) -> Result<CelKey, CelError> {
         if let EvalType::Value(val) = self {
             match val {
-                CelValue::Int(i) => Ok(CelKey::Int(*i)),
-                CelValue::UInt(u) => Ok(CelKey::UInt(*u)),
-                CelValue::Bool(b) => Ok(CelKey::Bool(*b)),
-                CelValue::String(s) => Ok(CelKey::String(s.clone())),
+                CelValue::Int(i) => Ok(CelKey::Int(i)),
+                CelValue::UInt(u) => Ok(CelKey::UInt(u)),
+                CelValue::Bool(b) => Ok(CelKey::Bool(b)),
+                CelValue::String(s) => Ok(CelKey::String(s)),
                 _ => Err(CelError::Unexpected(
                     "Expression didn't resolve to a valid key".to_string(),
                 )),
@@ -79,9 +79,9 @@ impl<'a> EvalType<'a> {
         }
     }
 
-    fn try_value(&self) -> Result<CelValue, CelError> {
+    fn try_into_value(self) -> Result<CelValue, CelError> {
         if let EvalType::Value(val) = self {
-            Ok(val.clone())
+            Ok(val)
         } else {
             Err(CelError::Unexpected("Couldn't unwrap value".to_string()))
         }
@@ -105,7 +105,7 @@ fn evaluate_expression_inner<'a>(
     use Expression::*;
     match expr {
         Ternary(cond, left, right) => {
-            if evaluate_expression(cond, ctx)?.try_bool()? {
+            if evaluate_expression(cond, ctx)?.try_into_bool()? {
                 evaluate_expression(left, ctx)
             } else {
                 evaluate_expression(right, ctx)
@@ -120,7 +120,7 @@ fn evaluate_expression_inner<'a>(
             for (k, v) in entries {
                 let key = evaluate_expression(k, ctx)?;
                 let value = evaluate_expression(v, ctx)?;
-                map.insert(key.try_key()?, value.try_value()?)
+                map.insert(key.try_into_key()?, value.try_into_value()?)
             }
             Ok(EvalType::Value(CelValue::from(map)))
         }
@@ -131,8 +131,8 @@ fn evaluate_expression_inner<'a>(
             let right = evaluate_expression(right, ctx)?;
             Ok(EvalType::Value(evaluate_arithmetic(
                 *op,
-                left.try_value()?,
-                right.try_value()?,
+                left.try_into_value()?,
+                right.try_into_value()?,
             )?))
         }
         Relation(op, left, right) => {
@@ -140,8 +140,8 @@ fn evaluate_expression_inner<'a>(
             let right = evaluate_expression(right, ctx)?;
             Ok(EvalType::Value(evaluate_relation(
                 *op,
-                left.try_value()?,
-                right.try_value()?,
+                left.try_into_value()?,
+                right.try_into_value()?,
             )?))
         }
         e => Err(CelError::Unexpected(format!("unimplemented {e:?}"))),
@@ -174,7 +174,7 @@ fn evaluate_member<'a>(
             EvalType::ContextItem(ContextItem::Function(f)) => {
                 let mut args = Vec::new();
                 for e in exprs {
-                    args.push(evaluate_expression(e, ctx)?.try_value()?)
+                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
                 }
                 Ok(EvalType::Value(f(args)?))
             }
@@ -184,7 +184,7 @@ fn evaluate_member<'a>(
             EvalType::MemberFn(v, f) => {
                 let mut args = Vec::new();
                 for e in exprs {
-                    args.push(evaluate_expression(e, ctx)?.try_value()?)
+                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
                 }
                 Ok(EvalType::Value(f(v, args)?))
             }
