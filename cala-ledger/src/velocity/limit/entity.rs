@@ -116,6 +116,7 @@ impl NewVelocityLimit {
                             .balance
                             .into_iter()
                             .map(|input| BalanceLimit {
+                                limit_type: input.limit_type,
                                 layer: CelExpression::try_from(input.layer)
                                     .expect("already validated"),
                                 amount: CelExpression::try_from(input.amount)
@@ -191,6 +192,8 @@ impl NewLimitBuilder {
 #[derive(Clone, Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct NewBalanceLimit {
+    #[builder(setter(into), default)]
+    limit_type: BalanceLimitType,
     #[builder(setter(into))]
     layer: String,
     #[builder(setter(into))]
