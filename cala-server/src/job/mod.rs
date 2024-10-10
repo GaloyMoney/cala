@@ -9,7 +9,7 @@ mod traits;
 
 pub mod error;
 
-use cala_ledger::{query::*, AtomicOperation};
+use cala_ledger::AtomicOperation;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
@@ -52,14 +52,7 @@ impl Jobs {
         description: Option<String>,
         data: D,
     ) -> Result<Job, JobError> {
-        let new_job = NewJob::builder()
-            .id(id)
-            .name(name)
-            .description(description)
-            .data(data)?
-            .job_type(<I as JobInitializer>::job_type())
-            .build()
-            .expect("Could not build job");
+        let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
         let job = self.repo.create_in_tx(op.tx(), new_job).await?;
         self.executor.spawn_job::<I>(op.tx(), &job, None).await?;
         Ok(job)
@@ -74,25 +67,12 @@ impl Jobs {
         data: D,
         schedule_at: DateTime<Utc>,
     ) -> Result<Job, JobError> {
-        let new_job = NewJob::builder()
-            .name(name)
-            .description(description)
-            .data(data)?
-            .job_type(<I as JobInitializer>::job_type())
-            .build()
-            .expect("Could not build job");
+        let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
         let job = self.repo.create_in_tx(op.tx(), new_job).await?;
         self.executor
             .spawn_job::<I>(op.tx(), &job, Some(schedule_at))
             .await?;
         Ok(job)
-    }
-
-    pub async fn list(
-        &self,
-        query: PaginatedQueryArgs<JobByNameCursor>,
-    ) -> Result<PaginatedQueryRet<Job, JobByNameCursor>, JobError> {
-        self.repo.list(query).await
     }
 
     #[instrument(name = "cala_server.jobs.find", skip(self))]

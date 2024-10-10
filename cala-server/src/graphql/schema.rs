@@ -4,8 +4,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::{
-    account::*, account_set::*, balance::*, job::*, journal::*, loader::*, primitives::*,
-    transaction::*, tx_template::*,
+    account::*, account_set::*, balance::*, journal::*, loader::*, primitives::*, transaction::*,
+    tx_template::*,
 };
 use crate::{app::CalaApp, extension::*};
 
@@ -203,40 +203,6 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
             }
             Err(err) => Err(err.into()),
         }
-    }
-
-    async fn jobs(
-        &self,
-        ctx: &Context<'_>,
-        first: i32,
-        after: Option<String>,
-    ) -> async_graphql::Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
-        let app = ctx.data_unchecked::<CalaApp>();
-        query(
-            after,
-            None,
-            Some(first),
-            None,
-            |after, _, first, _| async move {
-                let first = first.expect("First always exists");
-                let result = app
-                    .jobs()
-                    .list(cala_ledger::query::PaginatedQueryArgs {
-                        first,
-                        after: after.map(crate::job::JobByNameCursor::from),
-                    })
-                    .await?;
-                let mut connection = Connection::new(false, result.has_next_page);
-                connection
-                    .edges
-                    .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = JobByNameCursor::from(&entity);
-                        Edge::new(cursor, Job::from(entity))
-                    }));
-                Ok::<_, async_graphql::Error>(connection)
-            },
-        )
-        .await
     }
 }
 
