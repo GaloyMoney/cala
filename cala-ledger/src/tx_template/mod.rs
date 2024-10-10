@@ -3,9 +3,7 @@ mod repo;
 
 pub mod error;
 
-use chrono::NaiveDate;
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -86,6 +84,7 @@ impl TxTemplates {
     )]
     pub(crate) async fn prepare_transaction(
         &self,
+        time: DateTime<Utc>,
         tx_id: TransactionId,
         code: &str,
         params: Params,
@@ -101,6 +100,7 @@ impl TxTemplates {
         let mut tx_builder = NewTransaction::builder();
         tx_builder
             .id(tx_id)
+            .created_at(time)
             .tx_template_id(tmpl.id)
             .entry_ids(entries.iter().map(|e| e.id).collect());
 

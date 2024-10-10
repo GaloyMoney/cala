@@ -28,10 +28,12 @@ impl TransactionRepo {
         db: &mut DbTransaction<'_, Postgres>,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
+        let created_at = new_transaction.created_at;
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (id, journal_id, tx_template_id, correlation_id, external_id)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_transactions (id, created_at, journal_id, tx_template_id, correlation_id, external_id)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             new_transaction.id as TransactionId,
+            created_at,
             new_transaction.journal_id as JournalId,
             new_transaction.tx_template_id as TxTemplateId,
             new_transaction.correlation_id,
@@ -40,7 +42,7 @@ impl TransactionRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_transaction.initial_events();
-        events.persist(db).await?;
+        events.persist_at(db, created_at).await?;
         let transaction = Transaction::try_from(events)?;
         Ok(transaction)
     }

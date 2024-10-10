@@ -103,6 +103,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 pub(crate) struct NewTransaction {
     #[builder(setter(custom))]
     pub(super) id: TransactionId,
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) journal_id: JournalId,
     #[builder(setter(into))]
@@ -123,6 +124,7 @@ impl NewTransaction {
     pub fn builder() -> NewTransactionBuilder {
         NewTransactionBuilder::default()
     }
+
     #[allow(dead_code)]
     pub(super) fn initial_events(self) -> EntityEvents<TransactionEvent> {
         EntityEvents::init(
@@ -131,6 +133,8 @@ impl NewTransaction {
                 values: TransactionValues {
                     id: self.id,
                     version: 1,
+                    created_at: self.created_at,
+                    modified_at: self.created_at,
                     journal_id: self.journal_id,
                     tx_template_id: self.tx_template_id,
                     effective: self.effective,
@@ -164,6 +168,7 @@ mod tests {
         let id = uuid::Uuid::new_v4();
         let new_transaction = NewTransaction::builder()
             .id(id)
+            .created_at(chrono::Utc::now())
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
             .entry_ids(vec![EntryId::new()])
@@ -185,6 +190,7 @@ mod tests {
         use serde_json::json;
         let new_transaction = NewTransaction::builder()
             .id(uuid::Uuid::new_v4())
+            .created_at(chrono::Utc::now())
             .journal_id(uuid::Uuid::new_v4())
             .tx_template_id(uuid::Uuid::new_v4())
             .effective(chrono::NaiveDate::default())

@@ -160,7 +160,7 @@ impl CalaLedger {
     ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction(tx_id, tx_template_code, params.into())
+            .prepare_transaction(op.now, tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self
