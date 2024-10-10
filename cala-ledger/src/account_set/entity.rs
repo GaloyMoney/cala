@@ -62,13 +62,18 @@ impl AccountSet {
     }
 
     pub fn update(&mut self, builder: impl Into<AccountSetUpdate>) {
+        let mut builder = builder.into();
+        if builder.modified_at.is_none() {
+            builder.modified_at(chrono::Utc::now());
+        }
+
         let AccountSetUpdateValues {
+            modified_at,
             name,
             normal_balance_type,
             description,
             metadata,
         } = builder
-            .into()
             .build()
             .expect("AccountSetUpdateValues always exist");
         let mut updated_fields = Vec::new();
@@ -100,6 +105,8 @@ impl AccountSet {
             }
         }
 
+        self.values.modified_at = modified_at;
+
         if !updated_fields.is_empty() {
             self.events.push(AccountSetEvent::Updated {
                 values: self.values.clone(),
@@ -128,6 +135,8 @@ impl AccountSet {
 #[derive(Debug, Builder, Default)]
 #[builder(name = "AccountSetUpdate", default)]
 pub struct AccountSetUpdateValues {
+    #[builder(private)]
+    modified_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into, strip_option))]
     pub name: Option<String>,
     #[builder(setter(into, strip_option))]
@@ -151,6 +160,7 @@ impl AccountSetUpdate {
 impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
     fn from((values, fields): (AccountSetValues, Vec<String>)) -> Self {
         let mut builder = AccountSetUpdate::default();
+        builder.modified_at(values.modified_at);
 
         for field in fields {
             match field.as_str() {
@@ -210,6 +220,8 @@ impl TryFrom<EntityEvents<AccountSetEvent>> for AccountSet {
 pub struct NewAccountSet {
     #[builder(setter(into))]
     pub id: AccountSetId,
+    #[builder(private)]
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) name: String,
     #[builder(setter(into))]
@@ -224,7 +236,9 @@ pub struct NewAccountSet {
 
 impl NewAccountSet {
     pub fn builder() -> NewAccountSetBuilder {
-        NewAccountSetBuilder::default()
+        let mut builder = NewAccountSetBuilder::default();
+        builder.created_at(chrono::Utc::now());
+        builder
     }
 
     pub(super) fn initial_events(self) -> EntityEvents<AccountSetEvent> {
@@ -234,6 +248,8 @@ impl NewAccountSet {
                 values: AccountSetValues {
                     id: self.id,
                     version: 1,
+                    created_at: self.created_at,
+                    modified_at: self.created_at,
                     journal_id: self.journal_id,
                     name: self.name,
                     normal_balance_type: self.normal_balance_type,

@@ -25,10 +25,12 @@ impl AccountRepo {
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let id = new_account.id;
+        let created_at = new_account.created_at;
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (id, code, name, external_id, normal_balance_type, eventually_consistent, latest_values)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            r#"INSERT INTO cala_accounts (id, created_at, code, name, external_id, normal_balance_type, eventually_consistent, latest_values)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
             id as AccountId,
+            created_at,
             new_account.code,
             new_account.name,
             new_account.external_id,
@@ -39,7 +41,7 @@ impl AccountRepo {
         .execute(&mut **db)
         .await?;
         let mut events = new_account.initial_events();
-        events.persist(db).await?;
+        events.persist_at(db, created_at).await?;
         let account = Account::try_from(events)?;
         Ok(account)
     }

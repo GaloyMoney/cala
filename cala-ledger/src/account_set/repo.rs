@@ -30,17 +30,20 @@ impl AccountSetRepo {
         db: &mut Transaction<'_, Postgres>,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
+        let id = new_account_set.id;
+        let created_at = new_account_set.created_at;
         sqlx::query!(
-            r#"INSERT INTO cala_account_sets (id, journal_id, name)
-            VALUES ($1, $2, $3)"#,
-            new_account_set.id as AccountSetId,
+            r#"INSERT INTO cala_account_sets (id, created_at, journal_id, name)
+            VALUES ($1, $2, $3, $4)"#,
+            id as AccountSetId,
+            created_at,
             new_account_set.journal_id as JournalId,
             new_account_set.name,
         )
         .execute(&mut **db)
         .await?;
         let mut events = new_account_set.initial_events();
-        events.persist(db).await?;
+        events.persist_at(db, created_at).await?;
         let account_set = AccountSet::try_from(events)?;
         Ok(account_set)
     }
@@ -414,7 +417,10 @@ impl AccountSetRepo {
         )
         .execute(&mut **db)
         .await?;
-        account_set.events.persist(db).await?;
+        account_set
+            .events
+            .persist_at(db, account_set.values().modified_at)
+            .await?;
         Ok(())
     }
 

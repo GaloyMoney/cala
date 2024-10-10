@@ -96,11 +96,13 @@ message AccountSetUpdated {
 message AccountSet {
   string id = 1;
   uint32 version = 2;
-  string journal_id = 3;
-  string name = 4;
-  DebitOrCredit normal_balance_type = 5;
-  optional string description = 6;
-  optional google.protobuf.Struct metadata = 7;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string journal_id = 5;
+  string name = 6;
+  DebitOrCredit normal_balance_type = 7;
+  optional string description = 8;
+  optional google.protobuf.Struct metadata = 9;
 }
 
 message AccountSetMemberCreated {

@@ -215,6 +215,8 @@ impl From<AccountSetValues> for proto::AccountSet {
         AccountSetValues {
             id,
             version,
+            created_at,
+            modified_at,
             journal_id,
             name,
             normal_balance_type,
@@ -225,6 +227,8 @@ impl From<AccountSetValues> for proto::AccountSet {
         let normal_balance_type: proto::DebitOrCredit = normal_balance_type.into();
         proto::AccountSet {
             id: id.to_string(),
+            created_at: Some(created_at.into()),
+            modified_at: Some(modified_at.into()),
             version,
             journal_id: journal_id.to_string(),
             name,

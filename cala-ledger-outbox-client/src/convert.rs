@@ -254,6 +254,14 @@ impl TryFrom<proto::AccountSet> for AccountSetValues {
         let res = Self {
             id: account_set.id.parse()?,
             version: account_set.version,
+            created_at: account_set
+                .created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: account_set
+                .modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
             journal_id: account_set.journal_id.parse()?,
             name: account_set.name,
             normal_balance_type,

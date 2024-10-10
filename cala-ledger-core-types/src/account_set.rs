@@ -7,6 +7,8 @@ use super::primitives::*;
 pub struct AccountSetValues {
     pub id: AccountSetId,
     pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
     pub journal_id: JournalId,
     pub name: String,
     pub description: Option<String>,
