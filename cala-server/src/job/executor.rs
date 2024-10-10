@@ -242,6 +242,7 @@ impl JobExecutor {
         }
         Ok(())
     }
+
     async fn complete_job(
         mut db: Transaction<'_, Postgres>,
         id: JobId,
@@ -258,7 +259,7 @@ impl JobExecutor {
         .execute(&mut *db)
         .await?;
         job.complete();
-        repo.persist_in_tx(&mut db, &mut job).await?;
+        repo.persist_in_tx(&mut db, job).await?;
         db.commit().await?;
         Ok(())
     }
