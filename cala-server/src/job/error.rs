@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-use crate::primitives::JobId;
-
 use super::entity::JobType;
 
 #[derive(Error, Debug)]

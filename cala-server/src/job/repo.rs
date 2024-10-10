@@ -42,10 +42,12 @@ impl JobRepo {
         sqlx::query!(
             r#"UPDATE jobs
                SET completed_at = $2,
+                   last_error = $3,
                    modified_at = NOW()
                WHERE id = $1"#,
             job.id as JobId,
-            job.completed_at
+            job.completed_at,
+            job.last_error,
         )
         .execute(&mut **db)
         .await?;
@@ -54,7 +56,7 @@ impl JobRepo {
 
     pub async fn find_by_id(&self, id: JobId) -> Result<Job, JobError> {
         let row = sqlx::query!(
-            r#"SELECT id as "id: JobId", type AS job_type, name, description, data, completed_at
+            r#"SELECT id as "id: JobId", type AS job_type, name, description, data, completed_at, last_error
             FROM jobs
             WHERE id = $1"#,
             id as JobId
@@ -69,6 +71,7 @@ impl JobRepo {
         );
         job.id = row.id;
         job.completed_at = row.completed_at;
+        job.last_error = row.last_error;
         Ok(job)
     }
 }

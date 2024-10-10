@@ -6,17 +6,28 @@ use crate::{integration::*, primitives::JobId};
 
 pub struct CurrentJob {
     id: JobId,
+    attempt: u32,
     pool: PgPool,
     state_json: Option<serde_json::Value>,
 }
 
 impl CurrentJob {
-    pub(super) fn new(id: JobId, pool: PgPool, state: Option<serde_json::Value>) -> Self {
+    pub(super) fn new(
+        id: JobId,
+        attempt: u32,
+        pool: PgPool,
+        state: Option<serde_json::Value>,
+    ) -> Self {
         Self {
             id,
+            attempt,
             pool,
             state_json: state,
         }
+    }
+
+    pub fn attempt(&self) -> u32 {
+        self.attempt
     }
 
     pub fn state<T: DeserializeOwned>(&self) -> Result<Option<T>, serde_json::Error> {

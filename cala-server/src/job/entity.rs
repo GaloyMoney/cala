@@ -31,8 +31,9 @@ pub struct Job {
     pub name: String,
     pub job_type: JobType,
     pub description: Option<String>,
+    pub last_error: Option<String>,
     data: serde_json::Value,
-    pub(super) completed_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
 }
 
 impl Job {
@@ -48,6 +49,7 @@ impl Job {
             job_type,
             description,
             data: serde_json::to_value(data).expect("could not serialize job data"),
+            last_error: None,
             completed_at: None,
         }
     }
@@ -56,7 +58,12 @@ impl Job {
         serde_json::from_value(self.data.clone())
     }
 
-    pub(super) fn complete(&mut self) {
+    pub(super) fn success(&mut self) {
         self.completed_at = Some(Utc::now());
+        self.last_error = None;
+    }
+
+    pub(super) fn fail(&mut self, error: String) {
+        self.last_error = Some(error);
     }
 }

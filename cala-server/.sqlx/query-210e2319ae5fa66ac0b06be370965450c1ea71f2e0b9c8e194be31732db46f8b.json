@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              WITH selected_jobs AS (\n                  SELECT id\n                  FROM job_executions\n                  WHERE reschedule_after < NOW()\n                  AND state = 'pending'\n                  LIMIT $1\n                  FOR UPDATE\n              )\n              UPDATE job_executions AS je\n              SET state = 'running', reschedule_after = NOW() + $2::interval\n              FROM selected_jobs\n              WHERE je.id = selected_jobs.id\n              RETURNING je.id AS \"id!: JobId\", je.state_json, je.next_attempt\n              ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "state_json",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "next_attempt",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Interval"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "210e2319ae5fa66ac0b06be370965450c1ea71f2e0b9c8e194be31732db46f8b"
+}

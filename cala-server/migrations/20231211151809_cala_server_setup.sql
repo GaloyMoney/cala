@@ -4,7 +4,7 @@ CREATE TABLE jobs (
   type VARCHAR NOT NULL,
   description VARCHAR,
   data JSONB,
-  error VARCHAR,
+  last_error VARCHAR,
   completed_at TIMESTAMPTZ,
   modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -15,6 +15,7 @@ CREATE TYPE JobExecutionState AS ENUM ('pending', 'running');
 
 CREATE TABLE job_executions (
   id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
+  next_attempt INT NOT NULL DEFAULT 1,
   name VARCHAR NOT NULL,
   state JobExecutionState NOT NULL DEFAULT 'pending',
   state_json JSONB,

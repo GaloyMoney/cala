@@ -248,35 +248,6 @@ type Job {
 	description: String
 }
 
-type JobConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [JobEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [Job!]!
-}
-
-"""
-An edge in a connection.
-"""
-type JobEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: Job!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
-}
-
 type Journal {
 	id: ID!
 	journalId: UUID!
@@ -395,7 +366,6 @@ type Query {
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
-	jobs(first: Int!, after: String): JobConnection!
 }
 
 type RangedBalance {
