@@ -27,16 +27,18 @@ impl TxTemplateRepo {
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
         let id = new_tx_template.id;
+        let created_at = new_tx_template.created_at;
         sqlx::query!(
-            r#"INSERT INTO cala_tx_templates (id, code)
-            VALUES ($1, $2)"#,
+            r#"INSERT INTO cala_tx_templates (id, created_at, code)
+            VALUES ($1, $2, $3)"#,
             id as TxTemplateId,
+            created_at,
             new_tx_template.code,
         )
         .execute(&mut **db)
         .await?;
         let mut events = new_tx_template.initial_events();
-        events.persist(db).await?;
+        events.persist_at(db, created_at).await?;
         let tx_template = TxTemplate::try_from(events)?;
         Ok(tx_template)
     }

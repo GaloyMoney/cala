@@ -1,4 +1,5 @@
 use cel_interpreter::CelExpression;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 pub use crate::param::*;
@@ -8,6 +9,8 @@ use crate::primitives::*;
 pub struct TxTemplateValues {
     pub id: TxTemplateId,
     pub version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
     pub code: String,
     pub params: Option<Vec<ParamDefinition>>,
     pub transaction: TxTemplateTransaction,

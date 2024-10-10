@@ -152,12 +152,14 @@ message TxTemplateCreated {
 message TxTemplate {
   string id = 1;
   uint32 version = 2;
-  string code = 3;
-  repeated ParamDefinition params = 4;
-  TxTemplateTransaction transaction = 5;
-  repeated TxTemplateEntry entries = 6;
-  optional string description = 7;
-  optional google.protobuf.Struct metadata = 8;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string code = 5;
+  repeated ParamDefinition params = 6;
+  TxTemplateTransaction transaction = 7;
+  repeated TxTemplateEntry entries = 8;
+  optional string description = 9;
+  optional google.protobuf.Struct metadata = 10;
 }
 
 message TxTemplateEntry {

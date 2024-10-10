@@ -321,6 +321,8 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
         proto::TxTemplate {
             id,
             version,
+            created_at,
+            modified_at,
             code,
             params,
             transaction,
@@ -344,6 +346,12 @@ impl TryFrom<proto::TxTemplate> for TxTemplateValues {
         let res = Self {
             id: id.parse()?,
             version,
+            created_at: created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
             code,
             params: Some(params),
             transaction,

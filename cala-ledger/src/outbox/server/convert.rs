@@ -289,6 +289,8 @@ impl From<TxTemplateValues> for proto::TxTemplate {
         TxTemplateValues {
             id,
             version,
+            created_at,
+            modified_at,
             code,
             params,
             transaction,
@@ -305,6 +307,8 @@ impl From<TxTemplateValues> for proto::TxTemplate {
         proto::TxTemplate {
             id: id.to_string(),
             version,
+            created_at: Some(created_at.into()),
+            modified_at: Some(modified_at.into()),
             code,
             params,
             transaction: Some(transaction.into()),

@@ -112,6 +112,8 @@ impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
 pub struct NewTxTemplate {
     #[builder(setter(into))]
     pub(super) id: TxTemplateId,
+    #[builder(private)]
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) code: String,
     #[builder(setter(strip_option, into), default)]
@@ -126,7 +128,9 @@ pub struct NewTxTemplate {
 
 impl NewTxTemplate {
     pub fn builder() -> NewTxTemplateBuilder {
-        NewTxTemplateBuilder::default()
+        let mut builder = NewTxTemplateBuilder::default();
+        builder.created_at(chrono::Utc::now());
+        builder
     }
 
     pub(super) fn initial_events(self) -> EntityEvents<TxTemplateEvent> {
@@ -136,6 +140,8 @@ impl NewTxTemplate {
                 values: TxTemplateValues {
                     id: self.id,
                     version: 1,
+                    created_at: self.created_at,
+                    modified_at: self.created_at,
                     code: self.code,
                     description: self.description,
                     params: self
