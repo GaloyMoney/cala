@@ -10,6 +10,7 @@ mod schema;
 mod timestamp;
 pub mod transaction;
 pub mod tx_template;
+pub mod velocity;
 
 use async_graphql::{dataloader::*, *};
 
