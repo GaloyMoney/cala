@@ -71,6 +71,7 @@ pub struct NewVelocityLimit {
     window: Vec<NewPartitionKey>,
     #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
+    #[builder(setter(strip_option, into), default)]
     currency: Option<Currency>,
     #[builder(setter(strip_option), default)]
     params: Option<Vec<NewParamDefinition>>,
@@ -200,9 +201,9 @@ pub struct NewBalanceLimit {
     amount: String,
     #[builder(setter(into))]
     enforcement_direction: String,
-    #[builder(setter(into), default)]
+    #[builder(setter(into, strip_option), default)]
     start: Option<String>,
-    #[builder(setter(into), default)]
+    #[builder(setter(into, strip_option), default)]
     end: Option<String>,
 }
 impl NewBalanceLimit {
