@@ -280,6 +280,14 @@ impl TryFrom<proto::Journal> for JournalValues {
         let res = Self {
             id: journal.id.parse()?,
             version: journal.version,
+            created_at: journal
+                .created_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
+            modified_at: journal
+                .modified_at
+                .ok_or(CalaLedgerOutboxClientError::MissingField)?
+                .into(),
             name: journal.name,
             status,
             description: journal.description,

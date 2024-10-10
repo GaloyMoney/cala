@@ -25,16 +25,18 @@ impl JournalRepo {
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
         let id = new_journal.id;
+        let created_at = new_journal.created_at;
         sqlx::query!(
-            r#"INSERT INTO cala_journals (id, name)
-            VALUES ($1, $2)"#,
+            r#"INSERT INTO cala_journals (id, created_at, name)
+            VALUES ($1, $2, $3)"#,
             id as JournalId,
+            created_at,
             new_journal.name,
         )
         .execute(&mut **db)
         .await?;
         let mut events = new_journal.initial_events();
-        events.persist(db).await?;
+        events.persist_at(db, created_at).await?;
         let journal = Journal::try_from(events)?;
         Ok(journal)
     }
@@ -52,7 +54,10 @@ impl JournalRepo {
         )
         .execute(&mut **db)
         .await?;
-        journal.events.persist(db).await?;
+        journal
+            .events
+            .persist_at(db, journal.values().modified_at)
+            .await?;
         Ok(())
     }
 

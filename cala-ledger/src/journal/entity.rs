@@ -61,14 +61,17 @@ impl Journal {
     }
 
     pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
+        let mut builder = builder.into();
+        if builder.modified_at.is_none() {
+            builder.modified_at(chrono::Utc::now());
+        }
+
         let JournalUpdateValues {
             name,
+            modified_at,
             status,
             description,
-        } = builder
-            .into()
-            .build()
-            .expect("JournalUpdateValues always exist");
+        } = builder.build().expect("JournalUpdateValues always exist");
         let mut updated_fields = Vec::new();
 
         if let Some(name) = name {
@@ -87,6 +90,8 @@ impl Journal {
             self.values.description.clone_from(&description);
             updated_fields.push("description".to_string());
         }
+
+        self.values.modified_at = modified_at;
 
         if !updated_fields.is_empty() {
             self.events.push(JournalEvent::Updated {
@@ -116,6 +121,8 @@ impl Journal {
 #[derive(Builder, Debug, Default)]
 #[builder(name = "JournalUpdate", default)]
 pub struct JournalUpdateValues {
+    #[builder(private)]
+    modified_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into, strip_option))]
     pub name: Option<String>,
     #[builder(setter(into, strip_option))]
@@ -127,6 +134,7 @@ pub struct JournalUpdateValues {
 impl From<(JournalValues, Vec<String>)> for JournalUpdate {
     fn from((values, fields): (JournalValues, Vec<String>)) -> Self {
         let mut builder = JournalUpdate::default();
+        builder.modified_at(values.modified_at);
 
         for field in fields {
             match field.as_str() {
@@ -177,6 +185,8 @@ impl TryFrom<EntityEvents<JournalEvent>> for Journal {
 pub struct NewJournal {
     #[builder(setter(into))]
     pub id: JournalId,
+    #[builder(private)]
+    pub(super) created_at: chrono::DateTime<chrono::Utc>,
     #[builder(setter(into))]
     pub(super) name: String,
     #[builder(setter(into), default)]
@@ -187,7 +197,9 @@ pub struct NewJournal {
 
 impl NewJournal {
     pub fn builder() -> NewJournalBuilder {
-        NewJournalBuilder::default()
+        let mut builder = NewJournalBuilder::default();
+        builder.created_at(chrono::Utc::now());
+        builder
     }
 
     pub(super) fn initial_events(self) -> EntityEvents<JournalEvent> {
@@ -197,6 +209,8 @@ impl NewJournal {
                 values: JournalValues {
                     id: self.id,
                     version: 1,
+                    created_at: self.created_at,
+                    modified_at: self.created_at,
                     name: self.name,
                     status: self.status,
                     description: self.description,

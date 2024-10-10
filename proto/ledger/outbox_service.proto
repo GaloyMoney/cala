@@ -137,9 +137,11 @@ message JournalUpdated {
 message Journal {
   string id = 1;
   uint32 version = 2;
-  string name = 3;
-  Status status = 4;
-  optional string description = 5;
+  google.protobuf.Timestamp created_at = 3;
+  google.protobuf.Timestamp modified_at = 4;
+  string name = 5;
+  Status status = 6;
+  optional string description = 7;
 }
 
 message TxTemplateCreated {
