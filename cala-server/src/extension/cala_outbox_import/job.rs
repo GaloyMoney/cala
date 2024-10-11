@@ -47,7 +47,7 @@ pub struct CalaOutboxImportJobState {
 impl JobRunner for CalaOutboxImportJob {
     #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
     async fn run(
-        &mut self,
+        &self,
         mut current_job: CurrentJob,
     ) -> Result<JobCompletion, Box<dyn std::error::Error>> {
         let mut state = current_job
