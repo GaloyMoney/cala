@@ -38,7 +38,7 @@ impl CurrentJob {
         }
     }
 
-    pub async fn update_execution_state<T: Serialize>(
+    pub async fn update_state<T: Serialize>(
         &mut self,
         db: &mut Transaction<'_, Postgres>,
         state: T,
@@ -46,7 +46,7 @@ impl CurrentJob {
         let state_json = serde_json::to_value(state).map_err(JobError::CouldNotSerializeState)?;
         sqlx::query!(
             r#"
-          UPDATE job_executions
+          UPDATE jobs
           SET state_json = $1
           WHERE id = $2
         "#,

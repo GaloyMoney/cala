@@ -3,7 +3,7 @@ CREATE TABLE jobs (
   name VARCHAR NOT NULL,
   type VARCHAR NOT NULL,
   description VARCHAR,
-  data JSONB,
+  state_json JSONB,
   last_error VARCHAR,
   completed_at TIMESTAMPTZ,
   modified_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -18,9 +18,8 @@ CREATE TABLE job_executions (
   next_attempt INT NOT NULL DEFAULT 1,
   name VARCHAR NOT NULL,
   state JobExecutionState NOT NULL DEFAULT 'pending',
-  state_json JSONB,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  reschedule_after TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE integrations (

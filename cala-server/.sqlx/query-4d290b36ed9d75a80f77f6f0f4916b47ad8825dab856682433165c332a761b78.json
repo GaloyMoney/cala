@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id as \"id: JobId\", type AS job_type, name, description, data, completed_at, last_error\n            FROM jobs\n            WHERE id = $1",
+  "query": "SELECT id as \"id: JobId\", type AS job_type, name, description, state_json, completed_at, last_error\n            FROM jobs\n            WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -25,7 +25,7 @@
       },
       {
         "ordinal": 4,
-        "name": "data",
+        "name": "state_json",
         "type_info": "Jsonb"
       },
       {
@@ -54,5 +54,5 @@
       true
     ]
   },
-  "hash": "0ff4c7b86806df5eff0b3189b809c217a7fe77da062c51ae7cf7a3b0e01beb29"
+  "hash": "4d290b36ed9d75a80f77f6f0f4916b47ad8825dab856682433165c332a761b78"
 }

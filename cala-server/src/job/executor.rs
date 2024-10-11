@@ -145,10 +145,11 @@ impl JobExecutor {
         let rows = sqlx::query!(
             r#"
               WITH selected_jobs AS (
-                  SELECT id
-                  FROM job_executions
+                  SELECT je.id, state_json
+                  FROM job_executions je
+                  JOIN jobs ON je.id = jobs.id
                   WHERE reschedule_after < NOW()
-                  AND state = 'pending'
+                  AND je.state = 'pending'
                   LIMIT $1
                   FOR UPDATE
               )
@@ -156,7 +157,7 @@ impl JobExecutor {
               SET state = 'running', reschedule_after = NOW() + $2::interval
               FROM selected_jobs
               WHERE je.id = selected_jobs.id
-              RETURNING je.id AS "id!: JobId", je.state_json, je.next_attempt
+              RETURNING je.id AS "id!: JobId", selected_jobs.state_json, je.next_attempt
               "#,
             poll_limit as i32,
             pg_interval
