@@ -211,6 +211,27 @@ type BalanceAmount {
 	entryId: UUID!
 }
 
+type BalanceLimit {
+	layer: Expression!
+	amount: Expression!
+	normalBalanceType: Expression!
+	start: Expression
+	end: Expression
+}
+
+input BalanceLimitInput {
+	limitType: BalanceLimitType! = AVAILABLE
+	layer: Expression!
+	amount: Expression!
+	normalBalanceType: Expression!
+	start: Expression
+	end: Expression
+}
+
+enum BalanceLimitType {
+	AVAILABLE
+}
+
 
 input CalaOutboxImportJobCreateInput {
 	jobId: UUID!
@@ -286,6 +307,16 @@ enum Layer {
 	ENCUMBRANCE
 }
 
+type Limit {
+	timestampSource: Expression
+	balance: [BalanceLimit!]!
+}
+
+input LimitInput {
+	timestampSource: Expression
+	balance: [BalanceLimitInput!]!
+}
+
 type Money {
 	units: Decimal!
 	currency: CurrencyCode!
@@ -303,6 +334,7 @@ type Mutation {
 	journalUpdate(id: UUID!, input: JournalUpdateInput!): JournalUpdatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	transactionPost(input: TransactionInput!): TransactionPostPayload!
+	velocityLimitCreate(input: VelocityLimitCreateInput!): VelocityLimitCreatePayload!
 }
 
 """
@@ -350,6 +382,16 @@ input ParamDefinitionInput {
 	type: ParamDataType!
 	default: Expression
 	description: String
+}
+
+type PartitionKey {
+	alias: String!
+	value: Expression!
+}
+
+input PartitionKeyInput {
+	alias: String!
+	value: Expression!
 }
 
 type Query {
@@ -484,6 +526,33 @@ input TxTemplateTransactionInput {
 }
 
 scalar UUID
+
+type VelocityLimit {
+	id: ID!
+	velocityLimitId: UUID!
+	name: String!
+	description: String!
+	condition: Expression
+	window: [PartitionKey!]!
+	currency: CurrencyCode
+	params: [ParamDefinition!]
+	limit: Limit!
+}
+
+input VelocityLimitCreateInput {
+	velocityLimitId: UUID!
+	name: String!
+	description: String!
+	window: [PartitionKeyInput!]!
+	condition: Expression
+	limit: LimitInput!
+	currency: CurrencyCode
+	params: [ParamDefinitionInput!]
+}
+
+type VelocityLimitCreatePayload {
+	velocityLimit: VelocityLimit!
+}
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

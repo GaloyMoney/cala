@@ -24,7 +24,6 @@ async fn create_control() -> anyhow::Result<()> {
         .name("Withdrawal")
         .description("test")
         .window(vec![])
-        .currency(None)
         .limit(
             NewLimit::builder()
                 .balance(vec![NewBalanceLimit::builder()
@@ -50,7 +49,6 @@ async fn create_control() -> anyhow::Result<()> {
         .name("Deposit")
         .description("test")
         .window(vec![])
-        .currency(None)
         .limit(
             NewLimit::builder()
                 .balance(vec![NewBalanceLimit::builder()

@@ -110,6 +110,12 @@ impl From<UUID> for cala_ledger::JournalId {
     }
 }
 
+impl From<UUID> for cala_ledger::VelocityLimitId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::VelocityLimitId::from(uuid.0)
+    }
+}
+
 impl From<UUID> for cala_ledger::TxTemplateId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::TxTemplateId::from(uuid.0)
