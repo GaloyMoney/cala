@@ -715,11 +715,16 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
+
         let mut new_velocity_control_builder = cala_ledger::velocity::NewVelocityControl::builder();
         new_velocity_control_builder
             .id(input.velocity_control_id)
             .name(input.name)
             .description(input.description);
+
+        if let Some(condition) = input.condition {
+            new_velocity_control_builder.condition(condition);
+        }
 
         let new_velocity_control = new_velocity_control_builder.build()?;
         let velocity_control = app
