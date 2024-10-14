@@ -93,19 +93,12 @@ impl Velocities {
     pub async fn add_limit_to_control_in_op(
         &self,
         op: &mut AtomicOperation<'_>,
-        control_id: VelocityControlId,
-        limit_id: VelocityLimitId,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
         let db = op.tx();
-
-        let mut control = self.controls.find_by_id(db, control_id).await?;
-        control.add_limit(limit_id);
-        self.limits
-            .add_limit_to_control(db, control_id, limit_id)
-            .await?;
-        self.controls.persist_in_tx(db, &mut control).await?;
-
-        Ok(control)
+        self.limits.add_limit_to_control(db, control, limit).await?;
+        self.controls.find_by_id(db, control).await
     }
 
     pub async fn attach_control_to_account(

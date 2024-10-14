@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub use crate::{entity::*, param::definition::*};
 pub use cala_types::{
-    primitives::{Currency, VelocityControlId, VelocityLimitId},
+    primitives::{Currency, VelocityControlId},
     velocity::*,
 };
 
@@ -12,7 +12,6 @@ pub use cala_types::{
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum VelocityControlEvent {
     Initialized { values: VelocityControlValues },
-    AddLimit { limit_id: VelocityLimitId },
 }
 
 impl EntityEvent for VelocityControlEvent {
@@ -43,11 +42,6 @@ impl VelocityControl {
             .entity_first_persisted_at
             .expect("No events for account")
     }
-
-    pub fn add_limit(&mut self, limit_id: VelocityLimitId) {
-        self.events
-            .push(VelocityControlEvent::AddLimit { limit_id });
-    }
 }
 
 impl Entity for VelocityControl {
@@ -64,7 +58,6 @@ impl TryFrom<EntityEvents<VelocityControlEvent>> for VelocityControl {
                 VelocityControlEvent::Initialized { values } => {
                     builder = builder.values(values.clone());
                 }
-                _ => {}
             }
         }
         builder.events(events).build()
