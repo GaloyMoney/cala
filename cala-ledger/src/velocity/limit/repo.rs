@@ -56,7 +56,7 @@ impl VelocityLimitRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         control: VelocityControlId,
-    ) -> Result<Vec<VelocityLimitValues>, VelocityError> {
+    ) -> Result<Vec<VelocityLimit>, VelocityError> {
         let rows = sqlx::query_as!(
             GenericEvent,
             r#"WITH limits AS (
@@ -77,11 +77,7 @@ impl VelocityLimitRepo {
         .fetch_all(&mut **db)
         .await?;
         let n = rows.len();
-        let ret = EntityEvents::load_n(rows, n)?
-            .0
-            .into_iter()
-            .map(|l: VelocityLimit| l.into_values())
-            .collect();
+        let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;
         Ok(ret)
     }
 }

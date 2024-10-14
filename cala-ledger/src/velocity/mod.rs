@@ -122,7 +122,14 @@ impl Velocities {
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<(), VelocityError> {
         let control = self.controls.find_by_id(op.tx(), control_id).await?;
-        let limits = self.limits.list_for_control(op.tx(), control_id).await?;
+        let limits = self
+            .limits
+            .list_for_control(op.tx(), control_id)
+            .await?
+            .into_iter()
+            .map(|l| l.into_values())
+            .collect();
+
         self.account_controls
             .attach_control_in_op(
                 op,
@@ -152,5 +159,25 @@ impl Velocities {
         self.balances
             .update_balances_in_op(op, created_at, transaction, entries, controls)
             .await
+    }
+
+    pub async fn list_limits_for_control(
+        &self,
+        control_id: VelocityControlId,
+    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let limits = self
+            .list_limits_for_control_in_op(&mut op, control_id)
+            .await?;
+        op.commit().await?;
+        Ok(limits)
+    }
+
+    pub async fn list_limits_for_control_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        control_id: VelocityControlId,
+    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+        self.limits.list_for_control(op.tx(), control_id).await
     }
 }

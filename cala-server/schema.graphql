@@ -536,6 +536,7 @@ type VelocityControl {
 	description: String!
 	enforcement: VelocityEnforcement!
 	condition: Expression
+	limits: [VelocityLimit!]!
 }
 
 input VelocityControlAddLimitInput {
