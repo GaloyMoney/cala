@@ -75,7 +75,7 @@ pub struct NewVelocityControl {
     #[builder(setter(into))]
     description: String,
     #[builder(setter(into), default)]
-    enforcement: VelocityEnforcement,
+    enforcement: NewVelocityEnforcement,
     #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
 }
@@ -93,7 +93,7 @@ impl NewVelocityControl {
                     id: self.id,
                     name: self.name,
                     description: self.description,
-                    enforcement: self.enforcement,
+                    enforcement: self.enforcement.action.into(),
                     condition: self
                         .condition
                         .map(|expr| CelExpression::try_from(expr).expect("already validated")),
@@ -115,4 +115,16 @@ fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), Str
         CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
     }
     Ok(())
+}
+
+#[derive(Builder, Debug, Clone, Default)]
+pub struct NewVelocityEnforcement {
+    #[builder(setter(into), default)]
+    pub(super) action: VelocityEnforcementAction,
+}
+
+impl NewVelocityEnforcement {
+    pub fn builder() -> NewVelocityEnforcementBuilder {
+        NewVelocityEnforcementBuilder::default()
+    }
 }

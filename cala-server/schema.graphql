@@ -335,6 +335,7 @@ type Mutation {
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	transactionPost(input: TransactionInput!): TransactionPostPayload!
 	velocityLimitCreate(input: VelocityLimitCreateInput!): VelocityLimitCreatePayload!
+	velocityControlCreate(input: VelocityControlCreateInput!): VelocityControlCreatePayload!
 }
 
 """
@@ -526,6 +527,39 @@ input TxTemplateTransactionInput {
 }
 
 scalar UUID
+
+type VelocityControl {
+	id: ID!
+	velocityControlId: UUID!
+	name: String!
+	description: String!
+	enforcement: VelocityEnforcement!
+	condition: Expression
+}
+
+input VelocityControlCreateInput {
+	velocityControlId: UUID!
+	name: String!
+	description: String!
+	enforcement: VelocityEnforcementInput!
+	condition: Expression
+}
+
+type VelocityControlCreatePayload {
+	velocityControl: VelocityControl!
+}
+
+type VelocityEnforcement {
+	velocityEnforcementAction: VelocityEnforcementAction!
+}
+
+enum VelocityEnforcementAction {
+	REJECT
+}
+
+input VelocityEnforcementInput {
+	velocityEnforcementAction: VelocityEnforcementAction! = REJECT
+}
 
 type VelocityLimit {
 	id: ID!

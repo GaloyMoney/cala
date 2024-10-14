@@ -704,4 +704,42 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         Ok(velocity_limit.into())
     }
+
+    async fn velocity_control_create(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlCreateInput,
+    ) -> Result<VelocityControlCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let mut new_velocity_control_builder = cala_ledger::velocity::NewVelocityControl::builder();
+        new_velocity_control_builder
+            .id(input.velocity_control_id)
+            .name(input.name)
+            .description(input.description);
+
+        if let Some(condition) = input.condition {
+            new_velocity_control_builder.condition(condition);
+        }
+
+        let mut new_velocity_enforcement_builder =
+            cala_ledger::velocity::NewVelocityEnforcement::builder();
+        new_velocity_enforcement_builder.action(input.enforcement.velocity_enforcement_action);
+        let new_velocity_enforcement = new_velocity_enforcement_builder.build()?;
+
+        new_velocity_control_builder.enforcement(new_velocity_enforcement);
+
+        let new_velocity_control = new_velocity_control_builder.build()?;
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .create_control_in_op(&mut op, new_velocity_control)
+            .await?;
+
+        Ok(velocity_control.into())
+    }
 }
