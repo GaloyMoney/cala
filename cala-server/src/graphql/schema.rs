@@ -726,6 +726,13 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             new_velocity_control_builder.condition(condition);
         }
 
+        let mut new_velocity_enforcement_builder =
+            cala_ledger::velocity::NewVelocityEnforcement::builder();
+        new_velocity_enforcement_builder.action(input.enforcement.velocity_enforcement_action);
+        let new_velocity_enforcement = new_velocity_enforcement_builder.build()?;
+
+        new_velocity_control_builder.enforcement(new_velocity_enforcement);
+
         let new_velocity_control = new_velocity_control_builder.build()?;
         let velocity_control = app
             .ledger()
