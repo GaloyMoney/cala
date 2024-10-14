@@ -87,6 +87,93 @@ pub(super) struct VelocityLimitCreatePayload {
     velocity_limit: VelocityLimit,
 }
 
+#[derive(SimpleObject)]
+struct VelocityControl {
+    id: ID,
+    velocity_control_id: UUID,
+    name: String,
+    description: String,
+    enforcement: VelocityEnforcement,
+    condition: Option<Expression>,
+}
+
+#[derive(SimpleObject)]
+struct VelocityEnforcement {
+    velocity_enforcement_action: VelocityEnforcementAction,
+}
+
+#[derive(InputObject)]
+pub(super) struct VelocityControlCreateInput {
+    pub velocity_control_id: UUID,
+    pub name: String,
+    pub description: String,
+    pub enforcement: VelocityEnforcementInput,
+    pub condition: Option<Expression>,
+}
+
+#[derive(InputObject)]
+pub(super) struct VelocityEnforcementInput {
+    #[graphql(default)]
+    pub velocity_enforcement_action: VelocityEnforcementAction,
+}
+
+#[derive(Enum, Default, Copy, Clone, Eq, PartialEq)]
+#[graphql(remote = "cala_ledger::velocity::VelocityEnforcementAction")]
+pub(super) enum VelocityEnforcementAction {
+    #[default]
+    Reject,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct VelocityControlCreatePayload {
+    velocity_control: VelocityControl,
+}
+
+impl ToGlobalId for cala_ledger::VelocityControlId {
+    fn to_global_id(&self) -> async_graphql::types::ID {
+        async_graphql::types::ID::from(format!("velocity_control:{}", self))
+    }
+}
+
+impl From<cala_ledger::velocity::VelocityControl> for VelocityControl {
+    fn from(velocity_control: cala_ledger::velocity::VelocityControl) -> Self {
+        let cala_ledger::velocity::VelocityControlValues {
+            id,
+            name,
+            description,
+            enforcement,
+            condition,
+        } = velocity_control.into_values();
+
+        let enforcement = VelocityEnforcement::from(enforcement);
+
+        Self {
+            id: id.to_global_id(),
+            velocity_control_id: UUID::from(id),
+            name,
+            description,
+            enforcement,
+            condition: condition.map(Expression::from),
+        }
+    }
+}
+
+impl From<cala_ledger::velocity::VelocityEnforcement> for VelocityEnforcement {
+    fn from(enforcement: cala_ledger::velocity::VelocityEnforcement) -> Self {
+        Self {
+            velocity_enforcement_action: enforcement.action.into(),
+        }
+    }
+}
+
+impl From<cala_ledger::velocity::VelocityControl> for VelocityControlCreatePayload {
+    fn from(entity: cala_ledger::velocity::VelocityControl) -> Self {
+        Self {
+            velocity_control: VelocityControl::from(entity),
+        }
+    }
+}
+
 impl ToGlobalId for cala_ledger::VelocityLimitId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("velocity_limit:{}", self))

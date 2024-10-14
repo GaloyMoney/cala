@@ -116,6 +116,12 @@ impl From<UUID> for cala_ledger::VelocityLimitId {
     }
 }
 
+impl From<UUID> for cala_ledger::VelocityControlId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::VelocityControlId::from(uuid.0)
+    }
+}
+
 impl From<UUID> for cala_ledger::TxTemplateId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::TxTemplateId::from(uuid.0)
