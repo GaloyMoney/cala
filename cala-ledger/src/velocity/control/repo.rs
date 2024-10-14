@@ -62,4 +62,13 @@ impl VelocityControlRepo {
             Err(e) => Err(e.into()),
         }
     }
+
+    pub async fn persist_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        control: &mut VelocityControl,
+    ) -> Result<(), VelocityError> {
+        control.events.persist(db).await?;
+        Ok(())
+    }
 }

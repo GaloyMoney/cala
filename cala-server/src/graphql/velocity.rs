@@ -174,6 +174,25 @@ impl From<cala_ledger::velocity::VelocityControl> for VelocityControlCreatePaylo
     }
 }
 
+#[derive(InputObject)]
+pub(super) struct VelocityControlAddLimitInput {
+    pub velocity_control_id: UUID,
+    pub velocity_limit_id: UUID,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct VelocityControlAddLimitPayload {
+    velocity_control: VelocityControl,
+}
+
+impl From<cala_ledger::velocity::VelocityControl> for VelocityControlAddLimitPayload {
+    fn from(entity: cala_ledger::velocity::VelocityControl) -> Self {
+        Self {
+            velocity_control: VelocityControl::from(entity),
+        }
+    }
+}
+
 impl ToGlobalId for cala_ledger::VelocityLimitId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("velocity_limit:{}", self))
