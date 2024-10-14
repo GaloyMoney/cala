@@ -742,4 +742,28 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         Ok(velocity_control.into())
     }
+
+    async fn velocity_control_add_limit(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlAddLimitInput,
+    ) -> Result<VelocityControlAddLimitPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let velocity_limit = app
+            .ledger()
+            .velocities()
+            .add_limit_to_control_in_op(
+                &mut op,
+                input.velocity_limit_id.into(),
+                input.velocity_limit_id.into(),
+            )
+            .await?;
+
+        Ok(velocity_limit.into())
+    }
 }

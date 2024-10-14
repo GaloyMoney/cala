@@ -81,12 +81,13 @@ impl Velocities {
         &self,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<VelocityControl, VelocityError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
-        self.add_limit_to_control_in_op(&mut op, control, limit)
+        let control = self
+            .add_limit_to_control_in_op(&mut op, control, limit)
             .await?;
         op.commit().await?;
-        Ok(())
+        Ok(control)
     }
 
     pub async fn add_limit_to_control_in_op(
@@ -94,10 +95,10 @@ impl Velocities {
         op: &mut AtomicOperation<'_>,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<(), VelocityError> {
-        self.limits
-            .add_limit_to_control(op.tx(), control, limit)
-            .await
+    ) -> Result<VelocityControl, VelocityError> {
+        let db = op.tx();
+        self.limits.add_limit_to_control(db, control, limit).await?;
+        self.controls.find_by_id(db, control).await
     }
 
     pub async fn attach_control_to_account(
@@ -121,7 +122,14 @@ impl Velocities {
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<(), VelocityError> {
         let control = self.controls.find_by_id(op.tx(), control_id).await?;
-        let limits = self.limits.list_for_control(op.tx(), control_id).await?;
+        let limits = self
+            .limits
+            .list_for_control(op.tx(), control_id)
+            .await?
+            .into_iter()
+            .map(|l| l.into_values())
+            .collect();
+
         self.account_controls
             .attach_control_in_op(
                 op,
@@ -151,5 +159,25 @@ impl Velocities {
         self.balances
             .update_balances_in_op(op, created_at, transaction, entries, controls)
             .await
+    }
+
+    pub async fn list_limits_for_control(
+        &self,
+        control_id: VelocityControlId,
+    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let limits = self
+            .list_limits_for_control_in_op(&mut op, control_id)
+            .await?;
+        op.commit().await?;
+        Ok(limits)
+    }
+
+    pub async fn list_limits_for_control_in_op(
+        &self,
+        op: &mut AtomicOperation<'_>,
+        control_id: VelocityControlId,
+    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+        self.limits.list_for_control(op.tx(), control_id).await
     }
 }

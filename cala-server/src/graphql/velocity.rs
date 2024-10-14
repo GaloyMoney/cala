@@ -1,9 +1,14 @@
 use async_graphql::*;
 
+use cala_ledger::VelocityControlId;
+
+use crate::app::CalaApp;
+
 use super::{
     convert::ToGlobalId,
     primitives::*,
     tx_template::{ParamDefinition, ParamDefinitionInput},
+    DbOp,
 };
 
 #[derive(SimpleObject)]
@@ -88,6 +93,7 @@ pub(super) struct VelocityLimitCreatePayload {
 }
 
 #[derive(SimpleObject)]
+#[graphql(complex)]
 struct VelocityControl {
     id: ID,
     velocity_control_id: UUID,
@@ -95,6 +101,33 @@ struct VelocityControl {
     description: String,
     enforcement: VelocityEnforcement,
     condition: Option<Expression>,
+}
+
+#[ComplexObject]
+impl VelocityControl {
+    async fn limits(&self, ctx: &Context<'_>) -> Result<Vec<VelocityLimit>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let control_id = VelocityControlId::from(self.velocity_control_id);
+
+        let res = match ctx.data_opt::<DbOp>() {
+            Some(op) => {
+                let mut op = op.try_lock().expect("Lock held concurrently");
+                app.ledger()
+                    .velocities()
+                    .list_limits_for_control_in_op(&mut op, control_id)
+                    .await?
+            }
+            None => {
+                app.ledger()
+                    .velocities()
+                    .list_limits_for_control(control_id)
+                    .await?
+            }
+        };
+
+        let limits = res.into_iter().map(VelocityLimit::from).collect();
+        Ok(limits)
+    }
 }
 
 #[derive(SimpleObject)]
@@ -167,6 +200,25 @@ impl From<cala_ledger::velocity::VelocityEnforcement> for VelocityEnforcement {
 }
 
 impl From<cala_ledger::velocity::VelocityControl> for VelocityControlCreatePayload {
+    fn from(entity: cala_ledger::velocity::VelocityControl) -> Self {
+        Self {
+            velocity_control: VelocityControl::from(entity),
+        }
+    }
+}
+
+#[derive(InputObject)]
+pub(super) struct VelocityControlAddLimitInput {
+    pub velocity_control_id: UUID,
+    pub velocity_limit_id: UUID,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct VelocityControlAddLimitPayload {
+    velocity_control: VelocityControl,
+}
+
+impl From<cala_ledger::velocity::VelocityControl> for VelocityControlAddLimitPayload {
     fn from(entity: cala_ledger::velocity::VelocityControl) -> Self {
         Self {
             velocity_control: VelocityControl::from(entity),
