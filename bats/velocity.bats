@@ -79,7 +79,7 @@ teardown_file() {
           "balance": [{
             "limitType": "AVAILABLE",
             "layer": "SETTLED",
-            "amount": "params.deposit_limit",
+            "amount": "params.withdrawal_limit",
             "normalBalanceType": "DEBIT",
           }]
         },
@@ -95,40 +95,6 @@ teardown_file() {
   exec_graphql 'velocity-limit-create' "$variables"
   velocity_limit_id=$(graphql_output '.data.velocityLimitCreate.velocityLimit.velocityLimitId')
   [[ "$velocity_limit_id" == "$withdrawal_limit_id" ]] || exit 1
-
-  deposit_limit_id=$(random_uuid)
-  variables=$(
-    jq -n \
-    --arg velocityLimitId "$deposit_limit_id" \
-    '{
-      "input": {
-        "velocityLimitId": $velocityLimitId,
-        "name": ("Deposit-" + $velocityLimitId),
-        "description": "Test deposit limit",
-        "window": [],
-        "currency": null,
-        "limit": {
-          "timestampSource": null,
-          "balance": [{
-            "limitType": "AVAILABLE",
-            "layer": "SETTLED",
-            "amount": "params.deposit_limit",
-            "normalBalanceType": "DEBIT",
-          }]
-        },
-        "params": [{
-          "name": "deposit_limit",
-          "type": "DECIMAL",
-          "default": null,
-          "description": null
-        }]
-      }
-    }'
-  )
-  exec_graphql 'velocity-limit-create' "$variables"
-  velocity_limit_id=$(graphql_output '.data.velocityLimitCreate.velocityLimit.velocityLimitId')
-  [[ "$velocity_limit_id" == "$deposit_limit_id" ]] || exit 1
-
 
   # create velocity control
   control_id=$(random_uuid)
@@ -163,78 +129,66 @@ teardown_file() {
     }'
   )
   exec_graphql 'velocity-control-add-limit' "$variables"
-  echo $(graphql_output) | jq .
-  n_limits=$(graphql_output '.data.velocityControlAddLimits.velocityControl.limits') | jq length
+  n_limits=$(graphql_output '.data.velocityControlAddLimit.velocityControl.limits' | jq length)
   [[ $n_limits == 1 ]] || exit 1
 
-  variables=$(
-    jq -n \
-    --arg velocity_control_id "$control_id" \
-    --arg velocity_limit_id "$deposit_limit_id" \
-    '{
-      "input": {
-        "velocityControlId": $velocity_control_id,
-        "velocityLimitId": $velocity_limit_id
-      }
-    }'
-  )
-  exec_graphql 'velocity-control-add-limit' "$variables"
-  echo $(graphql_output) | jq . 
-  n_limits=$(graphql_output '.data.velocityControlAddLimits.velocityControl.limits') | jq length
-  [[ $n_limits == 2 ]] || exit 1
-
   # attach control to sender account
+  limit="100.0"
   variables=$(
     jq -n \
     --arg control_id "$control_id" \
     --arg sender_account_id "$sender_account_id" \
+    --arg limit "$limit" \
     '{
       "input": {
-        "controlId": $control_id,
+        "velocityControlId": $control_id,
         "accountId": $sender_account_id,
         "params": {
-          "withdrawal_limit": "100.00",
-          "deposit_limit": "100.00"
+          "withdrawal_limit": $limit,
         }
       }
     }'
   )
-  exec_graphql 'velocity-control-attach-account' "$variables"
-  output=$(graphql_output '.data.velocityControlAttachAccount.velocityControl.controlId')
-  [[ "$output" != "null" ]] || exit 1
+  exec_graphql 'velocity-control-attach' "$variables"
+  velocity_control_id=$(graphql_output '.data.velocityControlAttach.velocityControl.velocityControlId')
+  [[ "$velocity_control_id" != "null" ]] || exit 1
 
-  # post transaction
+  # create tx templates
+
+  velocity_template_id=$(random_uuid)
+  variables=$(jq -n \
+  --arg velocityTemplateId "$velocity_template_id" \
+  --arg journalId "$journal_id" \
+  '{
+  "templateId": $velocityTemplateId,
+  "templateCode": ("VELOCITY-" + $velocityTemplateId),
+  "journalId": ("uuid(\u0027" + $journalId + "\u0027)")
+  }')
+  exec_graphql 'velocity-tx-template-create' "$variables"
+
+  # # post transaction
+  overflow_limit="101.10"
   transaction_id=$(random_uuid)
   variables=$(
     jq -n \
     --arg transaction_id "$transaction_id" \
-    --arg sender_account_id "$sender_account_id" \
-    --arg recipient_account_id "$recipient_account_id" \
-    --arg amount "50.00" \
+    --arg sender "$sender_account_id" \
+    --arg recipient "$recipient_account_id" \
+    --arg templateId "$velocity_template_id" \
+    --arg overflowLimit "$overflow_limit" \
     '{
       "input": {
         "transactionId": $transaction_id,
-        "sender": $sender_account_id,
-        "recipient": $recipient_account_id,
-        "amount": $amount
+        "txTemplateCode": ("VELOCITY-" + $templateId),
+        "params": {
+          "sender": $sender,
+          "recipient": $recipient,
+          "amount": $overflowLimit,
+        }
       }
     }'
   )
   exec_graphql 'transaction-post' "$variables"
-  correlation_id=$(graphql_output '.data.transactionPost.transaction.correlationId')
-  [[ $correlation_id == $transaction_id  ]] || exit 1
-
-  # check balance
-  variables=$(jq -n \
-    --arg journalId "$journal_id" \
-    --arg accountId "$sender_account_id" \
-    '{
-      "accountId": $accountId,
-      "journalId": $journalId,
-      "currency": "USD"
-    }'
-  )
-  exec_graphql 'account-with-balance' "$variables"
-  balance=$(graphql_output '.data.account.balance.settled.normalBalance.units')
-  [[ $balance == "50.00" ]] || exit 1
+  error=$(graphql_output '.errors[0].message')
+  [[ "$error" == *"Enforcement: Velocity limit"* ]] || exit 1
 }
