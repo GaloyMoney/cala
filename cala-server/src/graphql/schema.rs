@@ -759,7 +759,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .velocities()
             .add_limit_to_control_in_op(
                 &mut op,
-                input.velocity_limit_id.into(),
+                input.velocity_control_id.into(),
                 input.velocity_limit_id.into(),
             )
             .await?;
