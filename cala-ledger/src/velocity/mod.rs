@@ -106,12 +106,13 @@ impl Velocities {
         control: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<VelocityControl, VelocityError> {
         let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
-        self.attach_control_to_account_in_op(&mut op, control, account_id, params)
+        let control = self
+            .attach_control_to_account_in_op(&mut op, control, account_id, params)
             .await?;
         op.commit().await?;
-        Ok(())
+        Ok(control)
     }
 
     pub async fn attach_control_to_account_in_op(
@@ -120,7 +121,7 @@ impl Velocities {
         control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<VelocityControl, VelocityError> {
         let control = self.controls.find_by_id(op.tx(), control_id).await?;
         let limits = self
             .limits
@@ -134,13 +135,13 @@ impl Velocities {
             .attach_control_in_op(
                 op,
                 control.created_at(),
-                control.into_values(),
+                control.values(),
                 account_id,
                 limits,
                 params,
             )
             .await?;
-        Ok(())
+        Ok(control)
     }
 
     pub(crate) async fn update_balances_in_op(
