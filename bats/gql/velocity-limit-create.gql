@@ -1,0 +1,7 @@
+mutation VelocityLimitCreate($input: VelocityLimitCreateInput!) {
+  velocityLimitCreate(input: $input) {
+    velocityLimit {
+      velocityLimitId
+    }
+  }
+}
