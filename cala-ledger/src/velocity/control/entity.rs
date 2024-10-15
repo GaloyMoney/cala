@@ -37,6 +37,10 @@ impl VelocityControl {
         self.values
     }
 
+    pub fn values(&self) -> VelocityControlValues {
+        self.values.clone()
+    }
+
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
             .entity_first_persisted_at

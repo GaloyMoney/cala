@@ -766,4 +766,30 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         Ok(velocity_limit.into())
     }
+
+    async fn velocity_control_attach(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlAttachInput,
+    ) -> Result<VelocityControlAttachPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+        let params = cala_ledger::tx_template::Params::from(input.params);
+
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .attach_control_to_account_in_op(
+                &mut op,
+                input.velocity_control_id.into(),
+                input.account_id.into(),
+                params,
+            )
+            .await?;
+
+        Ok(velocity_control.into())
+    }
 }

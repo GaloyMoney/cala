@@ -337,6 +337,7 @@ type Mutation {
 	velocityLimitCreate(input: VelocityLimitCreateInput!): VelocityLimitCreatePayload!
 	velocityControlCreate(input: VelocityControlCreateInput!): VelocityControlCreatePayload!
 	velocityControlAddLimit(input: VelocityControlAddLimitInput!): VelocityControlAddLimitPayload!
+	velocityControlAttach(input: VelocityControlAttachInput!): VelocityControlAttachPayload!
 }
 
 """
@@ -545,6 +546,16 @@ input VelocityControlAddLimitInput {
 }
 
 type VelocityControlAddLimitPayload {
+	velocityControl: VelocityControl!
+}
+
+input VelocityControlAttachInput {
+	velocityControlId: UUID!
+	accountId: UUID!
+	params: JSON!
+}
+
+type VelocityControlAttachPayload {
 	velocityControl: VelocityControl!
 }
 

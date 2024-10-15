@@ -162,6 +162,26 @@ pub(super) struct VelocityControlCreatePayload {
     velocity_control: VelocityControl,
 }
 
+#[derive(InputObject)]
+pub(super) struct VelocityControlAttachInput {
+    pub velocity_control_id: UUID,
+    pub account_id: UUID,
+    pub params: JSON,
+}
+
+#[derive(SimpleObject)]
+pub(super) struct VelocityControlAttachPayload {
+    velocity_control: VelocityControl,
+}
+
+impl From<cala_ledger::velocity::VelocityControl> for VelocityControlAttachPayload {
+    fn from(entity: cala_ledger::velocity::VelocityControl) -> Self {
+        Self {
+            velocity_control: VelocityControl::from(entity),
+        }
+    }
+}
+
 impl ToGlobalId for cala_ledger::VelocityControlId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("velocity_control:{}", self))
