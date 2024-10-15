@@ -1,0 +1,7 @@
+mutation VelocityControlAttach($input: VelocityControlAttachInput!) {
+  velocityControlAttach(input: $input) {
+    velocityControl {
+      velocityControlId
+    }
+  }
+}
