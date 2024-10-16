@@ -11,8 +11,8 @@ use super::{
     DbOp,
 };
 
-#[derive(SimpleObject)]
-struct VelocityLimit {
+#[derive(SimpleObject, Clone)]
+pub struct VelocityLimit {
     id: ID,
     velocity_limit_id: UUID,
     name: String,
@@ -24,13 +24,13 @@ struct VelocityLimit {
     limit: Limit,
 }
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 struct Limit {
     timestamp_source: Option<Expression>,
     balance: Vec<BalanceLimit>,
 }
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 struct BalanceLimit {
     layer: Expression,
     amount: Expression,
@@ -39,7 +39,7 @@ struct BalanceLimit {
     end: Option<Expression>,
 }
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 struct PartitionKey {
     alias: String,
     value: Expression,
@@ -92,9 +92,9 @@ pub(super) struct VelocityLimitCreatePayload {
     velocity_limit: VelocityLimit,
 }
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 #[graphql(complex)]
-struct VelocityControl {
+pub struct VelocityControl {
     id: ID,
     velocity_control_id: UUID,
     name: String,
@@ -130,7 +130,7 @@ impl VelocityControl {
     }
 }
 
-#[derive(SimpleObject)]
+#[derive(SimpleObject, Clone)]
 struct VelocityEnforcement {
     velocity_enforcement_action: VelocityEnforcementAction,
 }

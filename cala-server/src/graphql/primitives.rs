@@ -178,7 +178,7 @@ impl From<Date> for NaiveDate {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct CurrencyCode(cala_types::primitives::Currency);
 scalar!(CurrencyCode);

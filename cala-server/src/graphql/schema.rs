@@ -205,6 +205,24 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
             Err(err) => Err(err.into()),
         }
     }
+
+    async fn velocity_limit(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<VelocityLimit>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        Ok(loader.load_one(VelocityLimitId::from(id)).await?)
+    }
+
+    async fn velocity_control(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<VelocityControl>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        Ok(loader.load_one(VelocityControlId::from(id)).await?)
+    }
 }
 
 #[derive(Default)]
