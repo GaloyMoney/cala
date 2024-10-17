@@ -8,6 +8,8 @@ mod limit;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
+use std::collections::HashMap;
+
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
@@ -180,5 +182,19 @@ impl Velocities {
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
         self.limits.list_for_control(op.tx(), control_id).await
+    }
+
+    pub async fn find_all_limits<T: From<VelocityLimit>>(
+        &self,
+        limit_ids: &[VelocityLimitId],
+    ) -> Result<HashMap<VelocityLimitId, T>, VelocityError> {
+        self.limits.find_all(limit_ids).await
+    }
+
+    pub async fn find_all_controls<T: From<VelocityControl>>(
+        &self,
+        control_ids: &[VelocityControlId],
+    ) -> Result<HashMap<VelocityControlId, T>, VelocityError> {
+        self.controls.find_all(control_ids).await
     }
 }

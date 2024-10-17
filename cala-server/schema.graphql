@@ -411,6 +411,8 @@ type Query {
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
+	velocityLimit(id: UUID!): VelocityLimit
+	velocityControl(id: UUID!): VelocityControl
 }
 
 type RangedBalance {

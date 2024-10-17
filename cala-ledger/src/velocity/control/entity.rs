@@ -37,8 +37,8 @@ impl VelocityControl {
         self.values
     }
 
-    pub fn values(&self) -> VelocityControlValues {
-        self.values.clone()
+    pub fn values(&self) -> &VelocityControlValues {
+        &self.values
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {

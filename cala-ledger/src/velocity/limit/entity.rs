@@ -36,6 +36,10 @@ impl VelocityLimit {
     pub fn into_values(self) -> VelocityLimitValues {
         self.values
     }
+
+    pub fn values(&self) -> &VelocityLimitValues {
+        &self.values
+    }
 }
 
 impl Entity for VelocityLimit {

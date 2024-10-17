@@ -41,7 +41,7 @@ impl AccountControls {
         &self,
         op: &mut AtomicOperation<'_>,
         created_at: DateTime<Utc>,
-        control: VelocityControlValues,
+        control: &VelocityControlValues,
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
@@ -91,8 +91,8 @@ impl AccountControls {
         let control = AccountVelocityControl {
             account_id,
             control_id: control.id,
-            condition: control.condition,
-            enforcement: control.enforcement,
+            condition: control.condition.clone(),
+            enforcement: control.enforcement.clone(),
             velocity_limits,
         };
 
