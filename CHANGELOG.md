@@ -1,3 +1,14 @@
+# [cala release v0.2.46](https://github.com/GaloyMoney/cala/releases/tag/0.2.46)
+
+
+### Documentation
+
+- Api reference and website examples update to 9490239af64d3b088d5e6e5e62e15e2aad81d14f
+
+### Miscellaneous Tasks
+
+- Remove dbg
+
 # [cala release v0.2.45](https://github.com/GaloyMoney/cala/releases/tag/0.2.45)
 
 
