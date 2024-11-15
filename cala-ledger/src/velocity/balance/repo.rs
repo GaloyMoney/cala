@@ -112,8 +112,6 @@ impl VelocityBalanceRepo {
         db: &mut Transaction<'_, Postgres>,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
     ) -> Result<(), VelocityError> {
-        dbg!("insert_new_snapshots");
-        dbg!(&new_balances);
         let mut query_builder = QueryBuilder::new(
             r#"
         WITH new_snapshots AS (
