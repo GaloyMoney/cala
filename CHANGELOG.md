@@ -1,3 +1,42 @@
+# [cala release v0.2.45](https://github.com/GaloyMoney/cala/releases/tag/0.2.45)
+
+
+### Documentation
+
+- Add enterprise solutions page (#211)
+- Api reference and website examples update to a443b6720a24e2fba588331572966efc45cd2b5d
+
+### Features
+
+- VelocityControlCreate mutation (#250)
+- VelocityLimitCreate mutation (#248)
+
+### Miscellaneous Tasks
+
+- VelocityLimit and velocityControl queries (#256)
+- VelocityControlAttach mutation (#253)
+- VelocityControlLimitAdd (#252)
+- Add timestamps to Transaction (#247)
+- Bump axum from 0.7.6 to 0.7.7 (#236)
+- Bump napi-derive from 2.16.11 to 2.16.12 (#233)
+- Bump tonic-build from 0.12.2 to 0.12.3 (#234)
+- Bump tonic-health from 0.12.2 to 0.12.3 (#235)
+- Bump serde_with from 3.9.0 to 3.11.0 (#239)
+- Add support for member fns (#242)
+- Velocity enforcement (#237)
+- Add velocity control and attach to account boilerplate (#225)
+
+### Refactor
+
+- No need for Runner.run to be mut
+- Remove events from Job entity (#249)
+
+### Testing
+
+- Velocity limits (#254)
+- Add unit tests for enforce (#241)
+- Velocity (#240)
+
 # [cala release v0.2.44](https://github.com/GaloyMoney/cala/releases/tag/0.2.44)
 
 
