@@ -12,7 +12,7 @@ type FeatureItem = {
 const FeatureList: FeatureItem[] = [
   {
     title: "GraphQL API",
-    image: require("@site/static/img/frontpage-icon-graphql-api.png").default,
+    image: require("@site/static/img/Cala-icons_graphsql.png").default,
     description: (
       <>
         Develop applications efficiently with Cala's GraphQL playground,
@@ -24,7 +24,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Double-Entry Accounting",
-    image: require("@site/static/img/frontpage-icon-double-entry-accounting.png").default,
+    image: require("@site/static/img/Cala-icons_double-entry.png").default,
     description: (
       <>
         Every transaction is recorded accurately on both sides of the ledger
@@ -35,7 +35,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Transaction Templates",
-    image: require("@site/static/img/frontpage-icon-transaction-templates.png").default,
+    image: require("@site/static/img/Cala-icons_templates.png").default,
     description: (
       <>
         Create custom transaction templates for your specific use cases. Tailor
@@ -47,7 +47,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Embeddable",
-    image: require("@site/static/img/frontpage-icon-embeddable.png").default,
+    image: require("@site/static/img/Cala-icons_embeds.png").default,
     description: (
       <>
         Cala is fully embeddable, capable of being used as a library not
@@ -58,7 +58,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Run Anywhere",
-    image: require("@site/static/img/frontpage-icon-run-anywhere.png").default,
+    image: require("@site/static/img/Cala-icons_cloud-or-own.png").default,
     description: (
       <>
         Can serve as a standalone application in the cloud, on your own server,
@@ -69,7 +69,7 @@ const FeatureList: FeatureItem[] = [
   },
   {
     title: "Open Source Core in Rust",
-    image: require("@site/static/img/frontpage-icon-rust.png").default,
+    image: require("@site/static/img/Cala-icons_rust-foss.png").default,
     description: (
       <>
         Join our community to contribute and innovate with transparency and

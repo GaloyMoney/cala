@@ -57,7 +57,7 @@ const config: Config = {
       title: '',
       logo: {
         alt: 'Cala Logo',
-        src: 'img/logo.svg',
+        src: 'img/galoy.png',
       },
       items: [
         {
