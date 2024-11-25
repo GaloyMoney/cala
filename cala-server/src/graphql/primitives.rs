@@ -110,6 +110,18 @@ impl From<UUID> for cala_ledger::JournalId {
     }
 }
 
+impl From<UUID> for cala_ledger::VelocityLimitId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::VelocityLimitId::from(uuid.0)
+    }
+}
+
+impl From<UUID> for cala_ledger::VelocityControlId {
+    fn from(uuid: UUID) -> Self {
+        cala_ledger::VelocityControlId::from(uuid.0)
+    }
+}
+
 impl From<UUID> for cala_ledger::TxTemplateId {
     fn from(uuid: UUID) -> Self {
         cala_ledger::TxTemplateId::from(uuid.0)
@@ -166,7 +178,7 @@ impl From<Date> for NaiveDate {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(transparent)]
 pub struct CurrencyCode(cala_types::primitives::Currency);
 scalar!(CurrencyCode);

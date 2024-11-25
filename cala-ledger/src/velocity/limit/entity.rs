@@ -24,8 +24,22 @@ impl EntityEvent for VelocityLimitEvent {
 #[derive(Builder)]
 #[builder(pattern = "owned", build_fn(error = "EntityError"))]
 pub struct VelocityLimit {
-    _values: VelocityLimitValues,
+    values: VelocityLimitValues,
     pub(super) _events: EntityEvents<VelocityLimitEvent>,
+}
+
+impl VelocityLimit {
+    pub fn id(&self) -> VelocityLimitId {
+        self.values.id
+    }
+
+    pub fn into_values(self) -> VelocityLimitValues {
+        self.values
+    }
+
+    pub fn values(&self) -> &VelocityLimitValues {
+        &self.values
+    }
 }
 
 impl Entity for VelocityLimit {
@@ -40,7 +54,7 @@ impl TryFrom<EntityEvents<VelocityLimitEvent>> for VelocityLimit {
         for event in events.iter() {
             match event {
                 VelocityLimitEvent::Initialized { values } => {
-                    builder = builder._values(values.clone());
+                    builder = builder.values(values.clone());
                 }
             }
         }
@@ -61,6 +75,7 @@ pub struct NewVelocityLimit {
     window: Vec<NewPartitionKey>,
     #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
+    #[builder(setter(strip_option, into), default)]
     currency: Option<Currency>,
     #[builder(setter(strip_option), default)]
     params: Option<Vec<NewParamDefinition>>,
@@ -106,6 +121,7 @@ impl NewVelocityLimit {
                             .balance
                             .into_iter()
                             .map(|input| BalanceLimit {
+                                limit_type: input.limit_type,
                                 layer: CelExpression::try_from(input.layer)
                                     .expect("already validated"),
                                 amount: CelExpression::try_from(input.amount)
@@ -114,6 +130,12 @@ impl NewVelocityLimit {
                                     input.enforcement_direction,
                                 )
                                 .expect("already validated"),
+                                start: input.start.map(|expr| {
+                                    CelExpression::try_from(expr).expect("already validated")
+                                }),
+                                end: input.end.map(|expr| {
+                                    CelExpression::try_from(expr).expect("already validated")
+                                }),
                             })
                             .collect(),
                     },
@@ -175,12 +197,18 @@ impl NewLimitBuilder {
 #[derive(Clone, Builder, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct NewBalanceLimit {
+    #[builder(setter(into), default)]
+    limit_type: BalanceLimitType,
     #[builder(setter(into))]
     layer: String,
     #[builder(setter(into))]
     amount: String,
     #[builder(setter(into))]
     enforcement_direction: String,
+    #[builder(setter(into, strip_option), default)]
+    start: Option<String>,
+    #[builder(setter(into, strip_option), default)]
+    end: Option<String>,
 }
 impl NewBalanceLimit {
     pub fn builder() -> NewBalanceLimitBuilder {
@@ -192,18 +220,20 @@ impl NewBalanceLimitBuilder {
         validate_expression(
             self.layer
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'layer' not set"),
         )?;
         validate_expression(
             self.amount
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'amount' not set"),
         )?;
         validate_expression(
             self.enforcement_direction
                 .as_ref()
-                .expect("Mandatory field 'value' not set"),
+                .expect("Mandatory field 'enforcement_direction' not set"),
         )?;
+        validate_optional_expression(&self.start)?;
+        validate_optional_expression(&self.end)?;
         Ok(())
     }
 }

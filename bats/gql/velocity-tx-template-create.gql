@@ -1,0 +1,64 @@
+mutation VelocityTxTemplateCreate(
+  $templateId: UUID!
+  $templateCode: String!
+  $journalId: Expression!
+) {
+  velocityTemplate: txTemplateCreate(
+    input: {
+      txTemplateId: $templateId
+      code: $templateCode
+      description: "Velocity transaction template."
+      params: [
+        { name: "recipient", type: UUID, description: "Recipient account ID." }
+        { name: "sender", type: UUID, description: "Sender account ID." }
+        { name: "journal_id", type: UUID, description: "Journal ID." }
+        {
+          name: "amount"
+          type: DECIMAL
+          description: "Amount with decimal, e.g. `1.23`."
+        }
+        {
+          name: "currency"
+          type: STRING
+          description: "Currency used in the transaction."
+          default: "'USD'"
+        }
+        {
+          name: "layer"
+          type: STRING
+          description: "Layer for the transaction."
+          default: "'SETTLED'"
+        }
+        {
+          name: "effective"
+          type: DATE
+          description: "Effective date for transaction."
+          default: "date()"
+        }
+      ]
+      transaction: { journalId: $journalId, effective: "params.effective" }
+      entries: [
+        {
+          accountId: "params.sender"
+          units: "params.amount"
+          currency: "params.currency"
+          entryType: "'TEST_DR'"
+          direction: "DEBIT"
+          layer: "params.layer"
+        }
+        {
+          accountId: "params.recipient"
+          units: "params.amount"
+          currency: "params.currency"
+          entryType: "'TEST_CR'"
+          direction: "CREDIT"
+          layer: "params.layer"
+        }
+      ]
+    }
+  ) {
+    txTemplate {
+      txTemplateId
+    }
+  }
+}

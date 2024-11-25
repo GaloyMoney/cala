@@ -390,6 +390,8 @@ impl From<TransactionValues> for proto::Transaction {
         TransactionValues {
             id,
             version,
+            created_at,
+            modified_at,
             journal_id,
             tx_template_id,
             correlation_id,
@@ -403,6 +405,8 @@ impl From<TransactionValues> for proto::Transaction {
         proto::Transaction {
             id: id.to_string(),
             version,
+            created_at: Some(created_at.into()),
+            modified_at: Some(modified_at.into()),
             journal_id: journal_id.to_string(),
             tx_template_id: tx_template_id.to_string(),
             entry_ids: entry_ids.into_iter().map(|id| id.to_string()).collect(),

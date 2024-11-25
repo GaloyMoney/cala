@@ -1,7 +1,8 @@
 use cel_interpreter::CelExpression;
 use serde::{Deserialize, Serialize};
 
-use crate::{param::*, primitives::*};
+pub use crate::param::*;
+use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct VelocityLimitValues {
@@ -29,7 +30,17 @@ pub struct Limit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BalanceLimit {
+    pub limit_type: BalanceLimitType,
     pub layer: CelExpression,
     pub amount: CelExpression,
     pub enforcement_direction: CelExpression,
+    pub start: Option<CelExpression>,
+    pub end: Option<CelExpression>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BalanceLimitType {
+    #[default]
+    Available,
 }

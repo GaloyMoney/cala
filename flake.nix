@@ -40,6 +40,7 @@
           cargo-nextest
           cargo-audit
           cargo-watch
+          bacon
           postgresql
           docker-compose
           bats

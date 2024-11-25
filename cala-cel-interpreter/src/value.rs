@@ -1,5 +1,5 @@
 use cel_parser::{ast::Literal, Expression};
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use uuid::Uuid;
 
@@ -25,9 +25,10 @@ pub enum CelValue {
     Bool(bool),
     Null,
 
-    // Addons
+    // Abstract
     Decimal(Decimal),
     Date(NaiveDate),
+    Timestamp(DateTime<Utc>),
     Uuid(Uuid),
 }
 
@@ -46,27 +47,6 @@ pub struct CelMap {
     inner: HashMap<CelKey, CelValue>,
 }
 
-#[derive(Debug, PartialEq)]
-pub struct CelArray {
-    inner: Vec<CelValue>,
-}
-
-impl CelArray {
-    pub fn new() -> Self {
-        Self { inner: Vec::new() }
-    }
-
-    pub fn push(&mut self, elem: impl Into<CelValue>) {
-        self.inner.push(elem.into());
-    }
-}
-
-impl Default for CelArray {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl CelMap {
     pub fn new() -> Self {
         Self {
@@ -83,6 +63,10 @@ impl CelMap {
             .get(&key.into())
             .cloned()
             .unwrap_or(CelValue::Null)
+    }
+
+    pub fn contains_key(&self, key: impl Into<CelKey>) -> bool {
+        self.inner.contains_key(&key.into())
     }
 }
 
@@ -105,6 +89,27 @@ impl From<HashMap<String, CelValue>> for CelMap {
 impl From<CelMap> for CelValue {
     fn from(m: CelMap) -> Self {
         CelValue::Map(Arc::from(m))
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct CelArray {
+    inner: Vec<CelValue>,
+}
+
+impl CelArray {
+    pub fn new() -> Self {
+        Self { inner: Vec::new() }
+    }
+
+    pub fn push(&mut self, elem: impl Into<CelValue>) {
+        self.inner.push(elem.into());
+    }
+}
+
+impl Default for CelArray {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -226,6 +231,7 @@ impl From<&CelValue> for CelType {
             CelValue::Decimal(_) => CelType::Decimal,
             CelValue::Date(_) => CelType::Date,
             CelValue::Uuid(_) => CelType::Uuid,
+            CelValue::Timestamp(_) => CelType::Timestamp,
         }
     }
 }
@@ -242,6 +248,12 @@ impl From<&Literal> for CelValue {
             Bool(b) => CelValue::Bool(*b),
             Null => CelValue::Null,
         }
+    }
+}
+
+impl From<DateTime<Utc>> for CelValue {
+    fn from(d: DateTime<Utc>) -> Self {
+        CelValue::Timestamp(d)
     }
 }
 
@@ -269,6 +281,22 @@ impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
     }
 }
 
+impl<'a> TryFrom<CelResult<'a>> for bool {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Bool(b) = val {
+            Ok(b)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Bool,
+            ))
+        }
+    }
+}
+
 impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     type Error = ResultCoercionError;
 
@@ -280,6 +308,22 @@ impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
                 format!("{expr:?}"),
                 CelType::from(&val),
                 CelType::Date,
+            ))
+        }
+    }
+}
+
+impl<'a> TryFrom<CelResult<'a>> for DateTime<Utc> {
+    type Error = ResultCoercionError;
+
+    fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
+        if let CelValue::Timestamp(d) = val {
+            Ok(d)
+        } else {
+            Err(ResultCoercionError::BadCoreTypeCoercion(
+                format!("{expr:?}"),
+                CelType::from(&val),
+                CelType::Timestamp,
             ))
         }
     }

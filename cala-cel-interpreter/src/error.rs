@@ -21,6 +21,10 @@ pub enum CelError {
     BadType(CelType, CelType),
     #[error("CelError - UnknownIdentifier: {0}")]
     UnknownIdent(String),
+    #[error("CelError - UnknownPackage: No package installed for type '{0}'")]
+    UnknownPackage(&'static str),
+    #[error("CelError - UnknownAttribute: No attribute '{1}' on type {0:?}")]
+    UnknownAttribute(CelType, String),
     #[error("CelError - IllegalTarget")]
     IllegalTarget,
     #[error("CelError - MissingArgument")]
@@ -33,6 +37,8 @@ pub enum CelError {
     UuidError(String),
     #[error("CelError - DecimalError: {0}")]
     DecimalError(String),
+    #[error("CelError - TimestampError: {0}")]
+    TimestampError(String),
     #[error("CelError - NoMatchingOverload: {0}")]
     NoMatchingOverload(String),
     #[error("CelError - Unexpected: {0}")]

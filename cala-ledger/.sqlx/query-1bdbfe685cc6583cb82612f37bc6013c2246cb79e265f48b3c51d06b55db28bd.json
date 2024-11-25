@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cala_accounts\n            SET code = $2, name = $3, external_id = $4, normal_balance_type = $5, latest_values = $6\n            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        },
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1bdbfe685cc6583cb82612f37bc6013c2246cb79e265f48b3c51d06b55db28bd"
+}

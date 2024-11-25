@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH limits AS (\n              SELECT id, l.data_source_id, l.created_at AS entity_created_at\n              FROM cala_velocity_limits l\n              JOIN cala_velocity_control_limits ON id = velocity_limit_id\n              WHERE velocity_control_id = $1\n              AND l.data_source_id = '00000000-0000-0000-0000-000000000000'\n              AND l.data_source_id = cala_velocity_control_limits.data_source_id\n            )\n            SELECT l.id, e.sequence, e.event, entity_created_at, e.recorded_at AS event_recorded_at\n            FROM limits l\n            JOIN cala_velocity_limit_events e ON l.id = e.id\n            WHERE l.data_source_id = e.data_source_id\n            ORDER BY l.id, e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "event_recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "f6db747bfaa7a84bd3b627c14cc09ccc0cee1b189956d564e27aa97d25844bba"
+}

@@ -3,11 +3,12 @@ use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamD
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::{
-    account::*, account_set::*, balance::*, job::*, journal::*, loader::*, primitives::*,
-    transaction::*, tx_template::*,
-};
 use crate::{app::CalaApp, extension::*};
+
+use super::{
+    account::*, account_set::*, balance::*, journal::*, loader::*, primitives::*, transaction::*,
+    tx_template::*, velocity::*,
+};
 
 pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
 
@@ -205,38 +206,22 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         }
     }
 
-    async fn jobs(
+    async fn velocity_limit(
         &self,
         ctx: &Context<'_>,
-        first: i32,
-        after: Option<String>,
-    ) -> async_graphql::Result<Connection<JobByNameCursor, Job, EmptyFields, EmptyFields>> {
-        let app = ctx.data_unchecked::<CalaApp>();
-        query(
-            after,
-            None,
-            Some(first),
-            None,
-            |after, _, first, _| async move {
-                let first = first.expect("First always exists");
-                let result = app
-                    .jobs()
-                    .list(cala_ledger::query::PaginatedQueryArgs {
-                        first,
-                        after: after.map(crate::job::JobByNameCursor::from),
-                    })
-                    .await?;
-                let mut connection = Connection::new(false, result.has_next_page);
-                connection
-                    .edges
-                    .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = JobByNameCursor::from(&entity);
-                        Edge::new(cursor, Job::from(entity))
-                    }));
-                Ok::<_, async_graphql::Error>(connection)
-            },
-        )
-        .await
+        id: UUID,
+    ) -> async_graphql::Result<Option<VelocityLimit>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        Ok(loader.load_one(VelocityLimitId::from(id)).await?)
+    }
+
+    async fn velocity_control(
+        &self,
+        ctx: &Context<'_>,
+        id: UUID,
+    ) -> async_graphql::Result<Option<VelocityControl>> {
+        let loader = ctx.data_unchecked::<DataLoader<LedgerDataLoader>>();
+        Ok(loader.load_one(VelocityControlId::from(id)).await?)
     }
 }
 
@@ -515,6 +500,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         Ok(journal.into())
     }
+
     async fn tx_template_create(
         &self,
         ctx: &Context<'_>,
@@ -639,5 +625,189 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             )
             .await?;
         Ok(transaction.into())
+    }
+
+    async fn velocity_limit_create(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityLimitCreateInput,
+    ) -> Result<VelocityLimitCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let mut new_velocity_limit_builder = cala_ledger::velocity::NewVelocityLimit::builder();
+        new_velocity_limit_builder
+            .id(input.velocity_limit_id)
+            .name(input.name)
+            .description(input.description);
+
+        if let Some(condition) = input.condition {
+            new_velocity_limit_builder.condition(condition);
+        }
+
+        if let Some(currency) = input.currency {
+            new_velocity_limit_builder.currency(currency);
+        }
+
+        let mut new_window = Vec::new();
+        for partition_key_input in input.window {
+            let mut new_partition_key_builder = cala_ledger::velocity::NewPartitionKey::builder();
+            let partition_key = new_partition_key_builder
+                .alias(partition_key_input.alias)
+                .value(partition_key_input.value)
+                .build()?;
+
+            new_window.push(partition_key);
+        }
+        new_velocity_limit_builder.window(new_window);
+
+        let mut new_limit_builder = cala_ledger::velocity::NewLimit::builder();
+
+        if let Some(timestamp_source) = input.limit.timestamp_source {
+            new_limit_builder.timestamp_source(timestamp_source);
+        }
+
+        let mut new_balance_limits = Vec::new();
+        for balance_limit_input in input.limit.balance {
+            let mut new_balance_limit_builder = cala_ledger::velocity::NewBalanceLimit::builder();
+            new_balance_limit_builder
+                .limit_type(balance_limit_input.limit_type)
+                .layer(balance_limit_input.layer)
+                .amount(balance_limit_input.amount)
+                .enforcement_direction(balance_limit_input.normal_balance_type);
+
+            if let Some(start) = balance_limit_input.start {
+                new_balance_limit_builder.start(start);
+            }
+
+            if let Some(end) = balance_limit_input.end {
+                new_balance_limit_builder.end(end);
+            }
+
+            let new_balance_limit = new_balance_limit_builder.build()?;
+            new_balance_limits.push(new_balance_limit);
+        }
+        new_limit_builder.balance(new_balance_limits);
+        let new_limit = new_limit_builder.build()?;
+
+        new_velocity_limit_builder.limit(new_limit);
+
+        if let Some(params) = input.params {
+            let mut new_params = Vec::new();
+            for param in params {
+                let mut param_builder = NewParamDefinition::builder();
+                param_builder.name(param.name).r#type(param.r#type.into());
+                if let Some(default) = param.default {
+                    param_builder.default_expr(default);
+                }
+                if let Some(description) = param.description {
+                    param_builder.description(description);
+                }
+                let new_param = param_builder.build()?;
+                new_params.push(new_param);
+            }
+            new_velocity_limit_builder.params(new_params);
+        }
+
+        let new_velocity_limit = new_velocity_limit_builder.build()?;
+
+        let velocity_limit = app
+            .ledger()
+            .velocities()
+            .create_limit_in_op(&mut op, new_velocity_limit)
+            .await?;
+
+        Ok(velocity_limit.into())
+    }
+
+    async fn velocity_control_create(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlCreateInput,
+    ) -> Result<VelocityControlCreatePayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let mut new_velocity_control_builder = cala_ledger::velocity::NewVelocityControl::builder();
+        new_velocity_control_builder
+            .id(input.velocity_control_id)
+            .name(input.name)
+            .description(input.description);
+
+        if let Some(condition) = input.condition {
+            new_velocity_control_builder.condition(condition);
+        }
+
+        let mut new_velocity_enforcement_builder =
+            cala_ledger::velocity::NewVelocityEnforcement::builder();
+        new_velocity_enforcement_builder.action(input.enforcement.velocity_enforcement_action);
+        let new_velocity_enforcement = new_velocity_enforcement_builder.build()?;
+
+        new_velocity_control_builder.enforcement(new_velocity_enforcement);
+
+        let new_velocity_control = new_velocity_control_builder.build()?;
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .create_control_in_op(&mut op, new_velocity_control)
+            .await?;
+
+        Ok(velocity_control.into())
+    }
+
+    async fn velocity_control_add_limit(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlAddLimitInput,
+    ) -> Result<VelocityControlAddLimitPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+
+        let velocity_limit = app
+            .ledger()
+            .velocities()
+            .add_limit_to_control_in_op(
+                &mut op,
+                input.velocity_control_id.into(),
+                input.velocity_limit_id.into(),
+            )
+            .await?;
+
+        Ok(velocity_limit.into())
+    }
+
+    async fn velocity_control_attach(
+        &self,
+        ctx: &Context<'_>,
+        input: VelocityControlAttachInput,
+    ) -> Result<VelocityControlAttachPayload> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let mut op = ctx
+            .data_unchecked::<DbOp>()
+            .try_lock()
+            .expect("Lock held concurrently");
+        let params = cala_ledger::tx_template::Params::from(input.params);
+
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .attach_control_to_account_in_op(
+                &mut op,
+                input.velocity_control_id.into(),
+                input.account_id.into(),
+                params,
+            )
+            .await?;
+
+        Ok(velocity_control.into())
     }
 }

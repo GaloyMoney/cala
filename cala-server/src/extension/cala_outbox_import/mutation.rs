@@ -41,7 +41,7 @@ impl Mutation {
                 input.job_id,
                 input.name.clone(),
                 input.description.clone(),
-                CalaOutboxImportConfig::from(input),
+                CalaOutboxImportJobState::from(input),
             )
             .await?;
         Ok(CalaOutboxImportJobCreatePayload {
@@ -50,10 +50,11 @@ impl Mutation {
     }
 }
 
-impl From<CalaOutboxImportJobCreateInput> for CalaOutboxImportConfig {
+impl From<CalaOutboxImportJobCreateInput> for CalaOutboxImportJobState {
     fn from(input: CalaOutboxImportJobCreateInput) -> Self {
-        CalaOutboxImportConfig {
+        Self {
             endpoint: input.endpoint,
+            last_synced: Default::default(),
         }
     }
 }

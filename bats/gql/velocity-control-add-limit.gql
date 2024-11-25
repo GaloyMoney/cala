@@ -1,0 +1,9 @@
+mutation VelocityControlAddLimit($input: VelocityControlAddLimitInput!) {
+  velocityControlAddLimit(input: $input) {
+    velocityControl {
+      limits {
+        velocityLimitId
+      }
+    }
+  }
+}

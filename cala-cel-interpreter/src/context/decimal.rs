@@ -1,22 +1,23 @@
 use lazy_static::lazy_static;
 
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
 use crate::builtins;
 
 use super::*;
 
 lazy_static! {
-    pub static ref CEL_CONTEXT: CelContext = {
+    pub static ref CEL_PACKAGE: CelPackage = {
         let mut idents = HashMap::new();
         idents.insert(
-            SELF_PACKAGE_NAME.to_string(),
+            SELF_PACKAGE_NAME,
             ContextItem::Function(Box::new(builtins::decimal::cast)),
         );
         idents.insert(
-            "Add".to_string(),
+            Cow::Borrowed("Add"),
             ContextItem::Function(Box::new(builtins::decimal::add)),
         );
-        CelContext { idents }
+
+        CelPackage::new(CelContext { idents }, HashMap::new())
     };
 }

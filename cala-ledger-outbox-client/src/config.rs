@@ -4,3 +4,9 @@ use serde::{Deserialize, Serialize};
 pub struct CalaLedgerOutboxClientConfig {
     pub url: String,
 }
+
+impl CalaLedgerOutboxClientConfig {
+    pub fn new(url: String) -> Self {
+        Self { url }
+    }
+}

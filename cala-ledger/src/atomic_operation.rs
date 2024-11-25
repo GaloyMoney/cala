@@ -3,6 +3,8 @@ use sqlx::{PgPool, Postgres, Transaction};
 use crate::outbox::*;
 
 pub struct AtomicOperation<'t> {
+    pub(crate) now: chrono::DateTime<chrono::Utc>,
+
     tx: Transaction<'t, Postgres>,
     outbox: Outbox,
     accumulated_events: Vec<OutboxEventPayload>,
@@ -10,8 +12,15 @@ pub struct AtomicOperation<'t> {
 
 impl<'t> AtomicOperation<'t> {
     pub(crate) async fn init(pool: &PgPool, outbox: &Outbox) -> Result<Self, sqlx::Error> {
+        let mut tx = pool.begin().await?;
+        let now = sqlx::query!("SELECT NOW()")
+            .fetch_one(&mut *tx)
+            .await?
+            .now
+            .expect("NOW() is not NULL");
         Ok(Self {
-            tx: pool.begin().await?,
+            tx,
+            now,
             outbox: outbox.clone(),
             accumulated_events: Vec::new(),
         })

@@ -13,6 +13,7 @@ crate::entity_id! { TxTemplateId }
 crate::entity_id! { TransactionId }
 crate::entity_id! { EntryId }
 crate::entity_id! { VelocityLimitId }
+crate::entity_id! { VelocityControlId }
 
 pub type BalanceId = (JournalId, AccountId, Currency);
 impl From<&AccountSetId> for AccountId {
@@ -52,6 +53,15 @@ impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
                 CelType::from(&v),
                 "DebitOrCredit",
             )),
+        }
+    }
+}
+
+impl From<DebitOrCredit> for CelValue {
+    fn from(v: DebitOrCredit) -> Self {
+        match v {
+            DebitOrCredit::Debit => "DEBIT".into(),
+            DebitOrCredit::Credit => "CREDIT".into(),
         }
     }
 }
@@ -107,6 +117,16 @@ impl Default for Layer {
     }
 }
 
+impl From<Layer> for CelValue {
+    fn from(l: Layer) -> Self {
+        match l {
+            Layer::Settled => "SETTLED".into(),
+            Layer::Pending => "PENDING".into(),
+            Layer::Encumbrance => "ENCUMBRANCE".into(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 #[serde(into = "&str")]
@@ -127,6 +147,12 @@ impl Currency {
 impl std::fmt::Display for Currency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.code())
+    }
+}
+
+impl From<Currency> for CelValue {
+    fn from(c: Currency) -> Self {
+        c.code().into()
     }
 }
 

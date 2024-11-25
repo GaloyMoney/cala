@@ -18,6 +18,7 @@ impl Integration {
             data: serde_json::to_value(data).expect("Could not serialize data"),
         }
     }
+
     pub fn data<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         serde_json::from_value(self.data.clone())
     }

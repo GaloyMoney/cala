@@ -211,6 +211,27 @@ type BalanceAmount {
 	entryId: UUID!
 }
 
+type BalanceLimit {
+	layer: Expression!
+	amount: Expression!
+	normalBalanceType: Expression!
+	start: Expression
+	end: Expression
+}
+
+input BalanceLimitInput {
+	limitType: BalanceLimitType! = AVAILABLE
+	layer: Expression!
+	amount: Expression!
+	normalBalanceType: Expression!
+	start: Expression
+	end: Expression
+}
+
+enum BalanceLimitType {
+	AVAILABLE
+}
+
 
 input CalaOutboxImportJobCreateInput {
 	jobId: UUID!
@@ -246,35 +267,6 @@ type Job {
 	jobId: UUID!
 	name: String!
 	description: String
-}
-
-type JobConnection {
-	"""
-	Information to aid in pagination.
-	"""
-	pageInfo: PageInfo!
-	"""
-	A list of edges.
-	"""
-	edges: [JobEdge!]!
-	"""
-	A list of nodes.
-	"""
-	nodes: [Job!]!
-}
-
-"""
-An edge in a connection.
-"""
-type JobEdge {
-	"""
-	The item at the end of the edge
-	"""
-	node: Job!
-	"""
-	A cursor for use in pagination
-	"""
-	cursor: String!
 }
 
 type Journal {
@@ -315,6 +307,16 @@ enum Layer {
 	ENCUMBRANCE
 }
 
+type Limit {
+	timestampSource: Expression
+	balance: [BalanceLimit!]!
+}
+
+input LimitInput {
+	timestampSource: Expression
+	balance: [BalanceLimitInput!]!
+}
+
 type Money {
 	units: Decimal!
 	currency: CurrencyCode!
@@ -332,6 +334,10 @@ type Mutation {
 	journalUpdate(id: UUID!, input: JournalUpdateInput!): JournalUpdatePayload!
 	txTemplateCreate(input: TxTemplateCreateInput!): TxTemplateCreatePayload!
 	transactionPost(input: TransactionInput!): TransactionPostPayload!
+	velocityLimitCreate(input: VelocityLimitCreateInput!): VelocityLimitCreatePayload!
+	velocityControlCreate(input: VelocityControlCreateInput!): VelocityControlCreatePayload!
+	velocityControlAddLimit(input: VelocityControlAddLimitInput!): VelocityControlAddLimitPayload!
+	velocityControlAttach(input: VelocityControlAttachInput!): VelocityControlAttachPayload!
 }
 
 """
@@ -381,6 +387,16 @@ input ParamDefinitionInput {
 	description: String
 }
 
+type PartitionKey {
+	alias: String!
+	value: Expression!
+}
+
+input PartitionKeyInput {
+	alias: String!
+	value: Expression!
+}
+
 type Query {
 	serverVersion: String!
 	account(id: UUID!): Account
@@ -395,7 +411,8 @@ type Query {
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
-	jobs(first: Int!, after: String): JobConnection!
+	velocityLimit(id: UUID!): VelocityLimit
+	velocityControl(id: UUID!): VelocityControl
 }
 
 type RangedBalance {
@@ -514,6 +531,86 @@ input TxTemplateTransactionInput {
 }
 
 scalar UUID
+
+type VelocityControl {
+	id: ID!
+	velocityControlId: UUID!
+	name: String!
+	description: String!
+	enforcement: VelocityEnforcement!
+	condition: Expression
+	limits: [VelocityLimit!]!
+}
+
+input VelocityControlAddLimitInput {
+	velocityControlId: UUID!
+	velocityLimitId: UUID!
+}
+
+type VelocityControlAddLimitPayload {
+	velocityControl: VelocityControl!
+}
+
+input VelocityControlAttachInput {
+	velocityControlId: UUID!
+	accountId: UUID!
+	params: JSON!
+}
+
+type VelocityControlAttachPayload {
+	velocityControl: VelocityControl!
+}
+
+input VelocityControlCreateInput {
+	velocityControlId: UUID!
+	name: String!
+	description: String!
+	enforcement: VelocityEnforcementInput!
+	condition: Expression
+}
+
+type VelocityControlCreatePayload {
+	velocityControl: VelocityControl!
+}
+
+type VelocityEnforcement {
+	velocityEnforcementAction: VelocityEnforcementAction!
+}
+
+enum VelocityEnforcementAction {
+	REJECT
+}
+
+input VelocityEnforcementInput {
+	velocityEnforcementAction: VelocityEnforcementAction! = REJECT
+}
+
+type VelocityLimit {
+	id: ID!
+	velocityLimitId: UUID!
+	name: String!
+	description: String!
+	condition: Expression
+	window: [PartitionKey!]!
+	currency: CurrencyCode
+	params: [ParamDefinition!]
+	limit: Limit!
+}
+
+input VelocityLimitCreateInput {
+	velocityLimitId: UUID!
+	name: String!
+	description: String!
+	window: [PartitionKeyInput!]!
+	condition: Expression
+	limit: LimitInput!
+	currency: CurrencyCode
+	params: [ParamDefinitionInput!]
+}
+
+type VelocityLimitCreatePayload {
+	velocityLimit: VelocityLimit!
+}
 
 directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
 directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT

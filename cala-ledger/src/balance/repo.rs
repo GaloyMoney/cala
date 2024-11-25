@@ -78,10 +78,7 @@ impl BalanceRepo {
         if let Some(row) = row {
             let details: BalanceSnapshot =
                 serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            Ok(AccountBalance {
-                balance_type: row.normal_balance_type,
-                details,
-            })
+            Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
             Err(BalanceError::NotFound(journal_id, account_id, currency))
         }
@@ -149,18 +146,12 @@ impl BalanceRepo {
                 let details: BalanceSnapshot =
                     serde_json::from_value(row.values.expect("values is not null"))
                         .expect("Failed to deserialize balance snapshot");
-                first = Some(AccountBalance {
-                    balance_type: row.normal_balance_type,
-                    details,
-                });
+                first = Some(AccountBalance::new(row.normal_balance_type, details));
             } else {
                 let details: BalanceSnapshot =
                     serde_json::from_value(row.values.expect("values is not null"))
                         .expect("Failed to deserialize balance snapshot");
-                last = Some(AccountBalance {
-                    balance_type: row.normal_balance_type,
-                    details,
-                });
+                last = Some(AccountBalance::new(row.normal_balance_type, details));
             }
         }
         Ok((first, last))
@@ -201,10 +192,7 @@ impl BalanceRepo {
             let normal_balance_type: DebitOrCredit = row.get("normal_balance_type");
             ret.insert(
                 (details.journal_id, details.account_id, details.currency),
-                AccountBalance {
-                    details,
-                    balance_type: normal_balance_type,
-                },
+                AccountBalance::new(normal_balance_type, details),
             );
         }
         Ok(ret)

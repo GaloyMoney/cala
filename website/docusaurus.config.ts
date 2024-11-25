@@ -54,7 +54,7 @@ const config: Config = {
     // social card
     image: 'img/galoy.png',
     navbar: {
-      title: 'Cala',
+      title: '',
       logo: {
         alt: 'Cala Logo',
         src: 'img/galoy.png',
@@ -67,25 +67,16 @@ const config: Config = {
           label: 'Docs',
         },
         {
+          type: 'doc',
+          position: 'left',
+          label: 'Enterprise',
+          docId: 'enterprise',
+        },
+        {
           type: 'docSidebar',
           sidebarId: 'accountingSidebar',
           position: 'left',
           label: 'Accounting Intro',
-        },
-        {
-          href: 'https://cala.sh/api-reference.html',
-          label: 'API Reference',
-          position: 'left',
-        },
-        {
-          href: 'https://docs.rs/cala-ledger/latest/cala_ledger/',
-          label: 'Rust Crate Docs',
-          position: 'left',
-        },
-        {
-          href: 'https://github.com/GaloyMoney/cala',
-          label: 'GitHub',
-          position: 'right',
         },
       ],
     },

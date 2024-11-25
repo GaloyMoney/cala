@@ -3,8 +3,12 @@ use async_graphql::dataloader::Loader;
 use std::{collections::HashMap, sync::Arc};
 
 use super::{
-    account::Account, account_set::AccountSet, journal::Journal, transaction::Transaction,
+    account::Account,
+    account_set::AccountSet,
+    journal::Journal,
+    transaction::Transaction,
     tx_template::TxTemplate,
+    velocity::{VelocityControl, VelocityLimit},
 };
 use cala_ledger::{
     account::{error::AccountError, *},
@@ -14,7 +18,8 @@ use cala_ledger::{
     primitives::*,
     transaction::error::TransactionError,
     tx_template::error::TxTemplateError,
-    *,
+    velocity::error::VelocityError,
+    CalaLedger,
 };
 
 pub struct LedgerDataLoader {
@@ -106,6 +111,38 @@ impl Loader<TxTemplateId> for LedgerDataLoader {
         self.ledger
             .tx_templates()
             .find_all(keys)
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+impl Loader<VelocityLimitId> for LedgerDataLoader {
+    type Value = VelocityLimit;
+    type Error = Arc<VelocityError>;
+
+    async fn load(
+        &self,
+        keys: &[VelocityLimitId],
+    ) -> Result<HashMap<VelocityLimitId, VelocityLimit>, Self::Error> {
+        self.ledger
+            .velocities()
+            .find_all_limits(keys)
+            .await
+            .map_err(Arc::new)
+    }
+}
+
+impl Loader<VelocityControlId> for LedgerDataLoader {
+    type Value = VelocityControl;
+    type Error = Arc<VelocityError>;
+
+    async fn load(
+        &self,
+        keys: &[VelocityControlId],
+    ) -> Result<HashMap<VelocityControlId, VelocityControl>, Self::Error> {
+        self.ledger
+            .velocities()
+            .find_all_controls(keys)
             .await
             .map_err(Arc::new)
     }

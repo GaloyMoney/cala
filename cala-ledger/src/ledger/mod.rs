@@ -160,7 +160,7 @@ impl CalaLedger {
     ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction(tx_id, tx_template_code, params.into())
+            .prepare_transaction(op.now, tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self
@@ -184,6 +184,16 @@ impl CalaLedger {
         let mappings = self
             .account_sets
             .fetch_mappings(transaction.values().journal_id, &account_ids)
+            .await?;
+
+        self.velocities
+            .update_balances_in_op(
+                op,
+                transaction.created_at(),
+                transaction.values(),
+                &entries,
+                &account_ids,
+            )
             .await?;
 
         self.balances
