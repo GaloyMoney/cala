@@ -1,10 +1,11 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
-use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
     balance::*,
     primitives::{AccountId, Currency, JournalId},
 };
+
+pub use cala_ledger::account::AccountsByNameCursor;
 
 use crate::app::CalaApp;
 
@@ -141,31 +142,6 @@ impl Account {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub(super) struct AccountByNameCursor {
-    pub name: String,
-    pub id: cala_ledger::primitives::AccountId,
-}
-
-impl CursorType for AccountByNameCursor {
-    type Error = String;
-
-    fn encode_cursor(&self) -> String {
-        use base64::{engine::general_purpose, Engine as _};
-        let json = serde_json::to_string(&self).expect("could not serialize token");
-        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-    }
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        use base64::{engine::general_purpose, Engine as _};
-        let bytes = general_purpose::STANDARD_NO_PAD
-            .decode(s.as_bytes())
-            .map_err(|e| e.to_string())?;
-        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-        serde_json::from_str(&json).map_err(|e| e.to_string())
-    }
-}
-
 #[derive(InputObject)]
 pub(super) struct AccountCreateInput {
     pub account_id: UUID,
@@ -205,24 +181,6 @@ pub(super) struct AccountUpdatePayload {
 impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("account:{}", self))
-    }
-}
-
-impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
-    fn from(values: &cala_ledger::account::AccountValues) -> Self {
-        Self {
-            name: values.name.clone(),
-            id: values.id,
-        }
-    }
-}
-
-impl From<AccountByNameCursor> for cala_ledger::account::AccountByNameCursor {
-    fn from(cursor: AccountByNameCursor) -> Self {
-        Self {
-            name: cursor.name,
-            id: cursor.id,
-        }
     }
 }
 

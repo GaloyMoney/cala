@@ -13,6 +13,7 @@ categories = ["finance"]
 
 fail-on-warnings = []
 import = []
+graphql = ["es-entity/graphql"]
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.47-dev" }

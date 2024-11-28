@@ -150,6 +150,8 @@ pub mod primitives {
     pub use cala_types::primitives::*;
 }
 
+pub use es_entity;
+
 pub mod query {
     #[derive(Debug)]
     pub struct PaginatedQueryArgs<T: std::fmt::Debug> {

@@ -66,7 +66,7 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountByNameCursor, Account, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountsByNameCursor, Account, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         query(
             after,
@@ -78,16 +78,13 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
                 let result = app
                     .ledger()
                     .accounts()
-                    .list(cala_ledger::query::PaginatedQueryArgs {
-                        first,
-                        after: after.map(cala_ledger::account::AccountByNameCursor::from),
-                    })
+                    .list(cala_ledger::es_entity::PaginatedQueryArgs { first, after })
                     .await?;
                 let mut connection = Connection::new(false, result.has_next_page);
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = AccountByNameCursor::from(entity.values());
+                        let cursor = AccountsByNameCursor::from(&entity);
                         Edge::new(cursor, Account::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
@@ -245,7 +242,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account::NewAccount::builder();
@@ -272,12 +269,13 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .await?;
 
         if let Some(account_set_ids) = input.account_set_ids {
-            for id in account_set_ids {
-                app.ledger()
-                    .account_sets()
-                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
-                    .await?;
-            }
+            unimplemented!()
+            // for id in account_set_ids {
+            //     app.ledger()
+            //         .account_sets()
+            //         .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
+            //         .await?;
+            // }
         }
 
         Ok(account.into())
@@ -291,7 +289,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 

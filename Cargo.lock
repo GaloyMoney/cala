@@ -1113,7 +1113,9 @@ name = "es-entity"
 version = "0.2.46-dev"
 source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#ff18dd2f39e3e37dde892997faa94a93dd09aa51"
 dependencies = [
+ "async-graphql",
  "async-trait",
+ "base64 0.22.1",
  "chrono",
  "derive_builder",
  "es-entity-macros",
