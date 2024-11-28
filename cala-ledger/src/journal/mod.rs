@@ -1,8 +1,6 @@
-// mod entity;
+mod entity;
 pub mod error;
-mod new_entity;
-mod new_repo;
-// mod repo;
+mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
@@ -15,9 +13,9 @@ use std::collections::HashMap;
 use crate::primitives::DataSourceId;
 use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
 
+pub use entity::*;
 use error::*;
-pub use new_entity::*;
-use new_repo::*;
+use repo::*;
 
 /// Service for working with `Journal` entities.
 #[derive(Clone)]
