@@ -2,8 +2,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 

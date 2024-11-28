@@ -1,13 +1,11 @@
 #[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
-#[cfg(feature = "import")]
 use es_entity::DbOp;
 use es_entity::*;
 use sqlx::PgPool;
 
 use crate::primitives::DataSourceId;
 
-use super::{error::JournalError, new_entity::*};
+use super::{entity::*, error::JournalError};
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
