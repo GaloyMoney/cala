@@ -85,7 +85,7 @@ CREATE TABLE cala_account_set_member_account_sets (
 
 CREATE TABLE cala_tx_templates (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID PRIMARY KEY,
   code VARCHAR NOT NULL, 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id),
@@ -104,29 +104,24 @@ CREATE TABLE cala_tx_template_events (
 );
 
 CREATE TABLE cala_transactions (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID PRIMARY KEY,
+  data_source_id UUID NOT NULL,
   journal_id UUID NOT NULL,
   tx_template_id UUID NOT NULL,
   external_id VARCHAR DEFAULT NULL,
   correlation_id VARCHAR NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id),
   FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, tx_template_id) REFERENCES cala_tx_templates(data_source_id, id)
+  FOREIGN KEY (tx_template_id) REFERENCES cala_tx_templates(id)
 );
-CREATE INDEX idx_cala_transactions_data_source_id_correlation_id ON cala_transactions (data_source_id, correlation_id);
-CREATE UNIQUE INDEX idx_cala_transactions_data_source_id_external_id ON cala_transactions (data_source_id, external_id) WHERE external_id IS NOT NULL;
 
 CREATE TABLE cala_transaction_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_transactions(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_transactions(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_entries (

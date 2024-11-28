@@ -3,8 +3,6 @@ pub mod error;
 mod entity;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -12,7 +10,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -36,11 +34,11 @@ impl Transactions {
 
     pub(crate) async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
-        let transaction = self.repo.create_in_tx(op.tx(), new_transaction).await?;
-        op.accumulate(transaction.events.last_persisted());
+        let transaction = self.repo.create_in_op(db.op(), new_transaction).await?;
+        db.accumulate(transaction.events.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
 
@@ -49,7 +47,7 @@ impl Transactions {
         &self,
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
-        self.repo.find_by_external_id(external_id).await
+        self.repo.find_by_external_id(Some(external_id)).await
     }
 
     #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self), err)]
@@ -71,17 +69,21 @@ impl Transactions {
     #[cfg(feature = "import")]
     pub async fn sync_transaction_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
         let mut transaction = Transaction::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut transaction)
+            .import_in_op(&mut db, origin, &mut transaction)
             .await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, transaction.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                transaction.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }

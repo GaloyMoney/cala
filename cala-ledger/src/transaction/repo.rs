@@ -1,19 +1,32 @@
 #[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, Transaction as DbTransaction};
+use es_entity::DbOp;
 
-use std::collections::HashMap;
+use es_entity::*;
+use sqlx::PgPool;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{
-    entity::*,
-    primitives::{JournalId, TransactionId, TxTemplateId},
-};
+use crate::primitives::*;
 
-use super::{entity::*, error::*};
+use super::{entity::*, error::TransactionError};
 
-#[derive(Debug, Clone)]
+#[derive(EsRepo, Clone)]
+#[es_repo(
+    entity = "Transaction",
+    err = "TransactionError",
+    columns(
+        external_id(ty = "Option<String>", update(persist = false), list_by = false),
+        correlation_id(ty = "String", update(persist = false), list_by = false),
+        journal_id(ty = "JournalId", update(persist = false), list_by = false),
+        tx_template_id(ty = "TxTemplateId", update(persist = false), list_by = false),
+        data_source_id(
+            ty = "DataSourceId",
+            create(accessor = "data_source().into()"),
+            update(persist = false),
+            list_by = false
+        ),
+    ),
+    tbl_prefix = "cala"
+)]
+
 pub(super) struct TransactionRepo {
     pool: PgPool,
 }
@@ -23,117 +36,14 @@ impl TransactionRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn create_in_tx(
-        &self,
-        db: &mut DbTransaction<'_, Postgres>,
-        new_transaction: NewTransaction,
-    ) -> Result<Transaction, TransactionError> {
-        let created_at = new_transaction.created_at;
-        sqlx::query!(
-            r#"INSERT INTO cala_transactions (id, created_at, journal_id, tx_template_id, correlation_id, external_id)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            new_transaction.id as TransactionId,
-            created_at,
-            new_transaction.journal_id as JournalId,
-            new_transaction.tx_template_id as TxTemplateId,
-            new_transaction.correlation_id,
-            new_transaction.external_id
-        )
-        .execute(&mut **db)
-        .await?;
-        let mut events = new_transaction.initial_events();
-        events.persist_at(db, created_at).await?;
-        let transaction = Transaction::try_from(events)?;
-        Ok(transaction)
-    }
-
-    pub(super) async fn find_all<T: From<Transaction>>(
-        &self,
-        ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT t.id, e.sequence, e.event,
-                t.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_transactions t
-            JOIN cala_transaction_events e
-            ON t.data_source_id = e.data_source_id
-            AND t.id = e.id
-            WHERE t.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND t.id = ANY($1)
-            ORDER BY t.id, e.sequence"#,
-            ids as &[TransactionId]
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        let n = rows.len();
-        let ret = EntityEvents::load_n(rows, n)?
-            .0
-            .into_iter()
-            .map(|transaction: Transaction| (transaction.values().id, T::from(transaction)))
-            .collect();
-        Ok(ret)
-    }
-
-    pub async fn find_by_external_id(
-        &self,
-        external_id: String,
-    ) -> Result<Transaction, TransactionError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_transactions a
-            JOIN cala_transaction_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.external_id = $1
-            ORDER BY e.sequence"#,
-            external_id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(transaction) => Ok(transaction),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(TransactionError::CouldNotFindByExternalId(external_id))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    pub async fn find_by_id(&self, id: TransactionId) -> Result<Transaction, TransactionError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_transactions a
-            JOIN cala_transaction_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.id = $1
-            ORDER BY e.sequence"#,
-            id as TransactionId
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(transaction) => Ok(transaction),
-            Err(EntityError::NoEntityEventsPresent) => Err(TransactionError::CouldNotFindById(id)),
-            Err(e) => Err(e.into()),
-        }
-    }
-
     #[cfg(feature = "import")]
-    pub async fn import(
+    pub async fn import_in_op(
         &self,
-        db: &mut DbTransaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
+        op: &mut DbOp<'_>,
         origin: DataSourceId,
         transaction: &mut Transaction,
     ) -> Result<(), TransactionError> {
+        let recorded_at = op.now();
         sqlx::query!(
             r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, tx_template_id, external_id, correlation_id, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
@@ -145,12 +55,9 @@ impl TransactionRepo {
             transaction.values().correlation_id,
             recorded_at
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
-        transaction
-            .events
-            .persisted_at(db, origin, recorded_at)
-            .await?;
+        self.persist_events(op, &mut transaction.events).await?;
         Ok(())
     }
 }

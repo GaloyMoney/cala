@@ -1,12 +1,13 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
+use crate::primitives::*;
 pub use cala_types::{primitives::TransactionId, transaction::*};
+use es_entity::*;
 
-use crate::{entity::*, primitives::*};
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "TransactionId")]
 pub enum TransactionEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -18,22 +19,12 @@ pub enum TransactionEvent {
     },
 }
 
-impl EntityEvent for TransactionEvent {
-    type EntityId = TransactionId;
-    fn event_table_name() -> &'static str {
-        "cala_transaction_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct Transaction {
+    pub id: TransactionId,
     values: TransactionValues,
     pub(super) events: EntityEvents<TransactionEvent>,
-}
-
-impl Entity for Transaction {
-    type Event = TransactionEvent;
 }
 
 impl Transaction {
@@ -46,7 +37,7 @@ impl Transaction {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build transaction from events")
+        Self::try_from_events(events).expect("Failed to build transaction from events")
     }
 
     pub fn id(&self) -> TransactionId {
@@ -67,30 +58,28 @@ impl Transaction {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
+            .entity_first_persisted_at()
             .expect("No persisted events")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .latest_event_persisted_at
-            .expect("No events for account")
+            .entity_last_modified_at()
+            .expect("Entity not persisted")
     }
 }
 
-impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<TransactionEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<TransactionEvent> for Transaction {
+    fn try_from_events(events: EntityEvents<TransactionEvent>) -> Result<Self, EsEntityError> {
         let mut builder = TransactionBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 TransactionEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 TransactionEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
             }
         }
@@ -100,7 +89,7 @@ impl TryFrom<EntityEvents<TransactionEvent>> for Transaction {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub(crate) struct NewTransaction {
+pub struct NewTransaction {
     #[builder(setter(custom))]
     pub(super) id: TransactionId,
     pub(super) created_at: chrono::DateTime<chrono::Utc>,
@@ -125,8 +114,13 @@ impl NewTransaction {
         NewTransactionBuilder::default()
     }
 
-    #[allow(dead_code)]
-    pub(super) fn initial_events(self) -> EntityEvents<TransactionEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<TransactionEvent> for NewTransaction {
+    fn into_events(self) -> EntityEvents<TransactionEvent> {
         EntityEvents::init(
             self.id,
             [TransactionEvent::Initialized {

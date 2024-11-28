@@ -9,12 +9,14 @@ pub enum TransactionError {
     Sqlx(sqlx::Error),
     #[error("TransactionError - DuplicateKey: {0}")]
     DuplicateKey(Box<dyn DatabaseError>),
-    #[error("TransactionError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
     #[error("TransactionError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
     #[error("TransactionError - NotFound: id '{0}' not found")]
     CouldNotFindById(TransactionId),
+    #[error("JournalError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("JournalError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 
 impl From<sqlx::Error> for TransactionError {
@@ -27,3 +29,5 @@ impl From<sqlx::Error> for TransactionError {
         }
     }
 }
+
+es_entity::from_es_entity_error!(TransactionError);
