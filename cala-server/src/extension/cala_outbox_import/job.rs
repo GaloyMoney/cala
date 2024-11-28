@@ -45,42 +45,43 @@ pub struct CalaOutboxImportJobState {
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
+    // #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
     async fn run(
         &self,
         mut current_job: CurrentJob,
     ) -> Result<JobCompletion, Box<dyn std::error::Error>> {
-        let mut state = current_job
-            .state::<CalaOutboxImportJobState>()?
-            .expect("Job state");
-        println!(
-            "Executing CalaOutboxImportJob importing from endpoint: {}",
-            state.endpoint
-        );
-        let mut client = Client::connect(ClientConfig::new(state.endpoint.clone())).await?;
-        let mut stream = client.subscribe(Some(state.last_synced)).await?;
-        loop {
-            match stream.next().await {
-                Some(Ok(message)) => {
-                    let mut tx = current_job.pool().begin().await?;
-                    state.last_synced = message.sequence;
-                    current_job.update_state(&mut tx, &state).await?;
-                    self.ledger
-                        .sync_outbox_event(
-                            tx,
-                            DataSourceId::from(uuid::Uuid::from(current_job.id())),
-                            message,
-                        )
-                        .await?;
-                }
-                Some(Err(err)) => {
-                    return Err(Box::new(err));
-                }
-                None => {
-                    break;
-                }
-            }
-        }
-        Ok(JobCompletion::Complete)
+        unimplemented!()
+        // let mut state = current_job
+        //     .state::<CalaOutboxImportJobState>()?
+        //     .expect("Job state");
+        // println!(
+        //     "Executing CalaOutboxImportJob importing from endpoint: {}",
+        //     state.endpoint
+        // );
+        // let mut client = Client::connect(ClientConfig::new(state.endpoint.clone())).await?;
+        // let mut stream = client.subscribe(Some(state.last_synced)).await?;
+        // loop {
+        //     match stream.next().await {
+        //         Some(Ok(message)) => {
+        //             let mut tx = current_job.pool().begin().await?;
+        //             state.last_synced = message.sequence;
+        //             current_job.update_state(&mut tx, &state).await?;
+        //             self.ledger
+        //                 .sync_outbox_event(
+        //                     tx,
+        //                     DataSourceId::from(uuid::Uuid::from(current_job.id())),
+        //                     message,
+        //                 )
+        //                 .await?;
+        //         }
+        //         Some(Err(err)) => {
+        //             return Err(Box::new(err));
+        //         }
+        //         None => {
+        //             break;
+        //         }
+        //     }
+        // }
+        // Ok(JobCompletion::Complete)
     }
 }

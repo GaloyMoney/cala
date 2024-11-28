@@ -16,3 +16,4 @@ target/
 .rust-example-logs
 .cala
 .env
+.bacon-locations

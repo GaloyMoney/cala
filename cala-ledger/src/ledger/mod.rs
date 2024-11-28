@@ -284,15 +284,17 @@ impl CalaLedger {
                     .await?
             }
             JournalCreated { journal, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.journals
-                    .sync_journal_creation(db, event.recorded_at, origin, journal)
+                    .sync_journal_creation(op, origin, journal)
                     .await?
             }
             JournalUpdated {
                 journal, fields, ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.journals
-                    .sync_journal_update(db, event.recorded_at, origin, journal, fields)
+                    .sync_journal_update(op, journal, fields)
                     .await?
             }
             TransactionCreated { transaction, .. } => {

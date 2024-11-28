@@ -135,6 +135,7 @@ pub mod entity;
 pub mod entry;
 pub mod journal;
 pub mod migrate;
+pub mod new_atomic_operation;
 pub mod transaction;
 pub mod tx_template;
 pub mod velocity;

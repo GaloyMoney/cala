@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
+  "examples/rust",
+
   "cala-ledger",
   "cala-ledger-outbox-client",
   "cala-ledger-core-types",
@@ -9,7 +11,10 @@ members = [
   "cala-nodejs",
   "cala-cel-parser",
   "cala-cel-interpreter",
-  "examples/rust",
+
+  # "lib/es-entity",
+  # "lib/es-entity-macros",
+  # "lib/sim-time",
 ]
 
 [workspace.dependencies]
@@ -26,7 +31,7 @@ clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.1"
 sqlx = { version = "0.8", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 thiserror = "1.0.64"
-uuid = { version = "1.11", features = ["serde", "v4"] }
+uuid = { version = "1.10", features = ["serde", "v4"] }
 tracing = "0.1.40"
 tracing-opentelemetry = "0.25.0"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
@@ -39,7 +44,7 @@ tokio = { version = "1.40", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.16", features = ["sync"] }
 serde = { version = "1.0.215", features = ["derive"] }
 serde_yaml = "0.9.32"
-serde_json = "1.0.133"
+serde_json = "1.0.128"
 serde_with = "3.11.0"
 tonic = "0.12.3"
 tonic-build = { version = "0.12.3", features = ["prost"] }

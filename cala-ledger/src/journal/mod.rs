@@ -1,6 +1,8 @@
-mod entity;
+// mod entity;
 pub mod error;
-mod repo;
+mod new_entity;
+mod new_repo;
+// mod repo;
 
 #[cfg(feature = "import")]
 use chrono::{DateTime, Utc};
@@ -11,11 +13,11 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
 
-pub use entity::*;
 use error::*;
-use repo::*;
+pub use new_entity::*;
+use new_repo::*;
 
 /// Service for working with `Journal` entities.
 #[derive(Clone)]
@@ -44,11 +46,11 @@ impl Journals {
 
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_tx(op.tx(), new_journal).await?;
-        op.accumulate(journal.events.last_persisted());
+        let journal = self.repo.create_in_op(db.op(), new_journal).await?;
+        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
         Ok(journal)
     }
 
@@ -60,9 +62,9 @@ impl Journals {
         self.repo.find_all(journal_ids).await
     }
 
-    #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.journals.find_by_id", skip(self), err)]
     pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        self.repo.find(journal_id).await
+        self.repo.find_by_id(journal_id).await
     }
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
@@ -75,28 +77,32 @@ impl Journals {
 
     pub async fn persist_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        self.repo.persist_in_tx(op.tx(), journal).await?;
-        op.accumulate(journal.events.last_persisted());
+        self.repo.update_in_op(db.op(), journal).await?;
+        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
         Ok(())
     }
 
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: JournalValues,
     ) -> Result<(), JournalError> {
         let mut journal = Journal::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut journal)
+            .import_in_op(&mut db, origin, &mut journal)
             .await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                journal.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }
@@ -104,19 +110,20 @@ impl Journals {
     #[cfg(feature = "import")]
     pub async fn sync_journal_update(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        mut db: es_entity::DbOp<'_>,
         values: JournalValues,
         fields: Vec<String>,
     ) -> Result<(), JournalError> {
-        let mut journal = self.repo.find_imported(values.id, origin).await?;
+        let mut journal = self.repo.find_by_id(values.id).await?;
         journal.update((values, fields));
-        self.repo
-            .persist_at_in_tx(&mut db, recorded_at, origin, &mut journal)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut journal).await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                journal.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }

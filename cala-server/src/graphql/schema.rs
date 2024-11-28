@@ -11,6 +11,7 @@ use super::{
 };
 
 pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
+pub type NewDbOp<'a> = Arc<Mutex<cala_ledger::new_atomic_operation::AtomicOperation<'a>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {
@@ -447,7 +448,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::journal::NewJournal::builder();
@@ -475,7 +476,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<JournalUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 

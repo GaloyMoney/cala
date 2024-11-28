@@ -18,6 +18,7 @@ import = []
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.47-dev" }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.47-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.2.47-dev" }
+es-entity = { git = "https://github.com/galoymoney/lana-bank.git", branch = "main", package = "es-entity" }
 
 cached = { workspace = true }
 chrono = { workspace = true }
