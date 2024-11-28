@@ -1,5 +1,3 @@
-#[cfg(feature = "import")]
-use es_entity::DbOp;
 use es_entity::*;
 use sqlx::PgPool;
 

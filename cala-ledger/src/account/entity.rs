@@ -1,12 +1,14 @@
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
 pub use cala_types::{account::*, primitives::AccountId};
 
-use crate::{entity::*, primitives::*};
+use crate::primitives::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "AccountId")]
 pub enum AccountEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -22,22 +24,12 @@ pub enum AccountEvent {
     },
 }
 
-impl EntityEvent for AccountEvent {
-    type EntityId = AccountId;
-    fn event_table_name() -> &'static str {
-        "cala_account_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct Account {
+    pub id: AccountId,
     values: AccountValues,
     pub(super) events: EntityEvents<AccountEvent>,
-}
-
-impl Entity for Account {
-    type Event = AccountEvent;
 }
 
 impl Account {
@@ -50,7 +42,7 @@ impl Account {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build account from events")
+        Self::try_from_events(events).expect("Failed to build account from events")
     }
 
     pub fn id(&self) -> AccountId {
@@ -134,14 +126,14 @@ impl Account {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
-            .expect("No events for account")
+            .entity_first_persisted_at()
+            .expect("Entity not persisted")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .latest_event_persisted_at
-            .expect("No events for account")
+            .entity_last_modified_at()
+            .expect("Entity not persisted")
     }
 
     pub fn metadata<T: serde::de::DeserializeOwned>(&self) -> Result<Option<T>, serde_json::Error> {
@@ -152,19 +144,17 @@ impl Account {
     }
 }
 
-impl TryFrom<EntityEvents<AccountEvent>> for Account {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<AccountEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<AccountEvent> for Account {
+    fn try_from_events(events: EntityEvents<AccountEvent>) -> Result<Self, EsEntityError> {
         let mut builder = AccountBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 AccountEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 AccountEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 AccountEvent::Updated { values, .. } => {
                     builder = builder.values(values.clone());
@@ -275,6 +265,10 @@ impl NewAccount {
         NewAccountBuilder::default()
     }
 
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+
     pub(super) fn into_values(self) -> AccountValues {
         AccountValues {
             id: self.id,
@@ -292,8 +286,10 @@ impl NewAccount {
             },
         }
     }
+}
 
-    pub(super) fn initial_events(self) -> EntityEvents<AccountEvent> {
+impl IntoEvents<AccountEvent> for NewAccount {
+    fn into_events(self) -> EntityEvents<AccountEvent> {
         let values = self.into_values();
         EntityEvents::init(values.id, [AccountEvent::Initialized { values }])
     }

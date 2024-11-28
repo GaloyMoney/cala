@@ -1,9 +1,9 @@
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
 use crate::primitives::*;
 pub use cala_types::{journal::*, primitives::JournalId};
-use es_entity::*;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]

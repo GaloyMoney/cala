@@ -228,15 +228,17 @@ impl CalaLedger {
         match event.payload {
             Empty => (),
             AccountCreated { account, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.accounts
-                    .sync_account_creation(db, event.recorded_at, origin, account)
+                    .sync_account_creation(op, origin, account)
                     .await?
             }
             AccountUpdated {
                 account, fields, ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.accounts
-                    .sync_account_update(db, event.recorded_at, origin, account, fields)
+                    .sync_account_update(op, account, fields)
                     .await?
             }
             AccountSetCreated { account_set, .. } => {

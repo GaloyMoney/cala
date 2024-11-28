@@ -81,7 +81,7 @@ impl AccountSets {
             .is_account_set(true)
             .build()
             .expect("Failed to build account");
-        self.accounts.create_in_op(op, new_account).await?;
+        // self.accounts.create_in_op(op, new_account).await?;
         let account_set = self.repo.create_in_tx(op.tx(), new_account_set).await?;
         op.accumulate(account_set.events.last_persisted());
         Ok(account_set)

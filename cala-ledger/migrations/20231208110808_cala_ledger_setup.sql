@@ -3,31 +3,25 @@ CREATE TYPE Status AS ENUM ('active', 'locked');
 CREATE TYPE Layer AS ENUM ('settled', 'pending', 'encumbrance');
 
 CREATE TABLE cala_accounts (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
-  code VARCHAR NOT NULL,
+  id UUID PRIMARY KEY,
+  code VARCHAR UNIQUE NOT NULL,
   name VARCHAR NOT NULL,
-  external_id VARCHAR,
+  external_id VARCHAR UNIQUE,
+  data_source_id UUID NOT NULL,
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
   latest_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id),
-  UNIQUE(data_source_id, code)
+  created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
-CREATE UNIQUE INDEX idx_cala_accounts_data_source_id_external_id ON cala_accounts (data_source_id, external_id) WHERE external_id IS NOT NULL;
-
 
 CREATE TABLE cala_account_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_accounts(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_journals (
@@ -49,13 +43,11 @@ CREATE TABLE cala_journal_events (
 
 CREATE TABLE cala_account_sets (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
-  journal_id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_accounts(id),
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
   name VARCHAR NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id),
-  FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id)
+  UNIQUE(data_source_id, id)
 );
 CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
 
@@ -68,19 +60,17 @@ CREATE TABLE cala_account_set_events (
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_accounts(data_source_id, id),
   FOREIGN KEY (data_source_id, id) REFERENCES cala_account_sets(data_source_id, id)
 );
 
 CREATE TABLE cala_account_set_member_accounts (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   account_set_id UUID NOT NULL,
-  member_account_id UUID NOT NULL,
+  member_account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transitive BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, account_set_id, member_account_id),
-  FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id),
-  FOREIGN KEY (data_source_id, member_account_id) REFERENCES cala_accounts(data_source_id, id)
+  FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id)
 );
 
 CREATE TABLE cala_account_set_member_account_sets (
@@ -142,13 +132,11 @@ CREATE TABLE cala_transaction_events (
 CREATE TABLE cala_entries (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   id UUID NOT NULL,
-  journal_id UUID NOT NULL,
-  account_id UUID NOT NULL,
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transaction_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id),
-  FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+  UNIQUE(data_source_id, id)
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 
@@ -165,14 +153,12 @@ CREATE TABLE cala_entry_events (
 
 CREATE TABLE cala_current_balances (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  journal_id UUID NOT NULL,
-  account_id UUID NOT NULL,
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, journal_id, account_id, currency),
-  FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id)
+  UNIQUE(data_source_id, journal_id, account_id, currency)
 );
 
 CREATE TABLE cala_balance_history (
@@ -244,19 +230,18 @@ CREATE TABLE cala_velocity_control_limits (
 
 CREATE TABLE cala_velocity_account_controls (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  account_id UUID NOT NULL,
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
   velocity_control_id UUID NOT NULL,
   values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, account_id, velocity_control_id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
   FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id)
 );
 
 CREATE TABLE cala_velocity_current_balances (
   data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL,
-  account_id UUID NOT NULL,
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
   velocity_control_id UUID NOT NULL,
   velocity_limit_id UUID NOT NULL,
@@ -265,7 +250,6 @@ CREATE TABLE cala_velocity_current_balances (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
   FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, account_id) REFERENCES cala_accounts(data_source_id, id),
   FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id),
   FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
 );

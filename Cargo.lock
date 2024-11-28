@@ -1111,7 +1111,7 @@ dependencies = [
 [[package]]
 name = "es-entity"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#c41371b4a41824aa61de28bf0b6669f648fefd9a"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#ff18dd2f39e3e37dde892997faa94a93dd09aa51"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1127,7 +1127,7 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#c41371b4a41824aa61de28bf0b6669f648fefd9a"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#ff18dd2f39e3e37dde892997faa94a93dd09aa51"
 dependencies = [
  "convert_case",
  "darling",
