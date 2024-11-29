@@ -26,7 +26,6 @@ use super::{entity::*, error::TransactionError};
     ),
     tbl_prefix = "cala"
 )]
-
 pub(super) struct TransactionRepo {
     pool: PgPool,
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n          SELECT event \n          FROM cala_tx_template_events\n          WHERE id = $1 AND sequence = $2",
+  "query": "\n          SELECT event\n          FROM cala_tx_template_events\n          WHERE id = $1 AND sequence = $2",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       false
     ]
   },
-  "hash": "9e72a5d259a953c1d950b3600de33740ce7469f33920de6d4a7cd112ac1fc8c1"
+  "hash": "79dd2b6e80276d9a6d9328ddcbf45548e54b94b3c72e26aea4ab321734f8ea66"
 }

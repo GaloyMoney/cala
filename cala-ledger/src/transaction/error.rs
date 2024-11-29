@@ -13,9 +13,9 @@ pub enum TransactionError {
     CouldNotFindByExternalId(String),
     #[error("TransactionError - NotFound: id '{0}' not found")]
     CouldNotFindById(TransactionId),
-    #[error("JournalError - EsEntityError: {0}")]
+    #[error("TransactionError - EsEntityError: {0}")]
     EsEntityError(es_entity::EsEntityError),
-    #[error("JournalError - CursorDestructureError: {0}")]
+    #[error("TransactionError - CursorDestructureError: {0}")]
     CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 

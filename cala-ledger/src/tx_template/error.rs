@@ -25,6 +25,10 @@ pub enum TxTemplateError {
     CouldNotFindByCode(String),
     #[error("{0}")]
     ParamError(#[from] crate::param::error::ParamError),
+    #[error("TxTemplateError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("TxTemplateError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 
 impl From<sqlx::Error> for TxTemplateError {
@@ -37,3 +41,5 @@ impl From<sqlx::Error> for TxTemplateError {
         }
     }
 }
+
+es_entity::from_es_entity_error!(TxTemplateError);

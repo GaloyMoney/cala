@@ -12,8 +12,8 @@ use uuid::Uuid;
 
 pub use crate::param::*;
 use crate::{
-    atomic_operation::*,
     entry::NewEntry,
+    new_atomic_operation::*,
     outbox::*,
     primitives::{DataSource, *},
     transaction::NewTransaction,
@@ -57,11 +57,11 @@ impl TxTemplates {
 
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let tx_template = self.repo.create_in_tx(op.tx(), new_tx_template).await?;
-        op.accumulate(tx_template.events.last_persisted());
+        let tx_template = self.repo.create_in_op(db.op(), new_tx_template).await?;
+        db.accumulate(tx_template.events.last_persisted(1).map(|p| &p.event));
         Ok(tx_template)
     }
 
@@ -74,7 +74,7 @@ impl TxTemplates {
     }
 
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
-        self.repo.find_by_code(code.as_ref()).await
+        self.repo.find_by_code(code.as_ref().to_string()).await
     }
 
     #[instrument(
@@ -195,17 +195,21 @@ impl TxTemplates {
     #[cfg(feature = "import")]
     pub async fn sync_tx_template_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: TxTemplateValues,
     ) -> Result<(), TxTemplateError> {
         let mut tx_template = TxTemplate::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut tx_template)
+            .import_in_op(&mut db, origin, &mut tx_template)
             .await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, tx_template.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                tx_template.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }

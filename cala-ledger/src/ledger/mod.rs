@@ -307,8 +307,9 @@ impl CalaLedger {
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.tx_templates
-                    .sync_tx_template_creation(db, event.recorded_at, origin, tx_template)
+                    .sync_tx_template_creation(op, origin, tx_template)
                     .await?
             }
             EntryCreated { entry, .. } => {

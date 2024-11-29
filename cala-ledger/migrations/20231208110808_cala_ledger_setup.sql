@@ -84,23 +84,20 @@ CREATE TABLE cala_account_set_member_account_sets (
 );
 
 CREATE TABLE cala_tx_templates (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   id UUID PRIMARY KEY,
+  data_source_id UUID NOT NULL,
   code VARCHAR NOT NULL, 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id),
-  UNIQUE(data_source_id, code)
 );
 
 CREATE TABLE cala_tx_template_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   id UUID NOT NULL,
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_tx_templates(data_source_id, id)
+  UNIQUE(id, sequence),
+  FOREIGN KEY (id) REFERENCES cala_tx_templates(id)
 );
 
 CREATE TABLE cala_transactions (
