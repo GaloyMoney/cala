@@ -1,17 +1,13 @@
 use cached::proc_macro::cached;
-#[cfg(feature = "import")]
-use es_entity::DbOp;
 
 use es_entity::*;
 use sqlx::PgPool;
 
 use std::sync::Arc;
 
-#[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 
 use super::{entity::*, error::TxTemplateError};
-
 
 #[derive(EsRepo, Clone)]
 #[es_repo(
