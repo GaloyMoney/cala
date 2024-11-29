@@ -7,8 +7,14 @@ use cala_ledger::{
     primitives::{AccountId, AccountSetId, Currency, JournalId},
 };
 
+pub use cala_ledger::account_set::{AccountSetMembersCursor, AccountSetsByNameCursor};
+
 use super::{
-    balance::*, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*, schema::DbOp,
+    balance::*,
+    convert::ToGlobalId,
+    loader::LedgerDataLoader,
+    primitives::*,
+    schema::{DbOp, NewDbOp},
 };
 use crate::app::CalaApp;
 
@@ -95,7 +101,7 @@ impl AccountSet {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountSetMemberCursor, AccountSetMember, EmptyFields, EmptyFields>>
+    ) -> Result<Connection<AccountSetMembersCursor, AccountSetMember, EmptyFields, EmptyFields>>
     {
         let app = ctx.data_unchecked::<CalaApp>();
         let account_set_id = AccountSetId::from(self.account_set_id);
@@ -107,12 +113,9 @@ impl AccountSet {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let query_args = cala_ledger::query::PaginatedQueryArgs {
-                    first,
-                    after: after.map(cala_ledger::account_set::AccountSetMemberCursor::from),
-                };
+                let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
-                let (members, mut accounts, mut sets) = match ctx.data_opt::<DbOp>() {
+                let (members, mut accounts, mut sets) = match ctx.data_opt::<NewDbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         let account_sets = app.ledger().account_sets();
@@ -128,12 +131,11 @@ impl AccountSet {
                                 AccountSetMemberId::AccountSet(id) => set_ids.push(id),
                             }
                         }
-                        unimplemented!()
-                        // (
-                        //     members,
-                        //     accounts.find_all_in_op(&mut op, &account_ids).await?,
-                        //     account_sets.find_all_in_op(&mut op, &set_ids).await?,
-                        // )
+                        (
+                            members,
+                            accounts.find_all_in_op(&mut op, &account_ids).await?,
+                            account_sets.find_all_in_op(&mut op, &set_ids).await?,
+                        )
                     }
                     None => {
                         let members = app
@@ -162,12 +164,12 @@ impl AccountSet {
                     |member| match member.id {
                         AccountSetMemberId::Account(id) => {
                             let entity = accounts.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(member);
+                            let cursor = AccountSetMembersCursor::from(&member);
                             Edge::new(cursor, AccountSetMember::Account(entity))
                         }
                         AccountSetMemberId::AccountSet(id) => {
                             let entity = sets.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMemberCursor::from(member);
+                            let cursor = AccountSetMembersCursor::from(&member);
                             Edge::new(cursor, AccountSetMember::AccountSet(entity))
                         }
                     },
@@ -183,7 +185,7 @@ impl AccountSet {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountSetsByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         let account_set_id = AccountSetId::from(self.account_set_id);
 
@@ -194,12 +196,12 @@ impl AccountSet {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let query_args = cala_ledger::query::PaginatedQueryArgs {
+                let query_args = cala_ledger::es_entity::PaginatedQueryArgs {
                     first,
-                    after: after.map(cala_ledger::account_set::AccountSetByNameCursor::from),
+                    after: after.map(cala_ledger::account_set::AccountSetsByNameCursor::from),
                 };
 
-                let result = match ctx.data_opt::<DbOp>() {
+                let result = match ctx.data_opt::<NewDbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()
@@ -219,7 +221,7 @@ impl AccountSet {
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = AccountSetByNameCursor::from(entity.values());
+                        let cursor = AccountSetsByNameCursor::from(&entity);
                         Edge::new(cursor, AccountSet::from(entity))
                     }));
 
@@ -352,15 +354,6 @@ impl From<cala_ledger::account_set::AccountSet> for RemoveFromAccountSetPayload 
     }
 }
 
-impl From<&cala_ledger::account_set::AccountSetValues> for AccountSetByNameCursor {
-    fn from(values: &cala_ledger::account_set::AccountSetValues) -> Self {
-        Self {
-            name: values.name.clone(),
-            id: values.id,
-        }
-    }
-}
-
 #[derive(InputObject)]
 pub(super) struct AccountSetUpdateInput {
     pub name: Option<String>,
@@ -378,80 +371,6 @@ impl From<cala_ledger::account_set::AccountSet> for AccountSetUpdatePayload {
     fn from(value: cala_ledger::account_set::AccountSet) -> Self {
         Self {
             account_set: AccountSet::from(value),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(super) struct AccountSetByNameCursor {
-    pub name: String,
-    pub id: cala_ledger::primitives::AccountSetId,
-}
-
-impl CursorType for AccountSetByNameCursor {
-    type Error = String;
-
-    fn encode_cursor(&self) -> String {
-        use base64::{engine::general_purpose, Engine as _};
-        let json = serde_json::to_string(&self).expect("could not serialize token");
-        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-    }
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        use base64::{engine::general_purpose, Engine as _};
-        let bytes = general_purpose::STANDARD_NO_PAD
-            .decode(s.as_bytes())
-            .map_err(|e| e.to_string())?;
-        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-        serde_json::from_str(&json).map_err(|e| e.to_string())
-    }
-}
-
-impl From<AccountSetByNameCursor> for cala_ledger::account_set::AccountSetByNameCursor {
-    fn from(cursor: AccountSetByNameCursor) -> Self {
-        Self {
-            name: cursor.name,
-            id: cursor.id,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(super) struct AccountSetMemberCursor {
-    pub member_created_at: Timestamp,
-}
-
-impl CursorType for AccountSetMemberCursor {
-    type Error = String;
-
-    fn encode_cursor(&self) -> String {
-        use base64::{engine::general_purpose, Engine as _};
-        let json = serde_json::to_string(&self).expect("could not serialize token");
-        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-    }
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        use base64::{engine::general_purpose, Engine as _};
-        let bytes = general_purpose::STANDARD_NO_PAD
-            .decode(s.as_bytes())
-            .map_err(|e| e.to_string())?;
-        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-        serde_json::from_str(&json).map_err(|e| e.to_string())
-    }
-}
-
-impl From<AccountSetMemberCursor> for cala_ledger::account_set::AccountSetMemberCursor {
-    fn from(cursor: AccountSetMemberCursor) -> Self {
-        Self {
-            member_created_at: cursor.member_created_at.into_inner(),
-        }
-    }
-}
-
-impl From<cala_types::account_set::AccountSetMember> for AccountSetMemberCursor {
-    fn from(member: cala_types::account_set::AccountSetMember) -> Self {
-        Self {
-            member_created_at: Timestamp::from(member.created_at),
         }
     }
 }

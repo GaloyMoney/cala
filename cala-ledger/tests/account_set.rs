@@ -320,7 +320,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
         after: None,
     };
@@ -341,9 +341,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(account_one.id())
     );
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[0].clone())),
+        after: Some(AccountSetMembersCursor::from(&ret.entities[0])),
     };
 
     let ret = cala
@@ -361,9 +361,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(set_one.id())
     );
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[1].clone())),
+        after: Some(AccountSetMembersCursor::from(&ret.entities[1])),
     };
 
     let ret = cala

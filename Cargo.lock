@@ -608,6 +608,8 @@ name = "cala-ledger"
 version = "0.2.47-dev"
 dependencies = [
  "anyhow",
+ "async-graphql",
+ "base64 0.22.1",
  "cached",
  "cala-cel-interpreter",
  "cala-ledger-core-types",
@@ -1111,7 +1113,7 @@ dependencies = [
 [[package]]
 name = "es-entity"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#ff18dd2f39e3e37dde892997faa94a93dd09aa51"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#1cd7ac8a71bb5bf81265235f38c4b7a63e0fc445"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1129,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#ff18dd2f39e3e37dde892997faa94a93dd09aa51"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#1cd7ac8a71bb5bf81265235f38c4b7a63e0fc445"
 dependencies = [
  "convert_case",
  "darling",

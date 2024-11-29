@@ -243,8 +243,9 @@ impl CalaLedger {
                     .await?
             }
             AccountSetCreated { account_set, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_creation(db, event.recorded_at, origin, account_set)
+                    .sync_account_set_creation(op, origin, account_set)
                     .await?
             }
             AccountSetUpdated {
@@ -252,8 +253,9 @@ impl CalaLedger {
                 fields,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_update(db, event.recorded_at, origin, account_set, fields)
+                    .sync_account_set_update(op, account_set, fields)
                     .await?
             }
             AccountSetMemberCreated {
@@ -261,14 +263,9 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_member_creation(
-                        db,
-                        event.recorded_at,
-                        origin,
-                        account_set_id,
-                        member_id,
-                    )
+                    .sync_account_set_member_creation(op, origin, account_set_id, member_id)
                     .await?
             }
             AccountSetMemberRemoved {
@@ -276,14 +273,9 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_member_removal(
-                        db,
-                        event.recorded_at,
-                        origin,
-                        account_set_id,
-                        member_id,
-                    )
+                    .sync_account_set_member_removal(op, origin, account_set_id, member_id)
                     .await?
             }
             JournalCreated { journal, .. } => {

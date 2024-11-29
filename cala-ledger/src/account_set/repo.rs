@@ -1,21 +1,72 @@
 use chrono::{DateTime, Utc};
+use es_entity::*;
 use sqlx::{Executor, PgPool, Postgres, Transaction};
 
 use std::collections::HashMap;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{
-    entity::*,
-    primitives::{AccountId, JournalId},
-    query,
-};
+use crate::primitives::{AccountId, DataSourceId, JournalId};
 
-use super::{cursor::*, entity::*, error::*, AccountSetByNameCursor};
+use super::{entity::*, error::*};
 
 const ADDVISORY_LOCK_ID: i64 = 123456;
 
-#[derive(Debug, Clone)]
+pub mod members_cursor {
+    use cala_types::account_set::AccountSetMember;
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AccountSetMembersCursor {
+        pub member_created_at: chrono::DateTime<chrono::Utc>,
+    }
+
+    impl From<&AccountSetMember> for AccountSetMembersCursor {
+        fn from(member: &AccountSetMember) -> Self {
+            Self {
+                member_created_at: member.created_at,
+            }
+        }
+    }
+
+    #[cfg(feature = "graphql")]
+    impl async_graphql::connection::CursorType for AccountSetMembersCursor {
+        type Error = String;
+
+        fn encode_cursor(&self) -> String {
+            use base64::{engine::general_purpose, Engine as _};
+            let json = serde_json::to_string(&self).expect("could not serialize token");
+            general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
+        }
+
+        fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+            use base64::{engine::general_purpose, Engine as _};
+            let bytes = general_purpose::STANDARD_NO_PAD
+                .decode(s.as_bytes())
+                .map_err(|e| e.to_string())?;
+            let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+            serde_json::from_str(&json).map_err(|e| e.to_string())
+        }
+    }
+}
+
+use account_set_cursor::*;
+use members_cursor::*;
+
+#[derive(EsRepo, Debug, Clone)]
+#[es_repo(
+    entity = "AccountSet",
+    err = "AccountSetError",
+    columns(
+        name(ty = "String", update(accessor = "values().name")),
+        journal_id(ty = "JournalId", update(persist = false), list_by = false),
+        data_source_id(
+            ty = "DataSourceId",
+            create(accessor = "data_source().into()"),
+            update(persist = false),
+            list_by = false
+        ),
+    ),
+    tbl_prefix = "cala"
+)]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
 }
@@ -25,32 +76,14 @@ impl AccountSetRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn create_in_tx(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        new_account_set: NewAccountSet,
-    ) -> Result<AccountSet, AccountSetError> {
-        sqlx::query!(
-            r#"INSERT INTO cala_account_sets (id, journal_id, name)
-            VALUES ($1, $2, $3)"#,
-            new_account_set.id as AccountSetId,
-            new_account_set.journal_id as JournalId,
-            new_account_set.name,
-        )
-        .execute(&mut **db)
-        .await?;
-        let mut events = new_account_set.initial_events();
-        events.persist(db).await?;
-        let account_set = AccountSet::try_from(events)?;
-        Ok(account_set)
-    }
-
     pub async fn list_children(
         &self,
         id: AccountSetId,
-        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
-    {
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        AccountSetError,
+    > {
         self.list_children_in_executor(&self.pool, id, args).await
     }
 
@@ -58,9 +91,11 @@ impl AccountSetRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
-        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
-    {
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        AccountSetError,
+    > {
         self.list_children_in_executor(&mut **db, id, args).await
     }
 
@@ -68,9 +103,11 @@ impl AccountSetRepo {
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         id: AccountSetId,
-        args: query::PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError>
-    {
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        AccountSetError,
+    > {
         let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
         let rows = sqlx::query!(
             r#"
@@ -117,7 +154,7 @@ impl AccountSetRepo {
         let has_next_page = rows.len() > args.first;
         let mut end_cursor = None;
         if let Some(last) = rows.last() {
-            end_cursor = Some(AccountSetMemberCursor {
+            end_cursor = Some(AccountSetMembersCursor {
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
@@ -140,7 +177,7 @@ impl AccountSetRepo {
             )
             .collect::<Vec<AccountSetMember>>();
 
-        Ok(query::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet {
             entities: account_set_members,
             has_next_page,
             end_cursor,
@@ -158,19 +195,17 @@ impl AccountSetRepo {
             .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
             JOIN cala_account_sets s
-            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND m.member_account_set_id = $1
+            ON s.id = m.account_set_id
+            WHERE m.member_account_set_id = $1
 
             UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            SELECT p.member_account_set_id, m.account_set_id
             FROM parents p
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
-                AND p.data_source_id = m.data_source_id
           ),
           non_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
@@ -220,19 +255,17 @@ impl AccountSetRepo {
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
             JOIN cala_account_sets s
-            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND m.member_account_set_id = $1
+            ON s.id = m.account_set_id
+            WHERE m.member_account_set_id = $1
 
             UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            SELECT p.member_account_set_id, m.account_set_id
             FROM parents p
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
-                AND p.data_source_id = m.data_source_id
           ),
           deletions as (
             DELETE FROM cala_account_set_member_accounts
@@ -277,19 +310,17 @@ impl AccountSetRepo {
             .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
             JOIN cala_account_sets s
-            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND m.member_account_set_id = $1
+            ON s.id = m.account_set_id
+            WHERE m.member_account_set_id = $1
 
             UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            SELECT p.member_account_set_id, m.account_set_id
             FROM parents p
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
-                AND p.data_source_id = m.data_source_id
           ),
           set_insert AS (
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
@@ -300,7 +331,6 @@ impl AccountSetRepo {
             SELECT $1, m.member_account_id, TRUE
             FROM cala_account_set_member_accounts m
             WHERE m.account_set_id = $2
-            AND m.data_source_id = '00000000-0000-0000-0000-000000000000'
             RETURNING member_account_id
           ),
           transitive_inserts AS (
@@ -348,19 +378,17 @@ impl AccountSetRepo {
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id, s.data_source_id
+            SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
             JOIN cala_account_sets s
-            ON s.id = m.account_set_id AND s.data_source_id = m.data_source_id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND m.member_account_set_id = $1
+            ON s.id = m.account_set_id
+            WHERE m.member_account_set_id = $1
 
             UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id, m.data_source_id
+            SELECT p.member_account_set_id, m.account_set_id
             FROM parents p
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
-                AND p.data_source_id = m.data_source_id
           ),
           member_accounts_deletion AS (
             DELETE FROM cala_account_set_member_accounts
@@ -400,63 +428,12 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
-    pub async fn persist_in_tx(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        account_set: &mut AccountSet,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            r#"UPDATE cala_account_sets
-            SET name = $2
-            WHERE id = $1 AND data_source_id = '00000000-0000-0000-0000-000000000000'"#,
-            account_set.values().id as AccountSetId,
-            account_set.values().name,
-        )
-        .execute(&mut **db)
-        .await?;
-        account_set.events.persist(db).await?;
-        Ok(())
-    }
-
-    pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
-        let mut tx = self.pool.begin().await?;
-        self.find_in_tx(&mut tx, account_set_id).await
-    }
-
-    pub async fn find_in_tx(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        account_set_id: AccountSetId,
-    ) -> Result<AccountSet, AccountSetError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_account_sets a
-            JOIN cala_account_set_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND a.id = $1
-            ORDER BY e.sequence"#,
-            account_set_id as AccountSetId
-        )
-        .fetch_all(&mut **db)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(account_set) => Ok(account_set),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(AccountSetError::CouldNotFindById(account_set_id))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
     pub async fn find_where_account_is_member(
         &self,
         account_id: AccountId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         self.find_where_account_is_member_in_executor(&self.pool, account_id, query)
             .await
     }
@@ -465,8 +442,9 @@ impl AccountSetRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         account_id: AccountId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         self.find_where_account_is_member_in_executor(&mut **tx, account_id, query)
             .await
     }
@@ -475,24 +453,22 @@ impl AccountSetRepo {
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         account_id: AccountId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         let rows = sqlx::query_as!(
-            GenericEvent,
+            account_set_repo_types::Repo__DbEvent,
             r#"
             WITH member_account_sets AS (
               SELECT a.id, a.name, a.created_at
               FROM cala_account_set_member_accounts asm
-              JOIN cala_account_sets a ON asm.data_source_id = a.data_source_id AND
-              asm.account_set_id = a.id
-              WHERE asm.data_source_id = '00000000-0000-0000-0000-000000000000' AND
-              asm.member_account_id = $1 AND transitive IS FALSE
+              JOIN cala_account_sets a ON asm.account_set_id = a.id
+              WHERE asm.member_account_id = $1 AND transitive IS FALSE
               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
               ORDER BY a.name, a.id
               LIMIT $4
             )
-            SELECT mas.id, e.sequence, e.event,
-              mas.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            SELECT mas.id AS "entity_id!: AccountSetId", e.sequence, e.event, e.recorded_at
               FROM member_account_sets mas
               JOIN cala_account_set_events e ON mas.id = e.id
               ORDER BY mas.name, mas.id, e.sequence
@@ -508,12 +484,12 @@ impl AccountSetRepo {
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetByNameCursor {
+            end_cursor = Some(AccountSetsByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });
         }
-        Ok(query::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet {
             entities,
             has_next_page,
             end_cursor,
@@ -523,8 +499,9 @@ impl AccountSetRepo {
     pub async fn find_where_account_set_is_member(
         &self,
         account_set_id: AccountSetId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         self.find_where_account_set_is_member_in_executor(&self.pool, account_set_id, query)
             .await
     }
@@ -533,8 +510,9 @@ impl AccountSetRepo {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         account_set_id: AccountSetId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         self.find_where_account_set_is_member_in_executor(&mut **tx, account_set_id, query)
             .await
     }
@@ -543,24 +521,22 @@ impl AccountSetRepo {
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         account_set_id: AccountSetId,
-        query: query::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<query::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         let rows = sqlx::query_as!(
-            GenericEvent,
+            account_set_repo_types::Repo__DbEvent,
             r#"
             WITH member_account_sets AS (
               SELECT a.id, a.name, a.created_at
               FROM cala_account_set_member_account_sets asm
-              JOIN cala_account_sets a ON asm.data_source_id = a.data_source_id AND
-              asm.account_set_id = a.id
-              WHERE asm.data_source_id = '00000000-0000-0000-0000-000000000000' AND
-              asm.member_account_set_id = $1
+              JOIN cala_account_sets a ON asm.account_set_id = a.id
+              WHERE asm.member_account_set_id = $1
               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
               ORDER BY a.name, a.id
               LIMIT $4
             )
-            SELECT mas.id, e.sequence, e.event,
-              mas.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
+            SELECT mas.id AS "entity_id!: AccountSetId", e.sequence, e.event, e.recorded_at
               FROM member_account_sets mas
               JOIN cala_account_set_events e ON mas.id = e.id
               ORDER BY mas.name, mas.id, e.sequence
@@ -576,63 +552,26 @@ impl AccountSetRepo {
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetByNameCursor {
+            end_cursor = Some(AccountSetsByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });
         }
-        Ok(query::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet {
             entities,
             has_next_page,
             end_cursor,
         })
     }
 
-    pub(super) async fn find_all<T: From<AccountSet>>(
-        &self,
-        ids: &[AccountSetId],
-    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        let mut tx = self.pool.begin().await?;
-        self.find_all_in_tx(&mut tx, ids).await
-    }
-
-    pub(super) async fn find_all_in_tx<T: From<AccountSet>>(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        ids: &[AccountSetId],
-    ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT s.id, e.sequence, e.event,
-                s.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_accounts s
-            JOIN cala_account_set_events e
-            ON s.data_source_id = e.data_source_id
-            AND s.id = e.id
-            WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND s.id = ANY($1)
-            ORDER BY s.id, e.sequence"#,
-            ids as &[AccountSetId]
-        )
-        .fetch_all(&mut **db)
-        .await?;
-        let n = rows.len();
-        let ret = EntityEvents::load_n(rows, n)?
-            .0
-            .into_iter()
-            .map(|account: AccountSet| (account.values().id, T::from(account)))
-            .collect();
-        Ok(ret)
-    }
-
     #[cfg(feature = "import")]
-    pub async fn import(
+    pub async fn import_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
+        op: &mut DbOp<'_>,
         origin: DataSourceId,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
+        let recorded_at = op.now();
         sqlx::query!(
             r#"INSERT INTO cala_account_sets (data_source_id, id, journal_id, name, created_at)
             VALUES ($1, $2, $3, $4, $5)"#,
@@ -642,12 +581,9 @@ impl AccountSetRepo {
             account_set.values().name,
             recorded_at
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
-        account_set
-            .events
-            .persisted_at(db, origin, recorded_at)
-            .await?;
+        self.persist_events(op, &mut account_set.events).await?;
         Ok(())
     }
 
@@ -662,9 +598,7 @@ impl AccountSetRepo {
           FROM cala_account_set_member_accounts m
           JOIN cala_account_sets s
           ON m.account_set_id = s.id AND s.journal_id = $1
-            AND m.data_source_id = s.data_source_id
-          WHERE s.data_source_id = '00000000-0000-0000-0000-000000000000'
-          AND m.member_account_id = ANY($2)
+          WHERE m.member_account_id = ANY($2)
           "#,
             journal_id as JournalId,
             account_ids as &[AccountId]
@@ -682,23 +616,21 @@ impl AccountSetRepo {
     }
 
     #[cfg(feature = "import")]
-    pub async fn import_member_account(
+    pub async fn import_member_account_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        op: &mut DbOp<'_>,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
+        let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (data_source_id, account_set_id, member_account_id, created_at)
-            VALUES ($1, $2, $3, $4)"#,
-            origin as DataSourceId,
+            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, created_at)
+            VALUES ($1, $2, $3)"#,
             account_set_id as AccountSetId,
             account_id as AccountId,
             recorded_at
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
         Ok(())
     }
@@ -707,14 +639,12 @@ impl AccountSetRepo {
     pub async fn import_remove_member_account(
         &self,
         db: &mut Transaction<'_, Postgres>,
-        origin: DataSourceId,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
             r#"DELETE FROM cala_account_set_member_accounts
-            WHERE data_source_id = $1 AND account_set_id = $2 AND member_account_id = $3"#,
-            origin as DataSourceId,
+            WHERE account_set_id = $1 AND member_account_id = $2"#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
@@ -724,23 +654,21 @@ impl AccountSetRepo {
     }
 
     #[cfg(feature = "import")]
-    pub async fn import_member_set(
+    pub async fn import_member_set_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        op: &mut DbOp<'_>,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
+        let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_account_sets (data_source_id, account_set_id, member_account_set_id, created_at)
-            VALUES ($1, $2, $3, $4)"#,
-            origin as DataSourceId,
+            r#"INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id, created_at)
+            VALUES ($1, $2, $3)"#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
             recorded_at
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
         Ok(())
     }
@@ -749,75 +677,17 @@ impl AccountSetRepo {
     pub async fn import_remove_member_set(
         &self,
         db: &mut Transaction<'_, Postgres>,
-        origin: DataSourceId,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
             r#"DELETE FROM cala_account_set_member_account_sets
-            WHERE data_source_id = $1 AND account_set_id = $2 AND member_account_set_id = $3"#,
-            origin as DataSourceId,
+            WHERE account_set_id = $1 AND member_account_set_id = $2"#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
         .execute(&mut **db)
         .await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn find_imported(
-        &self,
-        account_set_id: AccountSetId,
-        origin: DataSourceId,
-    ) -> Result<AccountSet, AccountSetError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"SELECT a.id, e.sequence, e.event,
-                a.created_at AS entity_created_at, e.recorded_at AS event_recorded_at
-            FROM cala_account_sets a
-            JOIN cala_account_set_events e
-            ON a.data_source_id = e.data_source_id
-            AND a.id = e.id
-            WHERE a.data_source_id = $1
-            AND a.id = $2
-            ORDER BY e.sequence"#,
-            origin as DataSourceId,
-            account_set_id as AccountSetId
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        match EntityEvents::load_first(rows) {
-            Ok(account_set) => Ok(account_set),
-            Err(EntityError::NoEntityEventsPresent) => {
-                Err(AccountSetError::CouldNotFindById(account_set_id))
-            }
-            Err(e) => Err(e.into()),
-        }
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn persist_at_in_tx(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
-        account_set: &mut AccountSet,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            r#"UPDATE cala_account_sets
-            SET name = $3
-            WHERE data_source_id = $1 AND id = $2"#,
-            origin as DataSourceId,
-            account_set.values().id as AccountSetId,
-            account_set.values().name,
-        )
-        .execute(&mut **db)
-        .await?;
-        account_set
-            .events
-            .persisted_at(db, origin, recorded_at)
-            .await?;
         Ok(())
     }
 }

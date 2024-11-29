@@ -3,8 +3,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -13,18 +11,18 @@ use tracing::instrument;
 use crate::primitives::DataSourceId;
 use crate::{
     account::*,
-    atomic_operation::*,
     balance::*,
     entry::*,
+    new_atomic_operation::*,
     outbox::*,
     primitives::{DataSource, DebitOrCredit, JournalId, Layer},
-    query::*,
 };
 
 pub use cursor::*;
 pub use entity::*;
 use error::*;
 use repo::*;
+pub use repo::{account_set_cursor::*, members_cursor::*};
 
 #[allow(dead_code)]
 const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
@@ -67,10 +65,10 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create", skip(self, op))]
+    #[instrument(name = "cala_ledger.account_sets.create", skip(self, db))]
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
@@ -81,9 +79,9 @@ impl AccountSets {
             .is_account_set(true)
             .build()
             .expect("Failed to build account");
-        // self.accounts.create_in_op(op, new_account).await?;
-        let account_set = self.repo.create_in_tx(op.tx(), new_account_set).await?;
-        op.accumulate(account_set.events.last_persisted());
+        self.accounts.create_in_op(db, new_account).await?;
+        let account_set = self.repo.create_in_op(db.op(), new_account_set).await?;
+        db.accumulate(account_set.events.last_persisted(1).map(|p| &p.event));
         Ok(account_set)
     }
 
@@ -97,15 +95,15 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.persist_in_op",
-        skip(self, op, account_set)
+        skip(self, db, account_set)
     )]
     pub async fn persist_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
-        self.repo.persist_in_tx(op.tx(), account_set).await?;
-        op.accumulate(account_set.events.last_persisted());
+        self.repo.update_in_op(db.op(), account_set).await?;
+        db.accumulate(account_set.events.last_persisted(1).map(|p| &p.event));
         Ok(())
     }
 
@@ -131,7 +129,7 @@ impl AccountSets {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
-                let set = self.repo.find_in_tx(op.tx(), account_set_id).await?;
+                let set = self.repo.find_by_id_in_tx(op.tx(), account_set_id).await?;
                 let (time, parents) = self
                     .repo
                     .add_member_account_and_return_parents(op.tx(), account_set_id, id)
@@ -184,11 +182,11 @@ impl AccountSets {
         if entries.is_empty() {
             return Ok(account_set);
         }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-        let mappings = std::iter::once((target_account_id, parents)).collect();
-        self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-            .await?;
+        // let entries = self.entries.create_all_in_op(op, entries).await?;
+        // let mappings = std::iter::once((target_account_id, parents)).collect();
+        // self.balances
+        //     .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+        //     .await?;
 
         Ok(account_set)
     }
@@ -215,7 +213,7 @@ impl AccountSets {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
-                let set = self.repo.find_in_tx(op.tx(), account_set_id).await?;
+                let set = self.repo.find_by_id_in_tx(op.tx(), account_set_id).await?;
                 let (time, parents) = self
                     .repo
                     .remove_member_account_and_return_parents(op.tx(), account_set_id, id)
@@ -268,11 +266,11 @@ impl AccountSets {
         if entries.is_empty() {
             return Ok(account_set);
         }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-        let mappings = std::iter::once((target_account_id, parents)).collect();
-        self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-            .await?;
+        // let entries = self.entries.create_all_in_op(op, entries).await?;
+        // let mappings = std::iter::once((target_account_id, parents)).collect();
+        // self.balances
+        //     .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+        //     .await?;
 
         Ok(account_set)
     }
@@ -296,15 +294,16 @@ impl AccountSets {
 
     #[instrument(name = "cala_ledger.account_sets.find", skip(self), err)]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
-        self.repo.find(account_set_id).await
+        self.repo.find_by_id(account_set_id).await
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self), err)]
     pub async fn find_where_member(
         &self,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
-        query: PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
@@ -328,8 +327,9 @@ impl AccountSets {
         &self,
         op: &mut AtomicOperation<'_>,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
-        query: PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError> {
+        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+    {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
@@ -347,8 +347,11 @@ impl AccountSets {
     pub async fn list_members(
         &self,
         id: AccountSetId,
-        args: PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError> {
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        AccountSetError,
+    > {
         self.repo.list_children(id, args).await
     }
 
@@ -356,8 +359,11 @@ impl AccountSets {
         &self,
         op: &mut AtomicOperation<'_>,
         id: AccountSetId,
-        args: PaginatedQueryArgs<AccountSetMemberCursor>,
-    ) -> Result<PaginatedQueryRet<AccountSetMember, AccountSetMemberCursor>, AccountSetError> {
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        AccountSetError,
+    > {
         self.repo.list_children_in_tx(op.tx(), id, args).await
     }
 
@@ -372,17 +378,21 @@ impl AccountSets {
     #[cfg(feature = "import")]
     pub async fn sync_account_set_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: AccountSetValues,
     ) -> Result<(), AccountSetError> {
         let mut account_set = AccountSet::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut account_set)
+            .import_in_op(&mut db, origin, &mut account_set)
             .await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                account_set.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }
@@ -390,19 +400,20 @@ impl AccountSets {
     #[cfg(feature = "import")]
     pub async fn sync_account_set_update(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        mut db: es_entity::DbOp<'_>,
         values: AccountSetValues,
         fields: Vec<String>,
     ) -> Result<(), AccountSetError> {
-        let mut account_set = self.repo.find_imported(values.id, origin).await?;
+        let mut account_set = self.repo.find_by_id(values.id).await?;
         account_set.update((values, fields));
-        self.repo
-            .persist_at_in_tx(&mut db, recorded_at, origin, &mut account_set)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut account_set).await?;
+        let recorded_at = db.now();
         self.outbox
-            .persist_events_at(db, account_set.events.last_persisted(), recorded_at)
+            .persist_events_at(
+                db.into_tx(),
+                account_set.events.last_persisted(1).map(|p| &p.event),
+                recorded_at,
+            )
             .await?;
         Ok(())
     }
@@ -410,8 +421,7 @@ impl AccountSets {
     #[cfg(feature = "import")]
     pub async fn sync_account_set_member_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         account_set_id: AccountSetId,
         member_id: AccountSetMemberId,
@@ -419,18 +429,19 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_member_account(&mut db, recorded_at, origin, account_set_id, account_id)
+                    .import_member_account_in_op(&mut db, account_set_id, account_id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
-                    .import_member_set(&mut db, recorded_at, origin, account_set_id, account_set_id)
+                    .import_member_set_in_op(&mut db, account_set_id, account_set_id)
                     .await?;
             }
         }
+        let recorded_at = db.now();
         self.outbox
             .persist_events_at(
-                db,
+                db.into_tx(),
                 std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
                     source: DataSource::Remote { id: origin },
                     account_set_id,
@@ -445,8 +456,7 @@ impl AccountSets {
     #[cfg(feature = "import")]
     pub async fn sync_account_set_member_removal(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         account_set_id: AccountSetId,
         member_id: AccountSetMemberId,
@@ -454,18 +464,19 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_remove_member_account(&mut db, origin, account_set_id, account_id)
+                    .import_remove_member_account(db.tx(), account_set_id, account_id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(account_set_id) => {
                 self.repo
-                    .import_remove_member_set(&mut db, origin, account_set_id, account_set_id)
+                    .import_remove_member_set(db.tx(), account_set_id, account_set_id)
                     .await?;
             }
         }
+        let recorded_at = db.now();
         self.outbox
             .persist_events_at(
-                db,
+                db.into_tx(),
                 std::iter::once(OutboxEventPayload::AccountSetMemberRemoved {
                     source: DataSource::Remote { id: origin },
                     account_set_id,

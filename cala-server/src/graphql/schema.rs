@@ -269,13 +269,12 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .await?;
 
         if let Some(account_set_ids) = input.account_set_ids {
-            unimplemented!()
-            // for id in account_set_ids {
-            //     app.ledger()
-            //         .account_sets()
-            //         .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
-            //         .await?;
-            // }
+            for id in account_set_ids {
+                app.ledger()
+                    .account_sets()
+                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
+                    .await?;
+            }
         }
 
         Ok(account.into())
@@ -333,7 +332,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountSetCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::NewAccountSet::builder();
@@ -366,7 +365,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountSetUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::AccountSetUpdate::default();
@@ -406,7 +405,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AddToAccountSetPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 
@@ -426,7 +425,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<RemoveFromAccountSetPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<DbOp>()
+            .data_unchecked::<NewDbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 

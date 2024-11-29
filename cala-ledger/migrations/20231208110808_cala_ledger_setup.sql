@@ -42,45 +42,37 @@ CREATE TABLE cala_journal_events (
 );
 
 CREATE TABLE cala_account_sets (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL REFERENCES cala_accounts(id),
+  id UUID PRIMARY KEY REFERENCES cala_accounts(id),
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   name VARCHAR NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  data_source_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
 
 
 CREATE TABLE cala_account_set_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_account_sets(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_account_sets(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_account_set_member_accounts (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  account_set_id UUID NOT NULL,
+  account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
   member_account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transitive BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, account_set_id, member_account_id),
-  FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id)
+  UNIQUE(account_set_id, member_account_id)
 );
 
 CREATE TABLE cala_account_set_member_account_sets (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  account_set_id UUID NOT NULL,
-  member_account_set_id UUID NOT NULL,
+  account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
+  member_account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, account_set_id, member_account_set_id),
-  FOREIGN KEY (data_source_id, account_set_id) REFERENCES cala_account_sets(data_source_id, id),
-  FOREIGN KEY (data_source_id, member_account_set_id) REFERENCES cala_account_sets(data_source_id, id)
+  UNIQUE(account_set_id, member_account_set_id)
 );
 
 CREATE TABLE cala_tx_templates (

@@ -15,7 +15,7 @@ use super::{
     convert::ToGlobalId,
     loader::LedgerDataLoader,
     primitives::*,
-    schema::DbOp,
+    schema::{DbOp, NewDbOp},
 };
 
 #[derive(Clone, SimpleObject)]
@@ -98,7 +98,7 @@ impl Account {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountSetsByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         let account_id = AccountId::from(self.account_id);
         query(
@@ -108,12 +108,9 @@ impl Account {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let query_args = cala_ledger::query::PaginatedQueryArgs {
-                    first,
-                    after: after.map(cala_ledger::account_set::AccountSetByNameCursor::from),
-                };
+                let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
-                let result = match ctx.data_opt::<DbOp>() {
+                let result = match ctx.data_opt::<NewDbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()
@@ -132,7 +129,7 @@ impl Account {
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = AccountSetByNameCursor::from(entity.values());
+                        let cursor = AccountSetsByNameCursor::from(&entity);
                         Edge::new(cursor, AccountSet::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
