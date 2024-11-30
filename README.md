@@ -2,6 +2,17 @@
 
 Cala is a robust ledger system developed by Galoy, designed to handle complex financial transactions and accounting operations. It provides a flexible and scalable solution for managing financial records with strong consistency guarantees.
 
+## Features
+
+- **Double-Entry Accounting**: Built-in support for double-entry bookkeeping principles ensuring accurate financial records
+- **SQL-Compatible**: Engineered to work with SQL databases (PostgreSQL) for robust data persistence and querying
+- **GraphQL API**: Modern API interface with built-in playground for easy integration and testing
+- **Transaction Templates**: Customizable transaction templates for common financial operations
+- **Multi-Currency Support**: Handle transactions across different currencies
+- **Strong Consistency**: Ensures accuracy and reliability of financial records
+- **Extensible Architecture**: Modular design with support for custom extensions via the Node.js bindings
+- **Real-time Processing**: Efficient transaction processing suitable for production financial systems
+
 ## Components
 
 - `cala-ledger`: Core ledger implementation
