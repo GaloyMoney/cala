@@ -1113,7 +1113,6 @@ dependencies = [
 [[package]]
 name = "es-entity"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#1cd7ac8a71bb5bf81265235f38c4b7a63e0fc445"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1131,7 +1130,6 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#1cd7ac8a71bb5bf81265235f38c4b7a63e0fc445"
 dependencies = [
  "convert_case",
  "darling",

@@ -1,4 +1,5 @@
-use sqlx::{PgPool, Postgres, Transaction};
+use es_entity::DbOp;
+use sqlx::PgPool;
 
 use std::collections::HashMap;
 
@@ -22,7 +23,7 @@ impl AccountControlRepo {
 
     pub async fn create_in_tx(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut DbOp<'_>,
         control: AccountVelocityControl,
     ) -> Result<(), VelocityError> {
         sqlx::query!(
@@ -32,14 +33,14 @@ impl AccountControlRepo {
             control.control_id as VelocityControlId,
             serde_json::to_value(control).expect("Failed to serialize control values"),
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
         Ok(())
     }
 
     pub async fn find_for_enforcement(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut DbOp<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
     {
@@ -53,7 +54,7 @@ impl AccountControlRepo {
               AND account_id = ANY($1)"#,
             account_ids as &[AccountId],
         )
-        .fetch_all(&mut **db)
+        .fetch_all(&mut **op.tx())
         .await?;
 
         let mut res: HashMap<AccountId, (AccountValues, Vec<_>)> = HashMap::new();

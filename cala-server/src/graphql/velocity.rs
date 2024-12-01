@@ -112,10 +112,11 @@ impl VelocityControl {
         let res = match ctx.data_opt::<DbOp>() {
             Some(op) => {
                 let mut op = op.try_lock().expect("Lock held concurrently");
-                app.ledger()
-                    .velocities()
-                    .list_limits_for_control_in_op(&mut op, control_id)
-                    .await?
+                unimplemented!();
+                // app.ledger()
+                //     .velocities()
+                //     .list_limits_for_control_in_op(&mut op, control_id)
+                //     .await?
             }
             None => {
                 app.ledger()

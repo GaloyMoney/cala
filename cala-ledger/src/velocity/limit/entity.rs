@@ -2,30 +2,24 @@ use cel_interpreter::CelExpression;
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
-pub use crate::{entity::*, param::definition::*};
-pub use cala_types::{
-    primitives::{Currency, VelocityLimitId},
-    velocity::*,
-};
+use es_entity::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+pub use crate::param::definition::*;
+pub use cala_types::{primitives::*, velocity::*};
+
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "VelocityLimitId")]
 pub enum VelocityLimitEvent {
     Initialized { values: VelocityLimitValues },
 }
 
-impl EntityEvent for VelocityLimitEvent {
-    type EntityId = VelocityLimitId;
-    fn event_table_name() -> &'static str {
-        "cala_velocity_limit_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct VelocityLimit {
+    pub id: VelocityLimitId,
     values: VelocityLimitValues,
-    pub(super) _events: EntityEvents<VelocityLimitEvent>,
+    pub(super) events: EntityEvents<VelocityLimitEvent>,
 }
 
 impl VelocityLimit {
@@ -42,23 +36,17 @@ impl VelocityLimit {
     }
 }
 
-impl Entity for VelocityLimit {
-    type Event = VelocityLimitEvent;
-}
-
-impl TryFrom<EntityEvents<VelocityLimitEvent>> for VelocityLimit {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<VelocityLimitEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<VelocityLimitEvent> for VelocityLimit {
+    fn try_from_events(events: EntityEvents<VelocityLimitEvent>) -> Result<Self, EsEntityError> {
         let mut builder = VelocityLimitBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 VelocityLimitEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
             }
         }
-        builder._events(events).build()
+        builder.events(events).build()
     }
 }
 
@@ -87,7 +75,13 @@ impl NewVelocityLimit {
         NewVelocityLimitBuilder::default()
     }
 
-    pub(super) fn initial_events(self) -> EntityEvents<VelocityLimitEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {
+    fn into_events(self) -> EntityEvents<VelocityLimitEvent> {
         let limit = self.limit;
         EntityEvents::init(
             self.id,

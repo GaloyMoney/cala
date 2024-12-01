@@ -1,4 +1,5 @@
-use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction};
+use es_entity::DbOp;
+use sqlx::{PgPool, QueryBuilder, Row};
 
 use std::collections::HashMap;
 
@@ -29,7 +30,7 @@ impl VelocityBalanceRepo {
 
     pub async fn find_for_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut DbOp<'_>,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
     ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
         let mut query_builder = QueryBuilder::new(
@@ -81,7 +82,7 @@ impl VelocityBalanceRepo {
         "#
         );
         let query = query_builder.build();
-        let rows = query.fetch_all(&mut **db).await?;
+        let rows = query.fetch_all(&mut **op.tx()).await?;
 
         let mut ret = HashMap::new();
         for row in rows {
@@ -109,7 +110,7 @@ impl VelocityBalanceRepo {
 
     pub(crate) async fn insert_new_snapshots(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut DbOp<'_>,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
     ) -> Result<(), VelocityError> {
         let mut query_builder = QueryBuilder::new(
@@ -186,7 +187,7 @@ impl VelocityBalanceRepo {
               AND version = max AND version != rn
           "#,
         );
-        query_builder.build().execute(&mut **db).await?;
+        query_builder.build().execute(&mut **op.tx()).await?;
         Ok(())
     }
 }

@@ -161,98 +161,86 @@ CREATE TABLE cala_balance_history (
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
 CREATE TABLE cala_velocity_limits (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  data_source_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_velocity_limits_name ON cala_velocity_limits (name);
 
 
 CREATE TABLE cala_velocity_limit_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_velocity_limits(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_velocity_limits(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_velocity_controls (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  data_source_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_velocity_controls_name ON cala_velocity_controls (name);
 
 
 CREATE TABLE cala_velocity_control_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_velocity_controls(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_velocity_controls(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_velocity_control_limits (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  velocity_control_id UUID NOT NULL,
-  velocity_limit_id UUID NOT NULL,
+  velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
+  velocity_limit_id UUID NOT NULL REFERENCES cala_velocity_limits(id),
+  data_source_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, velocity_control_id, velocity_limit_id),
-  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id),
-  FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
+  UNIQUE(velocity_control_id, velocity_limit_id)
 );
 
 CREATE TABLE cala_velocity_account_controls (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
-  velocity_control_id UUID NOT NULL,
+  velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
+  data_source_id UUID NOT NULL,
   values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, account_id, velocity_control_id),
-  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id)
+  UNIQUE(account_id, velocity_control_id)
 );
 
 CREATE TABLE cala_velocity_current_balances (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  journal_id UUID NOT NULL,
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
-  velocity_control_id UUID NOT NULL,
-  velocity_limit_id UUID NOT NULL,
+  velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
+  velocity_limit_id UUID NOT NULL REFERENCES cala_velocity_limits(id),
+  data_source_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
-  FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (data_source_id, velocity_control_id) REFERENCES cala_velocity_controls(data_source_id, id),
-  FOREIGN KEY (data_source_id, velocity_limit_id) REFERENCES cala_velocity_limits(data_source_id, id)
+  UNIQUE(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id)
 );
 
 CREATE TABLE cala_velocity_balance_history (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   velocity_control_id UUID NOT NULL,
   velocity_limit_id UUID NOT NULL,
+  data_source_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_entry_id UUID NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id, version),
-  FOREIGN KEY (data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(data_source_id, partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
-  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
+  UNIQUE(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id, version),
+  FOREIGN KEY (partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
+  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id) --- FIXME: data_source_id should not be here
 );
 
 CREATE TABLE cala_outbox_events (

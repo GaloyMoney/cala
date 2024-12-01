@@ -10,7 +10,7 @@ use cala_types::{
     transaction::TransactionValues,
 };
 
-use crate::{atomic_operation::*, primitives::AccountId};
+use crate::{new_atomic_operation::*, primitives::AccountId};
 
 use super::{account_control::*, error::*};
 
@@ -30,7 +30,7 @@ impl VelocityBalances {
 
     pub(crate) async fn update_balances_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
@@ -47,14 +47,14 @@ impl VelocityBalances {
 
         let current_balances = self
             .repo
-            .find_for_update(op.tx(), entries_to_enforce.keys())
+            .find_for_update(db.op(), entries_to_enforce.keys())
             .await?;
 
         let new_balances =
             Self::new_snapshots(context, created_at, current_balances, &entries_to_enforce)?;
 
         self.repo
-            .insert_new_snapshots(op.tx(), new_balances)
+            .insert_new_snapshots(db.op(), new_balances)
             .await?;
 
         Ok(())

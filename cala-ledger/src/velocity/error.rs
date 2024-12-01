@@ -19,6 +19,10 @@ pub enum VelocityError {
     CouldNotFindControlById(VelocityControlId),
     #[error("VelocityError - Enforcement: {0}")]
     Enforcement(#[from] LimitExceededError),
+    #[error("VelocityError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("VelocityError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 
 #[derive(Error, Debug)]
@@ -32,3 +36,5 @@ pub struct LimitExceededError {
     pub limit: Decimal,
     pub requested: Decimal,
 }
+
+es_entity::from_es_entity_error!(VelocityError);
