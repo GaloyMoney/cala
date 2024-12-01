@@ -79,7 +79,7 @@ CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,
   data_source_id UUID NOT NULL,
   code VARCHAR NOT NULL, 
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE cala_tx_template_events (
