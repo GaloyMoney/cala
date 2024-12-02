@@ -11,8 +11,6 @@ pub enum TxTemplateError {
     Sqlx(sqlx::Error),
     #[error("TxTemplateError - DuplicateKey: {0}")]
     DuplicateKey(Box<dyn DatabaseError>),
-    #[error("TxTemplateError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
     #[error("TxTemplateError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("TxTemplateError - NotFound")]

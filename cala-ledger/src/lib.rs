@@ -130,7 +130,6 @@ mod param;
 pub mod account;
 pub mod account_set;
 pub mod balance;
-pub mod entity;
 pub mod entry;
 pub mod journal;
 pub mod ledger_operation;

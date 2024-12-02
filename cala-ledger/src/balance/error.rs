@@ -6,8 +6,6 @@ use cala_types::primitives::*;
 pub enum BalanceError {
     #[error("TransactionError - Sqlx: {0}")]
     Sqlx(#[from] sqlx::Error),
-    #[error("TransactionError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
     #[error("BalanceError - OptimisticLockingError")]
     OptimisticLockingError,
     #[error("BalanceError - NotFound: there is no balance recorded for journal {0}, account {1}, currency {2}")]

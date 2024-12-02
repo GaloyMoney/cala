@@ -331,7 +331,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(ret.entities.len(), 2);
-    assert_eq!(ret.has_next_page, true);
+    assert!(ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(set_two.id())
@@ -351,7 +351,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .list_members(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 2);
-    assert_eq!(ret.has_next_page, true);
+    assert!(ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(account_one.id())
@@ -371,7 +371,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .list_members(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 1);
-    assert_eq!(ret.has_next_page, false);
+    assert!(!ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(account_two.id())
