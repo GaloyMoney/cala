@@ -27,9 +27,15 @@ sed -i'' "s/cel-parser\", version = .*/cel-parser\", version = \"${VERSION}\" }/
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger-core-types/Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-ledger-outbox-client/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger-outbox-client/Cargo.toml
+
+sed -i'' "s/sim-time\", version = .*/sim-time\", version = \"${VERSION}\" }/" lib/es-entity/Cargo.toml
+sed -i'' "s/es-entity-macros\", version = .*/es-entity-macros\", version = \"${VERSION}\" }/" lib/es-entity/Cargo.toml
+
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
 sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
+sed -i'' "s/es-entity\", version = .*/es-entity\", version = \"${VERSION}\" }/" cala-ledger/Cargo.toml
+
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" }/" cala-server/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-server/Cargo.toml

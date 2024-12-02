@@ -10,8 +10,8 @@ graphql = ["es-entity-macros/graphql", "dep:async-graphql", "dep:base64"]
 sim-time = [ "dep:sim-time" ]
 
 [dependencies]
-es-entity-macros = { path = "../es-entity-macros" }
-sim-time = { path = "../sim-time", optional = true }
+es-entity-macros = { path = "../es-entity-macros", package = "es-entity-macros", version = "0.2.47-dev" }
+sim-time = { path = "../sim-time", optional = true, package = "sim-time", version = "0.2.47-dev" }
 
 async-trait = { workspace = true }
 sqlx = { workspace = true }
