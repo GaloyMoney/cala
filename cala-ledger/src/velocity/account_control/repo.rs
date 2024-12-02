@@ -49,8 +49,7 @@ impl AccountControlRepo {
             FROM cala_velocity_account_controls v
             JOIN cala_accounts a
             ON v.account_id = a.id
-            WHERE a.data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND account_id = ANY($1)"#,
+            WHERE account_id = ANY($1)"#,
             account_ids as &[AccountId],
         )
         .fetch_all(&mut **op.tx())
