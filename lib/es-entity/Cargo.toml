@@ -1,7 +1,11 @@
 [package]
 name = "es-entity"
+description = "Event Sourcing Entity Framework"
+repository = "https://github.com/GaloyMoney/cala"
 version = "0.2.47-dev"
 edition = "2021"
+license = "Apache-2.0"
+categories = ["data-structures", "database"]
 
 [features]
 
