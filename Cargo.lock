@@ -1112,9 +1112,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#7ea3ada7eefd160870c899131da8704bed05d425"
+version = "0.2.47-dev"
 dependencies = [
+ "anyhow",
  "async-graphql",
  "async-trait",
  "base64 0.22.1",
@@ -1123,15 +1123,16 @@ dependencies = [
  "es-entity-macros",
  "serde",
  "serde_json",
+ "sim-time",
  "sqlx",
  "thiserror",
+ "tokio",
  "uuid",
 ]
 
 [[package]]
 name = "es-entity-macros"
-version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#7ea3ada7eefd160870c899131da8704bed05d425"
+version = "0.2.47-dev"
 dependencies = [
  "convert_case",
  "darling",
@@ -3135,6 +3136,16 @@ checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "digest",
  "rand_core",
+]
+
+[[package]]
+name = "sim-time"
+version = "0.2.47-dev"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_with",
+ "tokio",
 ]
 
 [[package]]

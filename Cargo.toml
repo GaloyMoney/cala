@@ -12,9 +12,9 @@ members = [
   "cala-cel-parser",
   "cala-cel-interpreter",
 
-  # "lib/es-entity",
-  # "lib/es-entity-macros",
-  # "lib/sim-time",
+  "lib/es-entity",
+  "lib/es-entity-macros",
+  "lib/sim-time",
 ]
 
 [workspace.dependencies]
