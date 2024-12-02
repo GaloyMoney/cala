@@ -13,11 +13,16 @@ categories = ["finance"]
 
 fail-on-warnings = []
 import = []
+graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64"]
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.47-dev" }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.47-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.2.47-dev" }
+es-entity = { path = "../lib/es-entity" }
+
+async-graphql = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 
 cached = { workspace = true }
 chrono = { workspace = true }

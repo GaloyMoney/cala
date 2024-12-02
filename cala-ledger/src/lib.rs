@@ -129,11 +129,10 @@ mod param;
 
 pub mod account;
 pub mod account_set;
-pub mod atomic_operation;
 pub mod balance;
-pub mod entity;
 pub mod entry;
 pub mod journal;
+pub mod ledger_operation;
 pub mod migrate;
 pub mod transaction;
 pub mod tx_template;
@@ -142,12 +141,14 @@ pub mod velocity;
 mod ledger;
 pub mod outbox;
 
-pub use atomic_operation::*;
 pub use ledger::*;
+pub use ledger_operation::*;
 
 pub mod primitives {
     pub use cala_types::primitives::*;
 }
+
+pub use es_entity;
 
 pub mod query {
     #[derive(Debug)]

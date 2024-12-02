@@ -6,8 +6,10 @@ use crate::primitives::AccountSetId;
 pub enum AccountSetError {
     #[error("AccountSetError - Sqlx: {0}")]
     Sqlx(#[from] sqlx::Error),
-    #[error("AccountSetError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
+    #[error("AccountSetError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("AccountSetError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
     #[error("AccountSetError - AccountError: {0}")]
     AccountError(#[from] crate::account::error::AccountError),
     #[error("AccountSetError - BalanceError: {0}")]
@@ -19,3 +21,5 @@ pub enum AccountSetError {
     #[error("AccountSetError - JournalIdMismatch")]
     JournalIdMismatch,
 }
+
+es_entity::from_es_entity_error!(AccountSetError);

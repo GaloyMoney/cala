@@ -1,0 +1,14 @@
+[package]
+name = "sim-time"
+version = "0.2.47-dev"
+edition = "2021"
+
+[features]
+
+fail-on-warnings = []
+
+[dependencies]
+serde = { workspace = true }
+serde_with = { workspace = true }
+chrono = { workspace = true }
+tokio = { workspace = true }

@@ -1,12 +1,14 @@
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
 pub use cala_types::{account_set::*, primitives::AccountSetId};
 
-use crate::{entity::*, primitives::*};
+use crate::primitives::*;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "AccountSetId")]
 pub enum AccountSetEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -22,22 +24,12 @@ pub enum AccountSetEvent {
     },
 }
 
-impl EntityEvent for AccountSetEvent {
-    type EntityId = AccountSetId;
-    fn event_table_name() -> &'static str {
-        "cala_account_set_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct AccountSet {
+    pub id: AccountSetId,
     values: AccountSetValues,
     pub(super) events: EntityEvents<AccountSetEvent>,
-}
-
-impl Entity for AccountSet {
-    type Event = AccountSetEvent;
 }
 
 impl AccountSet {
@@ -50,7 +42,7 @@ impl AccountSet {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build account set from events")
+        Self::try_from_events(events).expect("Failed to build account set from events")
     }
 
     pub fn id(&self) -> AccountSetId {
@@ -114,14 +106,14 @@ impl AccountSet {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
-            .expect("No events for account set")
+            .entity_first_persisted_at()
+            .expect("Entity not persisted")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .latest_event_persisted_at
-            .expect("No events for account set")
+            .entity_last_modified_at()
+            .expect("Entity not persisted")
     }
 }
 
@@ -182,19 +174,17 @@ impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
     }
 }
 
-impl TryFrom<EntityEvents<AccountSetEvent>> for AccountSet {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<AccountSetEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<AccountSetEvent> for AccountSet {
+    fn try_from_events(events: EntityEvents<AccountSetEvent>) -> Result<Self, EsEntityError> {
         let mut builder = AccountSetBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 AccountSetEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 AccountSetEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 AccountSetEvent::Updated { values, .. } => {
                     builder = builder.values(values.clone());
@@ -227,7 +217,13 @@ impl NewAccountSet {
         NewAccountSetBuilder::default()
     }
 
-    pub(super) fn initial_events(self) -> EntityEvents<AccountSetEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<AccountSetEvent> for NewAccountSet {
+    fn into_events(self) -> EntityEvents<AccountSetEvent> {
         EntityEvents::init(
             self.id,
             [AccountSetEvent::Initialized {

@@ -1,12 +1,13 @@
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
+use crate::primitives::*;
 pub use cala_types::{entry::*, primitives::EntryId};
 
-use crate::{entity::*, primitives::*};
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "EntryId")]
 pub enum EntryEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -18,22 +19,12 @@ pub enum EntryEvent {
     },
 }
 
-impl EntityEvent for EntryEvent {
-    type EntityId = EntryId;
-    fn event_table_name() -> &'static str {
-        "cala_entry_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct Entry {
+    pub id: EntryId,
     values: EntryValues,
     pub(super) events: EntityEvents<EntryEvent>,
-}
-
-impl Entity for Entry {
-    type Event = EntryEvent;
 }
 
 impl Entry {
@@ -46,7 +37,7 @@ impl Entry {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build entry from events")
+        Self::try_from_events(events).expect("Failed to build entry from events")
     }
 
     pub fn id(&self) -> EntryId {
@@ -62,19 +53,17 @@ impl Entry {
     }
 }
 
-impl TryFrom<EntityEvents<EntryEvent>> for Entry {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<EntryEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<EntryEvent> for Entry {
+    fn try_from_events(events: EntityEvents<EntryEvent>) -> Result<Self, EsEntityError> {
         let mut builder = EntryBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 EntryEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 EntryEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
             }
         }
@@ -84,7 +73,7 @@ impl TryFrom<EntityEvents<EntryEvent>> for Entry {
 
 #[derive(Builder, Debug)]
 #[allow(dead_code)]
-pub(crate) struct NewEntry {
+pub struct NewEntry {
     #[builder(setter(into))]
     pub id: EntryId,
     #[builder(setter(into))]
@@ -114,24 +103,13 @@ impl NewEntry {
         NewEntryBuilder::default()
     }
 
-    pub(super) fn to_values(&self) -> EntryValues {
-        EntryValues {
-            id: self.id,
-            version: 1,
-            transaction_id: self.transaction_id,
-            journal_id: self.journal_id,
-            account_id: self.account_id,
-            entry_type: self.entry_type.clone(),
-            sequence: self.sequence,
-            layer: self.layer,
-            units: self.units,
-            currency: self.currency,
-            direction: self.direction,
-            description: self.description.clone(),
-        }
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
     }
+}
 
-    pub(super) fn initial_events(self) -> EntityEvents<EntryEvent> {
+impl IntoEvents<EntryEvent> for NewEntry {
+    fn into_events(self) -> EntityEvents<EntryEvent> {
         EntityEvents::init(
             self.id,
             [EntryEvent::Initialized {

@@ -1,29 +1,22 @@
 use cel_interpreter::CelExpression;
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
-pub use crate::{entity::*, param::definition::*};
-pub use cala_types::{
-    primitives::{Currency, VelocityControlId},
-    velocity::*,
-};
+pub use crate::param::definition::*;
+pub use cala_types::{primitives::*, velocity::*};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "VelocityControlId")]
 pub enum VelocityControlEvent {
     Initialized { values: VelocityControlValues },
 }
 
-impl EntityEvent for VelocityControlEvent {
-    type EntityId = VelocityControlId;
-    fn event_table_name() -> &'static str {
-        "cala_velocity_control_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct VelocityControl {
+    pub id: VelocityControlId,
     values: VelocityControlValues,
     pub(super) events: EntityEvents<VelocityControlEvent>,
 }
@@ -43,24 +36,18 @@ impl VelocityControl {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
-            .expect("No events for account")
+            .entity_first_persisted_at()
+            .expect("Entity not persisted")
     }
 }
 
-impl Entity for VelocityControl {
-    type Event = VelocityControlEvent;
-}
-
-impl TryFrom<EntityEvents<VelocityControlEvent>> for VelocityControl {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<VelocityControlEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<VelocityControlEvent> for VelocityControl {
+    fn try_from_events(events: EntityEvents<VelocityControlEvent>) -> Result<Self, EsEntityError> {
         let mut builder = VelocityControlBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 VelocityControlEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
             }
         }
@@ -89,7 +76,13 @@ impl NewVelocityControl {
         NewVelocityControlBuilder::default()
     }
 
-    pub(super) fn initial_events(self) -> EntityEvents<VelocityControlEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<VelocityControlEvent> for NewVelocityControl {
+    fn into_events(self) -> EntityEvents<VelocityControlEvent> {
         EntityEvents::init(
             self.id,
             [VelocityControlEvent::Initialized {

@@ -1,11 +1,8 @@
 //! [Account] holds a balance in a [Journal](crate::journal::Journal)
-mod cursor;
 mod entity;
 pub mod error;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -13,11 +10,11 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource, query::*};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
-pub use cursor::*;
 pub use entity::*;
 use error::*;
+pub use repo::account_cursor::*;
 use repo::*;
 
 /// Service for working with `Account` entities.
@@ -39,7 +36,7 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.create", skip(self))]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
         Ok(account)
@@ -47,16 +44,16 @@ impl Accounts {
 
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
-        let account = self.repo.create_in_tx(op.tx(), new_account).await?;
-        op.accumulate(account.events.last_persisted());
+        let account = self.repo.create_in_op(db.op(), new_account).await?;
+        db.accumulate(account.events.last_persisted(1).map(|p| &p.event));
         Ok(account)
     }
 
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
-        self.repo.find(account_id).await
+        self.repo.find_by_id(account_id).await
     }
 
     #[instrument(name = "cala_ledger.accounts.find_all", skip(self), err)]
@@ -67,18 +64,18 @@ impl Accounts {
         self.repo.find_all(account_ids).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db), err)]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
-        self.repo.find_all_in_tx(op.tx(), account_ids).await
+        self.repo.find_all_in_tx(db.tx(), account_ids).await
     }
 
     #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
-        self.repo.find_by_external_id(external_id).await
+        self.repo.find_by_external_id(Some(external_id)).await
     }
 
     #[instrument(name = "cala_ledger.accounts.find_by_code", skip(self), err)]
@@ -89,14 +86,14 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.list", skip(self))]
     pub async fn list(
         &self,
-        query: PaginatedQueryArgs<AccountByNameCursor>,
-    ) -> Result<PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
-        self.repo.list(query).await
+        query: es_entity::PaginatedQueryArgs<AccountsByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<Account, AccountsByNameCursor>, AccountError> {
+        self.repo.list_by_name(query, Default::default()).await
     }
 
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())
@@ -104,28 +101,33 @@ impl Accounts {
 
     pub async fn persist_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
-        self.repo.persist_in_tx(op.tx(), account).await?;
-        op.accumulate(account.events.last_persisted());
+        self.repo.update_in_op(db.op(), account).await?;
+        db.accumulate(account.events.last_persisted(1).map(|p| &p.event));
         Ok(())
     }
 
     #[cfg(feature = "import")]
     pub async fn sync_account_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: AccountValues,
     ) -> Result<(), AccountError> {
         let mut account = Account::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut account)
+            .import_in_op(&mut db, origin, &mut account)
             .await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = account
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(db, account.events.last_persisted(), recorded_at)
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }
@@ -133,19 +135,21 @@ impl Accounts {
     #[cfg(feature = "import")]
     pub async fn sync_account_update(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        mut db: es_entity::DbOp<'_>,
         values: AccountValues,
         fields: Vec<String>,
     ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_imported(values.id, origin).await?;
+        let mut account = self.repo.find_by_id(values.id).await?;
         account.update((values, fields));
-        self.repo
-            .persist_at_in_tx(&mut db, recorded_at, origin, &mut account)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut account).await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = account
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(db, account.events.last_persisted(), recorded_at)
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

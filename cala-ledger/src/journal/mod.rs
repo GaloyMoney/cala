@@ -2,8 +2,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -11,7 +9,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -36,7 +34,7 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
     pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let journal = self.create_in_op(&mut op, new_journal).await?;
         op.commit().await?;
         Ok(journal)
@@ -44,11 +42,11 @@ impl Journals {
 
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_tx(op.tx(), new_journal).await?;
-        op.accumulate(journal.events.last_persisted());
+        let journal = self.repo.create_in_op(db.op(), new_journal).await?;
+        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
         Ok(journal)
     }
 
@@ -60,14 +58,14 @@ impl Journals {
         self.repo.find_all(journal_ids).await
     }
 
-    #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.journals.find_by_id", skip(self), err)]
     pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        self.repo.find(journal_id).await
+        self.repo.find_by_id(journal_id).await
     }
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         self.persist_in_op(&mut op, journal).await?;
         op.commit().await?;
         Ok(())
@@ -75,28 +73,33 @@ impl Journals {
 
     pub async fn persist_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        self.repo.persist_in_tx(op.tx(), journal).await?;
-        op.accumulate(journal.events.last_persisted());
+        self.repo.update_in_op(db.op(), journal).await?;
+        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
         Ok(())
     }
 
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: JournalValues,
     ) -> Result<(), JournalError> {
         let mut journal = Journal::import(origin, values);
         self.repo
-            .import(&mut db, recorded_at, origin, &mut journal)
+            .import_in_op(&mut db, origin, &mut journal)
             .await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = journal
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }
@@ -104,19 +107,21 @@ impl Journals {
     #[cfg(feature = "import")]
     pub async fn sync_journal_update(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
-        origin: DataSourceId,
+        mut db: es_entity::DbOp<'_>,
         values: JournalValues,
         fields: Vec<String>,
     ) -> Result<(), JournalError> {
-        let mut journal = self.repo.find_imported(values.id, origin).await?;
+        let mut journal = self.repo.find_by_id(values.id).await?;
         journal.update((values, fields));
-        self.repo
-            .persist_at_in_tx(&mut db, recorded_at, origin, &mut journal)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut journal).await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = journal
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(db, journal.events.last_persisted(), recorded_at)
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

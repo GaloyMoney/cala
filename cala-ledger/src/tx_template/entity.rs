@@ -1,16 +1,15 @@
 use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
+pub use crate::param::definition::*;
+use crate::primitives::*;
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 use cel_interpreter::CelExpression;
+use es_entity::*;
 
-use crate::entity::*;
-pub use crate::param::definition::*;
-#[cfg(feature = "import")]
-use crate::primitives::*;
-
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "TxTemplateId")]
 pub enum TxTemplateEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -32,22 +31,12 @@ impl TxTemplateEvent {
     }
 }
 
-impl EntityEvent for TxTemplateEvent {
-    type EntityId = TxTemplateId;
-    fn event_table_name() -> &'static str {
-        "cala_tx_template_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct TxTemplate {
+    pub id: TxTemplateId,
     values: TxTemplateValues,
     pub(super) events: EntityEvents<TxTemplateEvent>,
-}
-
-impl Entity for TxTemplate {
-    type Event = TxTemplateEvent;
 }
 
 impl TxTemplate {
@@ -60,7 +49,7 @@ impl TxTemplate {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build tx_template from events")
+        Self::try_from_events(events).expect("Failed to build tx_template from events")
     }
 
     pub fn id(&self) -> TxTemplateId {
@@ -77,30 +66,28 @@ impl TxTemplate {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
+            .entity_first_persisted_at()
             .expect("No persisted events")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .latest_event_persisted_at
+            .entity_last_modified_at()
             .expect("No events for account")
     }
 }
 
-impl TryFrom<EntityEvents<TxTemplateEvent>> for TxTemplate {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<TxTemplateEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<TxTemplateEvent> for TxTemplate {
+    fn try_from_events(events: EntityEvents<TxTemplateEvent>) -> Result<Self, EsEntityError> {
         let mut builder = TxTemplateBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 TxTemplateEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 TxTemplateEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
             }
         }
@@ -129,7 +116,13 @@ impl NewTxTemplate {
         NewTxTemplateBuilder::default()
     }
 
-    pub(super) fn initial_events(self) -> EntityEvents<TxTemplateEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<TxTemplateEvent> for NewTxTemplate {
+    fn into_events(self) -> EntityEvents<TxTemplateEvent> {
         EntityEvents::init(
             self.id,
             [TxTemplateEvent::Initialized {

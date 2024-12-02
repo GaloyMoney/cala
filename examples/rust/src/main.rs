@@ -3,7 +3,7 @@ use rand::Rng;
 use std::fs;
 
 use cala_ledger::{
-    account::*, journal::*, migrate::IncludeMigrations, query::*, tx_template::*, *,
+    account::*, es_entity, journal::*, migrate::IncludeMigrations, tx_template::*, *,
 };
 
 pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
@@ -59,7 +59,10 @@ async fn main() -> anyhow::Result<()> {
     account.update(builder);
     cala.accounts().persist(&mut account).await?;
 
-    let result = cala.accounts().list(PaginatedQueryArgs::default()).await?;
+    let result = cala
+        .accounts()
+        .list(es_entity::PaginatedQueryArgs::default())
+        .await?;
     println!("No of accounts: {}", result.entities.len());
 
     let journal_id = JournalId::new();

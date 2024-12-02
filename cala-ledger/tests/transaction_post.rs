@@ -58,7 +58,7 @@ async fn transaction_post() -> anyhow::Result<()> {
     let sender_balance = all_balances
         .get(&(journal.id(), sender_account.id(), "BTC".parse().unwrap()))
         .unwrap();
-    assert_eq!(sender_balance.settled(), Decimal::from(-1 * 1290 * 2));
+    assert_eq!(sender_balance.settled(), Decimal::from(-1290 * 2));
 
     Ok(())
 }

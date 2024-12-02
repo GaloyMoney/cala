@@ -10,7 +10,7 @@ use super::{
     tx_template::*, velocity::*,
 };
 
-pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
+pub type DbOp<'a> = Arc<Mutex<cala_ledger::LedgerOperation<'a>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {
@@ -65,7 +65,7 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountByNameCursor, Account, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountsByNameCursor, Account, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         query(
             after,
@@ -77,16 +77,13 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
                 let result = app
                     .ledger()
                     .accounts()
-                    .list(cala_ledger::query::PaginatedQueryArgs {
-                        first,
-                        after: after.map(cala_ledger::account::AccountByNameCursor::from),
-                    })
+                    .list(cala_ledger::es_entity::PaginatedQueryArgs { first, after })
                     .await?;
                 let mut connection = Connection::new(false, result.has_next_page);
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = AccountByNameCursor::from(entity.values());
+                        let cursor = AccountsByNameCursor::from(&entity);
                         Edge::new(cursor, Account::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
@@ -595,6 +592,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             new_tx_template_builder.metadata(metadata)?;
         }
         let new_tx_template = new_tx_template_builder.build()?;
+
         let tx_template = app
             .ledger()
             .tx_templates()

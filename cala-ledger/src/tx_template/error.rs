@@ -11,8 +11,6 @@ pub enum TxTemplateError {
     Sqlx(sqlx::Error),
     #[error("TxTemplateError - DuplicateKey: {0}")]
     DuplicateKey(Box<dyn DatabaseError>),
-    #[error("TxTemplateError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
     #[error("TxTemplateError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("TxTemplateError - NotFound")]
@@ -25,6 +23,10 @@ pub enum TxTemplateError {
     CouldNotFindByCode(String),
     #[error("{0}")]
     ParamError(#[from] crate::param::error::ParamError),
+    #[error("TxTemplateError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("TxTemplateError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 
 impl From<sqlx::Error> for TxTemplateError {
@@ -37,3 +39,5 @@ impl From<sqlx::Error> for TxTemplateError {
         }
     }
 }
+
+es_entity::from_es_entity_error!(TxTemplateError);

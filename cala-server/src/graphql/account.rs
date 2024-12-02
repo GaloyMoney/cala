@@ -1,10 +1,11 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
-use serde::{Deserialize, Serialize};
 
 use cala_ledger::{
     balance::*,
     primitives::{AccountId, Currency, JournalId},
 };
+
+pub use cala_ledger::account::AccountsByNameCursor;
 
 use crate::app::CalaApp;
 
@@ -97,7 +98,7 @@ impl Account {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountSetByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
+    ) -> Result<Connection<AccountSetsByNameCursor, AccountSet, EmptyFields, EmptyFields>> {
         let app = ctx.data_unchecked::<CalaApp>();
         let account_id = AccountId::from(self.account_id);
         query(
@@ -107,10 +108,7 @@ impl Account {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let query_args = cala_ledger::query::PaginatedQueryArgs {
-                    first,
-                    after: after.map(cala_ledger::account_set::AccountSetByNameCursor::from),
-                };
+                let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
                 let result = match ctx.data_opt::<DbOp>() {
                     Some(op) => {
@@ -131,38 +129,13 @@ impl Account {
                 connection
                     .edges
                     .extend(result.entities.into_iter().map(|entity| {
-                        let cursor = AccountSetByNameCursor::from(entity.values());
+                        let cursor = AccountSetsByNameCursor::from(&entity);
                         Edge::new(cursor, AccountSet::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },
         )
         .await
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub(super) struct AccountByNameCursor {
-    pub name: String,
-    pub id: cala_ledger::primitives::AccountId,
-}
-
-impl CursorType for AccountByNameCursor {
-    type Error = String;
-
-    fn encode_cursor(&self) -> String {
-        use base64::{engine::general_purpose, Engine as _};
-        let json = serde_json::to_string(&self).expect("could not serialize token");
-        general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-    }
-
-    fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-        use base64::{engine::general_purpose, Engine as _};
-        let bytes = general_purpose::STANDARD_NO_PAD
-            .decode(s.as_bytes())
-            .map_err(|e| e.to_string())?;
-        let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-        serde_json::from_str(&json).map_err(|e| e.to_string())
     }
 }
 
@@ -205,24 +178,6 @@ pub(super) struct AccountUpdatePayload {
 impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
         async_graphql::types::ID::from(format!("account:{}", self))
-    }
-}
-
-impl From<&cala_ledger::account::AccountValues> for AccountByNameCursor {
-    fn from(values: &cala_ledger::account::AccountValues) -> Self {
-        Self {
-            name: values.name.clone(),
-            id: values.id,
-        }
-    }
-}
-
-impl From<AccountByNameCursor> for cala_ledger::account::AccountByNameCursor {
-    fn from(cursor: AccountByNameCursor) -> Self {
-        Self {
-            name: cursor.name,
-            id: cursor.id,
-        }
     }
 }
 

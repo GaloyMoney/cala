@@ -4,6 +4,10 @@ use thiserror::Error;
 pub enum EntryError {
     #[error("EntryError - Sqlx: {0}")]
     Sqlx(#[from] sqlx::Error),
-    #[error("EntryError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
+    #[error("JournalError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("JournalError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
+
+es_entity::from_es_entity_error!(EntryError);

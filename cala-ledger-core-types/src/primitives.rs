@@ -224,13 +224,22 @@ impl<'a> TryFrom<CelResult<'a>> for Currency {
     }
 }
 
-const _LOCAL_UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
+const LOCAL_UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
 
 #[derive(Debug, Copy, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum DataSource {
     Local,
     Remote { id: DataSourceId },
+}
+
+impl From<DataSource> for DataSourceId {
+    fn from(source: DataSource) -> Self {
+        match source {
+            DataSource::Local => DataSourceId(LOCAL_UUID),
+            DataSource::Remote { id } => id,
+        }
+    }
 }
 
 impl From<DataSource> for Option<DataSourceId> {

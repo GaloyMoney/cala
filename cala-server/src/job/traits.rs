@@ -60,7 +60,7 @@ impl RetrySettings {
 impl Default for RetrySettings {
     fn default() -> Self {
         Self {
-            n_attempts: 5,
+            n_attempts: 10,
             min_backoff: std::time::Duration::from_secs(1),
             max_backoff: std::time::Duration::from_secs(60),
         }

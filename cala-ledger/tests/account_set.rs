@@ -320,7 +320,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .await
         .unwrap();
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
         after: None,
     };
@@ -331,7 +331,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .await?;
 
     assert_eq!(ret.entities.len(), 2);
-    assert_eq!(ret.has_next_page, true);
+    assert!(ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(set_two.id())
@@ -341,9 +341,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(account_one.id())
     );
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[0].clone())),
+        after: Some(AccountSetMembersCursor::from(&ret.entities[0])),
     };
 
     let ret = cala
@@ -351,7 +351,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .list_members(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 2);
-    assert_eq!(ret.has_next_page, true);
+    assert!(ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(account_one.id())
@@ -361,9 +361,9 @@ async fn members_pagination() -> anyhow::Result<()> {
         AccountSetMemberId::from(set_one.id())
     );
 
-    let query_args = cala_ledger::query::PaginatedQueryArgs {
+    let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberCursor::from(ret.entities[1].clone())),
+        after: Some(AccountSetMembersCursor::from(&ret.entities[1])),
     };
 
     let ret = cala
@@ -371,7 +371,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .list_members(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 1);
-    assert_eq!(ret.has_next_page, false);
+    assert!(!ret.has_next_page);
     assert_eq!(
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(account_two.id())

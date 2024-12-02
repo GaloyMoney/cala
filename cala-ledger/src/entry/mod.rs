@@ -2,13 +2,11 @@ mod entity;
 pub mod error;
 mod repo;
 
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -32,35 +30,41 @@ impl Entries {
 
     pub(crate) async fn create_all_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
-        let entries = self.repo.create_all(op.tx(), entries).await?;
-        op.accumulate(
+        let entries = self.repo.create_all_in_op(db.op(), entries).await?;
+        db.accumulate(
             entries
                 .iter()
-                .map(|values| OutboxEventPayload::EntryCreated {
+                .map(|entry| OutboxEventPayload::EntryCreated {
                     source: DataSource::Local,
-                    entry: values.clone(),
+                    entry: entry.values().clone(),
                 }),
         );
-        Ok(entries)
+        Ok(entries
+            .into_iter()
+            .map(|entry| entry.into_values())
+            .collect())
     }
 
     #[cfg(feature = "import")]
     pub(crate) async fn sync_entry_creation(
         &self,
-        mut db: sqlx::Transaction<'_, sqlx::Postgres>,
-        recorded_at: DateTime<Utc>,
+        mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
         let mut entry = Entry::import(origin, values);
-        self.repo
-            .import(&mut db, recorded_at, origin, &mut entry)
-            .await?;
+        self.repo.import(&mut db, origin, &mut entry).await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = entry
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(db, entry.events.last_persisted(), recorded_at)
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

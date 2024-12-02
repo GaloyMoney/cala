@@ -46,7 +46,14 @@ wait_for_new_import_job() {
   retry 20 1 wait_for_new_import_job $job_count || true
   sleep 1
 
-  exec_graphql 'list-accounts'
-  accounts_after=$(graphql_output '.data.accounts.nodes | length')
+  for i in {1..60}; do
+    exec_graphql 'list-accounts'
+    accounts_after=$(graphql_output '.data.accounts.nodes | length')
+    if [[ "$accounts_after" -gt "$accounts_before" ]] then
+      break;
+    fi
+    sleep 1
+  done
+
   [[ "$accounts_after" -gt "$accounts_before" ]] || exit 1
 }

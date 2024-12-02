@@ -12,7 +12,7 @@ fail-on-warnings = []
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.2.47-dev" }
-cala-ledger = { path = "../cala-ledger", features = ["import"], package = "cala-ledger", version = "0.2.47-dev" }
+cala-ledger = { path = "../cala-ledger", features = ["import", "graphql"], package = "cala-ledger", version = "0.2.47-dev" }
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.2.47-dev" }
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.2.47-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.2.47-dev" }

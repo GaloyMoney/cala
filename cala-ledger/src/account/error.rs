@@ -6,8 +6,10 @@ use crate::primitives::AccountId;
 pub enum AccountError {
     #[error("AccountError - Sqlx: {0}")]
     Sqlx(sqlx::Error),
-    #[error("AccountError - EntityError: {0}")]
-    EntityError(#[from] crate::entity::EntityError),
+    #[error("AccountError - EsEntityError: {0}")]
+    EsEntityError(es_entity::EsEntityError),
+    #[error("AccountError - CursorDestructureError: {0}")]
+    CursorDestructureError(#[from] es_entity::CursorDestructureError),
     #[error("AccountError - NotFound: id '{0}' not found")]
     CouldNotFindById(AccountId),
     #[error("AccountError - NotFound: external id '{0}' not found")]
@@ -34,3 +36,5 @@ impl From<sqlx::Error> for AccountError {
         Self::Sqlx(error)
     }
 }
+
+es_entity::from_es_entity_error!(AccountError);

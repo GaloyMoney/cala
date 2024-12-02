@@ -1,0 +1,21 @@
+[package]
+name = "es-entity-macros"
+version = "0.2.47-dev"
+edition = "2021"
+
+[features]
+
+fail-on-warnings = []
+graphql = []
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1.0.92"
+syn = "2.0.87"
+quote = "1.0.36"
+darling = "0.20.9"
+pluralizer = "0.4.0"
+convert_case = "0.6.0"
+regex = "1.11"

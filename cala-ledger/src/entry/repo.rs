@@ -1,61 +1,44 @@
-#[cfg(feature = "import")]
-use chrono::{DateTime, Utc};
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
-use tracing::instrument;
+use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId, TransactionId};
+use es_entity::*;
+use sqlx::PgPool;
 
 use super::{entity::*, error::*};
-use crate::entity::EntityEvents;
-#[cfg(feature = "import")]
-use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId};
 
-#[derive(Debug, Clone)]
+#[derive(EsRepo, Debug, Clone)]
+#[es_repo(
+    entity = "Entry",
+    err = "EntryError",
+    columns(
+        journal_id(ty = "JournalId", update(persist = false), list_by = false),
+        account_id(ty = "AccountId", update(persist = false), list_by = false),
+        transaction_id(ty = "TransactionId", update(persist = false), list_by = false),
+        data_source_id(
+            ty = "DataSourceId",
+            create(accessor = "data_source().into()"),
+            update(persist = false),
+            list_by = false
+        ),
+    ),
+    tbl_prefix = "cala"
+)]
 pub(crate) struct EntryRepo {
-    _pool: PgPool,
+    #[allow(dead_code)]
+    pool: PgPool,
 }
 
 impl EntryRepo {
     pub(crate) fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
-        }
-    }
-
-    #[instrument(
-        level = "trace",
-        name = "cala_ledger.entries.create_all",
-        skip(self, db)
-    )]
-    pub(crate) async fn create_all(
-        &self,
-        db: &mut Transaction<'_, Postgres>,
-        entries: Vec<NewEntry>,
-    ) -> Result<Vec<EntryValues>, EntryError> {
-        let mut query_builder: QueryBuilder<Postgres> = QueryBuilder::new(
-            r#"INSERT INTO cala_entries
-               (id, journal_id, account_id, transaction_id)"#,
-        );
-        let mut entry_values = Vec::new();
-        query_builder.push_values(entries.iter(), |mut builder, entry: &NewEntry| {
-            entry_values.push(entry.to_values());
-            builder.push_bind(entry.id);
-            builder.push_bind(entry.journal_id);
-            builder.push_bind(entry.account_id);
-            builder.push_bind(entry.transaction_id);
-        });
-        let query = query_builder.build();
-        query.execute(&mut **db).await?;
-        EntityEvents::batch_persist(db, entries.into_iter().map(|n| n.initial_events())).await?;
-        Ok(entry_values)
+        Self { pool: pool.clone() }
     }
 
     #[cfg(feature = "import")]
     pub(super) async fn import(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        recorded_at: DateTime<Utc>,
+        op: &mut DbOp<'_>,
         origin: DataSourceId,
         entry: &mut Entry,
     ) -> Result<(), EntryError> {
+        let recorded_at = op.now();
         sqlx::query!(
             r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, created_at)
             VALUES ($1, $2, $3, $4, $5)"#,
@@ -65,9 +48,9 @@ impl EntryRepo {
             entry.values().account_id as AccountId,
             recorded_at,
         )
-        .execute(&mut **db)
+        .execute(&mut **op.tx())
         .await?;
-        entry.events.persisted_at(db, origin, recorded_at).await?;
+        self.persist_events(op, &mut entry.events).await?;
         Ok(())
     }
 }

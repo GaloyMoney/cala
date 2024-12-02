@@ -1,11 +1,13 @@
 use derive_builder::Builder;
+use es_entity::*;
 use serde::{Deserialize, Serialize};
 
-use crate::{entity::*, primitives::*};
+use crate::primitives::*;
 pub use cala_types::{journal::*, primitives::JournalId};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[es_event(id = "JournalId")]
 pub enum JournalEvent {
     #[cfg(feature = "import")]
     Imported {
@@ -21,22 +23,12 @@ pub enum JournalEvent {
     },
 }
 
-impl EntityEvent for JournalEvent {
-    type EntityId = JournalId;
-    fn event_table_name() -> &'static str {
-        "cala_journal_events"
-    }
-}
-
-#[derive(Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityError"))]
+#[derive(EsEntity, Builder)]
+#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
 pub struct Journal {
+    pub id: JournalId,
     values: JournalValues,
     pub(super) events: EntityEvents<JournalEvent>,
-}
-
-impl Entity for Journal {
-    type Event = JournalEvent;
 }
 
 impl Journal {
@@ -49,7 +41,7 @@ impl Journal {
                 values,
             }],
         );
-        Self::try_from(events).expect("Failed to build account from events")
+        Self::try_from_events(events).expect("Failed to build account from events")
     }
 
     pub fn id(&self) -> JournalId {
@@ -102,14 +94,14 @@ impl Journal {
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .entity_first_persisted_at
-            .expect("No events for account")
+            .entity_first_persisted_at()
+            .expect("Entity not persisted")
     }
 
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
-            .latest_event_persisted_at
-            .expect("No events for account")
+            .entity_last_modified_at()
+            .expect("Entity not persisted")
     }
 }
 
@@ -148,19 +140,17 @@ impl From<(JournalValues, Vec<String>)> for JournalUpdate {
     }
 }
 
-impl TryFrom<EntityEvents<JournalEvent>> for Journal {
-    type Error = EntityError;
-
-    fn try_from(events: EntityEvents<JournalEvent>) -> Result<Self, Self::Error> {
+impl TryFromEvents<JournalEvent> for Journal {
+    fn try_from_events(events: EntityEvents<JournalEvent>) -> Result<Self, EsEntityError> {
         let mut builder = JournalBuilder::default();
-        for event in events.iter() {
+        for event in events.iter_all() {
             match event {
                 #[cfg(feature = "import")]
                 JournalEvent::Imported { source: _, values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 JournalEvent::Initialized { values } => {
-                    builder = builder.values(values.clone());
+                    builder = builder.id(values.id).values(values.clone());
                 }
                 JournalEvent::Updated { values, .. } => {
                     builder = builder.values(values.clone());
@@ -190,7 +180,13 @@ impl NewJournal {
         NewJournalBuilder::default()
     }
 
-    pub(super) fn initial_events(self) -> EntityEvents<JournalEvent> {
+    pub(super) fn data_source(&self) -> DataSource {
+        DataSource::Local
+    }
+}
+
+impl IntoEvents<JournalEvent> for NewJournal {
+    fn into_events(self) -> EntityEvents<JournalEvent> {
         EntityEvents::init(
             self.id,
             [JournalEvent::Initialized {

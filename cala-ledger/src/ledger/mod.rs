@@ -11,10 +11,10 @@ use error::*;
 use crate::{
     account::Accounts,
     account_set::AccountSets,
-    atomic_operation::*,
     balance::Balances,
     entry::Entries,
     journal::Journals,
+    ledger_operation::*,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
@@ -99,8 +99,8 @@ impl CalaLedger {
         &self.pool
     }
 
-    pub async fn begin_operation<'a>(&self) -> Result<AtomicOperation<'a>, LedgerError> {
-        Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
+    pub async fn begin_operation<'a>(&self) -> Result<LedgerOperation<'a>, LedgerError> {
+        Ok(LedgerOperation::init(&self.pool, &self.outbox).await?)
     }
 
     pub fn accounts(&self) -> &Accounts {
@@ -137,35 +137,35 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
-            .post_transaction_in_op(&mut op, tx_id, tx_template_code, params)
+            .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
             .await?;
-        op.commit().await?;
+        db.commit().await?;
         Ok(transaction)
     }
 
     #[instrument(
         name = "cala_ledger.transaction_post",
-        skip(self, op)
+        skip(self, db)
         fields(transaction_id, external_id)
         err
     )]
     pub async fn post_transaction_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction(op.now, tx_id, tx_template_code, params.into())
+            .prepare_transaction(db.op().now(), tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self
             .transactions
-            .create_in_op(op, prepared_tx.transaction)
+            .create_in_op(db, prepared_tx.transaction)
             .await?;
 
         let span = tracing::Span::current();
@@ -174,7 +174,7 @@ impl CalaLedger {
 
         let entries = self
             .entries
-            .create_all_in_op(op, prepared_tx.entries)
+            .create_all_in_op(db, prepared_tx.entries)
             .await?;
 
         let account_ids = entries
@@ -188,7 +188,7 @@ impl CalaLedger {
 
         self.velocities
             .update_balances_in_op(
-                op,
+                db,
                 transaction.created_at(),
                 transaction.values(),
                 &entries,
@@ -198,7 +198,7 @@ impl CalaLedger {
 
         self.balances
             .update_balances_in_op(
-                op,
+                db,
                 transaction.created_at(),
                 transaction.journal_id(),
                 entries,
@@ -228,20 +228,23 @@ impl CalaLedger {
         match event.payload {
             Empty => (),
             AccountCreated { account, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.accounts
-                    .sync_account_creation(db, event.recorded_at, origin, account)
+                    .sync_account_creation(op, origin, account)
                     .await?
             }
             AccountUpdated {
                 account, fields, ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.accounts
-                    .sync_account_update(db, event.recorded_at, origin, account, fields)
+                    .sync_account_update(op, account, fields)
                     .await?
             }
             AccountSetCreated { account_set, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_creation(db, event.recorded_at, origin, account_set)
+                    .sync_account_set_creation(op, origin, account_set)
                     .await?
             }
             AccountSetUpdated {
@@ -249,8 +252,9 @@ impl CalaLedger {
                 fields,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_update(db, event.recorded_at, origin, account_set, fields)
+                    .sync_account_set_update(op, account_set, fields)
                     .await?
             }
             AccountSetMemberCreated {
@@ -258,14 +262,9 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_member_creation(
-                        db,
-                        event.recorded_at,
-                        origin,
-                        account_set_id,
-                        member_id,
-                    )
+                    .sync_account_set_member_creation(op, origin, account_set_id, member_id)
                     .await?
             }
             AccountSetMemberRemoved {
@@ -273,42 +272,40 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.account_sets
-                    .sync_account_set_member_removal(
-                        db,
-                        event.recorded_at,
-                        origin,
-                        account_set_id,
-                        member_id,
-                    )
+                    .sync_account_set_member_removal(op, origin, account_set_id, member_id)
                     .await?
             }
             JournalCreated { journal, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.journals
-                    .sync_journal_creation(db, event.recorded_at, origin, journal)
+                    .sync_journal_creation(op, origin, journal)
                     .await?
             }
             JournalUpdated {
                 journal, fields, ..
             } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.journals
-                    .sync_journal_update(db, event.recorded_at, origin, journal, fields)
+                    .sync_journal_update(op, journal, fields)
                     .await?
             }
             TransactionCreated { transaction, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.transactions
-                    .sync_transaction_creation(db, event.recorded_at, origin, transaction)
+                    .sync_transaction_creation(op, origin, transaction)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.tx_templates
-                    .sync_tx_template_creation(db, event.recorded_at, origin, tx_template)
+                    .sync_tx_template_creation(op, origin, tx_template)
                     .await?
             }
             EntryCreated { entry, .. } => {
-                self.entries
-                    .sync_entry_creation(db, event.recorded_at, origin, entry)
-                    .await?
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.entries.sync_entry_creation(op, origin, entry).await?
             }
             BalanceCreated { balance, .. } => {
                 self.balances

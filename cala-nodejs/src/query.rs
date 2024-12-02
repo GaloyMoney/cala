@@ -10,15 +10,15 @@ pub struct PaginatedQueryArgs {
   pub first: i32,
 }
 
-impl From<cala_ledger::account::AccountByNameCursor> for CursorToken {
-  fn from(cursor: cala_ledger::account::AccountByNameCursor) -> Self {
+impl From<cala_ledger::account::AccountsByNameCursor> for CursorToken {
+  fn from(cursor: cala_ledger::account::AccountsByNameCursor) -> Self {
     use base64::{engine::general_purpose, Engine as _};
     let json = serde_json::to_string(&cursor).expect("could not serialize token");
     let token: String = general_purpose::STANDARD_NO_PAD.encode(json.as_bytes());
     CursorToken { token }
   }
 }
-impl TryFrom<CursorToken> for cala_ledger::account::AccountByNameCursor {
+impl TryFrom<CursorToken> for cala_ledger::account::AccountsByNameCursor {
   type Error = napi::Error;
 
   fn try_from(token: CursorToken) -> Result<Self, Self::Error> {
