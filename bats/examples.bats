@@ -23,8 +23,6 @@ wait_for_new_import_job() {
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
 
-  background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
-
   job_id=$(random_uuid)
   variables=$(
     jq -n \
@@ -42,14 +40,20 @@ wait_for_new_import_job() {
   error_msg=$(graphql_output '.errors[0].message')
   [[ "$name" == "rust-example" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
+  background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
+
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 20 1 wait_for_new_import_job $job_count || true
-  sleep 2
+  sleep 1
 
-  cat .rust-example-logs
-  cat .e2e-logs
-  exec_graphql 'list-accounts'
-  echo $(graphql_output)
-  accounts_after=$(graphql_output '.data.accounts.nodes | length')
+  for i in {1..60}; do
+    exec_graphql 'list-accounts'
+    accounts_after=$(graphql_output '.data.accounts.nodes | length')
+    if [[ "$accounts_after" -gt "$accounts_before" ]] then
+      break;
+    fi
+    sleep 1
+  done
+
   [[ "$accounts_after" -gt "$accounts_before" ]] || exit 1
 }
