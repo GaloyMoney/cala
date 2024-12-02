@@ -13,7 +13,7 @@ use uuid::Uuid;
 pub use crate::param::*;
 use crate::{
     entry::NewEntry,
-    new_atomic_operation::*,
+    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, *},
     transaction::NewTransaction,
@@ -49,7 +49,7 @@ impl TxTemplates {
         &self,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
         op.commit().await?;
         Ok(tx_template)
@@ -57,7 +57,7 @@ impl TxTemplates {
 
     pub async fn create_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
         let tx_template = self.repo.create_in_op(db.op(), new_tx_template).await?;

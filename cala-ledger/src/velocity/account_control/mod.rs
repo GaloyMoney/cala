@@ -13,7 +13,7 @@ use cala_types::{
 };
 
 use crate::{
-    new_atomic_operation::*,
+    ledger_operation::*,
     param::Params,
     primitives::{AccountId, DebitOrCredit, Layer},
 };
@@ -39,7 +39,7 @@ impl AccountControls {
 
     pub async fn attach_control_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
         control: &VelocityControlValues,
         account_id: AccountId,
@@ -103,7 +103,7 @@ impl AccountControls {
 
     pub async fn find_for_enforcement(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
     {

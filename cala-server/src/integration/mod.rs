@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use cala_ledger::AtomicOperation;
+use cala_ledger::LedgerOperation;
 
 cala_types::entity_id! { IntegrationId }
 
@@ -35,7 +35,7 @@ impl Integrations {
 
     pub async fn create_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         id: impl Into<IntegrationId> + std::fmt::Debug,
         name: String,
         data: impl serde::Serialize,

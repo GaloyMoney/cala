@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -36,7 +36,7 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.create", skip(self))]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
         Ok(account)
@@ -44,7 +44,7 @@ impl Accounts {
 
     pub async fn create_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let account = self.repo.create_in_op(db.op(), new_account).await?;
@@ -67,7 +67,7 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db), err)]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
         self.repo.find_all_in_tx(db.tx(), account_ids).await
@@ -93,7 +93,7 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())
@@ -101,7 +101,7 @@ impl Accounts {
 
     pub async fn persist_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
         self.repo.update_in_op(db.op(), account).await?;

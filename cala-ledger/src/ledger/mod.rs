@@ -14,7 +14,7 @@ use crate::{
     balance::Balances,
     entry::Entries,
     journal::Journals,
-    new_atomic_operation::*,
+    ledger_operation::*,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
@@ -99,8 +99,8 @@ impl CalaLedger {
         &self.pool
     }
 
-    pub async fn begin_operation<'a>(&self) -> Result<AtomicOperation<'a>, LedgerError> {
-        Ok(AtomicOperation::init(&self.pool, &self.outbox).await?)
+    pub async fn begin_operation<'a>(&self) -> Result<LedgerOperation<'a>, LedgerError> {
+        Ok(LedgerOperation::init(&self.pool, &self.outbox).await?)
     }
 
     pub fn accounts(&self) -> &Accounts {
@@ -137,7 +137,7 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
             .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
             .await?;
@@ -153,7 +153,7 @@ impl CalaLedger {
     )]
     pub async fn post_transaction_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,

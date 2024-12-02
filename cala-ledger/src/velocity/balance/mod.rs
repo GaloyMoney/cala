@@ -10,7 +10,7 @@ use cala_types::{
     transaction::TransactionValues,
 };
 
-use crate::{new_atomic_operation::*, primitives::AccountId};
+use crate::{ledger_operation::*, primitives::AccountId};
 
 use super::{account_control::*, error::*};
 
@@ -30,7 +30,7 @@ impl VelocityBalances {
 
     pub(crate) async fn update_balances_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],

@@ -13,7 +13,7 @@ use crate::{
     account::*,
     balance::*,
     entry::*,
-    new_atomic_operation::*,
+    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, DebitOrCredit, JournalId, Layer},
 };
@@ -59,7 +59,7 @@ impl AccountSets {
         &self,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account_set = self.create_in_op(&mut op, new_account_set).await?;
         op.commit().await?;
         Ok(account_set)
@@ -68,7 +68,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.create", skip(self, db))]
     pub async fn create_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
@@ -87,7 +87,7 @@ impl AccountSets {
 
     #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
     pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         self.persist_in_op(&mut op, account_set).await?;
         op.commit().await?;
         Ok(())
@@ -99,7 +99,7 @@ impl AccountSets {
     )]
     pub async fn persist_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
         self.repo.update_in_op(db.op(), account_set).await?;
@@ -112,7 +112,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account_set = self
             .add_member_in_op(&mut op, account_set_id, member)
             .await?;
@@ -122,7 +122,7 @@ impl AccountSets {
 
     pub async fn add_member_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
@@ -196,7 +196,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account_set = self
             .remove_member_in_op(&mut op, account_set_id, member)
             .await?;
@@ -206,7 +206,7 @@ impl AccountSets {
 
     pub async fn remove_member_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
@@ -286,7 +286,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.find_all", skip(self, op), err)]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         self.repo.find_all_in_tx(op.tx(), account_set_ids).await
@@ -325,7 +325,7 @@ impl AccountSets {
     )]
     pub async fn find_where_member_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
@@ -357,7 +357,7 @@ impl AccountSets {
 
     pub async fn list_members_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
     ) -> Result<

@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -34,7 +34,7 @@ impl Transactions {
 
     pub(crate) async fn create_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db.op(), new_transaction).await?;

@@ -12,7 +12,7 @@ pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
-    new_atomic_operation::*,
+    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
@@ -54,7 +54,7 @@ impl Balances {
     #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op), err)]
     pub async fn find_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
@@ -93,7 +93,7 @@ impl Balances {
 
     pub(crate) async fn update_balances_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,

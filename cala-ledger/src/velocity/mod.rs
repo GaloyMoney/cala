@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
-use crate::{new_atomic_operation::*, outbox::*};
+use crate::{ledger_operation::*, outbox::*};
 
 use account_control::*;
 use balance::*;
@@ -47,7 +47,7 @@ impl Velocities {
         &self,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let mut db = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let limit = self.create_limit_in_op(&mut db, new_limit).await?;
         db.commit().await?;
         Ok(limit)
@@ -55,7 +55,7 @@ impl Velocities {
 
     pub async fn create_limit_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
         let res = self.limits.create_in_op(db.op(), new_limit).await?;
@@ -66,7 +66,7 @@ impl Velocities {
         &self,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let control = self.create_control_in_op(&mut db, new_control).await?;
         db.commit().await?;
         Ok(control)
@@ -74,7 +74,7 @@ impl Velocities {
 
     pub async fn create_control_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
         let res = self.controls.create_in_op(db.op(), new_control).await?;
@@ -86,7 +86,7 @@ impl Velocities {
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let control = self
             .add_limit_to_control_in_op(&mut db, control, limit)
             .await?;
@@ -96,7 +96,7 @@ impl Velocities {
 
     pub async fn add_limit_to_control_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
@@ -112,7 +112,7 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let control = self
             .attach_control_to_account_in_op(&mut op, control, account_id, params)
             .await?;
@@ -122,7 +122,7 @@ impl Velocities {
 
     pub async fn attach_control_to_account_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
@@ -152,7 +152,7 @@ impl Velocities {
 
     pub(crate) async fn update_balances_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
@@ -172,7 +172,7 @@ impl Velocities {
         &self,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let limits = self
             .list_limits_for_control_in_op(&mut op, control_id)
             .await?;
@@ -182,7 +182,7 @@ impl Velocities {
 
     pub async fn list_limits_for_control_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
         self.limits.list_for_control(op.tx(), control_id).await

@@ -10,7 +10,7 @@ use super::{
     tx_template::*, velocity::*,
 };
 
-pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
+pub type DbOp<'a> = Arc<Mutex<cala_ledger::LedgerOperation<'a>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {

@@ -9,7 +9,7 @@ mod traits;
 
 pub mod error;
 
-use cala_ledger::AtomicOperation;
+use cala_ledger::LedgerOperation;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use tracing::instrument;
@@ -46,7 +46,7 @@ impl Jobs {
     #[instrument(name = "cala_server.jobs.create_and_spawn", skip(self, op, data))]
     pub async fn create_and_spawn_in_op<I: JobInitializer + Default, D: serde::Serialize>(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         id: impl Into<JobId> + std::fmt::Debug,
         name: String,
         description: Option<String>,
@@ -61,7 +61,7 @@ impl Jobs {
     #[instrument(name = "cala_server.jobs.create_and_spawn_at", skip(self, op, data))]
     pub async fn create_and_spawn_at_in_op<I: JobInitializer + Default, D: serde::Serialize>(
         &self,
-        op: &mut AtomicOperation<'_>,
+        op: &mut LedgerOperation<'_>,
         name: String,
         description: Option<String>,
         data: D,

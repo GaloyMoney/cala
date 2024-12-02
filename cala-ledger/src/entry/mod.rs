@@ -6,7 +6,7 @@ use sqlx::PgPool;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -30,7 +30,7 @@ impl Entries {
 
     pub(crate) async fn create_all_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let entries = self.repo.create_all_in_op(db.op(), entries).await?;

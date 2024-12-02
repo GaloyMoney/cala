@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{new_atomic_operation::*, outbox::*, primitives::DataSource};
+use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -34,7 +34,7 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
     pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let journal = self.create_in_op(&mut op, new_journal).await?;
         op.commit().await?;
         Ok(journal)
@@ -42,7 +42,7 @@ impl Journals {
 
     pub async fn create_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
         let journal = self.repo.create_in_op(db.op(), new_journal).await?;
@@ -65,7 +65,7 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         self.persist_in_op(&mut op, journal).await?;
         op.commit().await?;
         Ok(())
@@ -73,7 +73,7 @@ impl Journals {
 
     pub async fn persist_in_op(
         &self,
-        db: &mut AtomicOperation<'_>,
+        db: &mut LedgerOperation<'_>,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
         self.repo.update_in_op(db.op(), journal).await?;

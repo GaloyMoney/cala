@@ -4,13 +4,13 @@ use es_entity::DbOp;
 
 use crate::outbox::*;
 
-pub struct AtomicOperation<'t> {
+pub struct LedgerOperation<'t> {
     db_op: DbOp<'t>,
     outbox: Outbox,
     accumulated_events: Vec<OutboxEventPayload>,
 }
 
-impl<'t> AtomicOperation<'t> {
+impl<'t> LedgerOperation<'t> {
     pub(crate) async fn init(pool: &PgPool, outbox: &Outbox) -> Result<Self, sqlx::Error> {
         let db_op = DbOp::init(pool).await?;
         Ok(Self {
