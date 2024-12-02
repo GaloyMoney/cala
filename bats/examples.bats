@@ -44,9 +44,12 @@ wait_for_new_import_job() {
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 20 1 wait_for_new_import_job $job_count || true
-  sleep 1
+  sleep 2
 
+  cat .rust-example-logs
+  cat .e2e-logs
   exec_graphql 'list-accounts'
+  echo $(graphql_output)
   accounts_after=$(graphql_output '.data.accounts.nodes | length')
   [[ "$accounts_after" -gt "$accounts_before" ]] || exit 1
 }
