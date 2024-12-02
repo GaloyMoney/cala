@@ -50,7 +50,7 @@ impl<'a> ManyFilter<'a> {
     }
 }
 
-impl<'a> ToTokens for ManyFilter<'a> {
+impl ToTokens for ManyFilter<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = self.ident();
         let variants = self.variants();
@@ -98,7 +98,7 @@ impl<'a> FindManyFn<'a> {
     }
 }
 
-impl<'a> ToTokens for FindManyFn<'a> {
+impl ToTokens for FindManyFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let filter_name = self.filter.ident();
         let sort_by_name = self.cursor.sort_by_name();

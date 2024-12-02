@@ -14,7 +14,7 @@ impl<'a> From<&'a RepositoryOptions> for Begin<'a> {
     }
 }
 
-impl<'a> ToTokens for Begin<'a> {
+impl ToTokens for Begin<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let begin = if let Some(begin) = self.begin {
             quote! {

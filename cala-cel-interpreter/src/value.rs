@@ -281,7 +281,7 @@ impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for bool {
+impl TryFrom<CelResult<'_>> for bool {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -297,7 +297,7 @@ impl<'a> TryFrom<CelResult<'a>> for bool {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
+impl TryFrom<CelResult<'_>> for NaiveDate {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -313,7 +313,7 @@ impl<'a> TryFrom<CelResult<'a>> for NaiveDate {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for DateTime<Utc> {
+impl TryFrom<CelResult<'_>> for DateTime<Utc> {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -329,7 +329,7 @@ impl<'a> TryFrom<CelResult<'a>> for DateTime<Utc> {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for Uuid {
+impl TryFrom<CelResult<'_>> for Uuid {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -345,7 +345,7 @@ impl<'a> TryFrom<CelResult<'a>> for Uuid {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for String {
+impl TryFrom<CelResult<'_>> for String {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -361,7 +361,7 @@ impl<'a> TryFrom<CelResult<'a>> for String {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for Decimal {
+impl TryFrom<CelResult<'_>> for Decimal {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -403,7 +403,7 @@ impl TryFrom<&CelKey> for String {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for serde_json::Value {
+impl TryFrom<CelResult<'_>> for serde_json::Value {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {

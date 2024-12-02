@@ -28,7 +28,7 @@ impl<'a> PopulateNested<'a> {
     }
 }
 
-impl<'a> ToTokens for PopulateNested<'a> {
+impl ToTokens for PopulateNested<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ty = self.column.ty();
         let ident = self.ident;

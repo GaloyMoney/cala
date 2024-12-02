@@ -22,7 +22,7 @@ impl<'a> From<&'a RepositoryOptions> for PostPersistHook<'a> {
     }
 }
 
-impl<'a> ToTokens for PostPersistHook<'a> {
+impl ToTokens for PostPersistHook<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let event = &self.event;
         let entity = &self.entity;

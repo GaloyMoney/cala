@@ -27,7 +27,7 @@ impl<'a> From<&'a RepositoryOptions> for CreateFn<'a> {
     }
 }
 
-impl<'a> ToTokens for CreateFn<'a> {
+impl ToTokens for CreateFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let entity = self.entity;
         let error = self.error;

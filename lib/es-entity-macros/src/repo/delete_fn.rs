@@ -24,7 +24,7 @@ impl<'a> DeleteFn<'a> {
     }
 }
 
-impl<'a> ToTokens for DeleteFn<'a> {
+impl ToTokens for DeleteFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         if matches!(self.delete_option, DeleteOption::No) {
             return;

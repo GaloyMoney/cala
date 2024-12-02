@@ -43,7 +43,7 @@ impl<'a> ListForFn<'a> {
     }
 }
 
-impl<'a> ToTokens for ListForFn<'a> {
+impl ToTokens for ListForFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let prefix_arg = self.ignore_prefix.map(|p| quote! { #p, });
         let entity = self.entity;

@@ -18,7 +18,7 @@ impl<'a> Nested<'a> {
     }
 }
 
-impl<'a> ToTokens for Nested<'a> {
+impl ToTokens for Nested<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let error = self.error;
         let repo_field = self.field.ident();

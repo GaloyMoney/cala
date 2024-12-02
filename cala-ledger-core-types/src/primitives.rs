@@ -41,7 +41,7 @@ impl Default for DebitOrCredit {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for DebitOrCredit {
+impl TryFrom<CelResult<'_>> for DebitOrCredit {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -94,7 +94,7 @@ pub enum ParseLayerError {
     UnknownLayer(String),
 }
 
-impl<'a> TryFrom<CelResult<'a>> for Layer {
+impl TryFrom<CelResult<'_>> for Layer {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
@@ -202,7 +202,7 @@ impl From<Currency> for &'static str {
     }
 }
 
-impl<'a> TryFrom<CelResult<'a>> for Currency {
+impl TryFrom<CelResult<'_>> for Currency {
     type Error = ResultCoercionError;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {

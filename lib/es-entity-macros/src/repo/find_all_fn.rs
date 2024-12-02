@@ -24,7 +24,7 @@ impl<'a> From<&'a RepositoryOptions> for FindAllFn<'a> {
     }
 }
 
-impl<'a> ToTokens for FindAllFn<'a> {
+impl ToTokens for FindAllFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let id = self.id;
         let entity = self.entity;

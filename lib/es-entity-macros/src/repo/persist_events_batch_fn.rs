@@ -22,7 +22,7 @@ impl<'a> From<&'a RepositoryOptions> for PersistEventsBatchFn<'a> {
     }
 }
 
-impl<'a> ToTokens for PersistEventsBatchFn<'a> {
+impl ToTokens for PersistEventsBatchFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let query = format!(
             "INSERT INTO {} (id, recorded_at, sequence, event_type, event) SELECT unnested.id, $1, unnested.sequence, unnested.event_type, unnested.event FROM UNNEST($2::UUID[], $3::INT[], $4::TEXT[], $5::JSONB[]) AS unnested(id, sequence, event_type, event)",

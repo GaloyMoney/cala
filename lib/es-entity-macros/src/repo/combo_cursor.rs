@@ -164,7 +164,7 @@ impl<'a> ComboCursor<'a> {
     }
 }
 
-impl<'a> ToTokens for ComboCursor<'a> {
+impl ToTokens for ComboCursor<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let ident = self.ident();
         let variants = self.variants();

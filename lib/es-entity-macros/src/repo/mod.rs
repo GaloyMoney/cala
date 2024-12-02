@@ -97,7 +97,7 @@ impl<'a> From<&'a RepositoryOptions> for EsRepo<'a> {
     }
 }
 
-impl<'a> ToTokens for EsRepo<'a> {
+impl ToTokens for EsRepo<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let repo = &self.repo;
         let persist_events_fn = &self.persist_events_fn;

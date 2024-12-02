@@ -28,7 +28,7 @@ impl<'a> FindByFn<'a> {
     }
 }
 
-impl<'a> ToTokens for FindByFn<'a> {
+impl ToTokens for FindByFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let entity = self.entity;
         let column_name = &self.column.name();

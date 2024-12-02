@@ -12,7 +12,7 @@ pub struct CursorStruct<'a> {
     pub cursor_mod: &'a syn::Ident,
 }
 
-impl<'a> CursorStruct<'a> {
+impl CursorStruct<'_> {
     fn name(&self) -> String {
         let entity_name = pluralizer::pluralize(&format!("{}", self.entity), 2, false);
         format!("{}_by_{}_cursor", entity_name, self.column.name()).to_case(Case::UpperCamel)
@@ -164,7 +164,7 @@ impl<'a> CursorStruct<'a> {
     }
 }
 
-impl<'a> ToTokens for CursorStruct<'a> {
+impl ToTokens for CursorStruct<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let entity = self.entity;
         let accessor = &self.column.accessor();
@@ -242,7 +242,7 @@ impl<'a> ListByFn<'a> {
     }
 }
 
-impl<'a> ToTokens for ListByFn<'a> {
+impl ToTokens for ListByFn<'_> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let prefix_arg = self.ignore_prefix.map(|p| quote! { #p, });
         let entity = self.entity;

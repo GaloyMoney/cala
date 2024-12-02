@@ -50,7 +50,7 @@ enum EvalType<'a> {
     MemberFn(&'a CelValue, &'a CelMemberFunction),
 }
 
-impl<'a> EvalType<'a> {
+impl EvalType<'_> {
     fn try_into_bool(self) -> Result<bool, CelError> {
         if let EvalType::Value(val) = self {
             val.try_bool()
