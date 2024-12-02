@@ -593,15 +593,13 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
         let new_tx_template = new_tx_template_builder.build()?;
 
-        // use new_atomic_operation::AtomicOperation
-        unimplemented!();
-        // let tx_template = app
-        //     .ledger()
-        //     .tx_templates()
-        //     .create_in_op(&mut op, new_tx_template)
-        //     .await?;
+        let tx_template = app
+            .ledger()
+            .tx_templates()
+            .create_in_op(&mut op, new_tx_template)
+            .await?;
 
-        // Ok(tx_template.into())
+        Ok(tx_template.into())
     }
 
     async fn transaction_post(

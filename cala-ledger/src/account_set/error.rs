@@ -20,6 +20,8 @@ pub enum AccountSetError {
     CouldNotFindById(AccountSetId),
     #[error("AccountSetError - JournalIdMismatch")]
     JournalIdMismatch,
+    #[error("AccountSetError - EntryError: {0}")]
+    EntryError(#[from] crate::entry::error::EntryError),
 }
 
 es_entity::from_es_entity_error!(AccountSetError);
