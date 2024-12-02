@@ -114,49 +114,45 @@ CREATE TABLE cala_transaction_events (
 );
 
 CREATE TABLE cala_entries (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID PRIMARY KEY,
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transaction_id UUID NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id)
+  data_source_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 
 CREATE TABLE cala_entry_events (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
-  id UUID NOT NULL,
+  id UUID NOT NULL REFERENCES cala_entries(id),
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, id, sequence),
-  FOREIGN KEY (data_source_id, id) REFERENCES cala_entries(data_source_id, id)
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_current_balances (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
+  data_source_id UUID NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, journal_id, account_id, currency)
+  UNIQUE(journal_id, account_id, currency)
 );
 
 CREATE TABLE cala_balance_history (
-  data_source_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000',
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
-  latest_entry_id UUID NOT NULL,
+  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
   currency VARCHAR NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
+  data_source_id UUID NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(data_source_id, journal_id, account_id, currency, version),
-  FOREIGN KEY (data_source_id, journal_id, account_id, currency) REFERENCES cala_current_balances(data_source_id, journal_id, account_id, currency),
-  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id)
+  UNIQUE(journal_id, account_id, currency, version),
+  FOREIGN KEY (journal_id, account_id, currency) REFERENCES cala_current_balances(journal_id, account_id, currency)
 );
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
@@ -234,13 +230,12 @@ CREATE TABLE cala_velocity_balance_history (
   velocity_limit_id UUID NOT NULL,
   data_source_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
-  latest_entry_id UUID NOT NULL,
+  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id, version),
-  FOREIGN KEY (partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id),
-  FOREIGN KEY (data_source_id, latest_entry_id) REFERENCES cala_entries(data_source_id, id) --- FIXME: data_source_id should not be here
+  FOREIGN KEY (partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id)
 );
 
 CREATE TABLE cala_outbox_events (

@@ -305,9 +305,8 @@ impl CalaLedger {
                     .await?
             }
             EntryCreated { entry, .. } => {
-                self.entries
-                    .sync_entry_creation(db, event.recorded_at, origin, entry)
-                    .await?
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.entries.sync_entry_creation(op, origin, entry).await?
             }
             BalanceCreated { balance, .. } => {
                 self.balances
