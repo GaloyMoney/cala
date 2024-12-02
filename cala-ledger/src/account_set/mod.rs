@@ -182,11 +182,11 @@ impl AccountSets {
         if entries.is_empty() {
             return Ok(account_set);
         }
-        // let entries = self.entries.create_all_in_op(op, entries).await?;
-        // let mappings = std::iter::once((target_account_id, parents)).collect();
-        // self.balances
-        //     .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-        //     .await?;
+        let entries = self.entries.create_all_in_op(op, entries).await?;
+        let mappings = std::iter::once((target_account_id, parents)).collect();
+        self.balances
+            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+            .await?;
 
         Ok(account_set)
     }
@@ -266,11 +266,11 @@ impl AccountSets {
         if entries.is_empty() {
             return Ok(account_set);
         }
-        // let entries = self.entries.create_all_in_op(op, entries).await?;
-        // let mappings = std::iter::once((target_account_id, parents)).collect();
-        // self.balances
-        //     .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
-        //     .await?;
+        let entries = self.entries.create_all_in_op(op, entries).await?;
+        let mappings = std::iter::once((target_account_id, parents)).collect();
+        self.balances
+            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+            .await?;
 
         Ok(account_set)
     }
