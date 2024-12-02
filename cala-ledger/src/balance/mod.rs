@@ -293,7 +293,7 @@ impl Balances {
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
-        self.repo.import_balance(&mut db, origin, &balance).await?;
+        self.repo.import_balance(&mut db, &balance).await?;
         let recorded_at = balance.created_at;
         self.outbox
             .persist_events_at(
@@ -315,9 +315,7 @@ impl Balances {
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
-        self.repo
-            .import_balance_update(&mut db, origin, &balance)
-            .await?;
+        self.repo.import_balance_update(&mut db, &balance).await?;
         let recorded_at = balance.modified_at;
         self.outbox
             .persist_events_at(

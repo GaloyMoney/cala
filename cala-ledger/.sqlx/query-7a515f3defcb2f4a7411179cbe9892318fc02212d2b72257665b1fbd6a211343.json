@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO cala_accounts (id, name, code, external_id, normal_balance_type, data_source_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+  "query": "INSERT INTO cala_accounts (id, name, code, external_id, normal_balance_type, eventually_consistent, latest_values, data_source_id, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
   "describe": {
     "columns": [],
     "parameters": {
@@ -20,11 +20,13 @@
             }
           }
         },
+        "Bool",
+        "Jsonb",
         "Uuid",
         "Timestamptz"
       ]
     },
     "nullable": []
   },
-  "hash": "7dc0c2841628b22acc19708da8072d8b2c6e458fdb04769a9c767ca26a3fafb1"
+  "hash": "7a515f3defcb2f4a7411179cbe9892318fc02212d2b72257665b1fbd6a211343"
 }

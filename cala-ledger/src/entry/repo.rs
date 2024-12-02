@@ -1,8 +1,6 @@
-use es_entity::*;
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
-use tracing::instrument;
-
 use crate::primitives::{AccountId, DataSourceId, EntryId, JournalId, TransactionId};
+use es_entity::*;
+use sqlx::PgPool;
 
 use super::{entity::*, error::*};
 
@@ -24,6 +22,7 @@ use super::{entity::*, error::*};
     tbl_prefix = "cala"
 )]
 pub(crate) struct EntryRepo {
+    #[allow(dead_code)]
     pool: PgPool,
 }
 

@@ -136,7 +136,6 @@ CREATE TABLE cala_current_balances (
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
-  data_source_id UUID NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(journal_id, account_id, currency)
@@ -149,7 +148,6 @@ CREATE TABLE cala_balance_history (
   currency VARCHAR NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
-  data_source_id UUID NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(journal_id, account_id, currency, version),
   FOREIGN KEY (journal_id, account_id, currency) REFERENCES cala_current_balances(journal_id, account_id, currency)
@@ -195,7 +193,6 @@ CREATE TABLE cala_velocity_control_events (
 CREATE TABLE cala_velocity_control_limits (
   velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
   velocity_limit_id UUID NOT NULL REFERENCES cala_velocity_limits(id),
-  data_source_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(velocity_control_id, velocity_limit_id)
 );
@@ -203,7 +200,6 @@ CREATE TABLE cala_velocity_control_limits (
 CREATE TABLE cala_velocity_account_controls (
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
-  data_source_id UUID NOT NULL,
   values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, velocity_control_id)
@@ -215,7 +211,6 @@ CREATE TABLE cala_velocity_current_balances (
   currency VARCHAR NOT NULL,
   velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
   velocity_limit_id UUID NOT NULL REFERENCES cala_velocity_limits(id),
-  data_source_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -228,7 +223,6 @@ CREATE TABLE cala_velocity_balance_history (
   currency VARCHAR NOT NULL,
   velocity_control_id UUID NOT NULL,
   velocity_limit_id UUID NOT NULL,
-  data_source_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
   version INT NOT NULL,

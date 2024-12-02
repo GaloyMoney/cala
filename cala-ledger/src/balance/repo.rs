@@ -3,9 +3,9 @@ use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Row, Transaction};
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
-use cala_types::primitives::{BalanceId, DebitOrCredit};
 #[cfg(feature = "import")]
-use cala_types::primitives::{DataSourceId, EntryId};
+use cala_types::primitives::EntryId;
+use cala_types::primitives::{BalanceId, DebitOrCredit};
 use cala_types::{
     balance::BalanceSnapshot,
     primitives::{AccountId, Currency, JournalId},
@@ -55,16 +55,13 @@ impl BalanceRepo {
             SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
             JOIN cala_current_balances c
-            ON h.data_source_id = c.data_source_id
-            AND h.journal_id = c.journal_id
+            ON h.journal_id = c.journal_id
             AND h.account_id = c.account_id
             AND h.currency = c.currency
             AND h.version = c.latest_version
             JOIN cala_accounts a
-            ON c.data_source_id = a.data_source_id
-            AND c.account_id = a.id
-            WHERE c.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND c.journal_id = $1
+            ON c.account_id = a.id
+            WHERE c.journal_id = $1
             AND c.account_id = $2
             AND c.currency = $3
             "#,
@@ -100,10 +97,8 @@ impl BalanceRepo {
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
             FROM cala_balance_history h
             JOIN cala_accounts a
-            ON h.data_source_id = a.data_source_id
-            AND h.account_id = a.id
-            WHERE h.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND h.journal_id = $1
+            ON h.account_id = a.id
+            WHERE h.journal_id = $1
             AND h.account_id = $2
             AND h.currency = $3
             AND h.recorded_at < $4
@@ -116,10 +111,8 @@ impl BalanceRepo {
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
             FROM cala_balance_history h
             JOIN cala_accounts a
-            ON h.data_source_id = a.data_source_id
-            AND h.account_id = a.id
-            WHERE h.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND h.journal_id = $1
+            ON h.account_id = a.id
+            WHERE h.journal_id = $1
             AND h.account_id = $2
             AND h.currency = $3
             AND h.recorded_at <= COALESCE($5, NOW())
@@ -166,16 +159,13 @@ impl BalanceRepo {
             SELECT h.values, a.normal_balance_type
             FROM cala_balance_history h
             JOIN cala_current_balances c
-            ON h.data_source_id = c.data_source_id
-            AND h.journal_id = c.journal_id
+            ON h.journal_id = c.journal_id
             AND h.account_id = c.account_id
             AND h.currency = c.currency
             AND h.version = c.latest_version
             JOIN cala_accounts a
-            ON c.data_source_id = a.data_source_id
-            AND c.account_id = a.id
-            WHERE c.data_source_id = '00000000-0000-0000-0000-000000000000'
-            AND (c.journal_id, c.account_id, c.currency) IN"#,
+            ON c.account_id = a.id
+            WHERE (c.journal_id, c.account_id, c.currency) IN"#,
         );
         query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
             builder.push_bind(journal_id);
@@ -222,14 +212,13 @@ impl BalanceRepo {
             r#"
             ) AS v(account_id, currency)
             JOIN cala_accounts a
-            ON a.data_source_id = '00000000-0000-0000-0000-000000000000' AND account_id = a.id
+            ON account_id = a.id
           ),
           locked_balances AS (
-            SELECT b.data_source_id, b.journal_id, b.account_id, b.currency, b.latest_version
+            SELECT b.journal_id, b.account_id, b.currency, b.latest_version
               FROM cala_current_balances b
               JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
-              WHERE b.data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND b.journal_id = "#,
+              WHERE b.journal_id = "#,
         );
         query_builder.push_bind(journal_id);
         query_builder.push(
@@ -237,14 +226,13 @@ impl BalanceRepo {
             FOR UPDATE OF b
           ),
           values AS (
-            SELECT b.data_source_id, p.account_id, p.currency, h.values
+            SELECT p.account_id, p.currency, h.values
             FROM pairs p
             LEFT JOIN locked_balances b
             ON p.account_id = b.account_id
               AND p.currency = b.currency
             LEFT JOIN cala_balance_history h
-            ON b.data_source_id = h.data_source_id
-              AND b.journal_id = h.journal_id
+            ON b.journal_id = h.journal_id
               AND b.account_id = h.account_id
               AND b.currency = h.currency
               AND b.latest_version = h.version
@@ -254,7 +242,7 @@ impl BalanceRepo {
             SELECT 1
             FROM values v
             JOIN cala_accounts a
-            ON v.data_source_id = a.data_source_id AND v.account_id = a.id
+            ON v.account_id = a.id
             WHERE v.values IS NULL
             FOR UPDATE
           )
@@ -331,7 +319,6 @@ impl BalanceRepo {
             FROM ranked_balances n
             WHERE n.account_id = c.account_id
               AND n.currency = c.currency
-              AND c.data_source_id = '00000000-0000-0000-0000-000000000000'
               AND c.journal_id = n.journal_id
               AND version = max AND version != rn
               "#,
@@ -344,14 +331,12 @@ impl BalanceRepo {
     pub async fn import_balance(
         &self,
         db: &mut Transaction<'_, Postgres>,
-        origin: DataSourceId,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
-            (data_source_id, journal_id, account_id, currency, latest_version, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            origin as DataSourceId,
+            (journal_id, account_id, currency, latest_version, created_at)
+            VALUES ($1, $2, $3, $4, $5)"#,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
@@ -362,9 +347,8 @@ impl BalanceRepo {
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
-            (data_source_id, journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
-            origin as DataSourceId,
+            (journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
@@ -393,18 +377,16 @@ impl BalanceRepo {
               AND a.id = $1
               FOR UPDATE
             ), locked_balances AS (
-              SELECT data_source_id, journal_id, account_id, currency, latest_version
+              SELECT journal_id, account_id, currency, latest_version
               FROM cala_current_balances
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND journal_id = $2
+              WHERE journal_id = $2
               AND account_id = $1
               FOR UPDATE
             )
             SELECT h.values
             FROM cala_balance_history h
             JOIN locked_balances b
-            ON b.data_source_id = h.data_source_id
-              AND b.journal_id = h.journal_id
+            ON b.journal_id = h.journal_id
               AND b.account_id = h.account_id
               AND b.currency = h.currency
               AND b.latest_version = h.version
@@ -429,16 +411,14 @@ impl BalanceRepo {
     pub async fn import_balance_update(
         &self,
         db: &mut Transaction<'_, Postgres>,
-        origin: DataSourceId,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
             SET latest_version = $1
-            WHERE data_source_id = $2 AND journal_id = $3 AND account_id = $4 AND currency = $5 AND latest_version = $1 - 1"#,
+            WHERE journal_id = $2 AND account_id = $3 AND currency = $4 AND latest_version = $1 - 1"#,
             balance.version as i32,
-            origin as DataSourceId,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
@@ -447,9 +427,8 @@ impl BalanceRepo {
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
-            (data_source_id, journal_id, account_id, currency, version, values, recorded_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
-            origin as DataSourceId,
+            (journal_id, account_id, currency, version, values, recorded_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),

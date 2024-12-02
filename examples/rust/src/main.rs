@@ -3,7 +3,7 @@ use rand::Rng;
 use std::fs;
 
 use cala_ledger::{
-    account::*, es_entity, journal::*, migrate::IncludeMigrations, query::*, tx_template::*, *,
+    account::*, es_entity, journal::*, migrate::IncludeMigrations, tx_template::*, *,
 };
 
 pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {

@@ -13,8 +13,16 @@ use super::{entity::*, error::AccountError};
         name(ty = "String", update(accessor = "values().name")),
         code(ty = "String", update(accessor = "values().code")),
         external_id(ty = "Option<String>", update(accessor = "values().external_id")),
-        normal_balance_type(ty = "DebitOrCredit", update(accessor = "values().normal_balance_type")),
-        // latest_values(ty = "String", update(accessor = "values()")),
+        normal_balance_type(
+            ty = "DebitOrCredit",
+            update(accessor = "values().normal_balance_type")
+        ),
+        eventually_consistent(ty = "bool", update(persist = false), list_by = false),
+        latest_values(
+            ty = "serde_json::Value",
+            create(accessor = "values_json()"),
+            update(accessor = "values_json()")
+        ),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),

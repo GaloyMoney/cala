@@ -57,6 +57,10 @@ impl Account {
         self.values
     }
 
+    pub(super) fn values_json(&self) -> serde_json::Value {
+        serde_json::to_value(self.values()).expect("Failed to serialize account values")
+    }
+
     pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
         let AccountUpdateValues {
             external_id,
@@ -267,6 +271,11 @@ impl NewAccount {
 
     pub(super) fn data_source(&self) -> DataSource {
         DataSource::Local
+    }
+
+    pub(super) fn values_json(&self) -> serde_json::Value {
+        serde_json::to_value(self.clone().into_values())
+            .expect("Failed to serialize account values")
     }
 
     pub(super) fn into_values(self) -> AccountValues {

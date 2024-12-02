@@ -56,9 +56,9 @@ impl VelocityBalanceRepo {
               ) AS v(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
             ),
             locked_balances AS (
-              SELECT data_source_id, b.partition_window, b.currency, b.journal_id, b.account_id, b.velocity_control_id, b.velocity_limit_id, b.latest_version
+              SELECT b.partition_window, b.currency, b.journal_id, b.account_id, b.velocity_control_id, b.velocity_limit_id, b.latest_version
               FROM cala_velocity_current_balances b
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000' AND ((partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id) IN (SELECT * FROM inputs))
+              WHERE ((partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id) IN (SELECT * FROM inputs))
               FOR UPDATE
             )
             SELECT i.partition_window, i.currency, i.journal_id, i.account_id, i.velocity_control_id, i.velocity_limit_id, h.values
@@ -71,8 +71,7 @@ impl VelocityBalanceRepo {
               AND i.velocity_control_id = b.velocity_control_id
               AND i.velocity_limit_id = b.velocity_limit_id
             LEFT JOIN cala_velocity_balance_history h
-            ON b.data_source_id = h.data_source_id
-              AND b.partition_window = h.partition_window
+            ON b.partition_window = h.partition_window
               AND b.currency = h.currency
               AND b.journal_id = h.journal_id
               AND b.account_id = h.account_id
@@ -183,7 +182,6 @@ impl VelocityBalanceRepo {
               AND c.velocity_control_id = n.velocity_control_id
               AND c.velocity_limit_id = n.velocity_limit_id
               AND c.partition_window = n.partition_window
-              AND c.data_source_id = '00000000-0000-0000-0000-000000000000'
               AND version = max AND version != rn
           "#,
         );
