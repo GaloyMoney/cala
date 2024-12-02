@@ -12,7 +12,7 @@ pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
-    atomic_operation::*,
+    new_atomic_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };

@@ -143,8 +143,8 @@ pub mod velocity;
 mod ledger;
 pub mod outbox;
 
-pub use atomic_operation::*;
 pub use ledger::*;
+pub use new_atomic_operation::*;
 
 pub mod primitives {
     pub use cala_types::primitives::*;

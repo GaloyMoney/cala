@@ -10,11 +10,7 @@ use cala_ledger::{
 pub use cala_ledger::account_set::{AccountSetMembersCursor, AccountSetsByNameCursor};
 
 use super::{
-    balance::*,
-    convert::ToGlobalId,
-    loader::LedgerDataLoader,
-    primitives::*,
-    schema::{DbOp, NewDbOp},
+    balance::*, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*, schema::DbOp,
 };
 use crate::app::CalaApp;
 
@@ -115,7 +111,7 @@ impl AccountSet {
                 let first = first.expect("First always exists");
                 let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
-                let (members, mut accounts, mut sets) = match ctx.data_opt::<NewDbOp>() {
+                let (members, mut accounts, mut sets) = match ctx.data_opt::<DbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         let account_sets = app.ledger().account_sets();
@@ -201,7 +197,7 @@ impl AccountSet {
                     after: after.map(cala_ledger::account_set::AccountSetsByNameCursor::from),
                 };
 
-                let result = match ctx.data_opt::<NewDbOp>() {
+                let result = match ctx.data_opt::<DbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()

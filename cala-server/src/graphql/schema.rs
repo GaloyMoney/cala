@@ -11,7 +11,6 @@ use super::{
 };
 
 pub type DbOp<'a> = Arc<Mutex<cala_ledger::AtomicOperation<'a>>>;
-pub type NewDbOp<'a> = Arc<Mutex<cala_ledger::new_atomic_operation::AtomicOperation<'a>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {
@@ -242,7 +241,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account::NewAccount::builder();
@@ -288,7 +287,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 
@@ -332,7 +331,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountSetCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::NewAccountSet::builder();
@@ -365,7 +364,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AccountSetUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::account_set::AccountSetUpdate::default();
@@ -405,7 +404,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<AddToAccountSetPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 
@@ -425,7 +424,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<RemoveFromAccountSetPayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 
@@ -445,7 +444,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<JournalCreatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
         let mut builder = cala_ledger::journal::NewJournal::builder();
@@ -473,7 +472,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
     ) -> Result<JournalUpdatePayload> {
         let app = ctx.data_unchecked::<CalaApp>();
         let mut op = ctx
-            .data_unchecked::<NewDbOp>()
+            .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
 
@@ -715,14 +714,13 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         let new_velocity_limit = new_velocity_limit_builder.build()?;
 
-        unimplemented!();
-        // let velocity_limit = app
-        //     .ledger()
-        //     .velocities()
-        //     .create_limit_in_op(&mut op, new_velocity_limit)
-        //     .await?;
+        let velocity_limit = app
+            .ledger()
+            .velocities()
+            .create_limit_in_op(&mut op, new_velocity_limit)
+            .await?;
 
-        // Ok(velocity_limit.into())
+        Ok(velocity_limit.into())
     }
 
     async fn velocity_control_create(
@@ -753,15 +751,14 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
 
         new_velocity_control_builder.enforcement(new_velocity_enforcement);
 
-        unimplemented!();
-        // let new_velocity_control = new_velocity_control_builder.build()?;
-        // let velocity_control = app
-        //     .ledger()
-        //     .velocities()
-        //     .create_control_in_op(&mut op, new_velocity_control)
-        //     .await?;
+        let new_velocity_control = new_velocity_control_builder.build()?;
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .create_control_in_op(&mut op, new_velocity_control)
+            .await?;
 
-        // Ok(velocity_control.into())
+        Ok(velocity_control.into())
     }
 
     async fn velocity_control_add_limit(
@@ -774,19 +771,18 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .data_unchecked::<DbOp>()
             .try_lock()
             .expect("Lock held concurrently");
-        unimplemented!();
 
-        // let velocity_limit = app
-        //     .ledger()
-        //     .velocities()
-        //     .add_limit_to_control_in_op(
-        //         &mut op,
-        //         input.velocity_control_id.into(),
-        //         input.velocity_limit_id.into(),
-        //     )
-        //     .await?;
+        let velocity_limit = app
+            .ledger()
+            .velocities()
+            .add_limit_to_control_in_op(
+                &mut op,
+                input.velocity_control_id.into(),
+                input.velocity_limit_id.into(),
+            )
+            .await?;
 
-        // Ok(velocity_limit.into())
+        Ok(velocity_limit.into())
     }
 
     async fn velocity_control_attach(
@@ -801,18 +797,17 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .expect("Lock held concurrently");
         let params = cala_ledger::tx_template::Params::from(input.params);
 
-        unimplemented!();
-        // let velocity_control = app
-        //     .ledger()
-        //     .velocities()
-        //     .attach_control_to_account_in_op(
-        //         &mut op,
-        //         input.velocity_control_id.into(),
-        //         input.account_id.into(),
-        //         params,
-        //     )
-        //     .await?;
+        let velocity_control = app
+            .ledger()
+            .velocities()
+            .attach_control_to_account_in_op(
+                &mut op,
+                input.velocity_control_id.into(),
+                input.account_id.into(),
+                params,
+            )
+            .await?;
 
-        // Ok(velocity_control.into())
+        Ok(velocity_control.into())
     }
 }

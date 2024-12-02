@@ -15,7 +15,7 @@ use super::{
     convert::ToGlobalId,
     loader::LedgerDataLoader,
     primitives::*,
-    schema::{DbOp, NewDbOp},
+    schema::DbOp,
 };
 
 #[derive(Clone, SimpleObject)]
@@ -110,7 +110,7 @@ impl Account {
                 let first = first.expect("First always exists");
                 let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
-                let result = match ctx.data_opt::<NewDbOp>() {
+                let result = match ctx.data_opt::<DbOp>() {
                     Some(op) => {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()

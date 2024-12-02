@@ -11,10 +11,10 @@ use error::*;
 use crate::{
     account::Accounts,
     account_set::AccountSets,
-    atomic_operation::*,
     balance::Balances,
     entry::Entries,
     journal::Journals,
+    new_atomic_operation::*,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
@@ -137,76 +137,75 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut op = AtomicOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = AtomicOperation::init(&self.pool, &self.outbox).await?;
         let transaction = self
-            .post_transaction_in_op(&mut op, tx_id, tx_template_code, params)
+            .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
             .await?;
-        op.commit().await?;
+        db.commit().await?;
         Ok(transaction)
     }
 
     #[instrument(
         name = "cala_ledger.transaction_post",
-        skip(self, op)
+        skip(self, db)
         fields(transaction_id, external_id)
         err
     )]
     pub async fn post_transaction_in_op(
         &self,
-        op: &mut AtomicOperation<'_>,
+        db: &mut AtomicOperation<'_>,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        unimplemented!();
-        // let prepared_tx = self
-        //     .tx_templates
-        //     .prepare_transaction(op.now, tx_id, tx_template_code, params.into())
-        //     .await?;
+        let prepared_tx = self
+            .tx_templates
+            .prepare_transaction(db.op().now(), tx_id, tx_template_code, params.into())
+            .await?;
 
-        // let transaction = self
-        //     .transactions
-        //     .create_in_op(op, prepared_tx.transaction)
-        //     .await?;
+        let transaction = self
+            .transactions
+            .create_in_op(db, prepared_tx.transaction)
+            .await?;
 
-        // let span = tracing::Span::current();
-        // span.record("transaction_id", transaction.id().to_string());
-        // span.record("external_id", &transaction.values().external_id);
+        let span = tracing::Span::current();
+        span.record("transaction_id", transaction.id().to_string());
+        span.record("external_id", &transaction.values().external_id);
 
-        // let entries = self
-        //     .entries
-        //     .create_all_in_op(op, prepared_tx.entries)
-        //     .await?;
+        let entries = self
+            .entries
+            .create_all_in_op(db, prepared_tx.entries)
+            .await?;
 
-        // let account_ids = entries
-        //     .iter()
-        //     .map(|entry| entry.account_id)
-        //     .collect::<Vec<_>>();
-        // let mappings = self
-        //     .account_sets
-        //     .fetch_mappings(transaction.values().journal_id, &account_ids)
-        //     .await?;
+        let account_ids = entries
+            .iter()
+            .map(|entry| entry.account_id)
+            .collect::<Vec<_>>();
+        let mappings = self
+            .account_sets
+            .fetch_mappings(transaction.values().journal_id, &account_ids)
+            .await?;
 
-        // self.velocities
-        //     .update_balances_in_op(
-        //         op,
-        //         transaction.created_at(),
-        //         transaction.values(),
-        //         &entries,
-        //         &account_ids,
-        //     )
-        //     .await?;
+        self.velocities
+            .update_balances_in_op(
+                db,
+                transaction.created_at(),
+                transaction.values(),
+                &entries,
+                &account_ids,
+            )
+            .await?;
 
-        // self.balances
-        //     .update_balances_in_op(
-        //         op,
-        //         transaction.created_at(),
-        //         transaction.journal_id(),
-        //         entries,
-        //         mappings,
-        //     )
-        //     .await?;
-        // Ok(transaction)
+        self.balances
+            .update_balances_in_op(
+                db,
+                transaction.created_at(),
+                transaction.journal_id(),
+                entries,
+                mappings,
+            )
+            .await?;
+        Ok(transaction)
     }
 
     pub async fn register_outbox_listener(
