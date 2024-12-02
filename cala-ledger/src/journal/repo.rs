@@ -14,8 +14,7 @@ use super::{entity::*, error::JournalError};
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
-            update(persist = false),
-            list_by = false
+            update(persist = false)
         ),
     ),
     tbl_prefix = "cala"

@@ -13,15 +13,14 @@ use super::{entity::*, error::TransactionError};
     entity = "Transaction",
     err = "TransactionError",
     columns(
-        external_id(ty = "Option<String>", update(persist = false), list_by = false),
-        correlation_id(ty = "String", update(persist = false), list_by = false),
-        journal_id(ty = "JournalId", update(persist = false), list_by = false),
-        tx_template_id(ty = "TxTemplateId", update(persist = false), list_by = false),
+        external_id(ty = "Option<String>", update(persist = false)),
+        correlation_id(ty = "String", update(persist = false)),
+        journal_id(ty = "JournalId", update(persist = false)),
+        tx_template_id(ty = "TxTemplateId", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
-            update(persist = false),
-            list_by = false
+            update(persist = false)
         ),
     ),
     tbl_prefix = "cala"

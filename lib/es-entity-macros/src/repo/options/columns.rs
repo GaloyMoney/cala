@@ -376,7 +376,7 @@ impl ColumnOpts {
     }
 
     fn list_by(&self) -> bool {
-        self.list_by.unwrap_or(!self.list_for())
+        self.list_by.unwrap_or(false)
     }
 
     fn list_for(&self) -> bool {

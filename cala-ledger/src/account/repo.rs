@@ -10,14 +10,18 @@ use super::{entity::*, error::AccountError};
     entity = "Account",
     err = "AccountError",
     columns(
-        name(ty = "String", update(accessor = "values().name")),
-        code(ty = "String", update(accessor = "values().code")),
-        external_id(ty = "Option<String>", update(accessor = "values().external_id")),
+        name(ty = "String", update(accessor = "values().name"), list_by),
+        code(ty = "String", update(accessor = "values().code"), list_by),
+        external_id(
+            ty = "Option<String>",
+            update(accessor = "values().external_id"),
+            list_by
+        ),
         normal_balance_type(
             ty = "DebitOrCredit",
             update(accessor = "values().normal_balance_type")
         ),
-        eventually_consistent(ty = "bool", update(persist = false), list_by = false),
+        eventually_consistent(ty = "bool", update(persist = false)),
         latest_values(
             ty = "serde_json::Value",
             create(accessor = "values_json()"),
@@ -26,8 +30,7 @@ use super::{entity::*, error::AccountError};
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
-            update(persist = false),
-            list_by = false
+            update(persist = false)
         ),
     ),
     tbl_prefix = "cala"

@@ -14,12 +14,11 @@ use super::{entity::*, error::TxTemplateError};
     entity = "TxTemplate",
     err = "TxTemplateError",
     columns(
-        code(ty = "String", update(persist = false), list_by = false),
+        code(ty = "String", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
             update(persist = false),
-            list_by = false
         ),
     ),
     tbl_prefix = "cala"

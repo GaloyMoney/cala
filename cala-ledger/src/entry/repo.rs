@@ -9,14 +9,13 @@ use super::{entity::*, error::*};
     entity = "Entry",
     err = "EntryError",
     columns(
-        journal_id(ty = "JournalId", update(persist = false), list_by = false),
-        account_id(ty = "AccountId", update(persist = false), list_by = false),
-        transaction_id(ty = "TransactionId", update(persist = false), list_by = false),
+        journal_id(ty = "JournalId", update(persist = false)),
+        account_id(ty = "AccountId", update(persist = false)),
+        transaction_id(ty = "TransactionId", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
             update(persist = false),
-            list_by = false
         ),
     ),
     tbl_prefix = "cala"
