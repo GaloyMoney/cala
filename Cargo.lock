@@ -1113,7 +1113,7 @@ dependencies = [
 [[package]]
 name = "es-entity"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=es-entity-batch-insert#7d21e76923b53708fbf312393b837644dc1608ec"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#7ea3ada7eefd160870c899131da8704bed05d425"
 dependencies = [
  "async-graphql",
  "async-trait",
@@ -1131,7 +1131,7 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.2.46-dev"
-source = "git+https://github.com/galoymoney/lana-bank.git?branch=es-entity-batch-insert#7d21e76923b53708fbf312393b837644dc1608ec"
+source = "git+https://github.com/galoymoney/lana-bank.git?branch=main#7ea3ada7eefd160870c899131da8704bed05d425"
 dependencies = [
  "convert_case",
  "darling",
