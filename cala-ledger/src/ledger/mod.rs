@@ -233,90 +233,90 @@ impl CalaLedger {
                     .sync_account_creation(op, origin, account)
                     .await?
             }
-            _ => unimplemented!(), // AccountUpdated {
-                                   //     account, fields, ..
-                                   // } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.accounts
-                                   //         .sync_account_update(op, account, fields)
-                                   //         .await?
-                                   // }
-                                   // AccountSetCreated { account_set, .. } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.account_sets
-                                   //         .sync_account_set_creation(op, origin, account_set)
-                                   //         .await?
-                                   // }
-                                   // AccountSetUpdated {
-                                   //     account_set,
-                                   //     fields,
-                                   //     ..
-                                   // } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.account_sets
-                                   //         .sync_account_set_update(op, account_set, fields)
-                                   //         .await?
-                                   // }
-                                   // AccountSetMemberCreated {
-                                   //     account_set_id,
-                                   //     member_id,
-                                   //     ..
-                                   // } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.account_sets
-                                   //         .sync_account_set_member_creation(op, origin, account_set_id, member_id)
-                                   //         .await?
-                                   // }
-                                   // AccountSetMemberRemoved {
-                                   //     account_set_id,
-                                   //     member_id,
-                                   //     ..
-                                   // } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.account_sets
-                                   //         .sync_account_set_member_removal(op, origin, account_set_id, member_id)
-                                   //         .await?
-                                   // }
-                                   // JournalCreated { journal, .. } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.journals
-                                   //         .sync_journal_creation(op, origin, journal)
-                                   //         .await?
-                                   // }
-                                   // JournalUpdated {
-                                   //     journal, fields, ..
-                                   // } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.journals
-                                   //         .sync_journal_update(op, journal, fields)
-                                   //         .await?
-                                   // }
-                                   // TransactionCreated { transaction, .. } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.transactions
-                                   //         .sync_transaction_creation(op, origin, transaction)
-                                   //         .await?
-                                   // }
-                                   // TxTemplateCreated { tx_template, .. } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.tx_templates
-                                   //         .sync_tx_template_creation(op, origin, tx_template)
-                                   //         .await?
-                                   // }
-                                   // EntryCreated { entry, .. } => {
-                                   //     let op = es_entity::DbOp::new(db, event.recorded_at);
-                                   //     self.entries.sync_entry_creation(op, origin, entry).await?
-                                   // }
-                                   // BalanceCreated { balance, .. } => {
-                                   //     self.balances
-                                   //         .sync_balance_creation(db, origin, balance)
-                                   //         .await?
-                                   // }
-                                   // BalanceUpdated { balance, .. } => {
-                                   //     self.balances
-                                   //         .sync_balance_update(db, origin, balance)
-                                   //         .await?
-                                   // }
+            AccountUpdated {
+                account, fields, ..
+            } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.accounts
+                    .sync_account_update(op, account, fields)
+                    .await?
+            }
+            AccountSetCreated { account_set, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.account_sets
+                    .sync_account_set_creation(op, origin, account_set)
+                    .await?
+            }
+            AccountSetUpdated {
+                account_set,
+                fields,
+                ..
+            } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.account_sets
+                    .sync_account_set_update(op, account_set, fields)
+                    .await?
+            }
+            AccountSetMemberCreated {
+                account_set_id,
+                member_id,
+                ..
+            } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.account_sets
+                    .sync_account_set_member_creation(op, origin, account_set_id, member_id)
+                    .await?
+            }
+            AccountSetMemberRemoved {
+                account_set_id,
+                member_id,
+                ..
+            } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.account_sets
+                    .sync_account_set_member_removal(op, origin, account_set_id, member_id)
+                    .await?
+            }
+            JournalCreated { journal, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.journals
+                    .sync_journal_creation(op, origin, journal)
+                    .await?
+            }
+            JournalUpdated {
+                journal, fields, ..
+            } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.journals
+                    .sync_journal_update(op, journal, fields)
+                    .await?
+            }
+            TransactionCreated { transaction, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.transactions
+                    .sync_transaction_creation(op, origin, transaction)
+                    .await?
+            }
+            TxTemplateCreated { tx_template, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.tx_templates
+                    .sync_tx_template_creation(op, origin, tx_template)
+                    .await?
+            }
+            EntryCreated { entry, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.entries.sync_entry_creation(op, origin, entry).await?
+            }
+            BalanceCreated { balance, .. } => {
+                self.balances
+                    .sync_balance_creation(db, origin, balance)
+                    .await?
+            }
+            BalanceUpdated { balance, .. } => {
+                self.balances
+                    .sync_balance_update(db, origin, balance)
+                    .await?
+            }
         }
         Ok(())
     }

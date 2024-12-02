@@ -58,12 +58,13 @@ impl Entries {
         let mut entry = Entry::import(origin, values);
         self.repo.import(&mut db, origin, &mut entry).await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = entry
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                entry.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

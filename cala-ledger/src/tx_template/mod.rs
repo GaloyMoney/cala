@@ -204,12 +204,13 @@ impl TxTemplates {
             .import_in_op(&mut db, origin, &mut tx_template)
             .await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = tx_template
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                tx_template.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

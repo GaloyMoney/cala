@@ -120,14 +120,15 @@ impl Accounts {
         self.repo
             .import_in_op(&mut db, origin, &mut account)
             .await?;
-        // let recorded_at = db.now();
-        // self.outbox
-        //     .persist_events_at(
-        //         db.into_tx(),
-        //         account.events.last_persisted(1).map(|p| &p.event),
-        //         recorded_at,
-        //     )
-        //     .await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = account
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
+        self.outbox
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .await?;
         Ok(())
     }
 
@@ -142,12 +143,13 @@ impl Accounts {
         account.update((values, fields));
         self.repo.update_in_op(&mut db, &mut account).await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = account
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                account.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

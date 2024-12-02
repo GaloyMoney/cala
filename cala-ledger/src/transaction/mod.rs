@@ -78,12 +78,13 @@ impl Transactions {
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = transaction
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                transaction.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }

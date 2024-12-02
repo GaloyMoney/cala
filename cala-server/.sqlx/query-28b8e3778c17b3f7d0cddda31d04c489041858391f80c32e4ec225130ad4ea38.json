@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH member_account_sets AS (\n              SELECT a.id, a.name, a.created_at\n              FROM cala_account_set_member_accounts asm\n              JOIN cala_account_sets a ON asm.account_set_id = a.id\n              WHERE asm.member_account_id = $1 AND transitive IS FALSE\n              AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))\n              ORDER BY a.name, a.id\n              LIMIT $4\n            )\n            SELECT mas.id AS \"entity_id!: AccountSetId\", e.sequence, e.event, e.recorded_at\n              FROM member_account_sets mas\n              JOIN cala_account_set_events e ON mas.id = e.id\n              ORDER BY mas.name, mas.id, e.sequence\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "28b8e3778c17b3f7d0cddda31d04c489041858391f80c32e4ec225130ad4ea38"
+}

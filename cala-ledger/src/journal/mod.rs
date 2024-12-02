@@ -93,12 +93,13 @@ impl Journals {
             .import_in_op(&mut db, origin, &mut journal)
             .await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = journal
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                journal.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }
@@ -114,12 +115,13 @@ impl Journals {
         journal.update((values, fields));
         self.repo.update_in_op(&mut db, &mut journal).await?;
         let recorded_at = db.now();
+        let outbox_events: Vec<_> = journal
+            .events
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
         self.outbox
-            .persist_events_at(
-                db.into_tx(),
-                journal.events.last_persisted(1).map(|p| &p.event),
-                recorded_at,
-            )
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
             .await?;
         Ok(())
     }
