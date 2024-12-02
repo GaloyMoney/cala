@@ -1,3 +1,32 @@
+# [cala release v0.3.0](https://github.com/GaloyMoney/cala/releases/tag/0.3.0)
+
+
+### Bug Fixes
+
+- Cargo.toml for lib
+
+### Documentation
+
+- Api reference and website examples update to 7986721300633d1abdbff87dec81b20202b866fb
+
+### Miscellaneous Tasks
+
+- Remove README ref from sim-time
+- || true for cala-tracing publish (tmp)
+- Clippy fix
+- Bump flake
+- Bump serde from 1.0.210 to 1.0.215 (#266)
+- Bump axum from 0.7.7 to 0.7.9 (#267)
+- Bump uuid from 1.10.0 to 1.11.0 (#255)
+- Bump clap from 4.5.18 to 4.5.21 (#263)
+- Bump serde_json from 1.0.128 to 1.0.133 (#264)
+- Bump flake
+
+### Refactor
+
+- [**breaking**] Es-entity list_by default = false
+- Use es-entity (#272)
+
 # [cala release v0.2.46](https://github.com/GaloyMoney/cala/releases/tag/0.2.46)
 
 
