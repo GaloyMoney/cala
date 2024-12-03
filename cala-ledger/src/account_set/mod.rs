@@ -102,8 +102,13 @@ impl AccountSets {
         db: &mut LedgerOperation<'_>,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
-        self.repo.update_in_op(db.op(), account_set).await?;
-        db.accumulate(account_set.events.last_persisted(1).map(|p| &p.event));
+        let n_events = self.repo.update_in_op(db.op(), account_set).await?;
+        db.accumulate(
+            account_set
+                .events
+                .last_persisted(n_events)
+                .map(|p| &p.event),
+        );
         Ok(())
     }
 
@@ -407,11 +412,11 @@ impl AccountSets {
     ) -> Result<(), AccountSetError> {
         let mut account_set = self.repo.find_by_id(values.id).await?;
         account_set.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut account_set).await?;
+        let n_events = self.repo.update_in_op(&mut db, &mut account_set).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account_set
             .events
-            .last_persisted(1)
+            .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
         self.outbox

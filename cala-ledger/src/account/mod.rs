@@ -104,8 +104,8 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
-        self.repo.update_in_op(db.op(), account).await?;
-        db.accumulate(account.events.last_persisted(1).map(|p| &p.event));
+        let n_events = self.repo.update_in_op(db.op(), account).await?;
+        db.accumulate(account.events.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
 
@@ -141,11 +141,11 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id(values.id).await?;
         account.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut account).await?;
+        let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account
             .events
-            .last_persisted(1)
+            .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
         self.outbox

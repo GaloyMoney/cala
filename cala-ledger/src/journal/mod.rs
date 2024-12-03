@@ -76,8 +76,8 @@ impl Journals {
         db: &mut LedgerOperation<'_>,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        self.repo.update_in_op(db.op(), journal).await?;
-        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
+        let n_events = self.repo.update_in_op(db.op(), journal).await?;
+        db.accumulate(journal.events.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
 
@@ -113,11 +113,11 @@ impl Journals {
     ) -> Result<(), JournalError> {
         let mut journal = self.repo.find_by_id(values.id).await?;
         journal.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut journal).await?;
+        let n_events = self.repo.update_in_op(&mut db, &mut journal).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = journal
             .events
-            .last_persisted(1)
+            .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
         self.outbox
