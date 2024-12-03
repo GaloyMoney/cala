@@ -1,3 +1,14 @@
+# [cala release v0.3.1](https://github.com/GaloyMoney/cala/releases/tag/0.3.1)
+
+
+### Documentation
+
+- Api reference and website examples update to de6fc30b7065d690e2cd10b7c7092b0eb2aa88cd
+
+### Refactor
+
+- Return n_events from update
+
 # [cala release v0.3.0](https://github.com/GaloyMoney/cala/releases/tag/0.3.0)
 
 
