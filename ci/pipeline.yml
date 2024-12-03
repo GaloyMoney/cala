@@ -4,7 +4,7 @@
 #@   "build_edge_image",
 #@   "public_docker_registry",
 #@   "nodejs_task_image_config",
-#@   "rust_check_code",
+#@   "check_code",
 #@   "docker_host_pool",
 #@   "test_on_docker_host",
 #@   "repo_resource",
@@ -70,7 +70,7 @@ groups:
   - bump-image-in-chart
 
 jobs:
-- #@ rust_check_code()
+- #@ check_code()
 - #@ on_nix_host("integration-tests", "make test-in-ci")
 - #@ on_nix_host("bats-tests", "make e2e")
 - #@ build_edge_image()
