@@ -103,6 +103,13 @@ impl CalaLedger {
         Ok(LedgerOperation::init(&self.pool, &self.outbox).await?)
     }
 
+    pub fn ledger_operation_from_db_op<'a>(
+        &self,
+        db_op: es_entity::DbOp<'a>,
+    ) -> LedgerOperation<'a> {
+        LedgerOperation::new(db_op, &self.outbox)
+    }
+
     pub fn accounts(&self) -> &Accounts {
         &self.accounts
     }

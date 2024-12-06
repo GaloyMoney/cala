@@ -20,6 +20,14 @@ impl<'t> LedgerOperation<'t> {
         })
     }
 
+    pub(crate) fn new(db_op: DbOp<'t>, outbox: &Outbox) -> Self {
+        Self {
+            db_op,
+            outbox: outbox.clone(),
+            accumulated_events: Vec::new(),
+        }
+    }
+
     pub fn tx(&mut self) -> &mut Transaction<'t, Postgres> {
         self.db_op.tx()
     }
