@@ -34,7 +34,7 @@ thiserror = "1.0.64"
 uuid = { version = "1.10", features = ["serde", "v4"] }
 tracing = "0.1.40"
 tracing-opentelemetry = "0.25.0"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter", "json"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
 opentelemetry = { version = "0.24.0" }
 opentelemetry_sdk = { version = "0.24.1", features = ["rt-tokio"] }
 opentelemetry-otlp = { version = "0.17.0", features = ["http-proto", "reqwest-client"] }
