@@ -97,8 +97,8 @@ CREATE TABLE cala_transactions (
   data_source_id UUID NOT NULL,
   journal_id UUID NOT NULL,
   tx_template_id UUID NOT NULL,
-  external_id VARCHAR DEFAULT NULL,
-  correlation_id VARCHAR NOT NULL,
+  external_id VARCHAR DEFAULT NULL UNIQUE,
+  correlation_id VARCHAR NOT NULL UNIQUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
   FOREIGN KEY (tx_template_id) REFERENCES cala_tx_templates(id)
