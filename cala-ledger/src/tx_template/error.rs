@@ -1,5 +1,4 @@
 use rust_decimal::Decimal;
-use sqlx::error::DatabaseError;
 use thiserror::Error;
 
 use cala_types::primitives::{Currency, Layer};
@@ -9,8 +8,10 @@ use cel_interpreter::CelError;
 pub enum TxTemplateError {
     #[error("TxTemplateError - Sqlx: {0}")]
     Sqlx(sqlx::Error),
-    #[error("TxTemplateError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
+    #[error("TxTemplateError - DuplicateCode: code already exists")]
+    DuplicateCode,
+    #[error("TxTemplateError - DuplicateId: id already exists")]
+    DuplicateId,
     #[error("TxTemplateError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("TxTemplateError - NotFound")]
@@ -32,8 +33,17 @@ pub enum TxTemplateError {
 impl From<sqlx::Error> for TxTemplateError {
     fn from(e: sqlx::Error) -> Self {
         match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
+            sqlx::Error::Database(ref err) if err.is_unique_violation() => {
+                let Some(constraint) = err.constraint() else {
+                    return Self::Sqlx(e);
+                };
+                if constraint.contains("code") {
+                    Self::DuplicateCode
+                } else if constraint.contains("id") {
+                    Self::DuplicateId
+                } else {
+                    Self::Sqlx(e)
+                }
             }
             e => Self::Sqlx(e),
         }

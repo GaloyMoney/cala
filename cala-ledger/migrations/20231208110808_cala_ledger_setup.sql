@@ -78,7 +78,7 @@ CREATE TABLE cala_account_set_member_account_sets (
 CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,
   data_source_id UUID NOT NULL,
-  code VARCHAR NOT NULL, 
+  code VARCHAR UNIQUE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
