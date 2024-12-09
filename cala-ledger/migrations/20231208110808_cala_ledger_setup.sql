@@ -95,13 +95,11 @@ CREATE TABLE cala_tx_template_events (
 CREATE TABLE cala_transactions (
   id UUID PRIMARY KEY,
   data_source_id UUID NOT NULL,
-  journal_id UUID NOT NULL,
-  tx_template_id UUID NOT NULL,
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  tx_template_id UUID NOT NULL REFERENCES cala_tx_templates(id),
   external_id VARCHAR DEFAULT NULL UNIQUE,
   correlation_id VARCHAR NOT NULL UNIQUE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  FOREIGN KEY (journal_id) REFERENCES cala_journals(id),
-  FOREIGN KEY (tx_template_id) REFERENCES cala_tx_templates(id)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE cala_transaction_events (

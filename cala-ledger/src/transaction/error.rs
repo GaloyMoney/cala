@@ -17,16 +17,24 @@ pub enum TransactionError {
     EsEntityError(es_entity::EsEntityError),
     #[error("TransactionError - CursorDestructureError: {0}")]
     CursorDestructureError(#[from] es_entity::CursorDestructureError),
+    #[error("TransactionError - external_id already exists")]
+    ExternalIdAlreadyExists,
+    #[error("TransactionError - correlation_id already exists")]
+    CorrelationIdAlreadyExists,
 }
 
 impl From<sqlx::Error> for TransactionError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
+    fn from(error: sqlx::Error) -> Self {
+        if let Some(err) = error.as_database_error() {
+            if let Some(constraint) = err.constraint() {
+                if constraint.contains("external_id") {
+                    return Self::ExternalIdAlreadyExists;
+                } else if constraint.contains("correlation_id") {
+                    return Self::CorrelationIdAlreadyExists;
+                }
             }
-            e => Self::Sqlx(e),
         }
+        Self::Sqlx(error)
     }
 }
 
