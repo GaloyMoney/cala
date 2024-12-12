@@ -34,7 +34,6 @@ impl Accounts {
         }
     }
 
-    #[instrument(name = "cala_ledger.accounts.create", skip(self))]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
@@ -42,6 +41,7 @@ impl Accounts {
         Ok(account)
     }
 
+    #[instrument(name = "cala_ledger.accounts.create", skip(self, db))]
     pub async fn create_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -50,6 +50,31 @@ impl Accounts {
         let account = self.repo.create_in_op(db.op(), new_account).await?;
         db.accumulate(account.events.last_persisted(1).map(|p| &p.event));
         Ok(account)
+    }
+
+    pub async fn create_all(
+        &self,
+        new_accounts: Vec<NewAccount>,
+    ) -> Result<Vec<Account>, AccountError> {
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let accounts = self.create_all_in_op(&mut op, new_accounts).await?;
+        op.commit().await?;
+        Ok(accounts)
+    }
+
+    #[instrument(name = "cala_ledger.accounts.create_all", skip(self, db))]
+    pub async fn create_all_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        new_accounts: Vec<NewAccount>,
+    ) -> Result<Vec<Account>, AccountError> {
+        let accounts = self.repo.create_all_in_op(db.op(), new_accounts).await?;
+        db.accumulate(
+            accounts
+                .iter()
+                .flat_map(|account| account.events.last_persisted(1).map(|p| &p.event)),
+        );
+        Ok(accounts)
     }
 
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
