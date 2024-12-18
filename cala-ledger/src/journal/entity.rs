@@ -169,6 +169,8 @@ pub struct NewJournal {
     pub id: JournalId,
     #[builder(setter(into))]
     pub(super) name: String,
+    #[builder(setter(strip_option, into), default)]
+    pub(super) code: Option<String>,
     #[builder(setter(into), default)]
     pub(super) status: Status,
     #[builder(setter(strip_option, into), default)]
@@ -194,6 +196,7 @@ impl IntoEvents<JournalEvent> for NewJournal {
                     id: self.id,
                     version: 1,
                     name: self.name,
+                    code: self.code,
                     status: self.status,
                     description: self.description,
                 },

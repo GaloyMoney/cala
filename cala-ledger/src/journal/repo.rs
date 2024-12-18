@@ -11,6 +11,7 @@ use super::{entity::*, error::JournalError};
     err = "JournalError",
     columns(
         name(ty = "String", update(accessor = "values().name")),
+        code(ty = "Option<String>", update(accessor = "values().code")),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),

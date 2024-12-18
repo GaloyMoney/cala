@@ -27,6 +27,7 @@ CREATE TABLE cala_account_events (
 CREATE TABLE cala_journals (
   id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
+  code VARCHAR UNIQUE DEFAULT NULL,
   data_source_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL
 );

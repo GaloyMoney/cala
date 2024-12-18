@@ -265,6 +265,7 @@ impl TryFrom<proto::Journal> for JournalValues {
             id: journal.id.parse()?,
             version: journal.version,
             name: journal.name,
+            code: journal.code,
             status,
             description: journal.description,
         };

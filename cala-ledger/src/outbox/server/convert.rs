@@ -239,6 +239,7 @@ impl From<JournalValues> for proto::Journal {
             id,
             version,
             name,
+            code,
             status,
             description,
         }: JournalValues,
@@ -248,6 +249,7 @@ impl From<JournalValues> for proto::Journal {
             id: id.to_string(),
             version,
             name,
+            code,
             status: status as i32,
             description,
         }

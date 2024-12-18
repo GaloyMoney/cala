@@ -135,7 +135,8 @@ message Journal {
   uint32 version = 2;
   string name = 3;
   Status status = 4;
-  optional string description = 5;
+  optional string code = 5;
+  optional string description = 6;
 }
 
 message TxTemplateCreated {
