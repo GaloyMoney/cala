@@ -81,6 +81,11 @@ impl Journals {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.journal.find_by_code", skip(self), err)]
+    pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
+        self.repo.find_by_code(Some(code)).await
+    }
+
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
