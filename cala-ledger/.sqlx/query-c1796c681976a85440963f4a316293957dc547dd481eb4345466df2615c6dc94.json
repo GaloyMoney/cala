@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT name, id FROM cala_journals WHERE (COALESCE((name, id) > ($3, $2), $2 IS NULL)) ORDER BY name ASC, id ASC LIMIT $1) SELECT i.id AS \"entity_id: JournalId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN cala_journal_events e ON i.id = e.id ORDER BY i.name asc, i.id asc, i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM cala_journals WHERE code = $1) SELECT i.id AS \"entity_id: JournalId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN cala_journal_events e ON i.id = e.id ORDER BY i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -26,8 +26,6 @@
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Uuid",
         "Text"
       ]
     },
@@ -38,5 +36,5 @@
       false
     ]
   },
-  "hash": "d15b154a494b4447883843c0c6d811c2ea329d8f401470ce03d6b16c17139506"
+  "hash": "c1796c681976a85440963f4a316293957dc547dd481eb4345466df2615c6dc94"
 }
