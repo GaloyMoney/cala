@@ -48,4 +48,11 @@ impl<'t> DbOp<'t> {
         self.tx.commit().await?;
         Ok(())
     }
+
+    pub async fn begin_sub_operation(&'t mut self) -> Result<DbOp<'t>, sqlx::Error> {
+        use sqlx::Acquire;
+
+        let tx = self.tx.begin().await?;
+        Ok(Self::new(tx, self.now))
+    }
 }
