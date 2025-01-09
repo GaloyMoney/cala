@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #2 from GaloyMoney/ci--remove-slack-notification-resource...'
-      sha: b394897fcbaab826eb410c673325dc46aa0a720b
+      commitTitle: 'ci: fix concourse locks git uri'
+      sha: 0c18d91f1b5bff905eb5e14ee3ba7f1c2db2595b
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #2 from GaloyMoney/ci--remove-slack-notification-resource...'
-      sha: b394897fcbaab826eb410c673325dc46aa0a720b
+      commitTitle: 'ci: fix concourse locks git uri'
+      sha: 0c18d91f1b5bff905eb5e14ee3ba7f1c2db2595b
     path: .
   path: vendor
 kind: LockConfig

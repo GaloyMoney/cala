@@ -515,7 +515,7 @@ source:
 name: docker-host
 type: pool
 source:
-  uri: git@github.com:GaloyMoney/concourse-locks.git
+  uri: git@github.com:GaloyMoney/galoy-concourse-locks.git
   branch: main
   pool: docker-hosts
   private_key: #@ data.values.github_private_key
