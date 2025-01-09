@@ -16,9 +16,6 @@
 #@   "rust_task_image_config",
 #@   "charts_repo_resource",
 #@   "charts_repo_bot_branch",
-#@   "slack_resource_type",
-#@   "slack_resource",
-#@   "slack_failure_notification"
 #@ )
 
 #@ def on_nix_host(name, cmd):
@@ -344,7 +341,6 @@ jobs:
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
-- #@ slack_resource()
 - #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
@@ -364,6 +360,3 @@ resources:
     branch: main
     pool: docker-hosts
     private_key: #@ data.values.github_private_key
-
-resource_types:
-- #@ slack_resource_type()
