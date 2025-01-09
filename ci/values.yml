@@ -28,8 +28,3 @@ gh_org: GaloyMoney
 gh_repository: cala
 
 crates_api_token: ((crates.token))
-
-slack_channel: cala-github
-slack_username: concourse
-slack_webhook_url: ((addons-slack.api_url))
-
