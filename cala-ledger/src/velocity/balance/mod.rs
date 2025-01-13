@@ -135,7 +135,7 @@ impl VelocityBalances {
                 };
                 let new_snapshot = crate::balance::Balances::update_snapshot(time, balance, entry);
                 limit.enforce(&ctx, time, &new_snapshot)?;
-                new_balances.push(new_snapshot);
+                latest_balance = Some(new_snapshot);
             }
             if let Some(latest) = latest_balance.take() {
                 new_balances.push(latest)
