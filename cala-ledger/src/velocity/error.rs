@@ -25,6 +25,8 @@ pub enum VelocityError {
     ControlIdAlreadyExists,
     #[error("VelocityError - limit_id already exists")]
     LimitIdAlreadyExists,
+    #[error("VelocityError - Limit already added to Control")]
+    LimitAlreadyAddedToControl,
 }
 
 impl From<sqlx::Error> for VelocityError {
@@ -36,6 +38,11 @@ impl From<sqlx::Error> for VelocityError {
                 }
                 if constraint.contains("cala_velocity_limits_pkey") {
                     return Self::LimitIdAlreadyExists;
+                }
+                if constraint
+                    .contains("cala_velocity_control_limits_velocity_control_id_velocity_l_key")
+                {
+                    return Self::LimitAlreadyAddedToControl;
                 }
             }
         }
