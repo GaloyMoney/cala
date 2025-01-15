@@ -8,7 +8,7 @@ use crate::primitives::*;
 #[derive(Error, Debug)]
 pub enum VelocityError {
     #[error("VelocityError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
     #[error("VelocityError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("{0}")]
@@ -21,6 +21,21 @@ pub enum VelocityError {
     EsEntityError(es_entity::EsEntityError),
     #[error("VelocityError - CursorDestructureError: {0}")]
     CursorDestructureError(#[from] es_entity::CursorDestructureError),
+    #[error("VelocityError - control_id already exists")]
+    ControlIdAlreadyExists,
+}
+
+impl From<sqlx::Error> for VelocityError {
+    fn from(error: sqlx::Error) -> Self {
+        if let Some(err) = error.as_database_error() {
+            if let Some(constraint) = err.constraint() {
+                if constraint.contains("cala_velocity_controls_pkey") {
+                    return Self::ControlIdAlreadyExists;
+                }
+            }
+        }
+        Self::Sqlx(error)
+    }
 }
 
 #[derive(Error, Debug)]
