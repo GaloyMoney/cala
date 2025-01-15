@@ -23,6 +23,8 @@ pub enum VelocityError {
     CursorDestructureError(#[from] es_entity::CursorDestructureError),
     #[error("VelocityError - control_id already exists")]
     ControlIdAlreadyExists,
+    #[error("VelocityError - limit_id already exists")]
+    LimitIdAlreadyExists,
 }
 
 impl From<sqlx::Error> for VelocityError {
@@ -31,6 +33,9 @@ impl From<sqlx::Error> for VelocityError {
             if let Some(constraint) = err.constraint() {
                 if constraint.contains("cala_velocity_controls_pkey") {
                     return Self::ControlIdAlreadyExists;
+                }
+                if constraint.contains("cala_velocity_limits_pkey") {
+                    return Self::LimitIdAlreadyExists;
                 }
             }
         }
