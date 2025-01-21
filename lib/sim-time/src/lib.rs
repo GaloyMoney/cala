@@ -66,7 +66,15 @@ impl Time {
                 .as_ref()
                 .expect("sim_time required when realtime is false");
             let elapsed_ms = self.elapsed_ms.load(Ordering::Relaxed);
-            sim_config.start_at + chrono::Duration::milliseconds(elapsed_ms as i64)
+
+            let simulated_time =
+                sim_config.start_at + chrono::Duration::milliseconds(elapsed_ms as i64);
+
+            if sim_config.transform_to_realtime && simulated_time >= Utc::now() {
+                Utc::now()
+            } else {
+                simulated_time
+            }
         }
     }
 
@@ -80,7 +88,14 @@ impl Time {
                 .as_ref()
                 .expect("sim_time required when realtime is false");
 
-            // Calculate how many real milliseconds we need to wait based on the simulation speed
+            let current_time = self.now();
+            let real_now = Utc::now();
+
+            if sim_config.transform_to_realtime && current_time >= real_now {
+                tokio::time::sleep(duration).await;
+                return;
+            }
+
             let sim_ms_per_real_ms = sim_config.tick_duration_secs.as_millis() as f64
                 / sim_config.tick_interval_ms as f64;
 
@@ -89,6 +104,31 @@ impl Time {
             tokio::time::sleep(Duration::from_millis(real_ms)).await
         }
     }
+
+    pub async fn wait_until_realtime(&self) {
+        if self.config.realtime {
+            return;
+        }
+
+        let current = self.now();
+        let real_now = Utc::now();
+
+        if current >= real_now {
+            return;
+        }
+
+        let wait_duration =
+            std::time::Duration::from_millis((real_now - current).num_milliseconds() as u64);
+
+        self.sleep(wait_duration).await;
+    }
+}
+
+pub async fn wait_until_realtime() {
+    INSTANCE
+        .get_or_init(|| Time::new(TimeConfig::default()))
+        .wait_until_realtime()
+        .await
 }
 
 pub fn init(config: TimeConfig) {
@@ -123,6 +163,7 @@ mod tests {
                 start_at: Utc::now(),
                 tick_interval_ms: 10,
                 tick_duration_secs: StdDuration::from_secs(10 * 24 * 60 * 60), // 10 days in seconds
+                transform_to_realtime: false,
             }),
         };
 
