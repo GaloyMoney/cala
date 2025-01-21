@@ -26,4 +26,6 @@ pub struct SimTimeConfig {
     pub(super) tick_interval_ms: u64,
     #[serde_as(as = "serde_with::DurationSeconds<u64>")]
     pub(super) tick_duration_secs: std::time::Duration,
+    #[serde(default)]
+    pub(super) transform_to_realtime: bool,
 }
