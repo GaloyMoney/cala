@@ -56,7 +56,7 @@ use members_cursor::*;
     entity = "AccountSet",
     err = "AccountSetError",
     columns(
-        name(ty = "String", update(accessor = "values().name"), list_by),
+        name(ty = "String", update(accessor = "values().name"), list_by, list_for),
         journal_id(ty = "JournalId", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
