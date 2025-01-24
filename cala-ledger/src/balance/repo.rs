@@ -214,6 +214,16 @@ impl BalanceRepo {
             JOIN cala_accounts a
             ON account_id = a.id
           ),
+          locked_accounts AS (
+            SELECT 1
+            FROM pairs p
+            JOIN cala_accounts a
+            ON p.account_id = a.id
+            LEFT JOIN cala_current_balances b
+            ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
+            WHERE b.latest_version IS NULL
+            FOR UPDATE OF a
+          ),
           locked_balances AS (
             SELECT b.journal_id, b.account_id, b.currency, b.latest_version
               FROM cala_current_balances b
@@ -237,14 +247,6 @@ impl BalanceRepo {
               AND b.currency = h.currency
               AND b.latest_version = h.version
             WHERE p.eventually_consistent = FALSE
-          ),
-          locked_accounts AS (
-            SELECT 1
-            FROM values v
-            JOIN cala_accounts a
-            ON v.account_id = a.id
-            WHERE v.values IS NULL
-            FOR UPDATE
           )
           SELECT account_id, currency, values FROM values
         "#,
@@ -373,8 +375,7 @@ impl BalanceRepo {
             WITH locked_accounts AS (
               SELECT 1
               FROM cala_accounts a
-              WHERE data_source_id = '00000000-0000-0000-0000-000000000000'
-              AND a.id = $1
+              WHERE a.id = $1
               FOR UPDATE
             ), locked_balances AS (
               SELECT journal_id, account_id, currency, latest_version

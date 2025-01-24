@@ -149,7 +149,7 @@ CREATE TABLE cala_balance_history (
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(journal_id, account_id, currency, version),
+  UNIQUE (journal_id, account_id, currency, version),
   FOREIGN KEY (journal_id, account_id, currency) REFERENCES cala_current_balances(journal_id, account_id, currency)
 );
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
