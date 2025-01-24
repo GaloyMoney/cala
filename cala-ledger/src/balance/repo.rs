@@ -199,46 +199,44 @@ impl BalanceRepo {
         journal_id: JournalId,
         ids: HashSet<(AccountId, Currency)>,
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        let mut query_builder = QueryBuilder::new(
+        let (account_ids, currencies): (Vec<_>, Vec<_>) =
+            ids.into_iter().map(|(a, c)| (a, c.code())).unzip();
+        sqlx::query!(
             r#"
-        WITH pairs AS (
-          SELECT account_id, currency, eventually_consistent FROM ("#,
-        );
-        query_builder.push_values(ids, |mut builder, (id, currency)| {
-            builder.push_bind(id);
-            builder.push_bind(currency.code());
-        });
-        query_builder.push(
-            r#"
-            ) AS v(account_id, currency)
+            SELECT pg_advisory_xact_lock(hashtext(concat($1::text, account_id::text, currency)))
+            FROM (
+            SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            ) AS v
             JOIN cala_accounts a
             ON account_id = a.id
-          ),
-          locked_accounts AS (
-            SELECT 1
-            FROM pairs p
+            WHERE eventually_consistent = FALSE
+            "#,
+            journal_id as JournalId,
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+        )
+        .execute(&mut **db)
+        .await?;
+        let rows = sqlx::query!(
+            r#"
+            WITH pairs AS (
+              SELECT account_id, currency, eventually_consistent
+            FROM (
+            SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            ) AS v
             JOIN cala_accounts a
-            ON p.account_id = a.id
-            LEFT JOIN cala_current_balances b
-            ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
-            WHERE b.latest_version IS NULL
-            FOR UPDATE OF a
-          ),
-          locked_balances AS (
+            ON account_id = a.id
+            ),
+          current_balances AS (
             SELECT b.journal_id, b.account_id, b.currency, b.latest_version
               FROM cala_current_balances b
               JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
-              WHERE b.journal_id = "#,
-        );
-        query_builder.push_bind(journal_id);
-        query_builder.push(
-            r#"
-            FOR UPDATE OF b
+              WHERE b.journal_id = $1
           ),
           values AS (
             SELECT p.account_id, p.currency, h.values
             FROM pairs p
-            LEFT JOIN locked_balances b
+            LEFT JOIN current_balances b
             ON p.account_id = b.account_id
               AND p.currency = b.currency
             LEFT JOIN cala_balance_history h
@@ -248,25 +246,23 @@ impl BalanceRepo {
               AND b.latest_version = h.version
             WHERE p.eventually_consistent = FALSE
           )
-          SELECT account_id, currency, values FROM values
+          SELECT account_id AS "account_id!: AccountId", currency AS "currency!", values FROM values
         "#,
-        );
-        let query = query_builder.build();
-        let rows = query.fetch_all(&mut **db).await?;
+            journal_id as JournalId,
+            &account_ids as &[AccountId],
+            &currencies as &[&str]
+        ).fetch_all(&mut **db).await?;
 
         let mut ret = HashMap::new();
         for row in rows {
-            let values: Option<serde_json::Value> = row.get("values");
-            let snapshot = values.map(|v| {
+            let snapshot = row.values.map(|v| {
                 serde_json::from_value::<BalanceSnapshot>(v)
                     .expect("Failed to deserialize balance snapshot")
             });
             ret.insert(
                 (
-                    row.get("account_id"),
-                    row.get::<&str, _>("currency")
-                        .parse()
-                        .expect("Could not parse currency"),
+                    row.account_id,
+                    row.currency.parse().expect("Could not parse currency"),
                 ),
                 snapshot,
             );
