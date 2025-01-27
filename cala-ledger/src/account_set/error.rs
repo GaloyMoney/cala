@@ -5,7 +5,7 @@ use crate::primitives::AccountSetId;
 #[derive(Error, Debug)]
 pub enum AccountSetError {
     #[error("AccountSetError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
+    Sqlx(sqlx::Error),
     #[error("AccountSetError - EsEntityError: {0}")]
     EsEntityError(es_entity::EsEntityError),
     #[error("AccountSetError - CursorDestructureError: {0}")]
@@ -20,6 +20,25 @@ pub enum AccountSetError {
     CouldNotFindById(AccountSetId),
     #[error("AccountSetError - JournalIdMismatch")]
     JournalIdMismatch,
+    #[error("AccountSetError - Member already added to account set")]
+    MemberAlreadyAdded,
 }
 
 es_entity::from_es_entity_error!(AccountSetError);
+
+impl From<sqlx::Error> for AccountSetError {
+    fn from(error: sqlx::Error) -> Self {
+        if let Some(err) = error.as_database_error() {
+            if let Some(constraint) = err.constraint() {
+                if constraint
+                    .contains("cala_account_set_member_accou_account_set_id_member_account_key")
+                    || constraint
+                        .contains("cala_account_set_member_accou_account_set_id_member_accoun_key1")
+                {
+                    return Self::MemberAlreadyAdded;
+                }
+            }
+        }
+        Self::Sqlx(error)
+    }
+}
