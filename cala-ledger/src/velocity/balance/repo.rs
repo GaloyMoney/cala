@@ -77,55 +77,49 @@ impl VelocityBalanceRepo {
 
         let rows = sqlx::query!(
         r#"
-        WITH inputs AS (
-          SELECT *
-          FROM UNNEST(
-            $1::jsonb[], 
-            $2::text[], 
-            $3::uuid[], 
-            $4::uuid[], 
-            $5::uuid[], 
-            $6::uuid[]
-          )
-          AS v(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
-        ),
-        locked_balances AS (
-          SELECT b.partition_window, b.currency, b.journal_id, b.account_id, b.velocity_control_id, b.velocity_limit_id, b.latest_version
-          FROM cala_velocity_current_balances b
-          WHERE (partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id) IN (SELECT partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id FROM inputs)
-          FOR UPDATE
+      WITH inputs AS (
+        SELECT *
+        FROM UNNEST(
+          $1::jsonb[], 
+          $2::text[], 
+          $3::uuid[], 
+          $4::uuid[], 
+          $5::uuid[], 
+          $6::uuid[]
         )
-        SELECT 
-            i.partition_window as "partition_window!: serde_json::Value", 
-            i.currency as "currency!", 
-            i.journal_id as "journal_id!: JournalId", 
-            i.account_id as "account_id!: AccountId", 
-            i.velocity_control_id as "velocity_control_id!: VelocityControlId", 
-            i.velocity_limit_id as "velocity_limit_id!: VelocityLimitId",
-            h.values as "values?: serde_json::Value"
-        FROM inputs i
-        LEFT JOIN locked_balances b
+        AS v(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
+      )
+      SELECT 
+          i.partition_window as "partition_window!: serde_json::Value", 
+          i.currency as "currency!", 
+          i.journal_id as "journal_id!: JournalId", 
+          i.account_id as "account_id!: AccountId", 
+          i.velocity_control_id as "velocity_control_id!: VelocityControlId", 
+          i.velocity_limit_id as "velocity_limit_id!: VelocityLimitId",
+          h.values as "values?: serde_json::Value"
+      FROM inputs i
+      LEFT JOIN cala_velocity_current_balances b
         ON i.partition_window = b.partition_window
-          AND i.currency = b.currency
-          AND i.journal_id = b.journal_id
-          AND i.account_id = b.account_id
-          AND i.velocity_control_id = b.velocity_control_id
-          AND i.velocity_limit_id = b.velocity_limit_id
-        LEFT JOIN cala_velocity_balance_history h
+        AND i.currency = b.currency
+        AND i.journal_id = b.journal_id
+        AND i.account_id = b.account_id
+        AND i.velocity_control_id = b.velocity_control_id
+        AND i.velocity_limit_id = b.velocity_limit_id
+      LEFT JOIN cala_velocity_balance_history h
         ON b.partition_window = h.partition_window
-          AND b.currency = h.currency
-          AND b.journal_id = h.journal_id
-          AND b.account_id = h.account_id
-          AND b.velocity_control_id = h.velocity_control_id
-          AND b.velocity_limit_id = h.velocity_limit_id
-          AND b.latest_version = h.version
-        "#,
-        &windows[..],
-        &currencies as &[&str],
-        &journal_ids  as &[JournalId],
-        &account_ids as &[AccountId],
-        &control_ids  as &[VelocityControlId],
-        &limit_ids  as &[VelocityLimitId],
+        AND b.currency = h.currency
+        AND b.journal_id = h.journal_id
+        AND b.account_id = h.account_id
+        AND b.velocity_control_id = h.velocity_control_id
+        AND b.velocity_limit_id = h.velocity_limit_id
+        AND b.latest_version = h.version
+      "#,
+       &windows[..],
+       &currencies as &[&str],
+       &journal_ids  as &[JournalId],
+       &account_ids as &[AccountId],
+       &control_ids  as &[VelocityControlId],
+       &limit_ids  as &[VelocityLimitId],
     )
     .fetch_all(&mut **op.tx())
     .await?;
