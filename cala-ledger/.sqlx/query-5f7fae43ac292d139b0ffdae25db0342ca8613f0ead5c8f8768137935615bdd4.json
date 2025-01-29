@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH pairs AS (\n              SELECT account_id, currency, eventually_consistent\n            FROM (\n            SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            ) AS v\n            JOIN cala_accounts a\n            ON account_id = a.id\n            ),\n          current_balances AS (\n            SELECT b.journal_id, b.account_id, b.currency, b.latest_version\n              FROM cala_current_balances b\n              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE\n              WHERE b.journal_id = $1\n          ),\n          values AS (\n            SELECT p.account_id, p.currency, h.values\n            FROM pairs p\n            LEFT JOIN current_balances b\n            ON p.account_id = b.account_id\n              AND p.currency = b.currency\n            LEFT JOIN cala_balance_history h\n            ON b.journal_id = h.journal_id\n              AND b.account_id = h.account_id\n              AND b.currency = h.currency\n              AND b.latest_version = h.version\n            WHERE p.eventually_consistent = FALSE\n          )\n          SELECT account_id AS \"account_id!: AccountId\", currency AS \"currency!\", values FROM values\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "5f7fae43ac292d139b0ffdae25db0342ca8613f0ead5c8f8768137935615bdd4"
+}
