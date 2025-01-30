@@ -1,3 +1,50 @@
+# [cala release v0.3.3](https://github.com/GaloyMoney/cala/releases/tag/0.3.3)
+
+
+### Bug Fixes
+
+- Update latest_balances instead of new_balance (#294)
+
+### Documentation
+
+- Api reference and website examples update to 91bfafe61feaad13b36c2e92c489393ebaceb219
+
+### Features
+
+- Add AccountSet list_for_name query (#305)
+- Wait until realtime fn (#304)
+
+### Miscellaneous Tasks
+
+- Bump serde_json from 1.0.133 to 1.0.138 (#307)
+- Member already added error (#306)
+- Attempt to fix concurrent update of balances
+- More precise error when limit already added to control (#297)
+- More specific error on duplicate limit id (#296)
+- Bump tokio-stream from 0.1.16 to 0.1.17 (#280)
+- Bump anyhow from 1.0.93 to 1.0.95 (#284)
+- Bump clap from 4.5.21 to 4.5.26 (#293)
+- More specific error on duplicate control id (#295)
+- Bump flake
+- Remove begin_sub_operation
+- Begin_sub_operation
+- Run sqlx prepare (#283)
+- Journals().find_by_code
+- Add CodeAlreadyExists to JournalError
+- Add code to journal
+- Accounts.create_all
+- Bump syn from 2.0.89 to 2.0.90 (#274)
+- Bump tracing-subscriber from 0.3.18 to 0.3.19 (#275)
+- Bump tokio from 1.41.1 to 1.42.0 (#276)
+- Remove core entities and technical specifications section (#278)
+- Add missing indexes on transaction (#277)
+- Tx_template DuplicateCode error
+
+### Refactor
+
+- Find for update in velocity (#309)
+- Better balance locking (#308)
+
 # [cala release v0.3.2](https://github.com/GaloyMoney/cala/releases/tag/0.3.2)
 
 
