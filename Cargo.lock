@@ -582,7 +582,7 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
@@ -605,7 +605,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -657,7 +657,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -668,7 +668,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-outbox-client"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "cala-cel-interpreter",
  "cala-ledger-core-types",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "cala-server"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "cala-tracing"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "axum-extra",
@@ -1112,7 +1112,7 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -1132,7 +1132,7 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "convert_case",
  "darling",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "galoymoney_cala-ledger"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "base64 0.22.1",
  "cala-ledger",
@@ -3140,7 +3140,7 @@ dependencies = [
 
 [[package]]
 name = "sim-time"
-version = "0.3.3"
+version = "0.3.4-dev"
 dependencies = [
  "chrono",
  "serde",
