@@ -1,3 +1,14 @@
+# [cala release v0.3.4](https://github.com/GaloyMoney/cala/releases/tag/0.3.4)
+
+
+### Documentation
+
+- Api reference and website examples update to e6f01654bccca6f97298fa70f6b8a8107ac5be2d
+
+### Features
+
+- Add 'in_tx' for list fns in es-entity (#313)
+
 # [cala release v0.3.3](https://github.com/GaloyMoney/cala/releases/tag/0.3.3)
 
 
