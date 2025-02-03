@@ -284,6 +284,23 @@ impl ToTokens for ListByFn<'_> {
                 ),
                 Span::call_site(),
             );
+            let fn_via = syn::Ident::new(
+                &format!(
+                    "list_by_{}_via{}",
+                    column_name,
+                    delete.include_deletion_fn_postfix()
+                ),
+                Span::call_site(),
+            );
+            let fn_in_tx = syn::Ident::new(
+                &format!(
+                    "list_by_{}_in_tx{}",
+                    column_name,
+                    delete.include_deletion_fn_postfix()
+                ),
+                Span::call_site(),
+            );
+
             let asc_query = format!(
                 r#"SELECT {} FROM {} WHERE ({}){} ORDER BY {} LIMIT $1"#,
                 select_columns,
@@ -315,13 +332,31 @@ impl ToTokens for ListByFn<'_> {
                     cursor: es_entity::PaginatedQueryArgs<#cursor_mod::#cursor_ident>,
                     direction: es_entity::ListDirection,
                 ) -> Result<es_entity::PaginatedQueryRet<#entity, #cursor_mod::#cursor_ident>, #error> {
+                    self.#fn_via(self.pool(), cursor, direction).await
+                }
+
+                pub async fn #fn_in_tx(
+                    &self,
+                    db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+                    cursor: es_entity::PaginatedQueryArgs<#cursor_mod::#cursor_ident>,
+                    direction: es_entity::ListDirection,
+                ) -> Result<es_entity::PaginatedQueryRet<#entity, #cursor_mod::#cursor_ident>, #error> {
+                    self.#fn_via(&mut **db, cursor, direction).await
+                }
+
+                async fn #fn_via(
+                    &self,
+                    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+                    cursor: es_entity::PaginatedQueryArgs<#cursor_mod::#cursor_ident>,
+                    direction: es_entity::ListDirection,
+                ) -> Result<es_entity::PaginatedQueryRet<#entity, #cursor_mod::#cursor_ident>, #error> {
                     #destructure_tokens
 
                     let #maybe_mut_entities = match direction {
                         es_entity::ListDirection::Ascending => {
                             es_entity::es_query!(
                                 #prefix_arg
-                                self.pool(),
+                                executor,
                                 #asc_query,
                                 #arg_tokens
                             )
@@ -331,7 +366,7 @@ impl ToTokens for ListByFn<'_> {
                         es_entity::ListDirection::Descending => {
                             es_entity::es_query!(
                                 #prefix_arg
-                                self.pool(),
+                                executor,
                                 #desc_query,
                                 #arg_tokens
                             )
@@ -469,6 +504,24 @@ mod tests {
                 cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
                 direction: es_entity::ListDirection,
             ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
+                self.list_by_id_via(self.pool(), cursor, direction).await
+            }
+
+            pub async fn list_by_id_in_tx(
+                &self,
+                db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
+                self.list_by_id_via(&mut **db, cursor, direction).await
+            }
+
+            async fn list_by_id_via(
+                &self,
+                executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
                 let es_entity::PaginatedQueryArgs { first, after } = cursor;
                 let id = if let Some(after) = after {
                     Some(after.id)
@@ -479,7 +532,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT id FROM entities WHERE (COALESCE(id > $2, true)) AND deleted = FALSE ORDER BY id ASC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -489,7 +542,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT id FROM entities WHERE (COALESCE(id < $2, true)) AND deleted = FALSE ORDER BY id DESC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -512,6 +565,24 @@ mod tests {
                 cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
                 direction: es_entity::ListDirection,
             ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
+                self.list_by_id_via_include_deleted(self.pool(), cursor, direction).await
+            }
+
+            pub async fn list_by_id_in_tx_include_deleted(
+                &self,
+                db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
+                self.list_by_id_via_include_deleted(&mut **db, cursor, direction).await
+            }
+
+            async fn list_by_id_via_include_deleted(
+                &self,
+                executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByIdCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByIdCursor>, es_entity::EsRepoError> {
                 let es_entity::PaginatedQueryArgs { first, after } = cursor;
                 let id = if let Some(after) = after {
                     Some(after.id)
@@ -521,7 +592,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT id FROM entities WHERE (COALESCE(id > $2, true)) ORDER BY id ASC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -531,7 +602,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT id FROM entities WHERE (COALESCE(id < $2, true)) ORDER BY id DESC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -584,6 +655,24 @@ mod tests {
                 cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByNameCursor>,
                 direction: es_entity::ListDirection,
             ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByNameCursor>, es_entity::EsRepoError> {
+                self.list_by_name_via(self.pool(), cursor, direction).await
+            }
+
+            pub async fn list_by_name_in_tx(
+                &self,
+                db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByNameCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByNameCursor>, es_entity::EsRepoError> {
+                self.list_by_name_via(&mut **db, cursor, direction).await
+            }
+
+            async fn list_by_name_via(
+                &self,
+                executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByNameCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByNameCursor>, es_entity::EsRepoError> {
                 let es_entity::PaginatedQueryArgs { first, after } = cursor;
                 let (id, name) = if let Some(after) = after {
                     (Some(after.id), Some(after.name))
@@ -594,7 +683,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT name, id FROM entities WHERE (COALESCE((name, id) > ($3, $2), $2 IS NULL)) ORDER BY name ASC, id ASC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -605,7 +694,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT name, id FROM entities WHERE (COALESCE((name, id) < ($3, $2), $2 IS NULL)) ORDER BY name DESC, id DESC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -661,6 +750,24 @@ mod tests {
                 cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByValueCursor>,
                 direction: es_entity::ListDirection,
             ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByValueCursor>, es_entity::EsRepoError> {
+                self.list_by_value_via(self.pool(), cursor, direction).await
+            }
+
+            pub async fn list_by_value_in_tx(
+                &self,
+                db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByValueCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByValueCursor>, es_entity::EsRepoError> {
+                self.list_by_value_via(&mut **db, cursor, direction).await
+            }
+
+            async fn list_by_value_via(
+                &self,
+                executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
+                cursor: es_entity::PaginatedQueryArgs<cursor_mod::EntitiesByValueCursor>,
+                direction: es_entity::ListDirection,
+            ) -> Result<es_entity::PaginatedQueryRet<Entity, cursor_mod::EntitiesByValueCursor>, es_entity::EsRepoError> {
                 let es_entity::PaginatedQueryArgs { first, after } = cursor;
                 let (id, value) = if let Some(after) = after {
                     (Some(after.id), after.value)
@@ -671,7 +778,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT value, id FROM entities WHERE ((value IS NOT DISTINCT FROM $3) AND COALESCE(id > $2, true) OR COALESCE(value > $3, value IS NOT NULL)) ORDER BY value ASC NULLS FIRST, id ASC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
@@ -682,7 +789,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
-                            self.pool(),
+                            executor,
                             "SELECT value, id FROM entities WHERE ((value IS NOT DISTINCT FROM $3) AND COALESCE(id < $2, true) OR COALESCE(value < $3, value IS NOT NULL)) ORDER BY value DESC NULLS LAST, id DESC LIMIT $1",
                             (first + 1) as i64,
                             id as Option<EntityId>,
