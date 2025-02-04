@@ -338,6 +338,25 @@ impl AccountSets {
     }
 
     #[instrument(
+        name = "cala_ledger.account_sets.list_for_name_in_op",
+        skip(self, op),
+        err
+    )]
+    pub async fn list_for_name_in_op(
+        &self,
+        op: &mut LedgerOperation<'_>,
+        name: String,
+        args: es_entity::PaginatedQueryArgs<AccountSetsByCreatedAtCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountSet, AccountSetsByCreatedAtCursor>,
+        AccountSetError,
+    > {
+        self.repo
+            .list_for_name_by_created_at_in_tx(op.tx(), name, args, Default::default())
+            .await
+    }
+
+    #[instrument(
         name = "cala_ledger.account_sets.find_where_member_in_op",
         skip(self, op),
         err
