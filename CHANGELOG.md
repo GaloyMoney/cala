@@ -1,3 +1,14 @@
+# [cala release v0.3.5](https://github.com/GaloyMoney/cala/releases/tag/0.3.5)
+
+
+### Documentation
+
+- Api reference and website examples update to 44afb1b1d7ae13a0f2e0a5673df7d0938ecbf791
+
+### Features
+
+- Add new 'list_for_name_in_op' function (#314)
+
 # [cala release v0.3.4](https://github.com/GaloyMoney/cala/releases/tag/0.3.4)
 
 
