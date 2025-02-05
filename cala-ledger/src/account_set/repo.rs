@@ -58,6 +58,11 @@ use members_cursor::*;
     columns(
         name(ty = "String", update(accessor = "values().name"), list_by, list_for),
         journal_id(ty = "JournalId", update(persist = false)),
+        external_id(
+            ty = "Option<String>",
+            update(accessor = "values().external_id"),
+            list_by
+        ),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
@@ -572,12 +577,13 @@ impl AccountSetRepo {
     ) -> Result<(), AccountSetError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_account_sets (data_source_id, id, journal_id, name, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_account_sets (data_source_id, id, journal_id, name, external_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             origin as DataSourceId,
             account_set.values().id as AccountSetId,
             account_set.values().journal_id as JournalId,
             account_set.values().name,
+            account_set.values().external_id,
             recorded_at
         )
         .execute(&mut **op.tx())

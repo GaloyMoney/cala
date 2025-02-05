@@ -55,6 +55,7 @@ impl AccountSet {
 
     pub fn update(&mut self, builder: impl Into<AccountSetUpdate>) {
         let AccountSetUpdateValues {
+            external_id,
             name,
             normal_balance_type,
             description,
@@ -78,6 +79,10 @@ impl AccountSet {
                     .clone_from(&normal_balance_type);
                 updated_fields.push("normal_balance_type".to_string());
             }
+        }
+        if external_id.is_some() && external_id != self.values().external_id {
+            self.values.external_id.clone_from(&external_id);
+            updated_fields.push("external_id".to_string());
         }
         if description.is_some() && description != self.values().description {
             self.values.description.clone_from(&description);
@@ -120,6 +125,8 @@ impl AccountSet {
 #[derive(Debug, Builder, Default)]
 #[builder(name = "AccountSetUpdate", default)]
 pub struct AccountSetUpdateValues {
+    #[builder(setter(strip_option, into))]
+    pub external_id: Option<String>,
     #[builder(setter(into, strip_option))]
     pub name: Option<String>,
     #[builder(setter(into, strip_option))]
@@ -146,6 +153,11 @@ impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
 
         for field in fields {
             match field.as_str() {
+                "external_id" => {
+                    if let Some(ref ext_id) = values.external_id {
+                        builder.external_id(ext_id);
+                    }
+                }
                 "name" => {
                     builder.name(values.name.clone());
                 }
@@ -202,6 +214,8 @@ pub struct NewAccountSet {
     pub id: AccountSetId,
     #[builder(setter(into))]
     pub(super) name: String,
+    #[builder(setter(strip_option, into), default)]
+    pub(super) external_id: Option<String>,
     #[builder(setter(into))]
     pub(super) journal_id: JournalId,
     #[builder(default)]
@@ -232,6 +246,7 @@ impl IntoEvents<AccountSetEvent> for NewAccountSet {
                     version: 1,
                     journal_id: self.journal_id,
                     name: self.name,
+                    external_id: self.external_id,
                     normal_balance_type: self.normal_balance_type,
                     description: self.description,
                     metadata: self.metadata,

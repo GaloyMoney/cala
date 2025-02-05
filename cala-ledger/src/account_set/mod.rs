@@ -302,6 +302,18 @@ impl AccountSets {
         self.repo.find_by_id(account_set_id).await
     }
 
+    #[instrument(
+        name = "cala_ledger.accounts_sets.find_by_external_id",
+        skip(self),
+        err
+    )]
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<AccountSet, AccountSetError> {
+        self.repo.find_by_external_id(Some(external_id)).await
+    }
+
     #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self), err)]
     pub async fn find_where_member(
         &self,

@@ -46,6 +46,7 @@ CREATE TABLE cala_account_sets (
   id UUID PRIMARY KEY REFERENCES cala_accounts(id),
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   name VARCHAR NOT NULL,
+  external_id VARCHAR UNIQUE,
   data_source_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
