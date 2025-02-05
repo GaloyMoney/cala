@@ -1,3 +1,19 @@
+# [cala release v0.3.6](https://github.com/GaloyMoney/cala/releases/tag/0.3.6)
+
+
+### Documentation
+
+- Api reference and website examples update to 62829b08802ef71e2f4127fda5ecc8146fb26bc2
+
+### Features
+
+- Add external_id to account set (#318)
+
+### Miscellaneous Tasks
+
+- Bump napi from 2.16.13 to 2.16.14 (#312)
+- Bump serde from 1.0.215 to 1.0.217 (#311)
+
 # [cala release v0.3.5](https://github.com/GaloyMoney/cala/releases/tag/0.3.5)
 
 
