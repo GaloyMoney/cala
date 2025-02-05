@@ -213,6 +213,7 @@ impl From<AccountSetValues> for proto::AccountSet {
             version,
             journal_id,
             name,
+            external_id,
             normal_balance_type,
             description,
             metadata,
@@ -224,6 +225,7 @@ impl From<AccountSetValues> for proto::AccountSet {
             version,
             journal_id: journal_id.to_string(),
             name,
+            external_id,
             normal_balance_type: normal_balance_type as i32,
             description,
             metadata: metadata.map(|json| {

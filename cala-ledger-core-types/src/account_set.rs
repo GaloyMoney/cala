@@ -9,6 +9,7 @@ pub struct AccountSetValues {
     pub version: u32,
     pub journal_id: JournalId,
     pub name: String,
+    pub external_id: Option<String>,
     pub description: Option<String>,
     pub metadata: Option<serde_json::Value>,
     pub normal_balance_type: DebitOrCredit,
