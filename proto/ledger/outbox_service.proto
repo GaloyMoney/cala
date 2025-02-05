@@ -97,8 +97,9 @@ message AccountSet {
   string journal_id = 3;
   string name = 4;
   DebitOrCredit normal_balance_type = 5;
-  optional string description = 6;
-  optional google.protobuf.Struct metadata = 7;
+  optional string external_id = 6;
+  optional string description = 7;
+  optional google.protobuf.Struct metadata = 8;
 }
 
 message AccountSetMemberCreated {

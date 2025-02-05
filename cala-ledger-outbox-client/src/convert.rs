@@ -248,6 +248,7 @@ impl TryFrom<proto::AccountSet> for AccountSetValues {
             version: account_set.version,
             journal_id: account_set.journal_id.parse()?,
             name: account_set.name,
+            external_id: account_set.external_id,
             normal_balance_type,
             description: account_set.description,
             metadata,
