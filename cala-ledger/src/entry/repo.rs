@@ -9,8 +9,8 @@ use super::{entity::*, error::*};
     entity = "Entry",
     err = "EntryError",
     columns(
+        account_id(ty = "AccountId", list_for, update(persist = false)),
         journal_id(ty = "JournalId", update(persist = false)),
-        account_id(ty = "AccountId", update(persist = false)),
         transaction_id(ty = "TransactionId", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
