@@ -1,3 +1,10 @@
+# [cala release v0.3.8](https://github.com/GaloyMoney/cala/releases/tag/0.3.8)
+
+
+### Bug Fixes
+
+- Sqlx-prepare
+
 # [cala release v0.3.7](https://github.com/GaloyMoney/cala/releases/tag/0.3.7)
 
 
