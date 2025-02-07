@@ -6,10 +6,15 @@ use sqlx::PgPool;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
+use crate::{
+    ledger_operation::*,
+    outbox::*,
+    primitives::{AccountId, DataSource},
+};
 
 pub use entity::*;
 use error::*;
+pub use repo::entry_cursor::EntriesByCreatedAtCursor;
 use repo::*;
 
 #[derive(Clone)]
@@ -26,6 +31,17 @@ impl Entries {
             outbox,
             _pool: pool.clone(),
         }
+    }
+
+    pub async fn list_for_account_id(
+        &self,
+        account_id: AccountId,
+        query: es_entity::PaginatedQueryArgs<EntriesByCreatedAtCursor>,
+        direction: es_entity::ListDirection,
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
+        self.repo
+            .list_for_account_id_by_created_at(account_id, query, direction)
+            .await
     }
 
     pub(crate) async fn create_all_in_op(

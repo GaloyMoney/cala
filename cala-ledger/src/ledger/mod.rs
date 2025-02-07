@@ -134,6 +134,10 @@ impl CalaLedger {
         &self.balances
     }
 
+    pub fn entries(&self) -> &Entries {
+        &self.entries
+    }
+
     pub fn transactions(&self) -> &Transactions {
         &self.transactions
     }
