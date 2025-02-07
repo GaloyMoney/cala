@@ -1,3 +1,10 @@
+# [cala release v0.3.7](https://github.com/GaloyMoney/cala/releases/tag/0.3.7)
+
+
+### Documentation
+
+- Api reference and website examples update to fcc1f6e474deb1b4a5ffe0379e6bf47d4db66a3f
+
 # [cala release v0.3.6](https://github.com/GaloyMoney/cala/releases/tag/0.3.6)
 
 
