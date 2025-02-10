@@ -91,6 +91,44 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_all_in_range", skip(self), err)]
+    pub async fn find_all_in_range(
+        &self,
+        ids: &[BalanceId],
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+        let ranges = self.repo.find_range_all(ids, from, until).await?;
+
+        let mut result = HashMap::new();
+        for (balance_id, (start, end)) in ranges {
+            match end {
+                Some(end) => {
+                    result.insert(balance_id, BalanceRange::new(start, end));
+                }
+                None => {
+                    return Err(BalanceError::NotFound(
+                        balance_id.0,
+                        balance_id.1,
+                        balance_id.2,
+                    ));
+                }
+            }
+        }
+
+        for balance_id in ids {
+            if !result.contains_key(balance_id) {
+                return Err(BalanceError::NotFound(
+                    balance_id.0,
+                    balance_id.1,
+                    balance_id.2,
+                ));
+            }
+        }
+
+        Ok(result)
+    }
+
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut LedgerOperation<'_>,

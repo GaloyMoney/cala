@@ -113,6 +113,7 @@ impl<'a> BalanceWithDirection<'a> {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct BalanceRange {
     pub start: AccountBalance,
     pub diff: AccountBalance,

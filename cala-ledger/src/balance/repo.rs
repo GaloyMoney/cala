@@ -106,7 +106,7 @@ impl BalanceRepo {
             LIMIT 1
         ),
         last AS (
-            SELECT 
+            SELECT
               false AS first, true AS last, h.values,
               a.normal_balance_type AS "normal_balance_type!: DebitOrCredit", h.recorded_at
             FROM cala_balance_history h
@@ -135,16 +135,14 @@ impl BalanceRepo {
         let mut first = None;
         let mut last = None;
         for row in rows {
+            let details: BalanceSnapshot =
+                serde_json::from_value(row.values.expect("values is not null"))
+                    .expect("Failed to deserialize balance snapshot");
+            let balance = Some(AccountBalance::new(row.normal_balance_type, details));
             if row.first.expect("first is not null") {
-                let details: BalanceSnapshot =
-                    serde_json::from_value(row.values.expect("values is not null"))
-                        .expect("Failed to deserialize balance snapshot");
-                first = Some(AccountBalance::new(row.normal_balance_type, details));
+                first = balance;
             } else {
-                let details: BalanceSnapshot =
-                    serde_json::from_value(row.values.expect("values is not null"))
-                        .expect("Failed to deserialize balance snapshot");
-                last = Some(AccountBalance::new(row.normal_balance_type, details));
+                last = balance;
             }
         }
         Ok((first, last))
@@ -184,6 +182,109 @@ impl BalanceRepo {
                 (details.journal_id, details.account_id, details.currency),
                 AccountBalance::new(normal_balance_type, details),
             );
+        }
+        Ok(ret)
+    }
+
+    pub(super) async fn find_range_all(
+        &self,
+        ids: &[BalanceId],
+        from: DateTime<Utc>,
+        until: Option<DateTime<Utc>>,
+    ) -> Result<HashMap<BalanceId, (Option<AccountBalance>, Option<AccountBalance>)>, BalanceError>
+    {
+        let mut query_builder = QueryBuilder::new(
+            r#"
+            WITH first AS (
+                SELECT *
+                FROM (
+                    SELECT
+                        true AS first, false AS last, h.values,
+                        a.normal_balance_type AS normal_balance_type, h.recorded_at,
+                        h.journal_id, h.account_id, h.currency,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY h.journal_id, h.account_id, h.currency
+                            ORDER BY h.recorded_at DESC, h.version DESC
+                        ) as rn
+                    FROM cala_balance_history h
+                    JOIN cala_accounts a ON h.account_id = a.id
+                    WHERE (h.journal_id, h.account_id, h.currency) IN"#,
+        );
+
+        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
+            builder.push_bind(journal_id);
+            builder.push_bind(account_id);
+            builder.push_bind(currency.code());
+        });
+
+        query_builder.push(" AND h.recorded_at < ");
+        query_builder.push_bind(from);
+
+        query_builder.push(
+            r#"
+                ) ranked
+                WHERE rn = 1
+            ),
+            last AS (
+                SELECT *
+                FROM (
+                    SELECT
+                        false AS first, true AS last, h.values,
+                        a.normal_balance_type AS normal_balance_type, h.recorded_at,
+                        h.journal_id, h.account_id, h.currency,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY h.journal_id, h.account_id, h.currency
+                            ORDER BY h.recorded_at DESC, h.version DESC
+                        ) as rn
+                    FROM cala_balance_history h
+                    JOIN cala_accounts a ON h.account_id = a.id
+                    WHERE (h.journal_id, h.account_id, h.currency) IN"#,
+        );
+
+        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
+            builder.push_bind(journal_id);
+            builder.push_bind(account_id);
+            builder.push_bind(currency.code());
+        });
+
+        query_builder.push(" AND h.recorded_at <= COALESCE(");
+        query_builder.push_bind(until);
+        query_builder.push(", NOW())");
+
+        query_builder.push(
+            r#"
+                ) ranked
+                WHERE rn = 1
+            )
+            SELECT
+                first, last, values, normal_balance_type, recorded_at,
+                journal_id, account_id, currency
+            FROM first
+            UNION ALL
+            SELECT
+                first, last, values, normal_balance_type, recorded_at,
+                journal_id, account_id, currency
+            FROM last"#,
+        );
+
+        let query = query_builder.build();
+
+        let rows = query.fetch_all(&self.pool).await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let values: serde_json::Value = row.get("values");
+            let details: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let normal_balance_type: DebitOrCredit = row.get("normal_balance_type");
+            let balance_id = (details.journal_id, details.account_id, details.currency);
+            let balance = AccountBalance::new(normal_balance_type, details);
+            let entry = ret.entry(balance_id).or_insert((None, None));
+            if row.get::<bool, _>("first") {
+                entry.0 = Some(balance);
+            } else {
+                entry.1 = Some(balance);
+            }
         }
         Ok(ret)
     }
