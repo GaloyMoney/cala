@@ -193,9 +193,22 @@ impl BalanceRepo {
         until: Option<DateTime<Utc>>,
     ) -> Result<HashMap<BalanceId, (Option<AccountBalance>, Option<AccountBalance>)>, BalanceError>
     {
-        let mut query_builder = QueryBuilder::new(
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        let mut currencies = Vec::with_capacity(ids.len());
+        for (journal_id, account_id, currency) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+            currencies.push(currency.code().to_string());
+        }
+
+        let rows = sqlx::query!(
             r#"
-            WITH first AS (
+            WITH balance_ids AS (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[]) 
+                AS v(journal_id, account_id, currency)
+            ),
+            first AS (
                 SELECT *
                 FROM (
                     SELECT
@@ -208,20 +221,11 @@ impl BalanceRepo {
                         ) as rn
                     FROM cala_balance_history h
                     JOIN cala_accounts a ON h.account_id = a.id
-                    WHERE (h.journal_id, h.account_id, h.currency) IN"#,
-        );
-
-        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
-            builder.push_bind(journal_id);
-            builder.push_bind(account_id);
-            builder.push_bind(currency.code());
-        });
-
-        query_builder.push(" AND h.recorded_at < ");
-        query_builder.push_bind(from);
-
-        query_builder.push(
-            r#"
+                    JOIN balance_ids b ON 
+                        h.journal_id = b.journal_id 
+                        AND h.account_id = b.account_id 
+                        AND h.currency = b.currency
+                    WHERE h.recorded_at < $4
                 ) ranked
                 WHERE rn = 1
             ),
@@ -238,49 +242,50 @@ impl BalanceRepo {
                         ) as rn
                     FROM cala_balance_history h
                     JOIN cala_accounts a ON h.account_id = a.id
-                    WHERE (h.journal_id, h.account_id, h.currency) IN"#,
-        );
-
-        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
-            builder.push_bind(journal_id);
-            builder.push_bind(account_id);
-            builder.push_bind(currency.code());
-        });
-
-        query_builder.push(" AND h.recorded_at <= COALESCE(");
-        query_builder.push_bind(until);
-        query_builder.push(", NOW())");
-
-        query_builder.push(
-            r#"
+                    JOIN balance_ids b ON 
+                        h.journal_id = b.journal_id 
+                        AND h.account_id = b.account_id 
+                        AND h.currency = b.currency
+                    WHERE h.recorded_at <= COALESCE($5, NOW())
                 ) ranked
                 WHERE rn = 1
             )
             SELECT
-                first, last, values, normal_balance_type, recorded_at,
-                journal_id, account_id, currency
+                first, last, values, 
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                recorded_at,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
             FROM first
             UNION ALL
             SELECT
-                first, last, values, normal_balance_type, recorded_at,
-                journal_id, account_id, currency
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                recorded_at,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
             FROM last"#,
-        );
-
-        let query = query_builder.build();
-
-        let rows = query.fetch_all(&self.pool).await?;
+            &journal_ids[..],
+            &account_ids[..],
+            &currencies[..],
+            from,
+            until,
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut ret = HashMap::new();
         for row in rows {
-            let values: serde_json::Value = row.get("values");
+            let values: serde_json::Value = row.values.expect("values is not null");
             let details: BalanceSnapshot =
                 serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
-            let normal_balance_type: DebitOrCredit = row.get("normal_balance_type");
+            let normal_balance_type: DebitOrCredit = row.normal_balance_type;
             let balance_id = (details.journal_id, details.account_id, details.currency);
             let balance = AccountBalance::new(normal_balance_type, details);
             let entry = ret.entry(balance_id).or_insert((None, None));
-            if row.get::<bool, _>("first") {
+            if row.first.expect("first is not null") {
                 entry.0 = Some(balance);
             } else {
                 entry.1 = Some(balance);
