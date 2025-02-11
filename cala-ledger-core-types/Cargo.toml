@@ -9,6 +9,7 @@ license = "Apache-2.0"
 [features]
 
 fail-on-warnings = []
+graphql = ["dep:async-graphql", "dep:base64"]
 
 [dependencies]
 cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.3.10-dev" }
@@ -22,3 +23,5 @@ thiserror = { workspace = true }
 derive_builder = { workspace = true }
 rust_decimal = { workspace = true }
 rusty-money = { workspace = true }
+async-graphql = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }

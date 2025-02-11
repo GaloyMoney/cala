@@ -643,6 +643,8 @@ dependencies = [
 name = "cala-ledger-core-types"
 version = "0.3.10-dev"
 dependencies = [
+ "async-graphql",
+ "base64 0.22.1",
  "cala-cel-interpreter",
  "chrono",
  "derive_builder",
