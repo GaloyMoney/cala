@@ -116,16 +116,6 @@ impl Balances {
             }
         }
 
-        for balance_id in ids {
-            if !result.contains_key(balance_id) {
-                return Err(BalanceError::NotFound(
-                    balance_id.0,
-                    balance_id.1,
-                    balance_id.2,
-                ));
-            }
-        }
-
         Ok(result)
     }
 
