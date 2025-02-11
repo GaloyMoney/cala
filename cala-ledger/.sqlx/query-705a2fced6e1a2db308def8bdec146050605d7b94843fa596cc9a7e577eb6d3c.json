@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH first AS (\n            SELECT\n              true AS first, false AS last, h.values,\n              a.normal_balance_type AS \"normal_balance_type!: DebitOrCredit\", h.recorded_at\n            FROM cala_balance_history h\n            JOIN cala_accounts a\n            ON h.account_id = a.id\n            WHERE h.journal_id = $1\n            AND h.account_id = $2\n            AND h.currency = $3\n            AND h.recorded_at < $4\n            ORDER BY h.recorded_at DESC, h.version DESC\n            LIMIT 1\n        ),\n        last AS (\n            SELECT\n              false AS first, true AS last, h.values,\n              a.normal_balance_type AS \"normal_balance_type!: DebitOrCredit\", h.recorded_at\n            FROM cala_balance_history h\n            JOIN cala_accounts a\n            ON h.account_id = a.id\n            WHERE h.journal_id = $1\n            AND h.account_id = $2\n            AND h.currency = $3\n            AND h.recorded_at <= COALESCE($5, NOW())\n            ORDER BY h.recorded_at DESC, h.version DESC\n            LIMIT 1\n        )\n        SELECT * FROM first\n        UNION ALL\n        SELECT * FROM last\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "last",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "705a2fced6e1a2db308def8bdec146050605d7b94843fa596cc9a7e577eb6d3c"
+}
