@@ -1,3 +1,14 @@
+# [cala release v0.3.9](https://github.com/GaloyMoney/cala/releases/tag/0.3.9)
+
+
+### Documentation
+
+- Api reference and website examples update to ea1b75fa7fdc27f386a71143f97bd589a9c00dc9
+
+### Miscellaneous Tasks
+
+- Expose created_at fn for entry entity (#319)
+
 # [cala release v0.3.8](https://github.com/GaloyMoney/cala/releases/tag/0.3.8)
 
 
