@@ -51,6 +51,12 @@ impl Entry {
     pub fn into_values(self) -> EntryValues {
         self.values
     }
+
+    pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
+        self.events
+            .entity_first_persisted_at()
+            .expect("Entity not persisted")
+    }
 }
 
 impl TryFromEvents<EntryEvent> for Entry {
