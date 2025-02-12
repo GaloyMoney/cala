@@ -707,6 +707,7 @@ dependencies = [
  "chrono",
  "clap",
  "derive_builder",
+ "es-entity",
  "futures",
  "rust_decimal",
  "serde",

@@ -2,5 +2,5 @@
 #[sqlx(transparent)]
 pub struct ServerId(String);
 
-cala_types::entity_id! { ImportJobId }
-cala_types::entity_id! { JobId }
+es_entity::entity_id! { ImportJobId }
+es_entity::entity_id! { JobId }

@@ -16,7 +16,7 @@ struct Field {
 
 impl Field {
     fn is_events_field(&self) -> bool {
-        self.events || self.ident.as_ref().map_or(false, |i| i == "events")
+        self.events || self.ident.as_ref().is_some_and(|i| i == "events")
     }
 
     fn extract_nested_entity_type(&self) -> &Type {

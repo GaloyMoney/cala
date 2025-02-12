@@ -24,7 +24,7 @@ impl RepoField {
     }
 
     fn is_pool_field(&self) -> bool {
-        self.pool || self.ident.as_ref().map_or(false, |i| i == "pool")
+        self.pool || self.ident.as_ref().is_some_and(|i| i == "pool")
     }
 
     pub fn create_nested_fn_name(&self) -> syn::Ident {

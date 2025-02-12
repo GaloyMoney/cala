@@ -2,7 +2,7 @@ use sqlx::PgPool;
 
 use cala_ledger::LedgerOperation;
 
-cala_types::entity_id! { IntegrationId }
+es_entity::entity_id! { IntegrationId }
 
 pub struct Integration {
     pub id: IntegrationId,

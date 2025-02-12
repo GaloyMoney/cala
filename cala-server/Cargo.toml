@@ -9,7 +9,6 @@ license = "Apache-2.0"
 [features]
 
 fail-on-warnings = []
-graphql = []
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.3.10-dev" }
@@ -17,6 +16,7 @@ cala-ledger = { path = "../cala-ledger", features = ["import", "graphql"], packa
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.3.10-dev" }
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.3.10-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.3.10-dev" }
+es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.3.10-dev" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
