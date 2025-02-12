@@ -646,6 +646,7 @@ dependencies = [
  "cala-cel-interpreter",
  "chrono",
  "derive_builder",
+ "es-entity",
  "rust_decimal",
  "rusty-money",
  "serde",

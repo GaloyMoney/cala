@@ -66,5 +66,19 @@ macro_rules! entity_id {
                 Ok(Self(uuid::Uuid::parse_str(s)?))
             }
         }
+
+        #[cfg(feature = "graphql")]
+        impl From<es_entity::graphql::UUID> for $name {
+            fn from(id: es_entity::graphql::UUID) -> Self {
+                $name(uuid::Uuid::from(&id))
+            }
+        }
+
+        #[cfg(feature = "graphql")]
+        impl From<&es_entity::graphql::UUID> for $name {
+            fn from(id: &es_entity::graphql::UUID) -> Self {
+                $name(uuid::Uuid::from(id))
+            }
+        }
     };
 }
