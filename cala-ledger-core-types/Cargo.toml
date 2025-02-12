@@ -2,7 +2,7 @@
 name = "cala-ledger-core-types"
 repository = "https://github.com/GaloyMoney/cala"
 description = "Core types for cala"
-version = "0.3.11"
+version = "0.3.12-dev"
 edition = "2021"
 license = "Apache-2.0"
 
@@ -12,7 +12,7 @@ fail-on-warnings = []
 graphql = ["dep:es-entity"]
 
 [dependencies]
-cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.3.11" }
+cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.3.12-dev" }
 es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.3.10-dev", optional = true }
 
 serde = { workspace = true }
