@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH balance_ids AS (\n                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[]) \n                AS v(journal_id, account_id, currency)\n            ),\n            first AS (\n                SELECT *\n                FROM (\n                    SELECT\n                        true AS first, false AS last, h.values,\n                        a.normal_balance_type AS normal_balance_type, h.recorded_at,\n                        h.journal_id, h.account_id, h.currency,\n                        ROW_NUMBER() OVER (\n                            PARTITION BY h.journal_id, h.account_id, h.currency\n                            ORDER BY h.recorded_at DESC, h.version DESC\n                        ) as rn\n                    FROM cala_balance_history h\n                    JOIN cala_accounts a ON h.account_id = a.id\n                    JOIN balance_ids b ON \n                        h.journal_id = b.journal_id \n                        AND h.account_id = b.account_id \n                        AND h.currency = b.currency\n                    WHERE h.recorded_at < $4\n                ) ranked\n                WHERE rn = 1\n            ),\n            last AS (\n                SELECT *\n                FROM (\n                    SELECT\n                        false AS first, true AS last, h.values,\n                        a.normal_balance_type AS normal_balance_type, h.recorded_at,\n                        h.journal_id, h.account_id, h.currency,\n                        ROW_NUMBER() OVER (\n                            PARTITION BY h.journal_id, h.account_id, h.currency\n                            ORDER BY h.recorded_at DESC, h.version DESC\n                        ) as rn\n                    FROM cala_balance_history h\n                    JOIN cala_accounts a ON h.account_id = a.id\n                    JOIN balance_ids b ON \n                        h.journal_id = b.journal_id \n                        AND h.account_id = b.account_id \n                        AND h.currency = b.currency\n                    WHERE h.recorded_at <= COALESCE($5, NOW())\n                ) ranked\n                WHERE rn = 1\n            )\n            SELECT\n                first, last, values, \n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                recorded_at,\n                journal_id as \"journal_id: JournalId\",\n                account_id as \"account_id: AccountId\",\n                currency\n            FROM first\n            UNION ALL\n            SELECT\n                first, last, values,\n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                recorded_at,\n                journal_id as \"journal_id: JournalId\",\n                account_id as \"account_id: AccountId\",\n                currency\n            FROM last",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "last",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "journal_id: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "currency",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "701ece34e1131b22ed09b5213c692d1f3bec83ce36a44424fc075d4a90d2cb5c"
+}
