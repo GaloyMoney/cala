@@ -1,3 +1,18 @@
+# [cala release v0.3.12](https://github.com/GaloyMoney/cala/releases/tag/0.3.12)
+
+
+### Bug Fixes
+
+- Set-dev-version
+
+### Documentation
+
+- Api reference and website examples update to 40370f9503965f4ff395d4e70c30a21fccd34f49
+
+### Features
+
+- Add 'find_all_in_range' function (#320)
+
 # [cala release v0.3.11](https://github.com/GaloyMoney/cala/releases/tag/0.3.11)
 
 

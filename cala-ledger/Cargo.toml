@@ -4,7 +4,7 @@ description = "An embeddable double sided accounting ledger built on PG/SQLx"
 repository = "https://github.com/GaloyMoney/cala"
 documentation = "https://docs.rs/cala-ledger"
 readme = "../README.md"
-version = "0.3.12-dev"
+version = "0.3.12"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["finance"]
@@ -16,10 +16,10 @@ import = []
 graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.3.12-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.3.12-dev" }
-cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.3.12-dev" }
-es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.3.12-dev" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.3.12" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.3.12" }
+cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.3.12" }
+es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.3.12" }
 
 async-graphql = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
