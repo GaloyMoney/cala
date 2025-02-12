@@ -97,22 +97,24 @@ impl Balances {
         ids: &[BalanceId],
         from: DateTime<Utc>,
         until: Option<DateTime<Utc>>,
-    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, Option<BalanceRange>>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
 
         let mut result = HashMap::new();
         for (balance_id, (start, end)) in ranges {
             match end {
                 Some(end) => {
-                    result.insert(balance_id, BalanceRange::new(start, end));
+                    result.insert(balance_id, Some(BalanceRange::new(start, end)));
                 }
                 None => {
-                    return Err(BalanceError::NotFound(
-                        balance_id.0,
-                        balance_id.1,
-                        balance_id.2,
-                    ));
+                    result.insert(balance_id, None);
                 }
+            }
+        }
+
+        for balance_id in ids {
+            if !result.contains_key(balance_id) {
+                result.insert(*balance_id, None);
             }
         }
 

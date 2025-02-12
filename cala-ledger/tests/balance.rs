@@ -26,8 +26,20 @@ async fn balance_in_range() -> anyhow::Result<()> {
 
     let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
     let new_template = helpers::currency_conversion_template(&tx_code);
-
     cala.tx_templates().create(new_template).await.unwrap();
+
+    let range = cala
+        .balances()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            btc,
+            Utc.timestamp_opt(0, 0).single().unwrap(),
+            None,
+        )
+        .await;
+    assert!(range.is_err());
+
     let mut params = Params::new();
     params.insert("journal_id", journal.id().to_string());
     params.insert("sender", sender_account.id());
@@ -97,6 +109,25 @@ async fn balance_in_range() -> anyhow::Result<()> {
     assert_eq!(range.diff.settled(), Decimal::from(1290));
     assert_eq!(range.end.details.version, 2);
 
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let after_second_tx = Utc::now();
+
+    let range = cala
+        .balances()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            btc,
+            after_second_tx,
+            None,
+        )
+        .await?;
+
+    assert_eq!(range.start.settled(), Decimal::from(2580));
+    assert_eq!(range.end.settled(), Decimal::from(2580));
+    assert_eq!(range.diff.settled(), Decimal::ZERO);
+    assert_eq!(range.end.details.version, 2);
+
     Ok(())
 }
 
@@ -123,6 +154,19 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
     let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 
+    let ids = vec![
+        (journal.id(), recipient1_account.id(), btc),
+        (journal.id(), recipient2_account.id(), btc),
+    ];
+
+    let ranges = cala
+        .balances()
+        .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
+        .await?;
+    for (_, range) in &ranges {
+        assert!(range.is_none());
+    }
+
     for (sender, recipient) in [
         (sender1_account.id(), recipient1_account.id()),
         (sender2_account.id(), recipient2_account.id()),
@@ -136,17 +180,12 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
             .unwrap();
     }
 
-    let ids = vec![
-        (journal.id(), recipient1_account.id(), btc),
-        (journal.id(), recipient2_account.id(), btc),
-    ];
-
     let ranges = cala
         .balances()
         .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
         .await?;
-
     for (_, range) in &ranges {
+        let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
@@ -177,8 +216,8 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
             Some(after_first_before_second_tx),
         )
         .await?;
-
     for (_, range) in &ranges {
+        let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
@@ -189,11 +228,26 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .balances()
         .find_all_in_range(&ids, after_first_before_second_tx, None)
         .await?;
-
     for (_, range) in &ranges {
+        let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::from(1290));
         assert_eq!(range.end.settled(), Decimal::from(2580));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
+        assert_eq!(range.end.details.version, 2);
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    let after_second_tx = Utc::now();
+
+    let ranges = cala
+        .balances()
+        .find_all_in_range(&ids, after_second_tx, None)
+        .await?;
+    for (_, range) in &ranges {
+        let range = range.clone().unwrap();
+        assert_eq!(range.start.settled(), Decimal::from(2580));
+        assert_eq!(range.end.settled(), Decimal::from(2580));
+        assert_eq!(range.diff.settled(), Decimal::ZERO);
         assert_eq!(range.end.details.version, 2);
     }
 
