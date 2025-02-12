@@ -9,6 +9,7 @@ license = "Apache-2.0"
 [features]
 
 fail-on-warnings = []
+graphql = []
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.3.10-dev" }
