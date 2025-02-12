@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Row, Transaction};
+use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Transaction};
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
@@ -152,35 +152,50 @@ impl BalanceRepo {
         &self,
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
-        let mut query_builder = QueryBuilder::new(
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        let mut currencies = Vec::with_capacity(ids.len());
+        for (journal_id, account_id, currency) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+            currencies.push(currency.code().to_string());
+        }
+
+        let rows = sqlx::query!(
             r#"
-            SELECT h.values, a.normal_balance_type
+            WITH balance_ids AS (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[]) 
+                AS v(journal_id, account_id, currency)
+            )
+            SELECT 
+                h.values,
+                a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
             JOIN cala_current_balances c
-            ON h.journal_id = c.journal_id
-            AND h.account_id = c.account_id
-            AND h.currency = c.currency
-            AND h.version = c.latest_version
+                ON h.journal_id = c.journal_id
+                AND h.account_id = c.account_id
+                AND h.currency = c.currency
+                AND h.version = c.latest_version
             JOIN cala_accounts a
-            ON c.account_id = a.id
-            WHERE (c.journal_id, c.account_id, c.currency) IN"#,
-        );
-        query_builder.push_tuples(ids, |mut builder, (journal_id, account_id, currency)| {
-            builder.push_bind(journal_id);
-            builder.push_bind(account_id);
-            builder.push_bind(currency.code());
-        });
-        let query = query_builder.build();
-        let rows = query.fetch_all(&self.pool).await?;
+                ON c.account_id = a.id
+            JOIN balance_ids b 
+                ON c.journal_id = b.journal_id
+                AND c.account_id = b.account_id
+                AND c.currency = b.currency"#,
+            &journal_ids[..],
+            &account_ids[..],
+            &currencies[..],
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
         let mut ret = HashMap::new();
         for row in rows {
-            let values: serde_json::Value = row.get("values");
             let details: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
-            let normal_balance_type: DebitOrCredit = row.get("normal_balance_type");
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
             ret.insert(
                 (details.journal_id, details.account_id, details.currency),
-                AccountBalance::new(normal_balance_type, details),
+                AccountBalance::new(row.normal_balance_type, details),
             );
         }
         Ok(ret)
@@ -281,9 +296,8 @@ impl BalanceRepo {
             let values: serde_json::Value = row.values.expect("values is not null");
             let details: BalanceSnapshot =
                 serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
-            let normal_balance_type: DebitOrCredit = row.normal_balance_type;
             let balance_id = (details.journal_id, details.account_id, details.currency);
-            let balance = AccountBalance::new(normal_balance_type, details);
+            let balance = AccountBalance::new(row.normal_balance_type, details);
             let entry = ret.entry(balance_id).or_insert((None, None));
             if row.first.expect("first is not null") {
                 entry.0 = Some(balance);
