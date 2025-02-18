@@ -36,26 +36,26 @@ impl ToTokens for FindAllFn<'_> {
         );
 
         tokens.append_all(quote! {
-            pub async fn find_all<T: From<#entity>>(
+            pub async fn find_all<Out: From<#entity>>(
                 &self,
                 ids: &[#id]
-            ) -> Result<std::collections::HashMap<#id, T>, #error> {
+            ) -> Result<std::collections::HashMap<#id, Out>, #error> {
                 self.find_all_via(self.pool(), ids).await
             }
 
-            pub async fn find_all_in_tx<T: From<#entity>>(
+            pub async fn find_all_in_tx<Out: From<#entity>>(
                 &self,
                 db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
                 ids: &[#id]
-            ) -> Result<std::collections::HashMap<#id, T>, #error> {
+            ) -> Result<std::collections::HashMap<#id, Out>, #error> {
                 self.find_all_via(&mut **db, ids).await
             }
 
-            async fn find_all_via<T: From<#entity>>(
+            async fn find_all_via<Out: From<#entity>>(
                 &self,
                 executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
                 ids: &[#id]
-            ) -> Result<std::collections::HashMap<#id, T>, #error> {
+            ) -> Result<std::collections::HashMap<#id, Out>, #error> {
                 let rows = sqlx::query!(
                     #query,
                     ids as &[#id],
@@ -71,7 +71,7 @@ impl ToTokens for FindAllFn<'_> {
                             recorded_at: r.recorded_at,
                         }), n)?;
 
-                Ok(res.0.into_iter().map(|u| (u.id.clone(), T::from(u))).collect())
+                Ok(res.0.into_iter().map(|u| (u.id.clone(), Out::from(u))).collect())
             }
         });
     }
@@ -101,26 +101,26 @@ mod tests {
         persist_fn.to_tokens(&mut tokens);
 
         let expected = quote! {
-            pub async fn find_all<T: From<Entity>>(
+            pub async fn find_all<Out: From<Entity>>(
                 &self,
                 ids: &[EntityId]
-            ) -> Result<std::collections::HashMap<EntityId, T>, es_entity::EsRepoError> {
+            ) -> Result<std::collections::HashMap<EntityId, Out>, es_entity::EsRepoError> {
                 self.find_all_via(self.pool(), ids).await
             }
 
-            pub async fn find_all_in_tx<T: From<Entity>>(
+            pub async fn find_all_in_tx<Out: From<Entity>>(
                 &self,
                 db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
                 ids: &[EntityId]
-            ) -> Result<std::collections::HashMap<EntityId, T>, es_entity::EsRepoError> {
+            ) -> Result<std::collections::HashMap<EntityId, Out>, es_entity::EsRepoError> {
                 self.find_all_via(&mut **db, ids).await
             }
 
-            async fn find_all_via<T: From<Entity>>(
+            async fn find_all_via<Out: From<Entity>>(
                 &self,
                 executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
                 ids: &[EntityId]
-            ) -> Result<std::collections::HashMap<EntityId, T>, es_entity::EsRepoError> {
+            ) -> Result<std::collections::HashMap<EntityId, Out>, es_entity::EsRepoError> {
                 let rows = sqlx::query!(
                     "SELECT i.id AS \"id: EntityId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN entity_events e ON i.id = e.id WHERE i.id = ANY($1) ORDER BY i.id, e.sequence",
                     ids as &[EntityId],
@@ -136,7 +136,7 @@ mod tests {
                             recorded_at: r.recorded_at,
                         }), n)?;
 
-                Ok(res.0.into_iter().map(|u| (u.id.clone(), T::from(u))).collect())
+                Ok(res.0.into_iter().map(|u| (u.id.clone(), Out::from(u))).collect())
             }
         };
 

@@ -29,6 +29,7 @@ pub fn derive(ast: syn::DeriveInput) -> darling::Result<proc_macro2::TokenStream
 }
 pub struct EsRepo<'a> {
     repo: &'a syn::Ident,
+    generics: &'a syn::Generics,
     persist_events_fn: persist_events_fn::PersistEventsFn<'a>,
     persist_events_batch_fn: persist_events_batch_fn::PersistEventsBatchFn<'a>,
     update_fn: update_fn::UpdateFn<'a>,
@@ -78,6 +79,7 @@ impl<'a> From<&'a RepositoryOptions> for EsRepo<'a> {
 
         Self {
             repo: &opts.ident,
+            generics: &opts.generics,
             persist_events_fn: persist_events_fn::PersistEventsFn::from(opts),
             persist_events_batch_fn: persist_events_batch_fn::PersistEventsBatchFn::from(opts),
             update_fn: update_fn::UpdateFn::from(opts),
@@ -151,6 +153,8 @@ impl ToTokens for EsRepo<'_> {
         let populate_nested = &self.populate_nested;
         let pool_field = self.opts.pool_field();
 
+        let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+
         tokens.append_all(quote! {
             pub mod #cursor_mod {
                 use super::*;
@@ -202,7 +206,7 @@ impl ToTokens for EsRepo<'_> {
             #find_many_filter
             #sort_by
 
-            impl #repo {
+             impl #impl_generics #repo #ty_generics #where_clause {
                 #[inline(always)]
                 pub fn pool(&self) -> &sqlx::PgPool {
                     &self.#pool_field
@@ -227,7 +231,7 @@ impl ToTokens for EsRepo<'_> {
 
             #populate_nested
 
-            impl es_entity::EsRepo for #repo {
+            impl #impl_generics es_entity::EsRepo for #repo #ty_generics #where_clause {
                 type Entity = #entity;
                 type Err = #error;
             }
