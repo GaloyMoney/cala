@@ -63,10 +63,10 @@ impl ToTokens for UpdateFn<'_> {
 
         tokens.append_all(quote! {
             #[inline(always)]
-            fn extract_events<T, E>(entity: &mut T) -> &mut es_entity::EntityEvents<E>
+            fn extract_events<Entity, Event>(entity: &mut Entity) -> &mut es_entity::EntityEvents<Event>
             where
-                T: es_entity::EsEntity<Event = E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::EsEntity<Event = Event>,
+                Event: es_entity::EsEvent,
             {
                 entity.events_mut()
             }
@@ -139,10 +139,10 @@ mod tests {
 
         let expected = quote! {
             #[inline(always)]
-            fn extract_events<T, E>(entity: &mut T) -> &mut es_entity::EntityEvents<E>
+            fn extract_events<Entity, Event>(entity: &mut Entity) -> &mut es_entity::EntityEvents<Event>
             where
-                T: es_entity::EsEntity<Event = E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::EsEntity<Event = Event>,
+                Event: es_entity::EsEvent,
             {
                 entity.events_mut()
             }
@@ -212,10 +212,10 @@ mod tests {
 
         let expected = quote! {
             #[inline(always)]
-            fn extract_events<T, E>(entity: &mut T) -> &mut es_entity::EntityEvents<E>
+            fn extract_events<Entity, Event>(entity: &mut Entity) -> &mut es_entity::EntityEvents<Event>
             where
-                T: es_entity::EsEntity<Event = E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::EsEntity<Event = Event>,
+                Event: es_entity::EsEvent,
             {
                 entity.events_mut()
             }

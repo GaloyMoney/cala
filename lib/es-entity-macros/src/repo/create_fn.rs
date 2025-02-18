@@ -62,22 +62,22 @@ impl ToTokens for CreateFn<'_> {
 
         tokens.append_all(quote! {
             #[inline(always)]
-            fn convert_new<T, E>(item: T) -> es_entity::EntityEvents<E>
+            fn convert_new<Entity, Event>(item: Entity) -> es_entity::EntityEvents<Event>
             where
-                T: es_entity::IntoEvents<E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::IntoEvents<Event>,
+                Event: es_entity::EsEvent,
             {
                 item.into_events()
             }
 
             #[inline(always)]
-            fn hydrate_entity<T, E>(events: es_entity::EntityEvents<E>) -> Result<T, #error>
+            fn hydrate_entity<Entity, Event>(events: es_entity::EntityEvents<Event>) -> Result<Entity, #error>
             where
-                T: es_entity::TryFromEvents<E>,
+                Entity: es_entity::TryFromEvents<Event>,
                 #error: From<es_entity::EsEntityError>,
-                E: es_entity::EsEvent,
+                Event: es_entity::EsEvent,
             {
-                Ok(T::try_from_events(events)?)
+                Ok(Entity::try_from_events(events)?)
             }
 
             pub async fn create(
@@ -145,22 +145,22 @@ mod tests {
 
         let expected = quote! {
             #[inline(always)]
-            fn convert_new<T, E>(item: T) -> es_entity::EntityEvents<E>
+            fn convert_new<Entity, Event>(item: Entity) -> es_entity::EntityEvents<Event>
             where
-                T: es_entity::IntoEvents<E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::IntoEvents<Event>,
+                Event: es_entity::EsEvent,
             {
                 item.into_events()
             }
 
             #[inline(always)]
-            fn hydrate_entity<T, E>(events: es_entity::EntityEvents<E>) -> Result<T, es_entity::EsRepoError>
+            fn hydrate_entity<Entity, Event>(events: es_entity::EntityEvents<Event>) -> Result<Entity, es_entity::EsRepoError>
             where
-                T: es_entity::TryFromEvents<E>,
+                Entity: es_entity::TryFromEvents<Event>,
                 es_entity::EsRepoError: From<es_entity::EsEntityError>,
-                E: es_entity::EsEvent,
+                Event: es_entity::EsEvent,
             {
-                Ok(T::try_from_events(events)?)
+                Ok(Entity::try_from_events(events)?)
             }
 
             pub async fn create(
@@ -224,22 +224,22 @@ mod tests {
 
         let expected = quote! {
             #[inline(always)]
-            fn convert_new<T, E>(item: T) -> es_entity::EntityEvents<E>
+            fn convert_new<Entity, Event>(item: Entity) -> es_entity::EntityEvents<Event>
             where
-                T: es_entity::IntoEvents<E>,
-                E: es_entity::EsEvent,
+                Entity: es_entity::IntoEvents<Event>,
+                Event: es_entity::EsEvent,
             {
                 item.into_events()
             }
 
             #[inline(always)]
-            fn hydrate_entity<T, E>(events: es_entity::EntityEvents<E>) -> Result<T, es_entity::EsRepoError>
+            fn hydrate_entity<Entity, Event>(events: es_entity::EntityEvents<Event>) -> Result<Entity, es_entity::EsRepoError>
             where
-                T: es_entity::TryFromEvents<E>,
+                Entity: es_entity::TryFromEvents<Event>,
                 es_entity::EsRepoError: From<es_entity::EsEntityError>,
-                E: es_entity::EsEvent,
+                Event: es_entity::EsEvent,
             {
-                Ok(T::try_from_events(events)?)
+                Ok(Entity::try_from_events(events)?)
             }
 
             pub async fn create(

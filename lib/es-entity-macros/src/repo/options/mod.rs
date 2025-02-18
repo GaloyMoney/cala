@@ -53,6 +53,7 @@ impl RepoField {
 #[darling(attributes(es_repo), map = "Self::update_defaults")]
 pub struct RepositoryOptions {
     pub ident: syn::Ident,
+    pub generics: syn::Generics,
     #[darling(default)]
     pub columns: Columns,
     #[darling(default)]
