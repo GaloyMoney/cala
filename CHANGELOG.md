@@ -1,3 +1,18 @@
+# [cala release v0.3.13](https://github.com/GaloyMoney/cala/releases/tag/0.3.13)
+
+
+### Documentation
+
+- Api reference and website examples update to 01be799c32668b021f75f7057d5e643b40b29e22
+
+### Miscellaneous Tasks
+
+- Bump flake
+
+### Testing
+
+- Add generic Repo test for es-entity (#323)
+
 # [cala release v0.3.12](https://github.com/GaloyMoney/cala/releases/tag/0.3.12)
 
 
