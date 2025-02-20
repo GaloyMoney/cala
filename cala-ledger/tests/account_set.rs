@@ -225,7 +225,6 @@ async fn balances() -> anyhow::Result<()> {
         .await?;
     assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
 
-    
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
         after: None,
