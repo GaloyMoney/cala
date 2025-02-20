@@ -225,8 +225,21 @@ async fn balances() -> anyhow::Result<()> {
         .await?;
     assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
 
-    //// Assert entries.list_for_account_set_id
+    
+    let query_args = es_entity::PaginatedQueryArgs {
+        first: 2,
+        after: None,
+    };
+    let ret = cala
+        .entries()
+        .list_for_account_set_id(
+            before_set.id(),
+            query_args,
+            es_entity::ListDirection::Ascending,
+        )
+        .await?;
 
+    assert!(!ret.entities.is_empty());
     Ok(())
 }
 
