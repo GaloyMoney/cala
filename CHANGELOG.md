@@ -1,3 +1,14 @@
+# [cala release v0.3.14](https://github.com/GaloyMoney/cala/releases/tag/0.3.14)
+
+
+### Documentation
+
+- Api reference and website examples update to 13201ed9f24fcabe2f2e24967dc602e927787992
+
+### Miscellaneous Tasks
+
+- Entries.list_for_account_set_id (#325)
+
 # [cala release v0.3.13](https://github.com/GaloyMoney/cala/releases/tag/0.3.13)
 
 
