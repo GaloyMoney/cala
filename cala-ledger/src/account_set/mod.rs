@@ -101,6 +101,19 @@ impl AccountSets {
         db: &mut LedgerOperation<'_>,
         new_account_sets: Vec<NewAccountSet>,
     ) -> Result<Vec<AccountSet>, AccountSetError> {
+        let mut new_accounts = Vec::new();
+        for new_account_set in new_account_sets.iter() {
+            let new_account = NewAccount::builder()
+                .id(uuid::Uuid::from(new_account_set.id))
+                .name(String::new())
+                .code(new_account_set.id.to_string())
+                .normal_balance_type(new_account_set.normal_balance_type)
+                .is_account_set(true)
+                .build()
+                .expect("Failed to build account");
+            new_accounts.push(new_account);
+        }
+        self.accounts.create_all_in_op(db, new_accounts).await?;
         let account_sets = self
             .repo
             .create_all_in_op(db.op(), new_account_sets)
