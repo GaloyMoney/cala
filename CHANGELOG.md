@@ -1,3 +1,18 @@
+# [cala release v0.3.15](https://github.com/GaloyMoney/cala/releases/tag/0.3.15)
+
+
+### Bug Fixes
+
+- Create account when batch creating account sets
+
+### Documentation
+
+- Api reference and website examples update to b1547bfb28d451979de5b7e42436736959b2f342
+
+### Miscellaneous Tasks
+
+- AccountSets.create_all
+
 # [cala release v0.3.14](https://github.com/GaloyMoney/cala/releases/tag/0.3.14)
 
 
