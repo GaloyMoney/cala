@@ -85,6 +85,34 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    pub async fn create_all(
+        &self,
+        new_account_sets: Vec<NewAccountSet>,
+    ) -> Result<Vec<AccountSet>, AccountSetError> {
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let account_sets = self.create_all_in_op(&mut op, new_account_sets).await?;
+        op.commit().await?;
+        Ok(account_sets)
+    }
+
+    #[instrument(name = "cala_ledger.account_sets.create_all", skip(self, db))]
+    pub async fn create_all_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        new_account_sets: Vec<NewAccountSet>,
+    ) -> Result<Vec<AccountSet>, AccountSetError> {
+        let account_sets = self
+            .repo
+            .create_all_in_op(db.op(), new_account_sets)
+            .await?;
+        db.accumulate(
+            account_sets
+                .iter()
+                .flat_map(|account| account.events.last_persisted(1).map(|p| &p.event)),
+        );
+        Ok(account_sets)
+    }
+
     #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
     pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
