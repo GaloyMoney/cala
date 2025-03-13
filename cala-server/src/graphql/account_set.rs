@@ -316,7 +316,7 @@ impl From<cala_ledger::account_set::AccountSet> for AccountSet {
             version: values.version,
             journal_id: UUID::from(values.journal_id),
             name: values.name,
-            normal_balance_type: DebitOrCredit::from(values.normal_balance_type),
+            normal_balance_type: values.normal_balance_type,
             description: values.description,
             metadata: values.metadata.map(JSON::from),
             created_at: created_at.into(),

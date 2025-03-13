@@ -52,12 +52,12 @@ pub(super) struct RangedBalance {
 #[ComplexObject]
 impl Balance {
     async fn available(&self, layer: Layer) -> BalanceAmount {
-        let amount = self.balance.details.available(layer.into());
+        let amount = self.balance.details.available(layer);
         let currency = self.balance.details.currency;
         BalanceAmount {
             dr_balance: (amount.dr_balance, currency).into(),
             cr_balance: (amount.cr_balance, currency).into(),
-            normal_balance: (self.balance.available(layer.into()), currency).into(),
+            normal_balance: (self.balance.available(layer), currency).into(),
             entry_id: amount.entry_id.into(),
         }
     }

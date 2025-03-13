@@ -249,8 +249,8 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .id(input.account_id)
             .name(input.name)
             .code(input.code)
-            .normal_balance_type(input.normal_balance_type.into())
-            .status(input.status.into());
+            .normal_balance_type(input.normal_balance_type)
+            .status(input.status);
 
         if let Some(external_id) = input.external_id {
             builder.external_id(external_id);
@@ -339,7 +339,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .id(input.account_set_id)
             .journal_id(input.journal_id)
             .name(input.name)
-            .normal_balance_type(input.normal_balance_type.into());
+            .normal_balance_type(input.normal_balance_type);
 
         if let Some(description) = input.description {
             builder.description(description);

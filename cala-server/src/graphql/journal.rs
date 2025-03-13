@@ -44,7 +44,7 @@ impl From<cala_ledger::journal::Journal> for Journal {
             journal_id: UUID::from(values.id),
             version: values.version,
             name: values.name,
-            status: Status::from(values.status),
+            status: values.status,
             description: values.description,
             created_at: Timestamp::from(created_at),
             modified_at: Timestamp::from(modified_at),
