@@ -1,3 +1,22 @@
+# [cala release v0.3.16](https://github.com/GaloyMoney/cala/releases/tag/0.3.16)
+
+
+### Bug Fixes
+
+- Clippy
+
+### Documentation
+
+- Api reference and website examples update to 4f7a93599cf8505978ceb6d50020a347534e3791
+
+### Miscellaneous Tasks
+
+- Bump ring from 0.17.8 to 0.17.13 (#331)
+
+### Refactor
+
+- Conditionally add GQL impl to core-types for primitives
+
 # [cala release v0.3.15](https://github.com/GaloyMoney/cala/releases/tag/0.3.15)
 
 
