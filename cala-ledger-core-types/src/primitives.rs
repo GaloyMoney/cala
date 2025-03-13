@@ -28,6 +28,7 @@ impl From<AccountSetId> for AccountId {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum DebitOrCredit {
@@ -69,6 +70,7 @@ impl From<DebitOrCredit> for CelValue {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 pub enum Status {
     Active,
     Locked,
@@ -82,6 +84,7 @@ impl Default for Status {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
 #[sqlx(type_name = "Layer", rename_all = "snake_case")]
+#[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 pub enum Layer {
     Settled,
     Pending,

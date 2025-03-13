@@ -3,39 +3,7 @@ use async_graphql::*;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "cala_ledger::primitives::DebitOrCredit")]
-pub(super) enum DebitOrCredit {
-    Debit,
-    Credit,
-}
-
-impl Default for DebitOrCredit {
-    fn default() -> Self {
-        Self::Credit
-    }
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "cala_ledger::primitives::Layer")]
-pub(super) enum Layer {
-    Settled,
-    Pending,
-    Encumbrance,
-}
-
-#[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(remote = "cala_ledger::primitives::Status")]
-pub(super) enum Status {
-    Active,
-    Locked,
-}
-
-impl Default for Status {
-    fn default() -> Self {
-        Self::Active
-    }
-}
+pub use cala_ledger::primitives::{DebitOrCredit, Layer, Status};
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
