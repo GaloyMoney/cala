@@ -653,6 +653,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "strum",
  "thiserror",
  "uuid",
 ]
