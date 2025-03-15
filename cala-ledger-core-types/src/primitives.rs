@@ -27,7 +27,18 @@ impl From<AccountSetId> for AccountId {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    sqlx::Type,
+    strum::Display,
+    strum::EnumString,
+)]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 #[sqlx(type_name = "DebitOrCredit", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
