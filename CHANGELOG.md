@@ -1,3 +1,17 @@
+# [cala release v0.3.17](https://github.com/GaloyMoney/cala/releases/tag/0.3.17)
+
+
+### Documentation
+
+- Api reference and website examples update to 8e5419b053a7c130418f8d27b91fca0b1337f9b1
+
+### Miscellaneous Tasks
+
+- Parse debit or credit from str (#338)
+- Bump napi-derive from 2.16.12 to 2.16.13 (#299)
+- Bump napi-build from 2.1.3 to 2.1.5 (#327)
+- Bump syn from 2.0.90 to 2.0.100 (#332)
+
 # [cala release v0.3.16](https://github.com/GaloyMoney/cala/releases/tag/0.3.16)
 
 
