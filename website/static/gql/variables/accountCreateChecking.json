@@ -1,8 +1,8 @@
 {
   "input": {
-    "accountId": "89bd29e2-bd19-4201-b9f3-4d7e31bcb771",
+    "accountId": "8cc6d8ee-588b-42e6-afda-54fa7dfc17f1",
     "name": "Alice - Checking",
-    "code": "ALICE.CHECKING-89bd29e2-bd19-4201-b9f3-4d7e31bcb771",
+    "code": "ALICE.CHECKING-8cc6d8ee-588b-42e6-afda-54fa7dfc17f1",
     "normalBalanceType": "CREDIT"
   }
 }
