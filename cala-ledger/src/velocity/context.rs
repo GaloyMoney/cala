@@ -134,7 +134,7 @@ mod tests {
 
         let expr: CelExpression = "context.vars.transaction.id".parse().unwrap();
         let result: uuid::Uuid = expr.try_evaluate(&ctx).unwrap();
-        assert!(result == tx.id.into());
+        assert!(result == uuid::Uuid::from(tx.id));
 
         let expr: CelExpression = "context.vars.account.metadata.test".parse().unwrap();
         let result: bool = expr.try_evaluate(&ctx).unwrap();
