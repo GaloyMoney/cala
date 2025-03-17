@@ -1,7 +1,8 @@
 mod helpers;
 
+use rand::distr::{Alphanumeric, SampleString};
+
 use cala_ledger::{account_set::*, tx_template::*, *};
-use rand::distributions::{Alphanumeric, DistString};
 
 #[tokio::test]
 async fn errors_on_collision() -> anyhow::Result<()> {
@@ -99,7 +100,7 @@ async fn balances() -> anyhow::Result<()> {
     let sender_account = cala.accounts().create(sender).await.unwrap();
     let recipient_account = cala.accounts().create(receiver).await.unwrap();
 
-    let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 
@@ -255,7 +256,7 @@ async fn account_set_update() -> anyhow::Result<()> {
     let journal = cala.journals().create(new_journal).await.unwrap();
 
     // create account set
-    let initial_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let initial_name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_account_set = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name(initial_name.clone())
@@ -266,7 +267,7 @@ async fn account_set_update() -> anyhow::Result<()> {
     assert_eq!(initial_name, account_set.values().name);
 
     // update account set name and description
-    let updated_name = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let updated_name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let mut builder = AccountSetUpdate::default();
     builder.name(updated_name.clone()).build()?;
     account_set.update(builder);

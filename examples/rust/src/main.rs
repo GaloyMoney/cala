@@ -21,7 +21,7 @@ fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let random_number = rand::thread_rng().gen_range(0..1000);
+    let random_number = rand::rng().random_range(0..1000);
     let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{:03}", random_number));
 
     store_server_pid(".cala", std::process::id())?;
