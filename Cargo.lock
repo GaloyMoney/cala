@@ -152,9 +152,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "7.0.11"
+version = "7.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ba6d24703c5adc5ba9116901b92ee4e4c0643c01a56c4fd303f3818638d7449"
+checksum = "bfff2b17d272a5e3e201feda444e2c24b011fa722951268d1bd8b9b5bc6dc449"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -174,7 +174,6 @@ dependencies = [
  "mime",
  "multer",
  "num-traits",
- "once_cell",
  "pin-project-lite",
  "regex",
  "serde",
@@ -206,9 +205,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "7.0.11"
+version = "7.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a94c2d176893486bd37cd1b6defadd999f7357bf5804e92f510c08bcf16c538f"
+checksum = "d8e5d0c6697def2f79ccbd972fb106b633173a6066e430b480e1ff9376a7561a"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -223,9 +222,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "7.0.11"
+version = "7.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79272bdbf26af97866e149f05b2b546edb5c00e51b5f916289931ed233e208ad"
+checksum = "8531ee6d292c26df31c18c565ff22371e7bdfffe7f5e62b69537db0b8fd554dc"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -235,9 +234,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "7.0.11"
+version = "7.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef5ec94176a12a8cbe985cd73f2e54dc9c702c88c766bdef12f1f3a67cedbee1"
+checksum = "741110dda927420a28fbc1c310543d3416f789a6ba96859c2c265843a0a96887"
 dependencies = [
  "bytes",
  "indexmap 2.6.0",
@@ -1934,7 +1933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.52.6",
 ]
 
 [[package]]
@@ -3583,7 +3582,7 @@ dependencies = [
  "fastrand",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4352,7 +4351,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
