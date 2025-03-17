@@ -1,10 +1,10 @@
 mod helpers;
 
 use chrono::{TimeZone, Utc};
+use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{tx_template::*, *};
-use rand::distributions::{Alphanumeric, DistString};
 
 #[tokio::test]
 async fn balance_in_range() -> anyhow::Result<()> {
@@ -24,7 +24,7 @@ async fn balance_in_range() -> anyhow::Result<()> {
     let sender_account = cala.accounts().create(sender).await.unwrap();
     let recipient_account = cala.accounts().create(receiver).await.unwrap();
 
-    let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 
@@ -150,7 +150,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
     let sender2_account = cala.accounts().create(sender2).await.unwrap();
     let recipient2_account = cala.accounts().create(receiver2).await.unwrap();
 
-    let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 

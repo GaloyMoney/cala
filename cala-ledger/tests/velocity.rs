@@ -1,6 +1,6 @@
 mod helpers;
 
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{velocity::*, *};
@@ -97,7 +97,7 @@ async fn create_control() -> anyhow::Result<()> {
         .attach_control_to_account(control.id(), sender_account.id(), params)
         .await?;
 
-    let tx_code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_template = helpers::velocity_template(&tx_code);
 
     cala.tx_templates().create(new_template).await.unwrap();

@@ -1,5 +1,5 @@
 #![allow(dead_code)]
-use rand::distributions::{Alphanumeric, DistString};
+use rand::distr::{Alphanumeric, SampleString};
 
 use cala_ledger::{account::*, journal::*, tx_template::*};
 
@@ -11,7 +11,7 @@ pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
 }
 
 pub fn test_journal() -> NewJournal {
-    let name = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     NewJournal::builder()
         .id(JournalId::new())
         .name(name)
@@ -20,14 +20,14 @@ pub fn test_journal() -> NewJournal {
 }
 
 pub fn test_accounts() -> (NewAccount, NewAccount) {
-    let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let sender_account = NewAccount::builder()
         .id(uuid::Uuid::new_v4())
         .name(format!("Test Sender Account {code}"))
         .code(code)
         .build()
         .unwrap();
-    let code = Alphanumeric.sample_string(&mut rand::thread_rng(), 32);
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account = NewAccount::builder()
         .id(uuid::Uuid::new_v4())
         .name(format!("Test Recipient Account {code}"))
