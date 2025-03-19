@@ -21,7 +21,7 @@ pub struct AccountSetMember {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "id")]
 pub enum AccountSetMemberId {
     Account(AccountId),
