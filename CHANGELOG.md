@@ -1,3 +1,33 @@
+# [cala release v0.3.18](https://github.com/GaloyMoney/cala/releases/tag/0.3.18)
+
+
+### Bug Fixes
+
+- Add id to 'AccountSetMembersCursor' (#353)
+
+### Documentation
+
+- Api reference and website examples update to 1b4cb3d3403bf232108c90101e660eb5f1f47483
+
+### Miscellaneous Tasks
+
+- Bump rust_decimal from 1.36.0 to 1.37.0 (#348)
+- Bump rust_decimal_macros from 1.36.0 to 1.37.0 (#349)
+- Bump async-graphql-axum from 7.0.11 to 7.0.13 (#350)
+- Bump quote from 1.0.37 to 1.0.40 (#351)
+- Bump proc-macro2 from 1.0.92 to 1.0.94 (#352)
+- Bump napi from 2.16.14 to 2.16.16 (#346)
+- Bump async-graphql from 7.0.11 to 7.0.15 (#345)
+- Bump rand to 0.9 (#310)
+- Bump chrono from 0.4.38 to 0.4.40 (#344)
+- Bump anyhow from 1.0.95 to 1.0.97 (#343)
+- Bump serde_json from 1.0.138 to 1.0.140 (#339)
+- Bump convert_case from 0.6.0 to 0.8.0 (#341)
+- Bump serde from 1.0.217 to 1.0.219 (#342)
+- Bump clap from 4.5.26 to 4.5.32 (#340)
+- Bump uuid from 1.11.0 to 1.16.0 (#337)
+- Bump micromatch from 4.0.5 to 4.0.8 in /cala-nodejs (#224)
+
 # [cala release v0.3.17](https://github.com/GaloyMoney/cala/releases/tag/0.3.17)
 
 
