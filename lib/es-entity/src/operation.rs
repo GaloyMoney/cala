@@ -48,4 +48,9 @@ impl<'t> DbOp<'t> {
         self.tx.commit().await?;
         Ok(())
     }
+
+    pub async fn rollback(self) -> Result<(), sqlx::Error> {
+        self.tx.rollback().await?;
+        Ok(())
+    }
 }

@@ -55,4 +55,10 @@ impl<'t> LedgerOperation<'t> {
         }
         Ok(())
     }
+
+    pub async fn rollback(self) -> Result<(), sqlx::Error> {
+        let tx = self.db_op.into_tx();
+        tx.rollback().await?;
+        Ok(())
+    }
 }
