@@ -16,7 +16,7 @@ graphql = []
 proc-macro = true
 
 [dependencies]
-proc-macro2 = "1.0.92"
+proc-macro2 = "1.0.94"
 syn = "2.0.100"
 quote = "1.0.36"
 darling = "0.20.9"
