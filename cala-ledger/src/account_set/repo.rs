@@ -11,17 +11,19 @@ use super::{entity::*, error::*};
 const ADDVISORY_LOCK_ID: i64 = 123456;
 
 pub mod members_cursor {
-    use cala_types::account_set::AccountSetMember;
+    use cala_types::account_set::{AccountSetMember, AccountSetMemberId};
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
     pub struct AccountSetMembersCursor {
+        pub id: AccountSetMemberId,
         pub member_created_at: chrono::DateTime<chrono::Utc>,
     }
 
     impl From<&AccountSetMember> for AccountSetMembersCursor {
         fn from(member: &AccountSetMember) -> Self {
             Self {
+                id: member.id,
                 member_created_at: member.created_at,
             }
         }
@@ -106,13 +108,27 @@ impl AccountSetRepo {
     async fn list_children_in_executor(
         &self,
         executor: impl Executor<'_, Database = Postgres>,
-        id: AccountSetId,
+        account_set_id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
         AccountSetError,
     > {
-        let after = args.after.map(|c| c.member_created_at) as Option<DateTime<Utc>>;
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (member_id, created_at) = if let Some(after) = after {
+            (Some(after.id), Some(after.member_created_at))
+        } else {
+            (None, None)
+        };
+
+        let id = match member_id {
+            Some(member_id) => match member_id {
+                AccountSetMemberId::Account(id) => Some(id),
+                AccountSetMemberId::AccountSet(id) => Some(id.into()),
+            },
+            None => None,
+        };
+
         let rows = sqlx::query!(
             r#"
             WITH member_accounts AS (
@@ -124,10 +140,10 @@ impl AccountSetRepo {
               FROM cala_account_set_member_accounts
               WHERE
                 transitive IS FALSE
-                AND account_set_id = $1
-                AND (created_at < $2 OR $2 IS NULL)
-              ORDER BY created_at DESC
-              LIMIT $3
+                AND account_set_id = $4
+                AND (COALESCE((created_at, member_account_id) < ($3, $2), $2 IS NULL))
+              ORDER BY created_at DESC, member_account_id DESC
+              LIMIT $1
             ), member_sets AS (
               SELECT
                 member_account_set_id AS member_id,
@@ -136,36 +152,45 @@ impl AccountSetRepo {
                 created_at
               FROM cala_account_set_member_account_sets
               WHERE
-                account_set_id = $1
-                AND (created_at < $2 OR $2 IS NULL)
-              ORDER BY created_at DESC
-              LIMIT $3
+                account_set_id = $4
+                AND (COALESCE((created_at, member_account_set_id) < ($3, $2), $2 IS NULL))
+              ORDER BY created_at DESC, member_account_set_id DESC
+              LIMIT $1
             ), all_members AS (
               SELECT * FROM member_accounts
               UNION ALL
               SELECT * FROM member_sets
             )
             SELECT * FROM all_members
-            ORDER BY created_at DESC
-            LIMIT $3
+            ORDER BY created_at DESC, member_id DESC
+            LIMIT $1
           "#,
-            id as AccountSetId,
-            after,
-            args.first as i64 + 1,
+            (first + 1) as i64,
+            id.map(uuid::Uuid::from),
+            created_at,
+            uuid::Uuid::from(account_set_id),
         )
         .fetch_all(executor)
         .await?;
-        let has_next_page = rows.len() > args.first;
+        let has_next_page = rows.len() > first;
         let mut end_cursor = None;
         if let Some(last) = rows.last() {
+            let id = last
+                .member_account_id
+                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
+                .or_else(|| {
+                    last.member_account_set_id
+                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
+                });
             end_cursor = Some(AccountSetMembersCursor {
+                id: id.expect("member_id not set"),
                 member_created_at: last.created_at.expect("created_at not set"),
             });
         }
 
         let account_set_members = rows
             .into_iter()
-            .take(args.first)
+            .take(first)
             .map(
                 |row| match (row.member_account_id, row.member_account_set_id) {
                     (Some(member_account_id), _) => AccountSetMember::from((
