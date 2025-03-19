@@ -1,5 +1,5 @@
 use cala_types::{
-    account_set::{AccountSetMember, AccountSetValues},
+    account_set::{AccountSetMember, AccountSetMemberId, AccountSetValues},
     primitives::AccountSetId,
 };
 use serde::{Deserialize, Serialize};
@@ -21,12 +21,14 @@ impl From<&AccountSetValues> for AccountSetByNameCursor {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AccountSetMemberCursor {
+    pub id: AccountSetMemberId,
     pub member_created_at: chrono::DateTime<chrono::Utc>,
 }
 
 impl From<AccountSetMember> for AccountSetMemberCursor {
     fn from(member: AccountSetMember) -> Self {
         Self {
+            id: member.id,
             member_created_at: member.created_at,
         }
     }
