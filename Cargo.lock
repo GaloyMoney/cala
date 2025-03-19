@@ -1933,7 +1933,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4979f22fdb869068da03c9f7528f8297c6fd2606bc3a4affe42e6a823fdb8da4"
 dependencies = [
  "cfg-if",
- "windows-targets 0.52.6",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -2931,12 +2931,12 @@ dependencies = [
 
 [[package]]
 name = "rust_decimal_macros"
-version = "1.36.0"
+version = "1.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da991f231869f34268415a49724c6578e740ad697ba0999199d6f22b3949332c"
+checksum = "0dde81640648b810262386d671ad939ca2b138c89e5cf5d91af31f17c9832e8d"
 dependencies = [
  "quote",
- "rust_decimal",
+ "syn 2.0.100",
 ]
 
 [[package]]
