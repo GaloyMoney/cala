@@ -10,7 +10,7 @@ use super::{entity::*, error::*};
     err = "EntryError",
     columns(
         account_id(ty = "AccountId", list_for, update(persist = false)),
-        journal_id(ty = "JournalId", update(persist = false)),
+        journal_id(ty = "JournalId", list_for, update(persist = false)),
         transaction_id(ty = "TransactionId", update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
