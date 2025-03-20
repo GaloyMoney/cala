@@ -1,3 +1,18 @@
+# [cala release v0.3.19](https://github.com/GaloyMoney/cala/releases/tag/0.3.19)
+
+
+### Bug Fixes
+
+- Sqlx-prepare
+
+### Documentation
+
+- Api reference and website examples update to 8458c52364e2420f01400341d3e9f31fcfad9eb7
+
+### Miscellaneous Tasks
+
+- Add entries.list_for_journal_id
+
 # [cala release v0.3.18](https://github.com/GaloyMoney/cala/releases/tag/0.3.18)
 
 
