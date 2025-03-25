@@ -81,7 +81,7 @@ impl JobExecutor {
                     &registry,
                     &mut keep_alive,
                     poll_limit,
-                    pg_interval.clone(),
+                    pg_interval,
                     &running_jobs,
                     &jobs,
                 )
