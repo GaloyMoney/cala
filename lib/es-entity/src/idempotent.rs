@@ -20,3 +20,19 @@ impl<T> Idempotent<T> {
         }
     }
 }
+
+pub trait FromIdempotentIgnored {
+    fn from_ignored() -> Self;
+}
+
+impl<T> FromIdempotentIgnored for Idempotent<T> {
+    fn from_ignored() -> Self {
+        Idempotent::Ignored
+    }
+}
+
+impl<T, E> FromIdempotentIgnored for Result<Idempotent<T>, E> {
+    fn from_ignored() -> Self {
+        Ok(Idempotent::Ignored)
+    }
+}
