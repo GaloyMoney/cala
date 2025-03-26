@@ -319,6 +319,7 @@ impl From<TxTemplateEntry> for proto::TxTemplateEntry {
             currency,
             units,
             description,
+            metadata,
         }: TxTemplateEntry,
     ) -> Self {
         proto::TxTemplateEntry {
@@ -329,6 +330,7 @@ impl From<TxTemplateEntry> for proto::TxTemplateEntry {
             currency: String::from(currency),
             units: String::from(units),
             description: description.map(String::from),
+            metadata: metadata.map(String::from),
         }
     }
 }
@@ -440,6 +442,7 @@ impl From<EntryValues> for proto::Entry {
             currency,
             units,
             description,
+            metadata,
         }: EntryValues,
     ) -> Self {
         let layer: proto::Layer = layer.into();
@@ -458,6 +461,9 @@ impl From<EntryValues> for proto::Entry {
             currency: currency.to_string(),
             units: units.to_string(),
             description: description.map(String::from),
+            metadata: metadata.map(|json| {
+                serde_json::from_value(json).expect("Could not transfer json -> struct")
+            }),
         }
     }
 }

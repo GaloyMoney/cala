@@ -69,6 +69,7 @@ pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
             .direction("DEBIT")
             .units("decimal('1290')")
             .currency("'BTC'")
+            .metadata(r#"{"sender": params.sender}"#)
             .build()
             .unwrap(),
         NewTxTemplateEntry::builder()

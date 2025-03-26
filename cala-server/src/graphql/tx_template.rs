@@ -34,6 +34,7 @@ pub(super) struct TxTemplateEntry {
     units: Expression,
     currency: Expression,
     description: Option<Expression>,
+    metadata: Option<Expression>,
 }
 
 #[derive(Clone, SimpleObject)]
@@ -159,6 +160,7 @@ impl From<cala_ledger::tx_template::TxTemplateEntry> for TxTemplateEntry {
             units,
             currency,
             description,
+            metadata,
         }: cala_ledger::tx_template::TxTemplateEntry,
     ) -> Self {
         Self {
@@ -169,6 +171,7 @@ impl From<cala_ledger::tx_template::TxTemplateEntry> for TxTemplateEntry {
             units: Expression::from(units),
             currency: Expression::from(currency),
             description: description.map(Expression::from),
+            metadata: metadata.map(Expression::from),
         }
     }
 }

@@ -1,5 +1,7 @@
 mod helpers;
 
+use std::collections::HashMap;
+
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
@@ -31,9 +33,26 @@ async fn transaction_post() -> anyhow::Result<()> {
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
 
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
+    let tx = cala
+        .post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
+
+    let entries = cala
+        .entries()
+        .find_all(&tx.values().entry_ids)
+        .await
+        .unwrap();
+
+    // Only one of the entries should have metadata.
+    for entry in entries.values() {
+        if let Some(metadata) = &entry.values().metadata {
+            let metadata: HashMap<String, AccountId> =
+                serde_json::from_value(metadata.clone()).unwrap();
+            assert_eq!(metadata.get("sender"), Some(&sender_account.id()));
+            break;
+        }
+    }
 
     // Run it again to test balance updates
     let mut params = Params::new();

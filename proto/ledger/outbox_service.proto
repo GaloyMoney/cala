@@ -164,6 +164,7 @@ message TxTemplateEntry {
   string units = 5;
   string currency = 6;
   optional string description = 7;
+  optional string metadata = 8;
 }
 
 message TxTemplateTransaction {
@@ -231,6 +232,7 @@ message Entry {
   string currency = 10;
   DebitOrCredit direction = 11;
   optional string description = 12;
+  optional google.protobuf.Struct metadata = 13;
 }
 
 message BalanceCreated {

@@ -388,6 +388,7 @@ impl TryFrom<proto::TxTemplateEntry> for TxTemplateEntry {
             units,
             currency,
             description,
+            metadata,
         }: proto::TxTemplateEntry,
     ) -> Result<Self, Self::Error> {
         let res = Self {
@@ -398,6 +399,7 @@ impl TryFrom<proto::TxTemplateEntry> for TxTemplateEntry {
             units: CelExpression::try_from(units)?,
             currency: CelExpression::try_from(currency)?,
             description: description.map(CelExpression::try_from).transpose()?,
+            metadata: metadata.map(CelExpression::try_from).transpose()?,
         };
         Ok(res)
     }
@@ -477,6 +479,7 @@ impl TryFrom<proto::Entry> for EntryValues {
             units,
             currency,
             description,
+            metadata,
         }: proto::Entry,
     ) -> Result<Self, Self::Error> {
         let res = Self {
@@ -492,6 +495,7 @@ impl TryFrom<proto::Entry> for EntryValues {
             units: units.parse()?,
             currency: currency.parse::<Currency>()?,
             description: description.map(String::from),
+            metadata: metadata.map(serde_json::to_value).transpose()?,
         };
         Ok(res)
     }

@@ -3,6 +3,7 @@ pub mod error;
 mod repo;
 
 use sqlx::PgPool;
+use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -31,6 +32,13 @@ impl Entries {
             outbox,
             _pool: pool.clone(),
         }
+    }
+
+    pub async fn find_all(
+        &self,
+        entry_ids: &[EntryId],
+    ) -> Result<HashMap<EntryId, Entry>, EntryError> {
+        self.repo.find_all(entry_ids).await
     }
 
     pub async fn list_for_account_id(

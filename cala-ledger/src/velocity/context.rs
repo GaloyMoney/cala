@@ -121,6 +121,7 @@ mod tests {
             direction: DebitOrCredit::Credit,
             units: Decimal::from(100),
             description: None,
+            metadata: None,
         }
     }
 

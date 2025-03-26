@@ -102,6 +102,8 @@ pub struct NewEntry {
     pub(super) direction: DebitOrCredit,
     #[builder(setter(strip_option), default)]
     pub(super) description: Option<String>,
+    #[builder(setter(into), default)]
+    pub(super) metadata: Option<serde_json::Value>,
 }
 
 impl NewEntry {
@@ -132,6 +134,7 @@ impl IntoEvents<EntryEvent> for NewEntry {
                     currency: self.currency,
                     direction: self.direction,
                     description: self.description,
+                    metadata: self.metadata,
                 },
             }],
         )
@@ -157,7 +160,8 @@ mod tests {
             .sequence(1u32)
             .units(rust_decimal::Decimal::from(1))
             .currency(currency)
-            .direction(DebitOrCredit::Debit);
+            .direction(DebitOrCredit::Debit)
+            .metadata(Some(serde_json::Value::String(String::new())));
         let new_entry = builder.build().unwrap();
         assert_eq!(new_entry.id, entry_id);
     }
