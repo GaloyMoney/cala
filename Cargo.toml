@@ -30,7 +30,7 @@ chrono = { version = "0.4.40", features = ["clock", "serde"], default-features =
 clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.1"
 sqlx = { version = "0.8", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
-thiserror = "1.0.64"
+thiserror = "2.0.12"
 uuid = { version = "1.16", features = ["serde", "v4"] }
 tracing = "0.1.40"
 tracing-opentelemetry = "0.25.0"
