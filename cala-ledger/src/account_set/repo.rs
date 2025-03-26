@@ -119,7 +119,7 @@ impl AccountSetRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn list_children(
+    pub async fn list_children_by_created_at(
         &self,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
@@ -127,10 +127,11 @@ impl AccountSetRepo {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.list_children_in_executor(&self.pool, id, args).await
+        self.list_children_by_created_at_in_executor(&self.pool, id, args)
+            .await
     }
 
-    pub async fn list_children_in_tx(
+    pub async fn list_children_by_created_at_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
@@ -139,10 +140,11 @@ impl AccountSetRepo {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.list_children_in_executor(&mut **db, id, args).await
+        self.list_children_by_created_at_in_executor(&mut **db, id, args)
+            .await
     }
 
-    async fn list_children_in_executor(
+    async fn list_children_by_created_at_in_executor(
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         account_set_id: AccountSetId,

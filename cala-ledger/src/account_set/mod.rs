@@ -435,7 +435,7 @@ impl AccountSets {
         }
     }
 
-    pub async fn list_members(
+    pub async fn list_members_by_created_at(
         &self,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
@@ -443,10 +443,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children(id, args).await
+        self.repo.list_children_by_created_at(id, args).await
     }
 
-    pub async fn list_members_in_op(
+    pub async fn list_members_created_at_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
         id: AccountSetId,
@@ -455,7 +455,9 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children_in_tx(op.tx(), id, args).await
+        self.repo
+            .list_children_by_created_at_in_tx(op.tx(), id, args)
+            .await
     }
 
     pub async fn list_members_by_external_id(

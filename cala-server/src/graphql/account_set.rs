@@ -117,7 +117,7 @@ impl AccountSet {
                         let account_sets = app.ledger().account_sets();
                         let accounts = app.ledger().accounts();
                         let members = account_sets
-                            .list_members_in_op(&mut op, account_set_id, query_args)
+                            .list_members_created_at_in_op(&mut op, account_set_id, query_args)
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
@@ -137,7 +137,7 @@ impl AccountSet {
                         let members = app
                             .ledger()
                             .account_sets()
-                            .list_members(account_set_id, query_args)
+                            .list_members_by_created_at(account_set_id, query_args)
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();

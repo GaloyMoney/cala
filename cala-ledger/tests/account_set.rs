@@ -342,7 +342,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
 
     assert_eq!(ret.entities.len(), 2);
@@ -363,7 +363,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 2);
     assert!(ret.has_next_page);
@@ -383,7 +383,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 1);
     assert!(!ret.has_next_page);
