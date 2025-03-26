@@ -435,27 +435,60 @@ impl AccountSets {
         }
     }
 
-    pub async fn list_members(
+    pub async fn list_members_by_created_at(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children(id, args).await
+        self.repo.list_children_by_created_at(id, args).await
     }
 
-    pub async fn list_members_in_op(
+    pub async fn list_members_created_at_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children_in_tx(op.tx(), id, args).await
+        self.repo
+            .list_children_by_created_at_in_tx(op.tx(), id, args)
+            .await
+    }
+
+    pub async fn list_members_by_external_id(
+        &self,
+        id: AccountSetId,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<
+            AccountSetMemberByExternalId,
+            AccountSetMembersByExternalIdCursor,
+        >,
+        AccountSetError,
+    > {
+        self.repo.list_children_by_external_id(id, args).await
+    }
+
+    pub async fn list_members_by_external_id_in_op(
+        &self,
+        op: &mut LedgerOperation<'_>,
+        id: AccountSetId,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<
+            AccountSetMemberByExternalId,
+            AccountSetMembersByExternalIdCursor,
+        >,
+        AccountSetError,
+    > {
+        self.repo
+            .list_children_by_external_id_in_tx(op.tx(), id, args)
+            .await
     }
 
     pub(crate) async fn fetch_mappings(

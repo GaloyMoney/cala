@@ -2,7 +2,7 @@ mod helpers;
 
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account_set::*, tx_template::*, *};
+use cala_ledger::{account::*, account_set::*, tx_template::*, *};
 
 #[tokio::test]
 async fn errors_on_collision() -> anyhow::Result<()> {
@@ -342,7 +342,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
 
     assert_eq!(ret.entities.len(), 2);
@@ -358,12 +358,12 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[0])),
     };
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 2);
     assert!(ret.has_next_page);
@@ -378,12 +378,12 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersCursor::from(&ret.entities[1])),
+        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[1])),
     };
 
     let ret = cala
         .account_sets()
-        .list_members(parent.id(), query_args)
+        .list_members_by_created_at(parent.id(), query_args)
         .await?;
     assert_eq!(ret.entities.len(), 1);
     assert!(!ret.has_next_page);
@@ -391,6 +391,102 @@ async fn members_pagination() -> anyhow::Result<()> {
         ret.entities[0].id.clone(),
         AccountSetMemberId::from(account_two.id())
     );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn list_members_by_external_id() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala = CalaLedger::init(
+        CalaLedgerConfig::builder()
+            .pool(pool)
+            .exec_migrations(false)
+            .build()?,
+    )
+    .await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let parent = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Parent Set")
+                .journal_id(journal.id())
+                .build()?,
+        )
+        .await?;
+
+    let random = Alphanumeric.sample_string(&mut rand::rng(), 8);
+
+    let account_ids = [
+        cala.accounts()
+            .create(
+                NewAccount::builder()
+                    .id(AccountId::new())
+                    .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .external_id(format!("a-{}", random))
+                    .build()?,
+            )
+            .await?,
+        cala.accounts()
+            .create(
+                NewAccount::builder()
+                    .id(AccountId::new())
+                    .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .external_id(format!("z-{}", random))
+                    .build()?,
+            )
+            .await?,
+        cala.accounts()
+            .create(
+                NewAccount::builder()
+                    .id(AccountId::new())
+                    .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
+                    .build()?,
+            )
+            .await?,
+    ];
+
+    for account in &account_ids {
+        cala.account_sets()
+            .add_member(parent.id(), account.id())
+            .await?;
+    }
+
+    let query_args = es_entity::PaginatedQueryArgs {
+        first: 1,
+        after: None,
+    };
+    let ret = cala
+        .account_sets()
+        .list_members_by_external_id(parent.id(), query_args)
+        .await?;
+    assert_eq!(ret.entities[0].external_id, Some(format!("a-{}", random)));
+
+    let query_args = es_entity::PaginatedQueryArgs {
+        first: 1,
+        after: Some(AccountSetMembersByExternalIdCursor::from(&ret.entities[0])),
+    };
+    let ret = cala
+        .account_sets()
+        .list_members_by_external_id(parent.id(), query_args)
+        .await?;
+    assert_eq!(ret.entities[0].external_id, Some(format!("z-{}", random)));
+
+    let query_args = es_entity::PaginatedQueryArgs {
+        first: 1,
+        after: Some(AccountSetMembersByExternalIdCursor::from(&ret.entities[0])),
+    };
+    let ret = cala
+        .account_sets()
+        .list_members_by_external_id(parent.id(), query_args)
+        .await?;
+    assert_eq!(ret.entities[0].external_id, None);
 
     Ok(())
 }

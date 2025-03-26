@@ -11,16 +11,18 @@ use super::{entity::*, error::*};
 const ADDVISORY_LOCK_ID: i64 = 123456;
 
 pub mod members_cursor {
-    use cala_types::account_set::{AccountSetMember, AccountSetMemberId};
+    use cala_types::account_set::{
+        AccountSetMember, AccountSetMemberByExternalId, AccountSetMemberId,
+    };
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMembersCursor {
+    pub struct AccountSetMembersByCreatedAtCursor {
         pub id: AccountSetMemberId,
         pub member_created_at: chrono::DateTime<chrono::Utc>,
     }
 
-    impl From<&AccountSetMember> for AccountSetMembersCursor {
+    impl From<&AccountSetMember> for AccountSetMembersByCreatedAtCursor {
         fn from(member: &AccountSetMember) -> Self {
             Self {
                 id: member.id,
@@ -30,7 +32,42 @@ pub mod members_cursor {
     }
 
     #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMembersCursor {
+    impl async_graphql::connection::CursorType for AccountSetMembersByCreatedAtCursor {
+        type Error = String;
+
+        fn encode_cursor(&self) -> String {
+            use base64::{engine::general_purpose, Engine as _};
+            let json = serde_json::to_string(&self).expect("could not serialize token");
+            general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
+        }
+
+        fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
+            use base64::{engine::general_purpose, Engine as _};
+            let bytes = general_purpose::STANDARD_NO_PAD
+                .decode(s.as_bytes())
+                .map_err(|e| e.to_string())?;
+            let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
+            serde_json::from_str(&json).map_err(|e| e.to_string())
+        }
+    }
+
+    #[derive(Debug, Serialize, Deserialize)]
+    pub struct AccountSetMembersByExternalIdCursor {
+        pub id: AccountSetMemberId,
+        pub external_id: Option<String>,
+    }
+
+    impl From<&AccountSetMemberByExternalId> for AccountSetMembersByExternalIdCursor {
+        fn from(member: &AccountSetMemberByExternalId) -> Self {
+            Self {
+                id: member.id,
+                external_id: member.external_id.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "graphql")]
+    impl async_graphql::connection::CursorType for AccountSetMembersByExternalIdCursor {
         type Error = String;
 
         fn encode_cursor(&self) -> String {
@@ -82,36 +119,38 @@ impl AccountSetRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn list_children(
+    pub async fn list_children_by_created_at(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.list_children_in_executor(&self.pool, id, args).await
+        self.list_children_by_created_at_in_executor(&self.pool, id, args)
+            .await
     }
 
-    pub async fn list_children_in_tx(
+    pub async fn list_children_by_created_at_in_tx(
         &self,
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.list_children_in_executor(&mut **db, id, args).await
+        self.list_children_by_created_at_in_executor(&mut **db, id, args)
+            .await
     }
 
-    async fn list_children_in_executor(
+    async fn list_children_by_created_at_in_executor(
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
@@ -182,7 +221,7 @@ impl AccountSetRepo {
                     last.member_account_set_id
                         .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
                 });
-            end_cursor = Some(AccountSetMembersCursor {
+            end_cursor = Some(AccountSetMembersByCreatedAtCursor {
                 id: id.expect("member_id not set"),
                 member_created_at: last.created_at.expect("created_at not set"),
             });
@@ -205,6 +244,163 @@ impl AccountSetRepo {
                 },
             )
             .collect::<Vec<AccountSetMember>>();
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities: account_set_members,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    pub async fn list_children_by_external_id(
+        &self,
+        id: AccountSetId,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<
+            AccountSetMemberByExternalId,
+            AccountSetMembersByExternalIdCursor,
+        >,
+        AccountSetError,
+    > {
+        self.list_children_by_external_id_in_executor(&self.pool, id, args)
+            .await
+    }
+
+    pub async fn list_children_by_external_id_in_tx(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        id: AccountSetId,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<
+            AccountSetMemberByExternalId,
+            AccountSetMembersByExternalIdCursor,
+        >,
+        AccountSetError,
+    > {
+        self.list_children_by_external_id_in_executor(&mut **db, id, args)
+            .await
+    }
+
+    async fn list_children_by_external_id_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        account_set_id: AccountSetId,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<
+            AccountSetMemberByExternalId,
+            AccountSetMembersByExternalIdCursor,
+        >,
+        AccountSetError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (member_id, external_id) = if let Some(after) = after {
+            (Some(after.id), after.external_id)
+        } else {
+            (None, None)
+        };
+
+        let id = match member_id {
+            Some(member_id) => match member_id {
+                AccountSetMemberId::Account(id) => Some(id),
+                AccountSetMemberId::AccountSet(id) => Some(id.into()),
+            },
+            None => None,
+        };
+
+        let rows = sqlx::query!(
+            r#"
+            WITH member_accounts AS (
+              SELECT
+                member_account_id AS member_id,
+                member_account_id,
+                NULL::uuid AS member_account_set_id,
+                a.external_id
+              FROM cala_account_set_member_accounts m
+              LEFT JOIN cala_accounts a ON m.member_account_id = a.id
+              WHERE
+                transitive IS FALSE
+                AND m.account_set_id = $4
+                AND (
+                  ($3::varchar IS NULL) OR
+                  (a.external_id IS NULL AND $3::varchar IS NOT NULL) OR
+                  (a.external_id > $3::varchar) OR
+                  (a.external_id = $3::varchar AND member_account_id > $2)
+                )
+              ORDER BY a.external_id ASC NULLS LAST, member_account_id ASC
+              LIMIT $1
+            ), member_sets AS (
+              SELECT
+                member_account_set_id AS member_id,
+                NULL::uuid AS member_account_id,
+                member_account_set_id,
+                s.external_id
+              FROM cala_account_set_member_account_sets m
+              LEFT JOIN cala_account_sets s ON m.member_account_set_id = s.id
+              WHERE
+                m.account_set_id = $4
+                AND (
+                  ($3::varchar IS NULL) OR
+                  (s.external_id IS NULL AND $3::varchar IS NOT NULL) OR
+                  (s.external_id > $3::varchar) OR
+                  (s.external_id = $3::varchar AND member_account_set_id > $2)
+                )
+              ORDER BY s.external_id ASC NULLS LAST, member_account_set_id ASC
+              LIMIT $1
+            ), all_members AS (
+              SELECT * FROM member_accounts
+              UNION ALL
+              SELECT * FROM member_sets
+            )
+            SELECT * FROM all_members
+            ORDER BY external_id ASC NULLS LAST, member_id ASC
+            LIMIT $1
+        "#,
+            (first + 1) as i64,
+            id.map(uuid::Uuid::from),
+            external_id,
+            uuid::Uuid::from(account_set_id),
+        )
+        .fetch_all(executor)
+        .await?;
+
+        let has_next_page = rows.len() > first;
+        let mut end_cursor = None;
+        if let Some(last) = rows.last() {
+            let id = last
+                .member_account_id
+                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
+                .or_else(|| {
+                    last.member_account_set_id
+                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
+                });
+            end_cursor = Some(AccountSetMembersByExternalIdCursor {
+                id: id.expect("member_id not set"),
+                external_id: last.external_id.clone(),
+            });
+        }
+
+        let account_set_members = rows
+            .into_iter()
+            .take(first)
+            .map(
+                |row| match (row.member_account_id, row.member_account_set_id) {
+                    (Some(member_account_id), _) => AccountSetMemberByExternalId {
+                        id: AccountSetMemberId::Account(AccountId::from(member_account_id)),
+                        external_id: row.external_id,
+                    },
+                    (_, Some(member_account_set_id)) => AccountSetMemberByExternalId {
+                        id: AccountSetMemberId::AccountSet(AccountSetId::from(
+                            member_account_set_id,
+                        )),
+                        external_id: row.external_id,
+                    },
+                    _ => unreachable!(),
+                },
+            )
+            .collect::<Vec<AccountSetMemberByExternalId>>();
 
         Ok(es_entity::PaginatedQueryRet {
             entities: account_set_members,
