@@ -1,8 +1,8 @@
 {
   "input": {
-    "accountId": "42fd28f5-3e86-43c6-b8ed-a0d583a06556",
+    "accountId": "a84d03b5-4987-4444-92e2-3ea5342b709d",
     "name": "Assets",
-    "code": "ASSET-42fd28f5-3e86-43c6-b8ed-a0d583a06556",
+    "code": "ASSET-a84d03b5-4987-4444-92e2-3ea5342b709d",
     "normalBalanceType": "DEBIT"
   }
 }
