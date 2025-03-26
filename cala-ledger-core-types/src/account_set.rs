@@ -21,6 +21,11 @@ pub struct AccountSetMember {
     pub created_at: DateTime<Utc>,
 }
 
+#[derive(Clone, Debug)]
+pub struct AccountSetMemberByExternalId {
+    pub id: AccountSetMemberId,
+    pub external_id: Option<String>,
+}
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", content = "id")]
 pub enum AccountSetMemberId {
@@ -43,5 +48,11 @@ impl From<AccountSetId> for AccountSetMemberId {
 impl From<(AccountSetMemberId, DateTime<Utc>)> for AccountSetMember {
     fn from((id, created_at): (AccountSetMemberId, DateTime<Utc>)) -> Self {
         Self { id, created_at }
+    }
+}
+
+impl From<(AccountSetMemberId, Option<String>)> for AccountSetMemberByExternalId {
+    fn from((id, external_id): (AccountSetMemberId, Option<String>)) -> Self {
+        Self { id, external_id }
     }
 }
