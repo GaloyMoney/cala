@@ -438,9 +438,9 @@ impl AccountSets {
     pub async fn list_members(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         self.repo.list_children(id, args).await
@@ -450,9 +450,9 @@ impl AccountSets {
         &self,
         op: &mut LedgerOperation<'_>,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         self.repo.list_children_in_tx(op.tx(), id, args).await

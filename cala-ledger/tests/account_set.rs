@@ -358,7 +358,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[0])),
     };
 
     let ret = cala
@@ -378,7 +378,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersCursor::from(&ret.entities[1])),
+        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[1])),
     };
 
     let ret = cala

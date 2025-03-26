@@ -15,12 +15,12 @@ pub mod members_cursor {
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMembersCursor {
+    pub struct AccountSetMembersByCreatedAtCursor {
         pub id: AccountSetMemberId,
         pub member_created_at: chrono::DateTime<chrono::Utc>,
     }
 
-    impl From<&AccountSetMember> for AccountSetMembersCursor {
+    impl From<&AccountSetMember> for AccountSetMembersByCreatedAtCursor {
         fn from(member: &AccountSetMember) -> Self {
             Self {
                 id: member.id,
@@ -30,7 +30,7 @@ pub mod members_cursor {
     }
 
     #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMembersCursor {
+    impl async_graphql::connection::CursorType for AccountSetMembersByCreatedAtCursor {
         type Error = String;
 
         fn encode_cursor(&self) -> String {
@@ -85,9 +85,9 @@ impl AccountSetRepo {
     pub async fn list_children(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         self.list_children_in_executor(&self.pool, id, args).await
@@ -97,9 +97,9 @@ impl AccountSetRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         self.list_children_in_executor(&mut **db, id, args).await
@@ -109,9 +109,9 @@ impl AccountSetRepo {
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
@@ -182,7 +182,7 @@ impl AccountSetRepo {
                     last.member_account_set_id
                         .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
                 });
-            end_cursor = Some(AccountSetMembersCursor {
+            end_cursor = Some(AccountSetMembersByCreatedAtCursor {
                 id: id.expect("member_id not set"),
                 member_created_at: last.created_at.expect("created_at not set"),
             });

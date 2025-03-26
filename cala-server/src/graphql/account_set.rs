@@ -6,7 +6,7 @@ use cala_ledger::{
     primitives::{AccountId, AccountSetId, Currency, JournalId},
 };
 
-pub use cala_ledger::account_set::{AccountSetMembersCursor, AccountSetsByNameCursor};
+pub use cala_ledger::account_set::{AccountSetMembersByCreatedAtCursor, AccountSetsByNameCursor};
 
 use super::{
     balance::*, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*, schema::DbOp,
@@ -96,8 +96,9 @@ impl AccountSet {
         ctx: &Context<'_>,
         first: i32,
         after: Option<String>,
-    ) -> Result<Connection<AccountSetMembersCursor, AccountSetMember, EmptyFields, EmptyFields>>
-    {
+    ) -> Result<
+        Connection<AccountSetMembersByCreatedAtCursor, AccountSetMember, EmptyFields, EmptyFields>,
+    > {
         let app = ctx.data_unchecked::<CalaApp>();
         let account_set_id = AccountSetId::from(self.account_set_id);
 
@@ -159,12 +160,12 @@ impl AccountSet {
                     |member| match member.id {
                         AccountSetMemberId::Account(id) => {
                             let entity = accounts.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMembersCursor::from(&member);
+                            let cursor = AccountSetMembersByCreatedAtCursor::from(&member);
                             Edge::new(cursor, AccountSetMember::Account(entity))
                         }
                         AccountSetMemberId::AccountSet(id) => {
                             let entity = sets.remove(&id).expect("Account exists");
-                            let cursor = AccountSetMembersCursor::from(&member);
+                            let cursor = AccountSetMembersByCreatedAtCursor::from(&member);
                             Edge::new(cursor, AccountSetMember::AccountSet(entity))
                         }
                     },
