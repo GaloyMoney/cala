@@ -4,7 +4,7 @@ macro_rules! idempotency_guard {
         for event in $events {
             match event {
                 $(
-                    $pattern $(if $guard)? => return $crate::FromIdempotentIgnored::from_ignored()
+                    $pattern $(if $guard)? => return $crate::FromIdempotentIgnored::from_ignored(),
                 )+
                 _ => {}
             }
