@@ -1,3 +1,16 @@
+# [cala release v0.3.21](https://github.com/GaloyMoney/cala/releases/tag/0.3.21)
+
+
+### Documentation
+
+- Api reference and website examples update to 32de413a01f749b53d7c037e2ca117c70f893de4
+
+### Features
+
+- Add 'expect' function to Idempotent (#368)
+- Account set members by external id query  (#367)
+- Add metadata to entries (#366)
+
 # [cala release v0.3.20](https://github.com/GaloyMoney/cala/releases/tag/0.3.20)
 
 
