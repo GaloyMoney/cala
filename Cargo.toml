@@ -21,7 +21,7 @@ members = [
 anyhow = "1.0.97"
 async-graphql = { version = "7.0.16", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
 async-graphql-axum = "7.0.13"
-async-trait = "0.1.83"
+async-trait = "0.1.88"
 axum = { version = "0.7.9", features = ["macros"] }
 axum-extra = { version = "0.9.4", default-features = false, features = ["tracing", "typed-header"] }
 base64 = { version = "0.22.1" }
