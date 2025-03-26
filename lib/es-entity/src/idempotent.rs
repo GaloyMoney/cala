@@ -1,12 +1,12 @@
 #[must_use]
 pub enum Idempotent<T> {
     Executed(T),
-    AlreadyApplied,
+    Ignored,
 }
 
 impl<T> Idempotent<T> {
-    pub fn was_already_applied(&self) -> bool {
-        matches!(self, Idempotent::AlreadyApplied)
+    pub fn was_ignored(&self) -> bool {
+        matches!(self, Idempotent::Ignored)
     }
 
     pub fn did_execute(&self) -> bool {
@@ -16,7 +16,7 @@ impl<T> Idempotent<T> {
     pub fn unwrap(self) -> T {
         match self {
             Idempotent::Executed(t) => t,
-            Idempotent::AlreadyApplied => panic!("Idempotent::AlreadyApplied"),
+            Idempotent::Ignored => panic!("Idempotent::Ignored"),
         }
     }
 }
