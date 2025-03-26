@@ -1,3 +1,38 @@
+# [cala release v0.3.20](https://github.com/GaloyMoney/cala/releases/tag/0.3.20)
+
+
+### Bug Fixes
+
+- Missing , in macro
+- Idempotency_guard
+
+### Documentation
+
+- Api reference and website examples update to 49f33a156588e0fdf8a0eac38b7d06cc121d7790
+
+### Miscellaneous Tasks
+
+- Make idempotency_guard work in Result fns
+- Bump napi from 2.16.16 to 2.16.17 (#360)
+- Bump tokio from 1.42.0 to 1.44.1 (#361)
+- Bump async-trait from 0.1.83 to 0.1.88 (#362)
+- Bump thiserror from 1.0.69 to 2.0.12 (#363)
+- Bump rust_decimal from 1.37.0 to 1.37.1 (#364)
+- Bump sqlx
+- Bump prost from 0.13.3 to 0.13.5 (#354)
+- Bump async-graphql from 7.0.15 to 7.0.16 (#356)
+- Bump pluralizer from 0.4.0 to 0.5.0 (#358)
+- Bump serde_with from 3.11.0 to 3.12.0 (#355)
+
+### Refactor
+
+- Idempotent::AlreadyApplied -> Ignored
+- Notify_cala_outbox_events fn (#359)
+
+### Testing
+
+- Fix clippy in balance.rs
+
 # [cala release v0.3.19](https://github.com/GaloyMoney/cala/releases/tag/0.3.19)
 
 
