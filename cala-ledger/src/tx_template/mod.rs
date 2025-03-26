@@ -180,6 +180,11 @@ impl TxTemplates {
                 builder.description(description);
             }
 
+            if let Some(metadata) = entry.metadata.as_ref() {
+                let metadata: serde_json::Value = metadata.try_evaluate(ctx)?;
+                builder.metadata(metadata);
+            }
+
             new_entries.push(builder.build().expect("Couldn't build entry"));
         }
 

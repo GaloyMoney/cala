@@ -500,6 +500,7 @@ type TxTemplateEntry {
 	units: Expression!
 	currency: Expression!
 	description: Expression
+	metadata: Expression
 }
 
 input TxTemplateEntryInput {

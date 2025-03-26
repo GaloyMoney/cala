@@ -170,6 +170,8 @@ pub struct NewTxTemplateEntry {
     currency: String,
     #[builder(setter(strip_option, into), default)]
     description: Option<String>,
+    #[builder(setter(strip_option, into), default)]
+    metadata: Option<String>,
 }
 
 impl NewTxTemplateEntry {
@@ -209,7 +211,8 @@ impl NewTxTemplateEntryBuilder {
                 .as_ref()
                 .expect("Mandatory field 'currency' not set"),
         )?;
-        validate_optional_expression(&self.description)
+        validate_optional_expression(&self.description)?;
+        validate_optional_expression(&self.metadata)
     }
 }
 
@@ -227,6 +230,9 @@ impl From<NewTxTemplateEntry> for cala_types::tx_template::TxTemplateEntry {
             description: input
                 .description
                 .map(|d| CelExpression::try_from(d).expect("always a valid description")),
+            metadata: input
+                .metadata
+                .map(|m| CelExpression::try_from(m).expect("always a valid metadata")),
         }
     }
 }
@@ -326,6 +332,7 @@ mod tests {
             .direction("'Settled'")
             .units("1290")
             .currency("'BTC'")
+            .metadata(r#"{"sender": param.sender}"#)
             .build()
             .unwrap()];
         let new_tx_template = NewTxTemplate::builder()

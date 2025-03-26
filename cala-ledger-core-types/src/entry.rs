@@ -17,6 +17,7 @@ pub struct EntryValues {
     pub currency: Currency,
     pub direction: DebitOrCredit,
     pub description: Option<String>,
+    pub metadata: Option<serde_json::Value>,
 }
 
 mod cel {
@@ -32,6 +33,9 @@ mod cel {
             map.insert("direction", entry.direction);
             map.insert("units", entry.units);
             map.insert("currency", entry.currency);
+            if let Some(metadata) = &entry.metadata {
+                map.insert("metadata", metadata.clone());
+            }
             map.into()
         }
     }
