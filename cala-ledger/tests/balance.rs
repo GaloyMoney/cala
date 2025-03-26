@@ -163,7 +163,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .balances()
         .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
         .await?;
-    for (_, range) in &ranges {
+    for range in ranges.values() {
         assert!(range.is_none());
     }
 
@@ -184,7 +184,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .balances()
         .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
         .await?;
-    for (_, range) in &ranges {
+    for range in ranges.values() {
         let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
@@ -216,7 +216,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
             Some(after_first_before_second_tx),
         )
         .await?;
-    for (_, range) in &ranges {
+    for range in ranges.values() {
         let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
@@ -228,7 +228,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .balances()
         .find_all_in_range(&ids, after_first_before_second_tx, None)
         .await?;
-    for (_, range) in &ranges {
+    for range in ranges.values() {
         let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::from(1290));
         assert_eq!(range.end.settled(), Decimal::from(2580));
@@ -243,7 +243,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .balances()
         .find_all_in_range(&ids, after_second_tx, None)
         .await?;
-    for (_, range) in &ranges {
+    for range in ranges.values() {
         let range = range.clone().unwrap();
         assert_eq!(range.start.settled(), Decimal::from(2580));
         assert_eq!(range.end.settled(), Decimal::from(2580));
