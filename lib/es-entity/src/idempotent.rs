@@ -19,6 +19,13 @@ impl<T> Idempotent<T> {
             Idempotent::Ignored => panic!("Idempotent::Ignored"),
         }
     }
+
+    pub fn expect(self, msg: &str) -> T {
+        match self {
+            Idempotent::Executed(val) => val,
+            Idempotent::Ignored => panic!("{}", msg),
+        }
+    }
 }
 
 pub trait FromIdempotentIgnored {
