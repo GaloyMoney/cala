@@ -192,10 +192,7 @@ impl AccountSet {
             None,
             |after, _, first, _| async move {
                 let first = first.expect("First always exists");
-                let query_args = cala_ledger::es_entity::PaginatedQueryArgs {
-                    first,
-                    after: after.map(cala_ledger::account_set::AccountSetsByNameCursor::from),
-                };
+                let query_args = cala_ledger::es_entity::PaginatedQueryArgs { first, after };
 
                 let result = match ctx.data_opt::<DbOp>() {
                     Some(op) => {

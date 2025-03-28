@@ -419,7 +419,7 @@ impl From<TransactionValues> for proto::Transaction {
             correlation_id,
             external_id,
             effective: effective.to_string(),
-            description: description.map(String::from),
+            description,
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),
@@ -460,7 +460,7 @@ impl From<EntryValues> for proto::Entry {
             direction: direction.into(),
             currency: currency.to_string(),
             units: units.to_string(),
-            description: description.map(String::from),
+            description,
             metadata: metadata.map(|json| {
                 serde_json::from_value(json).expect("Could not transfer json -> struct")
             }),
