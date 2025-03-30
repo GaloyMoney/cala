@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use serde::{de::DeserializeOwned, Serialize};
 
-use super::{error::EsEntityError, events::EntityEvents, nested::*};
+use super::{error::EsEntityError, event::EntityEvents, nested::*};
 
 pub trait EsEvent: DeserializeOwned + Serialize + Send + Sync {
     type EntityId: Clone

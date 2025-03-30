@@ -2,7 +2,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod error;
-mod events;
+mod event;
 mod idempotent;
 mod macros;
 mod nested;
@@ -24,7 +24,7 @@ pub use es_entity_macros::retry_on_concurrent_modification;
 pub use es_entity_macros::EsEntity;
 pub use es_entity_macros::EsEvent;
 pub use es_entity_macros::EsRepo;
-pub use events::*;
+pub use event::*;
 pub use idempotent::*;
 pub use nested::*;
 pub use operation::*;
