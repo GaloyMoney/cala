@@ -23,6 +23,10 @@ impl<T: EsEntity> Nested<T> {
         &self.new_entities[len]
     }
 
+    pub fn get_persisted(&self, id: &<<T as EsEntity>::Event as EsEvent>::EntityId) -> Option<&T> {
+        self.entities.get(id)
+    }
+
     pub fn get_persisted_mut(
         &mut self,
         id: &<<T as EsEntity>::Event as EsEvent>::EntityId,
