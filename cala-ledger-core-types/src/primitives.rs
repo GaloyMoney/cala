@@ -150,6 +150,9 @@ pub enum Currency {
 }
 
 impl Currency {
+    pub const BTC: Self = Self::Crypto(crypto::BTC);
+    pub const USD: Self = Self::Iso(iso::USD);
+
     pub fn code(&self) -> &'static str {
         match self {
             Currency::Iso(c) => c.iso_alpha_code,
@@ -283,5 +286,16 @@ impl std::str::FromStr for DataSource {
         } else {
             Ok(DataSource::Remote { id: s.parse()? })
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::primitives::Currency;
+
+    #[test]
+    fn currency_constants() {
+        assert_eq!(Currency::USD, "USD".parse().unwrap());
+        assert_eq!(Currency::BTC, "BTC".parse().unwrap());
     }
 }
