@@ -24,7 +24,6 @@ use error::*;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
-#[allow(dead_code)]
 const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 
 #[derive(Clone)]
@@ -500,7 +499,7 @@ impl AccountSets {
     }
 
     #[cfg(feature = "import")]
-    pub async fn sync_account_set_creation(
+    pub(crate) async fn sync_account_set_creation(
         &self,
         mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
@@ -523,7 +522,7 @@ impl AccountSets {
     }
 
     #[cfg(feature = "import")]
-    pub async fn sync_account_set_update(
+    pub(crate) async fn sync_account_set_update(
         &self,
         mut db: es_entity::DbOp<'_>,
         values: AccountSetValues,
@@ -545,7 +544,7 @@ impl AccountSets {
     }
 
     #[cfg(feature = "import")]
-    pub async fn sync_account_set_member_creation(
+    pub(crate) async fn sync_account_set_member_creation(
         &self,
         mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
@@ -580,7 +579,7 @@ impl AccountSets {
     }
 
     #[cfg(feature = "import")]
-    pub async fn sync_account_set_member_removal(
+    pub(crate) async fn sync_account_set_member_removal(
         &self,
         mut db: es_entity::DbOp<'_>,
         origin: DataSourceId,
