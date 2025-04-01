@@ -1,3 +1,23 @@
+# [cala release v0.3.22](https://github.com/GaloyMoney/cala/releases/tag/0.3.22)
+
+
+### Documentation
+
+- Api reference and website examples update to 33d1eccf6d46baa185d71205b3e1a1ca2af98e45
+
+### Features
+
+- Introduce BTC and USD currency constants (#376)
+
+### Miscellaneous Tasks
+
+- Add 'get_persisted' to Nested (#375)
+- Bump darling from 0.20.10 to 0.20.11 (#374)
+
+### Refactor
+
+- Fn visibility in AccountSet
+
 # [cala release v0.3.21](https://github.com/GaloyMoney/cala/releases/tag/0.3.21)
 
 
