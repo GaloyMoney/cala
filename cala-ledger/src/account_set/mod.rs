@@ -445,7 +445,7 @@ impl AccountSets {
         self.repo.list_children_by_created_at(id, args).await
     }
 
-    pub async fn list_members_created_at_in_op(
+    pub async fn list_members_by_created_at_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
         id: AccountSetId,
