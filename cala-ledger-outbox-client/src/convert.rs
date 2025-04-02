@@ -456,7 +456,7 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             effective: effective.parse()?,
             correlation_id,
             external_id,
-            description: description.map(String::from),
+            description,
             metadata: metadata.map(serde_json::to_value).transpose()?,
         };
         Ok(res)
@@ -494,7 +494,7 @@ impl TryFrom<proto::Entry> for EntryValues {
             direction: proto::DebitOrCredit::try_from(direction).map(DebitOrCredit::from)?,
             units: units.parse()?,
             currency: currency.parse::<Currency>()?,
-            description: description.map(String::from),
+            description,
             metadata: metadata.map(serde_json::to_value).transpose()?,
         };
         Ok(res)

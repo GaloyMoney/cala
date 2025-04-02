@@ -386,7 +386,7 @@ impl ColumnOpts {
     fn persist_on_create(&self) -> bool {
         self.create_opts
             .as_ref()
-            .map_or(true, |o| o.persist.unwrap_or(true))
+            .is_none_or(|o| o.persist.unwrap_or(true))
     }
 
     fn create_accessor(&self, name: &syn::Ident) -> proc_macro2::TokenStream {
@@ -404,7 +404,7 @@ impl ColumnOpts {
     fn persist_on_update(&self) -> bool {
         self.update_opts
             .as_ref()
-            .map_or(true, |o| o.persist.unwrap_or(true))
+            .is_none_or(|o| o.persist.unwrap_or(true))
     }
 
     fn update_accessor(&self, name: &syn::Ident) -> proc_macro2::TokenStream {
