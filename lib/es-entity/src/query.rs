@@ -17,6 +17,18 @@ pub struct PaginatedQueryArgs<T: std::fmt::Debug> {
     pub after: Option<T>,
 }
 
+impl<T: std::fmt::Debug> Clone for PaginatedQueryArgs<T>
+where
+    T: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            first: self.first,
+            after: self.after.clone(),
+        }
+    }
+}
+
 impl<T: std::fmt::Debug> Default for PaginatedQueryArgs<T> {
     fn default() -> Self {
         Self {
