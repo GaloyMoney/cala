@@ -1,3 +1,22 @@
+# [cala release v0.3.23](https://github.com/GaloyMoney/cala/releases/tag/0.3.23)
+
+
+### Bug Fixes
+
+- 'list_members_by_created_at_in_op' naming (#377)
+
+### Documentation
+
+- Api reference and website examples update to ae1088e0f2ef2a256db7d5a59b75213f6b67072f
+
+### Miscellaneous Tasks
+
+- Bump rust_decimal_macros from 1.37.0 to 1.37.1 (#369)
+- Bump napi-build from 2.1.5 to 2.1.6 (#371)
+- Bump clap from 4.5.32 to 4.5.35 (#378)
+- Derive Clone for PaginatedQueryArgs
+- Bump flake (#372)
+
 # [cala release v0.3.22](https://github.com/GaloyMoney/cala/releases/tag/0.3.22)
 
 
