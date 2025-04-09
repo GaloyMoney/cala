@@ -1,3 +1,15 @@
+# [cala release v0.3.24](https://github.com/GaloyMoney/cala/releases/tag/0.3.24)
+
+
+### Documentation
+
+- Api reference and website examples update to 424d50f80e2093b5d782bb4ea4af106cc5509a8f
+
+### Miscellaneous Tasks
+
+- Add list_for_transaction_id to EntryRepo (#382)
+- Bump tokio from 1.44.1 to 1.44.2 (#380)
+
 # [cala release v0.3.23](https://github.com/GaloyMoney/cala/releases/tag/0.3.23)
 
 
