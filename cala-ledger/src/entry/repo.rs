@@ -11,7 +11,7 @@ use super::{entity::*, error::*};
     columns(
         account_id(ty = "AccountId", list_for, update(persist = false)),
         journal_id(ty = "JournalId", list_for, update(persist = false)),
-        transaction_id(ty = "TransactionId", update(persist = false)),
+        transaction_id(ty = "TransactionId", list_for, update(persist = false)),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
