@@ -10,7 +10,7 @@ use crate::primitives::DataSourceId;
 use crate::{
     ledger_operation::*,
     outbox::*,
-    primitives::{AccountId, AccountSetId, DataSource, JournalId},
+    primitives::{AccountId, AccountSetId, DataSource, JournalId, TransactionId},
 };
 
 pub use entity::*;
@@ -72,6 +72,27 @@ impl Entries {
         self.repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
             .await
+    }
+
+    pub async fn list_for_transaction_id(
+        &self,
+        transaction_id: TransactionId,
+    ) -> Result<Vec<Entry>, EntryError> {
+        let mut entries = self
+            .repo
+            .list_for_transaction_id_by_created_at(
+                transaction_id,
+                Default::default(),
+                Default::default(),
+            )
+            .await?
+            .entities;
+        entries.sort_by(|a, b| {
+            let a_sequence = a.values().sequence;
+            let b_sequence = b.values().sequence;
+            a_sequence.cmp(&b_sequence)
+        });
+        Ok(entries)
     }
 
     pub(crate) async fn create_all_in_op(
