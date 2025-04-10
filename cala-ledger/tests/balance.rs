@@ -159,11 +159,13 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         (journal.id(), recipient2_account.id(), btc),
     ];
 
-    let ranges = cala
+    let mut ranges = cala
         .balances()
         .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
         .await?;
-    for range in ranges.values() {
+
+    for id in ids.iter() {
+        let range = ranges.remove(id);
         assert!(range.is_none());
     }
 
@@ -185,7 +187,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .find_all_in_range(&ids, Utc.timestamp_opt(0, 0).single().unwrap(), None)
         .await?;
     for range in ranges.values() {
-        let range = range.clone().unwrap();
+        let range = range.clone();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
@@ -217,7 +219,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         )
         .await?;
     for range in ranges.values() {
-        let range = range.clone().unwrap();
+        let range = range.clone();
         assert_eq!(range.start.settled(), Decimal::ZERO);
         assert_eq!(range.end.settled(), Decimal::from(1290));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
@@ -229,7 +231,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .find_all_in_range(&ids, after_first_before_second_tx, None)
         .await?;
     for range in ranges.values() {
-        let range = range.clone().unwrap();
+        let range = range.clone();
         assert_eq!(range.start.settled(), Decimal::from(1290));
         assert_eq!(range.end.settled(), Decimal::from(2580));
         assert_eq!(range.diff.settled(), Decimal::from(1290));
@@ -244,7 +246,7 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .find_all_in_range(&ids, after_second_tx, None)
         .await?;
     for range in ranges.values() {
-        let range = range.clone().unwrap();
+        let range = range.clone();
         assert_eq!(range.start.settled(), Decimal::from(2580));
         assert_eq!(range.end.settled(), Decimal::from(2580));
         assert_eq!(range.diff.settled(), Decimal::ZERO);
