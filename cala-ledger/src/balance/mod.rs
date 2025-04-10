@@ -97,28 +97,16 @@ impl Balances {
         ids: &[BalanceId],
         from: DateTime<Utc>,
         until: Option<DateTime<Utc>>,
-    ) -> Result<HashMap<BalanceId, Option<BalanceRange>>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
 
-        let mut result = HashMap::new();
-        for (balance_id, (start, end)) in ranges {
-            match end {
-                Some(end) => {
-                    result.insert(balance_id, Some(BalanceRange::new(start, end)));
-                }
-                None => {
-                    result.insert(balance_id, None);
-                }
+        let mut res = HashMap::new();
+        for (id, (start, end)) in ranges {
+            if let Some(end) = end {
+                res.insert(id, BalanceRange::new(start, end));
             }
         }
-
-        for balance_id in ids {
-            if !result.contains_key(balance_id) {
-                result.insert(*balance_id, None);
-            }
-        }
-
-        Ok(result)
+        Ok(res)
     }
 
     pub(crate) async fn update_balances_in_op(
