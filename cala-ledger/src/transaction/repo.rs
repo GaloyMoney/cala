@@ -16,7 +16,7 @@ use super::{entity::*, error::TransactionError};
         external_id(ty = "Option<String>", update(persist = false)),
         correlation_id(ty = "String", update(persist = false)),
         journal_id(ty = "JournalId", update(persist = false)),
-        tx_template_id(ty = "TxTemplateId", update(persist = false)),
+        tx_template_id(ty = "TxTemplateId", update(persist = false), list_for),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
