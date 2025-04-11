@@ -73,6 +73,10 @@ where
         self.new_events.push(event);
     }
 
+    pub fn extend(&mut self, events: impl IntoIterator<Item = T>) {
+        self.new_events.extend(events);
+    }
+
     pub fn mark_new_events_persisted_at(
         &mut self,
         recorded_at: chrono::DateTime<chrono::Utc>,
