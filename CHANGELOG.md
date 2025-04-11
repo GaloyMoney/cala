@@ -1,3 +1,14 @@
+# [cala release v0.4.2](https://github.com/GaloyMoney/cala/releases/tag/0.4.2)
+
+
+### Documentation
+
+- Api reference and website examples update to fd85eaadfe6ebe90d7f92e5235715b0c5ab65647
+
+### Features
+
+- Add TxTemplate::list (#389)
+
 # [cala release v0.4.1](https://github.com/GaloyMoney/cala/releases/tag/0.4.1)
 
 
