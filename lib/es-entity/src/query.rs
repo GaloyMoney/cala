@@ -43,3 +43,19 @@ pub struct PaginatedQueryRet<T, C> {
     pub has_next_page: bool,
     pub end_cursor: Option<C>,
 }
+
+impl<T, C> PaginatedQueryRet<T, C> {
+    pub fn into_next_query(self) -> Option<PaginatedQueryArgs<C>>
+    where
+        C: Clone + std::fmt::Debug,
+    {
+        if self.has_next_page {
+            Some(PaginatedQueryArgs {
+                first: self.entities.len(),
+                after: self.end_cursor,
+            })
+        } else {
+            None
+        }
+    }
+}

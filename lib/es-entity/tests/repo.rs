@@ -23,6 +23,6 @@ struct JournalRepo<E> {
 }
 
 #[tokio::test]
-async fn test() {
-    assert!(true);
+async fn test() -> Result<(), JournalError> {
+    Ok(())
 }
