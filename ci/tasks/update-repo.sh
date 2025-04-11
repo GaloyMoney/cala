@@ -25,6 +25,7 @@ done
 
 sed -i'' "s/cel-parser\", version = .*/cel-parser\", version = \"${VERSION}\" }/" cala-cel-interpreter/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger-core-types/Cargo.toml
+sed -i'' "s/es-entity\", version = .*/es-entity\", version = \"${VERSION}\" }/" cala-ledger-core-types/Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" cala-ledger-outbox-client/Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" cala-ledger-outbox-client/Cargo.toml
 
