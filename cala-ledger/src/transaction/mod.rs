@@ -10,10 +10,12 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
+use crate::primitives::TxTemplateId;
 use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
+pub use repo::transaction_cursor::TransactionsByCreatedAtCursor;
 use repo::*;
 
 #[derive(Clone)]
@@ -64,6 +66,25 @@ impl Transactions {
         transaction_ids: &[TransactionId],
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
         self.repo.find_all(transaction_ids).await
+    }
+
+    #[instrument(
+        name = "cala_ledger.transactions.list_for_template_ids",
+        skip(self),
+        err
+    )]
+    pub async fn list_for_template_ids<T: From<Transaction>>(
+        &self,
+        template_ids: &[TxTemplateId],
+        query: es_entity::PaginatedQueryArgs<TransactionsByCreatedAtCursor>,
+        direction: es_entity::ListDirection,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<Transaction, TransactionsByCreatedAtCursor>,
+        TransactionError,
+    > {
+        self.repo
+            .list_for_template_ids_by_created_at(template_ids, query, direction)
+            .await
     }
 
     #[cfg(feature = "import")]
