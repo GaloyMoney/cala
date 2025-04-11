@@ -14,7 +14,11 @@ use super::{entity::*, error::TxTemplateError};
     entity = "TxTemplate",
     err = "TxTemplateError",
     columns(
-        code(ty = "String", update(persist = false)),
+        code(
+            ty = "String",
+            update(accessor = "values().code", persist = false),
+            list_by
+        ),
         data_source_id(
             ty = "DataSourceId",
             create(accessor = "data_source().into()"),
