@@ -1,3 +1,18 @@
+# [cala release v0.4.0](https://github.com/GaloyMoney/cala/releases/tag/0.4.0)
+
+
+### Documentation
+
+- Api reference and website examples update to 10ba39b038f5aba6cdad75d0c1244751717ba1e6
+
+### Features
+
+- Add ability to query transactions by template (#385)
+
+### Refactor
+
+- [**breaking**] Find_all_in_range fn (#383)
+
 # [cala release v0.3.24](https://github.com/GaloyMoney/cala/releases/tag/0.3.24)
 
 
