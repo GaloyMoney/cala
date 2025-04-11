@@ -60,22 +60,14 @@ impl Transactions {
         self.repo.find_by_id(transaction_id).await
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
-    pub async fn find_all<T: From<Transaction>>(
-        &self,
-        transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        self.repo.find_all(transaction_ids).await
-    }
-
     #[instrument(
-        name = "cala_ledger.transactions.list_for_template_ids",
+        name = "cala_ledger.transactions.list_for_template_id",
         skip(self),
         err
     )]
-    pub async fn list_for_template_ids<T: From<Transaction>>(
+    pub async fn list_for_template_id(
         &self,
-        template_ids: &[TxTemplateId],
+        template_id: TxTemplateId,
         query: es_entity::PaginatedQueryArgs<TransactionsByCreatedAtCursor>,
         direction: es_entity::ListDirection,
     ) -> Result<
@@ -83,8 +75,16 @@ impl Transactions {
         TransactionError,
     > {
         self.repo
-            .list_for_template_ids_by_created_at(template_ids, query, direction)
+            .list_for_tx_template_id_by_created_at(template_id, query, direction)
             .await
+    }
+
+    #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
+    pub async fn find_all<T: From<Transaction>>(
+        &self,
+        transaction_ids: &[TransactionId],
+    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
+        self.repo.find_all(transaction_ids).await
     }
 
     #[cfg(feature = "import")]
