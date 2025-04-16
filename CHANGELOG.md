@@ -1,3 +1,17 @@
+# [cala release v0.4.3](https://github.com/GaloyMoney/cala/releases/tag/0.4.3)
+
+
+### Documentation
+
+- Api reference and website examples update to daf765865b6795a50c0fb2c2f35ed62b176b2b5a
+
+### Miscellaneous Tasks
+
+- Bump sqlx-ledger
+- Bump anyhow from 1.0.97 to 1.0.98 (#391)
+- Bump clap from 4.5.35 to 4.5.36 (#390)
+- Bump proc-macro2 from 1.0.94 to 1.0.95 (#393)
+
 # [cala release v0.4.2](https://github.com/GaloyMoney/cala/releases/tag/0.4.2)
 
 
