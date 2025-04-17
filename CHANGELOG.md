@@ -1,3 +1,14 @@
+# [cala release v0.4.4](https://github.com/GaloyMoney/cala/releases/tag/0.4.4)
+
+
+### Documentation
+
+- Api reference and website examples update to 00179b430d9ae02a0b251c7280986cb1f91af239
+
+### Miscellaneous Tasks
+
+- Bump flake
+
 # [cala release v0.4.3](https://github.com/GaloyMoney/cala/releases/tag/0.4.3)
 
 
