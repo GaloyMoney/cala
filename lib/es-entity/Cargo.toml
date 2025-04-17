@@ -2,7 +2,7 @@
 name = "es-entity"
 description = "Event Sourcing Entity Framework"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.4.4"
+version = "0.4.5-dev"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["data-structures", "database"]
@@ -14,8 +14,8 @@ graphql = ["es-entity-macros/graphql", "dep:async-graphql", "dep:base64"]
 sim-time = [ "dep:sim-time" ]
 
 [dependencies]
-es-entity-macros = { path = "../es-entity-macros", package = "es-entity-macros", version = "0.4.4" }
-sim-time = { path = "../sim-time", optional = true, package = "sim-time", version = "0.4.4" }
+es-entity-macros = { path = "../es-entity-macros", package = "es-entity-macros", version = "0.4.5-dev" }
+sim-time = { path = "../sim-time", optional = true, package = "sim-time", version = "0.4.5-dev" }
 
 async-trait = { workspace = true }
 sqlx = { workspace = true }
