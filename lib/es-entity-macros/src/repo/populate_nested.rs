@@ -7,6 +7,7 @@ use super::options::*;
 pub struct PopulateNested<'a> {
     column: &'a Column,
     ident: &'a syn::Ident,
+    generics: &'a syn::Generics,
     error: &'a syn::Type,
     id: &'a syn::Ident,
     table_name: &'a str,
@@ -19,6 +20,7 @@ impl<'a> PopulateNested<'a> {
         Self {
             column,
             ident: &opts.ident,
+            generics: &opts.generics,
             error: opts.err(),
             id: opts.id(),
             table_name: opts.table_name(),
@@ -44,9 +46,11 @@ impl ToTokens for PopulateNested<'_> {
             self.events_table_name,
         );
 
+        let (impl_generics, ty_generics, where_clause) = self.generics.split_for_impl();
+
         tokens.append_all(quote! {
             #[es_entity::prelude::async_trait::async_trait]
-            impl es_entity::PopulateNested<#ty> for #ident {
+            impl #impl_generics es_entity::PopulateNested<#ty> for #ident #ty_generics #where_clause {
                 async fn populate(
                     &self,
                     mut lookup: std::collections::HashMap<#ty, &mut Nested<<Self as EsRepo>::Entity>>,
