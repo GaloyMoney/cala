@@ -1,3 +1,14 @@
+# [cala release v0.4.5](https://github.com/GaloyMoney/cala/releases/tag/0.4.5)
+
+
+### Documentation
+
+- Api reference and website examples update to 5e7b99346378083c5168bc7346fd11c9e7650145
+
+### Features
+
+- Add generics to PopulateNested (#396)
+
 # [cala release v0.4.4](https://github.com/GaloyMoney/cala/releases/tag/0.4.4)
 
 
