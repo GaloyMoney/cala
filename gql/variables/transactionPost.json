@@ -1,9 +1,9 @@
 {
   "input": {
-    "transactionId": "885a5b4e-019f-4b71-bdc6-62f99a7747fa",
-    "txTemplateCode": "DEPOSIT-df3ba232-6cc0-4a1f-85e2-3f3caff5c564",
+    "transactionId": "1c07420c-d040-4b3f-be26-0ca3f660dcf0",
+    "txTemplateCode": "DEPOSIT-eff3535a-f6f1-413f-aece-2f4e6e74a990",
     "params": {
-      "account": "6e426584-6858-4a99-a168-140b7c22145d",
+      "account": "81c8f530-ec97-46b7-93d4-d78b519a6df6",
       "amount": "9.53",
       "effective": "2022-09-21"
     }
