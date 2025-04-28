@@ -28,6 +28,10 @@ pub trait EsEntity: TryFromEvents<Self::Event> {
     type New: IntoEvents<Self::Event>;
 
     fn events(&self) -> &EntityEvents<Self::Event>;
+    fn last_persisted(&self, n: usize) -> crate::events::LastPersisted<Self::Event> {
+        self.events().last_persisted(n)
+    }
+
     fn events_mut(&mut self) -> &mut EntityEvents<Self::Event>;
 }
 

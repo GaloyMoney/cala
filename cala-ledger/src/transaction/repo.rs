@@ -55,7 +55,7 @@ impl TransactionRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut transaction.events).await?;
+        self.persist_events(op, transaction.events_mut()).await?;
         Ok(())
     }
 }

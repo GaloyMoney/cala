@@ -121,7 +121,7 @@ impl EntryRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut entry.events).await?;
+        self.persist_events(op, entry.events_mut()).await?;
         Ok(())
     }
 }

@@ -2,6 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::EsEntity;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -126,7 +127,6 @@ impl Entries {
         self.repo.import(&mut db, origin, &mut entry).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = entry
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();

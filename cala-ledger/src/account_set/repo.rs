@@ -809,7 +809,7 @@ impl AccountSetRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut account_set.events).await?;
+        self.persist_events(op, account_set.events_mut()).await?;
         Ok(())
     }
 

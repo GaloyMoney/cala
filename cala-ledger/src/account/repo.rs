@@ -67,7 +67,7 @@ impl AccountRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut account.events).await?;
+        self.persist_events(op, account.events_mut()).await?;
         Ok(())
     }
 }

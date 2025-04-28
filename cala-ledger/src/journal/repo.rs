@@ -47,7 +47,7 @@ impl JournalRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut journal.events).await?;
+        self.persist_events(op, journal.events_mut()).await?;
         Ok(())
     }
 }
