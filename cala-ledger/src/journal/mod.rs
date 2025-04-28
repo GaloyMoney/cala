@@ -2,6 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -46,7 +47,7 @@ impl Journals {
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
         let journal = self.repo.create_in_op(db.op(), new_journal).await?;
-        db.accumulate(journal.events.last_persisted(1).map(|p| &p.event));
+        db.accumulate(journal.last_persisted(1).map(|p| &p.event));
         Ok(journal)
     }
 
@@ -77,7 +78,7 @@ impl Journals {
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
         let n_events = self.repo.update_in_op(db.op(), journal).await?;
-        db.accumulate(journal.events.last_persisted(n_events).map(|p| &p.event));
+        db.accumulate(journal.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
 
@@ -99,7 +100,6 @@ impl Journals {
             .await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = journal
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
@@ -121,7 +121,6 @@ impl Journals {
         let n_events = self.repo.update_in_op(&mut db, &mut journal).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = journal
-            .events
             .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();

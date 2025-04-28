@@ -3,6 +3,7 @@ pub mod error;
 mod entity;
 mod repo;
 
+use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -40,7 +41,7 @@ impl Transactions {
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db.op(), new_transaction).await?;
-        db.accumulate(transaction.events.last_persisted(1).map(|p| &p.event));
+        db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
 
@@ -100,7 +101,6 @@ impl Transactions {
             .await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = transaction
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();

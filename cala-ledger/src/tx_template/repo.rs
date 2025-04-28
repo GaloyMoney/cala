@@ -77,7 +77,7 @@ impl TxTemplateRepo {
         )
         .execute(&mut **op.tx())
         .await?;
-        self.persist_events(op, &mut tx_template.events).await?;
+        self.persist_events(op, tx_template.events_mut()).await?;
         Ok(())
     }
 }

@@ -4,6 +4,7 @@ mod repo;
 pub mod error;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use es_entity::EsEntity;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -62,7 +63,7 @@ impl TxTemplates {
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
         let tx_template = self.repo.create_in_op(db.op(), new_tx_template).await?;
-        db.accumulate(tx_template.events.last_persisted(1).map(|p| &p.event));
+        db.accumulate(tx_template.last_persisted(1).map(|p| &p.event));
         Ok(tx_template)
     }
 
@@ -221,7 +222,6 @@ impl TxTemplates {
             .await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = tx_template
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();

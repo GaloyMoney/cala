@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::EsEntity;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -80,7 +81,7 @@ impl AccountSets {
             .expect("Failed to build account");
         self.accounts.create_in_op(db, new_account).await?;
         let account_set = self.repo.create_in_op(db.op(), new_account_set).await?;
-        db.accumulate(account_set.events.last_persisted(1).map(|p| &p.event));
+        db.accumulate(account_set.last_persisted(1).map(|p| &p.event));
         Ok(account_set)
     }
 
@@ -120,7 +121,7 @@ impl AccountSets {
         db.accumulate(
             account_sets
                 .iter()
-                .flat_map(|account| account.events.last_persisted(1).map(|p| &p.event)),
+                .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
         );
         Ok(account_sets)
     }
@@ -143,12 +144,7 @@ impl AccountSets {
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
         let n_events = self.repo.update_in_op(db.op(), account_set).await?;
-        db.accumulate(
-            account_set
-                .events
-                .last_persisted(n_events)
-                .map(|p| &p.event),
-        );
+        db.accumulate(account_set.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
 
@@ -511,7 +507,6 @@ impl AccountSets {
             .await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account_set
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
@@ -533,7 +528,6 @@ impl AccountSets {
         let n_events = self.repo.update_in_op(&mut db, &mut account_set).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account_set
-            .events
             .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();

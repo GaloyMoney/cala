@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -48,7 +49,7 @@ impl Accounts {
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let account = self.repo.create_in_op(db.op(), new_account).await?;
-        db.accumulate(account.events.last_persisted(1).map(|p| &p.event));
+        db.accumulate(account.last_persisted(1).map(|p| &p.event));
         Ok(account)
     }
 
@@ -72,7 +73,7 @@ impl Accounts {
         db.accumulate(
             accounts
                 .iter()
-                .flat_map(|account| account.events.last_persisted(1).map(|p| &p.event)),
+                .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
         );
         Ok(accounts)
     }
@@ -130,7 +131,7 @@ impl Accounts {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         let n_events = self.repo.update_in_op(db.op(), account).await?;
-        db.accumulate(account.events.last_persisted(n_events).map(|p| &p.event));
+        db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
 
@@ -147,7 +148,6 @@ impl Accounts {
             .await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account
-            .events
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
@@ -169,7 +169,6 @@ impl Accounts {
         let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
         let recorded_at = db.now();
         let outbox_events: Vec<_> = account
-            .events
             .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
