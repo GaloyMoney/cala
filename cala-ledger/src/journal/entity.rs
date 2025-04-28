@@ -28,7 +28,7 @@ pub enum JournalEvent {
 pub struct Journal {
     pub id: JournalId,
     values: JournalValues,
-    events: EntityEvents<JournalEvent>,
+    pub(super) events: EntityEvents<JournalEvent>,
 }
 
 impl Journal {

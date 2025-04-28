@@ -24,7 +24,7 @@ pub enum TransactionEvent {
 pub struct Transaction {
     pub id: TransactionId,
     values: TransactionValues,
-    events: EntityEvents<TransactionEvent>,
+    pub(super) events: EntityEvents<TransactionEvent>,
 }
 
 impl Transaction {

@@ -29,7 +29,7 @@ pub enum AccountSetEvent {
 pub struct AccountSet {
     pub id: AccountSetId,
     values: AccountSetValues,
-    events: EntityEvents<AccountSetEvent>,
+    pub(super) events: EntityEvents<AccountSetEvent>,
 }
 
 impl AccountSet {

@@ -18,7 +18,7 @@ pub enum VelocityControlEvent {
 pub struct VelocityControl {
     pub id: VelocityControlId,
     values: VelocityControlValues,
-    events: EntityEvents<VelocityControlEvent>,
+    pub(super) events: EntityEvents<VelocityControlEvent>,
 }
 
 impl VelocityControl {

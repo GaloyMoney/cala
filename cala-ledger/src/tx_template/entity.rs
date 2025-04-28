@@ -36,7 +36,7 @@ impl TxTemplateEvent {
 pub struct TxTemplate {
     pub id: TxTemplateId,
     values: TxTemplateValues,
-    events: EntityEvents<TxTemplateEvent>,
+    pub(super) events: EntityEvents<TxTemplateEvent>,
 }
 
 impl TxTemplate {
