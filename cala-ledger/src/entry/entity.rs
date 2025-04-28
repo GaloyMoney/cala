@@ -24,7 +24,7 @@ pub enum EntryEvent {
 pub struct Entry {
     pub id: EntryId,
     values: EntryValues,
-    pub(super) events: EntityEvents<EntryEvent>,
+    events: EntityEvents<EntryEvent>,
 }
 
 impl Entry {
