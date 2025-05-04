@@ -259,9 +259,9 @@ pub struct NewAccount {
     #[builder(setter(custom), default)]
     pub(super) metadata: Option<serde_json::Value>,
     #[builder(setter(custom), default)]
-    pub(super) is_account_set: bool,
-    #[builder(setter(custom), default)]
     pub(super) eventually_consistent: bool,
+    #[builder(setter(custom), default)]
+    pub(super) is_account_set: bool,
 }
 
 impl NewAccount {
@@ -318,6 +318,7 @@ impl NewAccountBuilder {
         self.eventually_consistent(is_account_set)
     }
 
+    // dummy fn since its not fully supported yet
     fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
         self.is_account_set = Some(eventually_consistent);
         self

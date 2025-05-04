@@ -172,9 +172,11 @@ pub struct NewJournal {
     #[builder(setter(strip_option, into), default)]
     pub(super) code: Option<String>,
     #[builder(setter(into), default)]
-    pub(super) status: Status,
+    status: Status,
     #[builder(setter(strip_option, into), default)]
-    pub(super) description: Option<String>,
+    description: Option<String>,
+    #[builder(default)]
+    enable_effective_balance: bool,
 }
 
 impl NewJournal {
@@ -199,6 +201,9 @@ impl IntoEvents<JournalEvent> for NewJournal {
                     code: self.code,
                     status: self.status,
                     description: self.description,
+                    config: JournalConfig {
+                        enable_effective_balances: self.enable_effective_balance,
+                    },
                 },
             }],
         )

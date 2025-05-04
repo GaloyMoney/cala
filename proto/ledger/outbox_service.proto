@@ -138,6 +138,11 @@ message Journal {
   Status status = 4;
   optional string code = 5;
   optional string description = 6;
+  JournalConfig config = 7;
+}
+
+message JournalConfig {
+  bool enable_effective_balances = 1;
 }
 
 message TxTemplateCreated {
