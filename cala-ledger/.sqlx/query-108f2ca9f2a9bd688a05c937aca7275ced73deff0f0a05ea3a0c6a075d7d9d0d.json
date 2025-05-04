@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_transactions (id, external_id, correlation_id, journal_id, tx_template_id, data_source_id, effective, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "108f2ca9f2a9bd688a05c937aca7275ced73deff0f0a05ea3a0c6a075d7d9d0d"
+}
