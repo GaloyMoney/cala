@@ -10,4 +10,10 @@ pub struct JournalValues {
     pub code: Option<String>,
     pub status: Status,
     pub description: Option<String>,
+    pub config: JournalConfig,
+}
+
+#[derive(Default, Debug, Clone, Serialize, Deserialize)]
+pub struct JournalConfig {
+    pub enable_effective_balances: bool,
 }

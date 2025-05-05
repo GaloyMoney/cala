@@ -101,6 +101,7 @@ CREATE TABLE cala_transactions (
   tx_template_id UUID NOT NULL REFERENCES cala_tx_templates(id),
   external_id VARCHAR DEFAULT NULL UNIQUE,
   correlation_id VARCHAR NOT NULL,
+  effective DATE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_transactions_correlation_id ON cala_transactions (correlation_id);

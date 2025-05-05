@@ -269,8 +269,21 @@ impl TryFrom<proto::Journal> for JournalValues {
             code: journal.code,
             status,
             description: journal.description,
+            config: JournalConfig::from(
+                journal
+                    .config
+                    .ok_or(CalaLedgerOutboxClientError::MissingField)?,
+            ),
         };
         Ok(res)
+    }
+}
+
+impl From<proto::JournalConfig> for JournalConfig {
+    fn from(config: proto::JournalConfig) -> Self {
+        Self {
+            enable_effective_balances: config.enable_effective_balances,
+        }
     }
 }
 

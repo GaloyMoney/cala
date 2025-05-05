@@ -22,6 +22,7 @@ use super::{entity::*, error::TransactionError};
             create(accessor = "data_source().into()"),
             update(persist = false)
         ),
+        effective(ty = "chrono::NaiveDate", update(persist = false)),
     ),
     tbl_prefix = "cala"
 )]

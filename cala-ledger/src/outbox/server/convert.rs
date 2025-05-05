@@ -8,7 +8,7 @@ use crate::{
     account::*,
     account_set::*,
     entry::*,
-    journal::JournalValues,
+    journal::*,
     outbox::event::{OutboxEvent, OutboxEventPayload},
     transaction::TransactionValues,
     tx_template::*,
@@ -244,6 +244,7 @@ impl From<JournalValues> for proto::Journal {
             code,
             status,
             description,
+            config,
         }: JournalValues,
     ) -> Self {
         let status: proto::Status = status.into();
@@ -254,6 +255,15 @@ impl From<JournalValues> for proto::Journal {
             code,
             status: status as i32,
             description,
+            config: Some(proto::JournalConfig::from(config)),
+        }
+    }
+}
+
+impl From<JournalConfig> for proto::JournalConfig {
+    fn from(config: JournalConfig) -> Self {
+        proto::JournalConfig {
+            enable_effective_balances: config.enable_effective_balances,
         }
     }
 }
