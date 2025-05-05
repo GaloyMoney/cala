@@ -77,7 +77,7 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, outbox.clone());
-        let balances = Balances::new(&pool, outbox.clone());
+        let balances = Balances::new(&pool, outbox.clone(), &journals);
         let velocities = Velocities::new(&pool, outbox.clone());
         let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts, &entries, &balances);
         Ok(Self {
@@ -181,11 +181,6 @@ impl CalaLedger {
             .create_in_op(db, prepared_tx.transaction)
             .await?;
 
-        let journal = self.journals.find(transaction.journal_id()).await?;
-        if journal.is_locked() {
-            return Err(LedgerError::JournalLocked(transaction.journal_id()));
-        }
-
         let span = tracing::Span::current();
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
@@ -217,9 +212,10 @@ impl CalaLedger {
         self.balances
             .update_balances_in_op(
                 db,
-                transaction.created_at(),
                 transaction.journal_id(),
                 entries,
+                transaction.effective(),
+                transaction.created_at(),
                 mappings,
             )
             .await?;

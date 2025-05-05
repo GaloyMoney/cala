@@ -37,8 +37,6 @@ pub enum LedgerError {
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
     VelocityError(#[from] VelocityError),
-    #[error("LedgerError - JournalLocked: - the journal {0} is locked")]
-    JournalLocked(JournalId),
 }
 
 impl From<sqlx::Error> for LedgerError {

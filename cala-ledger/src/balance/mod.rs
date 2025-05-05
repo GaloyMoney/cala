@@ -1,23 +1,29 @@
 mod account_balance;
+mod effective;
 pub mod error;
 mod repo;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use sqlx::{Acquire, PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
+pub use cala_types::{
+    balance::{BalanceAmount, BalanceSnapshot},
+    journal::JournalValues,
+};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
+    journal::Journals,
     ledger_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
 
 pub use account_balance::*;
+use effective::*;
 use error::BalanceError;
 use repo::*;
 
@@ -27,16 +33,24 @@ const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 pub struct Balances {
     repo: BalanceRepo,
     outbox: Outbox,
+    journals: Journals,
+    effective: EffectiveBalances,
     _pool: PgPool,
 }
 
 impl Balances {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox, journals: &Journals) -> Self {
         Self {
             repo: BalanceRepo::new(pool),
+            effective: EffectiveBalances::new(pool),
             outbox,
+            journals: journals.clone(),
             _pool: pool.clone(),
         }
+    }
+
+    pub fn effective(&self) -> &EffectiveBalances {
+        &self.effective
     }
 
     #[instrument(name = "cala_ledger.balance.find", skip(self), err)]
@@ -112,18 +126,24 @@ impl Balances {
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
-        created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
+        effective: NaiveDate,
+        created_at: DateTime<Utc>,
         account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), BalanceError> {
-        let mut ids: HashSet<_> = entries
+        let journal = self.journals.find(journal_id).await?;
+        if journal.is_locked() {
+            return Err(BalanceError::JournalLocked(journal.id));
+        }
+
+        let mut all_involved_balances: HashSet<_> = entries
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
         for entry in entries.iter() {
             if let Some(account_set_ids) = account_set_mappings.get(&entry.account_id) {
-                ids.extend(
+                all_involved_balances.extend(
                     account_set_ids
                         .iter()
                         .map(|account_set_id| (AccountId::from(account_set_id), entry.currency)),
@@ -133,12 +153,33 @@ impl Balances {
 
         let mut db = op.tx().begin().await?;
 
-        let current_balances = self.repo.find_for_update(&mut db, journal_id, ids).await?;
-        let new_balances =
-            Self::new_snapshots(created_at, current_balances, entries, account_set_mappings);
-        self.repo
-            .insert_new_snapshots(&mut db, journal_id, &new_balances)
+        let current_balances = self
+            .repo
+            .find_for_update(&mut db, journal.id, &all_involved_balances)
             .await?;
+        let new_balances = Self::new_snapshots(
+            created_at,
+            current_balances,
+            &entries,
+            &account_set_mappings,
+        );
+        self.repo
+            .insert_new_snapshots(&mut db, journal.id, &new_balances)
+            .await?;
+
+        if journal.insert_effective_balances() {
+            self.effective
+                .update_cumulative_balances_in_tx(
+                    &mut db,
+                    journal_id,
+                    entries,
+                    effective,
+                    created_at,
+                    account_set_mappings,
+                    all_involved_balances,
+                )
+                .await?;
+        }
 
         db.commit().await?;
 
@@ -172,8 +213,8 @@ impl Balances {
     fn new_snapshots(
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
-        entries: Vec<EntryValues>,
-        mappings: HashMap<AccountId, Vec<AccountSetId>>,
+        entries: &Vec<EntryValues>,
+        mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
         let mut new_balances = Vec::new();

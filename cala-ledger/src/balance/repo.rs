@@ -317,10 +317,10 @@ impl BalanceRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
-        ids: HashSet<(AccountId, Currency)>,
+        ids: &HashSet<(AccountId, Currency)>,
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
         let (account_ids, currencies): (Vec<_>, Vec<_>) =
-            ids.into_iter().map(|(a, c)| (a, c.code())).unzip();
+            ids.iter().map(|(a, c)| (a, c.code())).unzip();
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock(hashtext(concat($1::text, account_id::text, currency)))
