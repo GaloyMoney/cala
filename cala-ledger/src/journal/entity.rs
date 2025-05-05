@@ -52,6 +52,10 @@ impl Journal {
         &self.values
     }
 
+    pub fn is_locked(&self) -> bool {
+        matches!(self.values.status, Status::Locked)
+    }
+
     pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
         let JournalUpdateValues {
             name,

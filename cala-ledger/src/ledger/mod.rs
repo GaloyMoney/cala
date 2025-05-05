@@ -181,6 +181,11 @@ impl CalaLedger {
             .create_in_op(db, prepared_tx.transaction)
             .await?;
 
+        let journal = self.journals.find(transaction.journal_id()).await?;
+        if journal.is_locked() {
+            return Err(LedgerError::JournalLocked(transaction.journal_id()));
+        }
+
         let span = tracing::Span::current();
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
