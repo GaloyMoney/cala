@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use sqlx::{PgPool, Postgres, Transaction};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tracing::instrument;
 
 use crate::balance::error::BalanceError;
@@ -30,11 +30,9 @@ impl EffectiveBalanceRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
-        ids: HashSet<(AccountId, Currency)>,
+        (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        let (account_ids, currencies): (Vec<_>, Vec<_>) =
-            ids.into_iter().map(|(a, c)| (a, c.code())).unzip();
         sqlx::query!(
             r#"
           WITH pairs AS (

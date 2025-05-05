@@ -1,10 +1,7 @@
 mod helpers;
 
 use chrono::NaiveDate;
-use std::collections::HashMap;
-
 use rand::distr::{Alphanumeric, SampleString};
-use rust_decimal::Decimal;
 
 use cala_ledger::{tx_template::*, *};
 
@@ -36,7 +33,7 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     let date1 = NaiveDate::from_ymd_opt(2025, 5, 5).unwrap();
     params.insert("effective", date1);
 
-    let tx = cala
+    let _tx = cala
         .post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();

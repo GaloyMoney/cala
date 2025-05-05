@@ -10,7 +10,7 @@ use cala_types::{
     balance::BalanceSnapshot,
     primitives::{AccountId, Currency, JournalId},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -317,10 +317,8 @@ impl BalanceRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
-        ids: &HashSet<(AccountId, Currency)>,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        let (account_ids, currencies): (Vec<_>, Vec<_>) =
-            ids.iter().map(|(a, c)| (a, c.code())).unzip();
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock(hashtext(concat($1::text, account_id::text, currency)))

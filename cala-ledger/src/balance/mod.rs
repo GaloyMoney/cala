@@ -150,6 +150,10 @@ impl Balances {
                 );
             }
         }
+        let all_involved_balances: (Vec<_>, Vec<_>) = all_involved_balances
+            .into_iter()
+            .map(|(a, c)| (a, c.code()))
+            .unzip();
 
         let mut db = op.tx().begin().await?;
 
@@ -213,7 +217,7 @@ impl Balances {
     fn new_snapshots(
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
-        entries: &Vec<EntryValues>,
+        entries: &[EntryValues],
         mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();

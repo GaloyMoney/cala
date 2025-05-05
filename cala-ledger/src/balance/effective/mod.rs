@@ -2,7 +2,7 @@ mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tracing::instrument;
 
 // pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
@@ -66,10 +66,10 @@ impl EffectiveBalances {
         effective: NaiveDate,
         _created_at: DateTime<Utc>,
         _account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
-        all_involved_balances: HashSet<(AccountId, Currency)>,
+        balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
         self.repo
-            .find_for_update(db, journal_id, all_involved_balances, effective)
+            .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
         // let mut op = LedgerOperation::init(&self._pool, &self._outbox).await?;
         // self.update_balances(op.op()).await?;
