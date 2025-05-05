@@ -4,9 +4,8 @@ use thiserror::Error;
 use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
-    outbox::server::error::OutboxServerError, primitives::JournalId,
-    transaction::error::TransactionError, tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    outbox::server::error::OutboxServerError, transaction::error::TransactionError,
+    tx_template::error::TxTemplateError, velocity::error::VelocityError,
 };
 
 #[derive(Error, Debug)]

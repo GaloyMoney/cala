@@ -156,6 +156,17 @@ CREATE TABLE cala_balance_history (
 );
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
+CREATE TABLE cala_cumulative_effective_balances (
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  currency VARCHAR NOT NULL,
+  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
+  values JSONB NOT NULL,
+  effective DATE NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(journal_id, account_id, currency, effective)
+);
+
 CREATE TABLE cala_velocity_limits (
   id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,

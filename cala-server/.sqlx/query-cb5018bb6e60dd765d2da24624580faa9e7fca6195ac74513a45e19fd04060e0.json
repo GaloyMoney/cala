@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH pairs AS (\n            SELECT account_id, currency, eventually_consistent\n            FROM (\n              SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            ) AS v\n            JOIN cala_accounts a\n            ON account_id = a.id\n          ),\n          delete_balances AS (\n            DELETE FROM cala_cumulative_effective_balances\n            WHERE journal_id = $1\n              AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)\n              AND effective >= $4\n          ),\n          values AS (\n            SELECT p.account_id, p.currency, b.values\n            FROM pairs p\n            LEFT JOIN cala_cumulative_effective_balances b\n            ON p.account_id = b.account_id\n              AND p.currency = b.currency\n            WHERE b.journal_id = $1\n              AND b.effective < $4\n          )\n          SELECT account_id AS \"account_id!: AccountId\", currency AS \"currency!\", values FROM values\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false
+    ]
+  },
+  "hash": "cb5018bb6e60dd765d2da24624580faa9e7fca6195ac74513a45e19fd04060e0"
+}

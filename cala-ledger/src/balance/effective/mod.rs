@@ -1,14 +1,14 @@
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use sqlx::{Acquire, PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
+// pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
-use crate::{ledger_operation::*, outbox::*, primitives::JournalId};
+use crate::{ledger_operation::*, primitives::JournalId};
 
 use super::{account_balance::*, error::BalanceError};
 
@@ -42,14 +42,14 @@ impl EffectiveBalances {
         unimplemented!()
     }
 
-    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, _op), err)]
     pub async fn find_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
-        journal_id: JournalId,
-        account_id: impl Into<AccountId> + std::fmt::Debug,
-        currency: Currency,
-        date: NaiveDate,
+        _op: &mut LedgerOperation<'_>,
+        _journal_id: JournalId,
+        _account_id: impl Into<AccountId> + std::fmt::Debug,
+        _currency: Currency,
+        _date: NaiveDate,
     ) -> Result<AccountBalance, BalanceError> {
         // self.repo
         //     .find_in_tx(op.tx(), journal_id, account_id.into(), currency)
@@ -57,17 +57,20 @@ impl EffectiveBalances {
         unimplemented!()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub async fn update_cumulative_balances_in_tx(
         &self,
         db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         journal_id: JournalId,
-        entries: Vec<EntryValues>,
+        _entries: Vec<EntryValues>,
         effective: NaiveDate,
-        created_at: DateTime<Utc>,
-        account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
+        _created_at: DateTime<Utc>,
+        _account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
         all_involved_balances: HashSet<(AccountId, Currency)>,
     ) -> Result<(), BalanceError> {
-        // self.repo.find_for_update()
+        self.repo
+            .find_for_update(db, journal_id, all_involved_balances, effective)
+            .await?;
         // let mut op = LedgerOperation::init(&self._pool, &self._outbox).await?;
         // self.update_balances(op.op()).await?;
         // op.commit().await?;
