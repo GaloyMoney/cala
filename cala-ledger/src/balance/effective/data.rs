@@ -304,7 +304,7 @@ mod tests {
             created_at: Utc::now(),
             modified_at: Utc::now(),
             entry_id,
-            settled: balance_amount(EntryId::new(), Decimal::ZERO),
+            settled: balance_amount(EntryId::new(), Decimal::ONE),
             pending: balance_amount(entry_id, Decimal::ONE),
             encumbrance: balance_amount(EntryId::new(), Decimal::ZERO),
         }
@@ -445,7 +445,7 @@ mod tests {
         assert_eq!(snapshot.entry_id, future_balance.entry_id);
         assert_eq!(snapshot.version, 1);
 
-        assert_eq!(snapshot.settled.cr_balance, dec!(2));
+        assert_eq!(snapshot.settled.cr_balance, dec!(3));
         assert_eq!(snapshot.settled.entry_id, entry_two.id);
         assert_eq!(snapshot.pending.cr_balance, dec!(1));
         assert_eq!(snapshot.entry_id, snapshot.pending.entry_id);
