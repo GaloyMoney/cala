@@ -40,7 +40,7 @@ impl EffectiveBalanceRepo {
         let rows = sqlx::query!(
             r#"
           WITH pairs AS (
-            SELECT account_id, currency, eventually_consistent
+            SELECT account_id, currency
             FROM (
               SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             ) AS v

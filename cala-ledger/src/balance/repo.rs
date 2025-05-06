@@ -338,17 +338,18 @@ impl BalanceRepo {
         let rows = sqlx::query!(
             r#"
             WITH pairs AS (
-              SELECT account_id, currency, eventually_consistent
+              SELECT account_id, currency
             FROM (
             SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             ) AS v
             JOIN cala_accounts a
             ON account_id = a.id
+            WHERE eventually_consistent = FALSE
             ),
           current_balances AS (
             SELECT b.journal_id, b.account_id, b.currency, b.latest_version
               FROM cala_current_balances b
-              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
+              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency
               WHERE b.journal_id = $1
           ),
           values AS (
@@ -362,14 +363,15 @@ impl BalanceRepo {
               AND b.account_id = h.account_id
               AND b.currency = h.currency
               AND b.latest_version = h.version
-            WHERE p.eventually_consistent = FALSE
           )
           SELECT account_id AS "account_id!: AccountId", currency AS "currency!", values FROM values
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
             &currencies as &[&str]
-        ).fetch_all(&mut **db).await?;
+        )
+        .fetch_all(&mut **db)
+        .await?;
 
         let mut ret = HashMap::new();
         for row in rows {

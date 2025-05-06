@@ -72,9 +72,12 @@ impl EffectiveBalances {
             .repo
             .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
-        // let mut op = LedgerOperation::init(&self._pool, &self._outbox).await?;
-        // self.update_balances(op.op()).await?;
-        // op.commit().await?;
+        // let entries = self.entries.find_for_recalculating_effective().await?;
+        //
+        // all entries after effective <- sorted together with the new entries
+        // -> derive snapshots from all of those entries
+        // -> persist the snapshots
+
         Ok(())
     }
 }
