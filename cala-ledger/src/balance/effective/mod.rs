@@ -69,7 +69,7 @@ impl EffectiveBalances {
         mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
-        let mut all_datas = self
+        let mut all_data = self
             .repo
             .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
@@ -82,12 +82,12 @@ impl EffectiveBalances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                if let Some(data) = all_datas.get_mut(&(account_id, entry.currency)) {
+                if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {
                     data.push(effective, entry);
                 }
             }
         }
-        for data in all_datas.values_mut() {
+        for data in all_data.values_mut() {
             data.re_calculate_snapshots(created_at, effective);
         }
         // let entries = self.entries.find_for_recalculating_effective().await?;
