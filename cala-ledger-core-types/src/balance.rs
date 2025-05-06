@@ -26,6 +26,12 @@ impl BalanceSnapshot {
             Layer::Encumbrance => self.settled.rollup(&self.pending).rollup(&self.encumbrance),
         }
     }
+
+    pub fn has_activity(&self) -> bool {
+        self.settled.has_activity()
+            || self.pending.has_activity()
+            || self.encumbrance.has_activity()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -50,5 +56,9 @@ impl BalanceAmount {
             entry_id,
             modified_at,
         }
+    }
+
+    fn has_activity(&self) -> bool {
+        !(self.cr_balance.is_zero() && self.dr_balance.is_zero())
     }
 }
