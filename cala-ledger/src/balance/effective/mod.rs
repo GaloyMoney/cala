@@ -64,6 +64,31 @@ impl EffectiveBalances {
         }
     }
 
+    #[instrument(
+        name = "cala_ledger.balance.effective.find_all_in_range",
+        skip(self),
+        err
+    )]
+    pub async fn find_all_in_range(
+        &self,
+        ids: &[BalanceId],
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+        let ranges = self.repo.find_range_all(ids, from, until).await?;
+
+        let mut res = HashMap::new();
+        for (id, (start, start_version, end, end_version)) in ranges {
+            if let Some(end) = end {
+                res.insert(
+                    id,
+                    BalanceRange::new(start, end, end_version - start_version),
+                );
+            }
+        }
+        Ok(res)
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn update_cumulative_balances_in_tx(
         &self,

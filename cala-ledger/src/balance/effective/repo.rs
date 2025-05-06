@@ -6,7 +6,7 @@ use tracing::instrument;
 use crate::balance::{account_balance::AccountBalance, error::BalanceError};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, Currency, DebitOrCredit, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, JournalId},
 };
 
 use super::data::*;
@@ -141,6 +141,116 @@ impl EffectiveBalanceRepo {
             }
         }
         Ok((first, last, last_version - first_version))
+    }
+
+    pub(super) async fn find_range_all(
+        &self,
+        ids: &[BalanceId],
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<
+        HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
+        BalanceError,
+    > {
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        let mut currencies = Vec::with_capacity(ids.len());
+        for (journal_id, account_id, currency) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+            currencies.push(currency.code().to_string());
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            WITH balance_ids AS (
+              SELECT journal_id, account_id, currency, normal_balance_type
+              FROM (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
+                AS v(journal_id, account_id, currency)
+              ) AS v
+              JOIN cala_accounts a
+              ON account_id = a.id
+            ),
+            first AS (
+              SELECT
+                true AS first, false AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
+                      AND effective < $4
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            ),
+            last AS (
+              SELECT
+                true AS first, false AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
+                      AND effective <= COALESCE($5, NOW()::DATE)
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            )
+            SELECT
+                first, last, values, 
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM first
+            UNION ALL
+            SELECT
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM last"#,
+            &journal_ids[..],
+            &account_ids[..],
+            &currencies[..],
+            from,
+            until,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let values: serde_json::Value = row.values.expect("values is not null");
+            let details: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let balance_id = (details.journal_id, details.account_id, details.currency);
+            let balance = AccountBalance::new(row.normal_balance_type, details);
+            let entry = ret.entry(balance_id).or_insert((None, 0, None, 0));
+            if row.first.expect("first is not null") {
+                entry.0 = Some(balance);
+                entry.1 = row.all_time_version.expect("all_time_version") as u32;
+            } else {
+                entry.2 = Some(balance);
+                entry.3 = row.all_time_version.expect("all_time_version") as u32;
+            }
+        }
+        Ok(ret)
     }
 
     #[instrument(

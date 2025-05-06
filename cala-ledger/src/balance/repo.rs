@@ -5,10 +5,9 @@ use tracing::instrument;
 use super::{account_balance::AccountBalance, error::BalanceError};
 #[cfg(feature = "import")]
 use cala_types::primitives::EntryId;
-use cala_types::primitives::{BalanceId, DebitOrCredit};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, Currency, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, JournalId},
 };
 use std::collections::HashMap;
 
