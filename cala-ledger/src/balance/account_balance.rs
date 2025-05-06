@@ -131,7 +131,7 @@ impl BalanceRange {
             None => {
                 use chrono::{TimeZone, Utc};
                 let zero_time = Utc.timestamp_opt(0, 0).single().expect("0 timestamp");
-                let zero_entry = EntryId::from(super::UNASSIGNED_ENTRY_ID);
+                let zero_entry = EntryId::from(super::snapshot::UNASSIGNED_ENTRY_ID);
                 let zero_amount = BalanceAmount {
                     dr_balance: Decimal::ZERO,
                     cr_balance: Decimal::ZERO,

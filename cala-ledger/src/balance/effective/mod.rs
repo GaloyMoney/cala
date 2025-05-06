@@ -65,8 +65,8 @@ impl EffectiveBalances {
         journal_id: JournalId,
         entries: Vec<EntryValues>,
         effective: NaiveDate,
-        _created_at: DateTime<Utc>,
-        _account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
+        created_at: DateTime<Utc>,
+        account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
         let mut all_datas = self
@@ -80,6 +80,7 @@ impl EffectiveBalances {
                     .iter()
                     .filter(|e| account_id == &e.account_id && currency == &e.currency),
             );
+            // data.re_calculate_snapshots();
         }
         // let entries = self.entries.find_for_recalculating_effective().await?;
         //

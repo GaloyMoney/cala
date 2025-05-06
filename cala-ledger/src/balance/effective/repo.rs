@@ -110,7 +110,7 @@ impl EffectiveBalanceRepo {
                     row.account_id,
                     row.currency.parse().expect("Could not parse currency"),
                 ),
-                EffectiveBalanceData::new(last_snapshot, updates),
+                EffectiveBalanceData::new(row.account_id, last_snapshot, updates),
             );
         }
         Ok(ret)

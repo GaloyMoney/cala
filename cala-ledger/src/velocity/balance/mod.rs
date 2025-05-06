@@ -126,14 +126,14 @@ impl VelocityBalances {
                     (_, Some(Some(balance))) => balance,
                     (_, Some(None)) => {
                         let new_snapshot =
-                            crate::balance::Balances::new_snapshot(time, entry.account_id, entry);
+                            crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry);
                         limit.enforce(&ctx, time, &new_snapshot)?;
                         latest_balance = Some(new_snapshot);
                         continue;
                     }
                     _ => unreachable!(),
                 };
-                let new_snapshot = crate::balance::Balances::update_snapshot(time, balance, entry);
+                let new_snapshot = crate::balance::Snapshots::update_snapshot(time, balance, entry);
                 limit.enforce(&ctx, time, &new_snapshot)?;
                 latest_balance = Some(new_snapshot);
             }
