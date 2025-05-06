@@ -1,3 +1,4 @@
+mod data;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -62,16 +63,24 @@ impl EffectiveBalances {
         &self,
         db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         journal_id: JournalId,
-        _entries: Vec<EntryValues>,
+        entries: Vec<EntryValues>,
         effective: NaiveDate,
         _created_at: DateTime<Utc>,
         _account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
-        let _last_balances = self
+        let mut all_datas = self
             .repo
             .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
+        for ((account_id, currency), data) in all_datas.iter_mut() {
+            data.insert_entries(
+                effective,
+                entries
+                    .iter()
+                    .filter(|e| account_id == &e.account_id && currency == &e.currency),
+            );
+        }
         // let entries = self.entries.find_for_recalculating_effective().await?;
         //
         // all entries after effective <- sorted together with the new entries
