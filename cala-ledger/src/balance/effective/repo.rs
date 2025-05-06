@@ -70,6 +70,79 @@ impl EffectiveBalanceRepo {
         }
     }
 
+    pub(super) async fn find_range(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<(Option<AccountBalance>, Option<AccountBalance>, u32), BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+        WITH first AS (
+            SELECT
+              true AS first, false AS last, values,
+              a.normal_balance_type AS "normal_balance_type!: DebitOrCredit",
+              all_time_version
+            FROM cala_cumulative_effective_balances
+            JOIN cala_accounts a
+            ON account_id = a.id
+            WHERE journal_id = $1
+            AND account_id = $2
+            AND currency = $3
+            AND effective < $4
+            ORDER BY effective DESC, version DESC
+            LIMIT 1
+        ),
+        last AS (
+            SELECT
+              false AS first, true AS last, values,
+              a.normal_balance_type AS "normal_balance_type!: DebitOrCredit",
+              all_time_version
+            FROM cala_cumulative_effective_balances
+            JOIN cala_accounts a
+            ON account_id = a.id
+            WHERE journal_id = $1
+            AND account_id = $2
+            AND currency = $3
+            AND effective <= COALESCE($5, NOW()::DATE)
+            ORDER BY effective DESC, version DESC
+            LIMIT 1
+        )
+        SELECT * FROM first
+        UNION ALL
+        SELECT * FROM last
+        "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency.code(),
+            from,
+            until,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut first = None;
+        let mut last = None;
+        let mut first_version = 0;
+        let mut last_version = 0;
+        for row in rows {
+            let details: BalanceSnapshot =
+                serde_json::from_value(row.values.expect("values is not null"))
+                    .expect("Failed to deserialize balance snapshot");
+            let balance = Some(AccountBalance::new(row.normal_balance_type, details));
+            if row.first.expect("first is not null") {
+                first = balance;
+                first_version = row.all_time_version.expect("all_time_version") as u32;
+            } else {
+                last = balance;
+                last_version = row.all_time_version.expect("all_time_version") as u32;
+            }
+        }
+        Ok((first, last, last_version - first_version))
+    }
+
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.effective.find_for_update",
@@ -104,13 +177,15 @@ impl EffectiveBalanceRepo {
             SELECT 
               p.account_id,
               p.currency,
-              b.values
+              b.values,
+              b.all_time_version
             FROM pairs p
             LEFT JOIN LATERAL (
               SELECT DISTINCT ON (account_id, currency)
                 account_id,
                 currency,
-                values
+                values,
+                all_time_version
               FROM cala_cumulative_effective_balances
               WHERE journal_id = $1
                 AND effective < $4
@@ -123,6 +198,7 @@ impl EffectiveBalanceRepo {
             v.account_id AS "account_id!: AccountId",
             v.currency AS "currency!",
             v.values AS "values?: serde_json::Value",
+            v.all_time_version AS "all_time_version?: i32",
             COALESCE(
               jsonb_agg(
                 jsonb_build_object('effective', d.effective, 'values', d.values)
@@ -132,7 +208,7 @@ impl EffectiveBalanceRepo {
           FROM values v
           LEFT JOIN delete_balances d
             ON v.account_id = d.account_id AND v.currency = d.currency
-          GROUP BY v.account_id, v.currency, v.values
+          GROUP BY v.account_id, v.currency, v.values, v.all_time_version
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -155,7 +231,13 @@ impl EffectiveBalanceRepo {
             let currency = row.currency.parse().expect("Failed to parse currency");
             ret.insert(
                 (row.account_id, currency),
-                EffectiveBalanceData::new(row.account_id, currency, last_snapshot, updates),
+                EffectiveBalanceData::new(
+                    row.account_id,
+                    currency,
+                    last_snapshot,
+                    row.all_time_version.map(|v| v as u32).unwrap_or(0),
+                    updates,
+                ),
             );
         }
         Ok(ret)
@@ -175,18 +257,19 @@ impl EffectiveBalanceRepo {
         let mut query_builder = QueryBuilder::new(
             r#"
             INSERT INTO cala_cumulative_effective_balances (
-              journal_id, account_id, currency, effective, version, latest_entry_id, updated_at, created_at, values
+              journal_id, account_id, currency, effective, version, all_time_version, latest_entry_id, updated_at, created_at, values
             )
             "#,
         );
         query_builder.push_values(
             data.into_values().flat_map(|d| d.into_updates()),
-            |mut builder, (account_id, currency, effective, snapshot)| {
+            |mut builder, (account_id, currency, effective, snapshot, all_time_version)| {
                 builder.push_bind(journal_id);
                 builder.push_bind(account_id);
                 builder.push_bind(currency.code());
                 builder.push_bind(effective);
                 builder.push_bind(snapshot.version as i32);
+                builder.push_bind(all_time_version as i32);
                 builder.push_bind(snapshot.entry_id);
                 builder.push_bind(snapshot.modified_at);
                 builder.push_bind(snapshot.created_at);

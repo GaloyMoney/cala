@@ -45,6 +45,25 @@ impl EffectiveBalances {
             .await
     }
 
+    #[instrument(name = "cala_ledger.balance.effective.find_in_range", skip(self), err)]
+    pub async fn find_in_range(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<BalanceRange, BalanceError> {
+        match self
+            .repo
+            .find_range(journal_id, account_id, currency, from, until)
+            .await?
+        {
+            (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
+            _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn update_cumulative_balances_in_tx(
         &self,

@@ -93,5 +93,35 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     assert_eq!(recipient_balance.settled(), dec!(200));
     assert_eq!(recipient_balance.pending(), dec!(200));
 
+    let balances = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            Currency::USD,
+            date1,
+            Some(date1),
+        )
+        .await?;
+    assert_eq!(balances.period.details.version, 2);
+    assert_eq!(balances.period.settled(), dec!(100));
+    assert_eq!(balances.period.pending(), dec!(100));
+
+    let balances = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            Currency::USD,
+            date2,
+            None,
+        )
+        .await?;
+    assert_eq!(balances.period.details.version, 4);
+    assert_eq!(balances.period.settled(), dec!(200));
+    assert_eq!(balances.period.pending(), dec!(200));
+
     Ok(())
 }

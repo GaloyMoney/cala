@@ -91,7 +91,11 @@ impl Balances {
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (start, Some(end)) => Ok(BalanceRange::new(start, end)),
+            (start, Some(end)) => {
+                let version_diff =
+                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
+                Ok(BalanceRange::new(start, end, version_diff))
+            }
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }
@@ -116,7 +120,9 @@ impl Balances {
         let mut res = HashMap::new();
         for (id, (start, end)) in ranges {
             if let Some(end) = end {
-                res.insert(id, BalanceRange::new(start, end));
+                let version_diff =
+                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
+                res.insert(id, BalanceRange::new(start, end, version_diff));
             }
         }
         Ok(res)
