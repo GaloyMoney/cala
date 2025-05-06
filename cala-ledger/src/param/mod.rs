@@ -39,8 +39,7 @@ impl Params {
                             .coerce_value(v)
                             .map_err(ParamError::ParamTypeMismatch)?,
                     );
-                }
-                if let Some(expr) = d.default.as_ref() {
+                } else if let Some(expr) = d.default.as_ref() {
                     cel_map.insert(d.name.clone(), expr.evaluate(&ctx)?);
                 }
             }
