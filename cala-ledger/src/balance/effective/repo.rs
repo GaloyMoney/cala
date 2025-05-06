@@ -26,14 +26,18 @@ impl EffectiveBalanceRepo {
         name = "cala_ledger.balances.find_for_update",
         skip(self, db)
     )]
+    #[allow(clippy::type_complexity)]
     pub(super) async fn find_for_update(
         &self,
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        sqlx::query!(
+    ) -> Result<
+        HashMap<(AccountId, Currency), (Option<BalanceSnapshot>, Vec<BalanceSnapshot>)>,
+        BalanceError,
+    > {
+        let rows = sqlx::query!(
             r#"
           WITH pairs AS (
             SELECT account_id, currency, eventually_consistent
@@ -42,23 +46,46 @@ impl EffectiveBalanceRepo {
             ) AS v
             JOIN cala_accounts a
             ON account_id = a.id
+            WHERE eventually_consistent = FALSE
           ),
           delete_balances AS (
             DELETE FROM cala_cumulative_effective_balances
             WHERE journal_id = $1
               AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)
               AND effective >= $4
+            RETURNING account_id, currency, values
           ),
           values AS (
-            SELECT p.account_id, p.currency, b.values
+            SELECT 
+              p.account_id,
+              p.currency,
+              b.values
             FROM pairs p
-            LEFT JOIN cala_cumulative_effective_balances b
-            ON p.account_id = b.account_id
-              AND p.currency = b.currency
-            WHERE b.journal_id = $1
-              AND b.effective < $4
+            LEFT JOIN LATERAL (
+              SELECT DISTINCT ON (account_id, currency)
+                account_id,
+                currency,
+                values
+              FROM cala_cumulative_effective_balances
+              WHERE journal_id = $1
+                AND effective < $4
+                AND account_id = p.account_id
+                AND currency = p.currency
+              ORDER BY account_id, currency, effective DESC, version DESC
+            ) b ON TRUE
           )
-          SELECT account_id AS "account_id!: AccountId", currency AS "currency!", values FROM values
+          SELECT
+            v.account_id AS "account_id!: AccountId",
+            v.currency AS "currency!",
+            v.values AS "values?: serde_json::Value",
+            COALESCE(
+              jsonb_agg(d.values) FILTER (WHERE d.values IS NOT NULL),
+              '[]'::jsonb
+            ) AS "deleted_values!: serde_json::Value"
+          FROM values v
+          LEFT JOIN delete_balances d
+            ON v.account_id = d.account_id AND v.currency = d.currency
+          GROUP BY v.account_id, v.currency, v.values
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -67,6 +94,26 @@ impl EffectiveBalanceRepo {
         )
         .fetch_all(&mut **db)
         .await?;
-        unimplemented!()
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let snapshot = row.values.map(|v| {
+                serde_json::from_value::<BalanceSnapshot>(v)
+                    .expect("Failed to deserialize balance snapshot")
+            });
+
+            let deleted_snapshots =
+                serde_json::from_value::<Vec<BalanceSnapshot>>(row.deleted_values)
+                    .expect("Failed to deserialize deleted values array");
+
+            ret.insert(
+                (
+                    row.account_id,
+                    row.currency.parse().expect("Could not parse currency"),
+                ),
+                (snapshot, deleted_snapshots),
+            );
+        }
+        Ok(ret)
     }
 }

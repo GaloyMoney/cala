@@ -68,7 +68,8 @@ impl EffectiveBalances {
         _account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
-        self.repo
+        let _last_balances = self
+            .repo
             .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
         // let mut op = LedgerOperation::init(&self._pool, &self._outbox).await?;

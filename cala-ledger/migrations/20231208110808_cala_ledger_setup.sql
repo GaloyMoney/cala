@@ -160,11 +160,12 @@ CREATE TABLE cala_cumulative_effective_balances (
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   currency VARCHAR NOT NULL,
+  effective DATE NOT NULL,
+  version INT NOT NULL,
   latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
   values JSONB NOT NULL,
-  effective DATE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(journal_id, account_id, currency, effective)
+  UNIQUE(journal_id, account_id, currency, effective, version)
 );
 
 CREATE TABLE cala_velocity_limits (
