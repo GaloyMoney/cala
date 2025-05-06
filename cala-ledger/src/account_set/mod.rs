@@ -486,12 +486,15 @@ impl AccountSets {
             .await
     }
 
-    pub(crate) async fn fetch_mappings(
+    pub(crate) async fn fetch_mappings_in_op(
         &self,
+        op: &mut LedgerOperation<'_>,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        self.repo.fetch_mappings(journal_id, account_ids).await
+        self.repo
+            .fetch_mappings_in_tx(op.tx(), journal_id, account_ids)
+            .await
     }
 
     #[cfg(feature = "import")]

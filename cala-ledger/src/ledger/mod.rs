@@ -196,7 +196,7 @@ impl CalaLedger {
             .collect::<Vec<_>>();
         let mappings = self
             .account_sets
-            .fetch_mappings(transaction.values().journal_id, &account_ids)
+            .fetch_mappings_in_op(db, transaction.values().journal_id, &account_ids)
             .await?;
 
         self.velocities
