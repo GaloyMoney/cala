@@ -813,8 +813,9 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    pub async fn fetch_mappings(
+    pub async fn fetch_mappings_in_tx(
         &self,
+        db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
@@ -829,7 +830,7 @@ impl AccountSetRepo {
             journal_id as JournalId,
             account_ids as &[AccountId]
         )
-        .fetch_all(&self.pool)
+        .fetch_all(&mut **db)
         .await?;
         let mut mappings = HashMap::new();
         for row in rows {
