@@ -9,7 +9,7 @@ use tracing::instrument;
 // pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
-use crate::{ledger_operation::*, primitives::JournalId};
+use crate::primitives::JournalId;
 
 use super::{account_balance::*, error::BalanceError};
 
@@ -40,26 +40,13 @@ impl EffectiveBalances {
         currency: Currency,
         date: NaiveDate,
     ) -> Result<AccountBalance, BalanceError> {
-        unimplemented!()
-    }
-
-    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, _op), err)]
-    pub async fn find_in_op(
-        &self,
-        _op: &mut LedgerOperation<'_>,
-        _journal_id: JournalId,
-        _account_id: impl Into<AccountId> + std::fmt::Debug,
-        _currency: Currency,
-        _date: NaiveDate,
-    ) -> Result<AccountBalance, BalanceError> {
-        // self.repo
-        //     .find_in_tx(op.tx(), journal_id, account_id.into(), currency)
-        //     .await
-        unimplemented!()
+        self.repo
+            .find(journal_id, account_id.into(), currency, date)
+            .await
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub async fn update_cumulative_balances_in_tx(
+    pub(crate) async fn update_cumulative_balances_in_tx(
         &self,
         db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         journal_id: JournalId,
@@ -90,11 +77,10 @@ impl EffectiveBalances {
         for data in all_data.values_mut() {
             data.re_calculate_snapshots(created_at, effective);
         }
-        // let entries = self.entries.find_for_recalculating_effective().await?;
-        //
-        // all entries after effective <- sorted together with the new entries
-        // -> derive snapshots from all of those entries
-        // -> persist the snapshots
+
+        self.repo
+            .insert_new_snapshots(db, journal_id, all_data)
+            .await?;
 
         Ok(())
     }

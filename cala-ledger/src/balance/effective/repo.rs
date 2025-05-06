@@ -1,31 +1,78 @@
 use chrono::NaiveDate;
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Transaction};
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::balance::error::BalanceError;
+use crate::balance::{account_balance::AccountBalance, error::BalanceError};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, Currency, JournalId},
+    primitives::{AccountId, Currency, DebitOrCredit, JournalId},
 };
 
 use super::data::*;
 
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl EffectiveBalanceRepo {
     pub fn new(pool: &PgPool) -> Self {
-        Self {
-            _pool: pool.clone(),
+        Self { pool: pool.clone() }
+    }
+
+    pub async fn find(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        date: NaiveDate,
+    ) -> Result<AccountBalance, BalanceError> {
+        self.find_in_executor(&self.pool, journal_id, account_id, currency, date)
+            .await
+    }
+
+    async fn find_in_executor(
+        &self,
+        executor: impl Executor<'_, Database = Postgres>,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        date: NaiveDate,
+    ) -> Result<AccountBalance, BalanceError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
+            FROM cala_cumulative_effective_balances
+            JOIN cala_accounts a
+            ON account_id = a.id
+            WHERE journal_id = $1
+            AND account_id = $2
+            AND currency = $3
+            AND effective <= $4
+            ORDER BY effective DESC, version DESC
+            LIMIT 1
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency.code(),
+            date
+        )
+        .fetch_optional(executor)
+        .await?;
+
+        if let Some(row) = row {
+            let details: BalanceSnapshot =
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            Ok(AccountBalance::new(row.normal_balance_type, details))
+        } else {
+            Err(BalanceError::NotFound(journal_id, account_id, currency))
         }
     }
 
     #[instrument(
         level = "trace",
-        name = "cala_ledger.balances.find_for_update",
+        name = "cala_ledger.balances.effective.find_for_update",
         skip(self, db)
     )]
     pub(super) async fn find_for_update(
@@ -105,14 +152,50 @@ impl EffectiveBalanceRepo {
             let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
                 .expect("Failed to deserialize deleted values array");
 
+            let currency = row.currency.parse().expect("Failed to parse currency");
             ret.insert(
-                (
-                    row.account_id,
-                    row.currency.parse().expect("Could not parse currency"),
-                ),
-                EffectiveBalanceData::new(row.account_id, last_snapshot, updates),
+                (row.account_id, currency),
+                EffectiveBalanceData::new(row.account_id, currency, last_snapshot, updates),
             );
         }
         Ok(ret)
+    }
+
+    #[instrument(
+        level = "trace",
+        name = "cala_ledger.balances.effective.insert_new_snapshots",
+        skip(self, db, data)
+    )]
+    pub(crate) async fn insert_new_snapshots(
+        &self,
+        db: &mut Transaction<'_, Postgres>,
+        journal_id: JournalId,
+        data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
+    ) -> Result<(), BalanceError> {
+        let mut query_builder = QueryBuilder::new(
+            r#"
+            INSERT INTO cala_cumulative_effective_balances (
+              journal_id, account_id, currency, effective, version, latest_entry_id, updated_at, created_at, values
+            )
+            "#,
+        );
+        query_builder.push_values(
+            data.into_values().flat_map(|d| d.into_updates()),
+            |mut builder, (account_id, currency, effective, snapshot)| {
+                builder.push_bind(journal_id);
+                builder.push_bind(account_id);
+                builder.push_bind(currency.code());
+                builder.push_bind(effective);
+                builder.push_bind(snapshot.version as i32);
+                builder.push_bind(snapshot.entry_id);
+                builder.push_bind(snapshot.modified_at);
+                builder.push_bind(snapshot.created_at);
+                builder.push_bind(
+                    serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
+                );
+            },
+        );
+        query_builder.build().execute(&mut **db).await?;
+        Ok(())
     }
 }

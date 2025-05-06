@@ -164,6 +164,7 @@ CREATE TABLE cala_cumulative_effective_balances (
   version INT NOT NULL,
   latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
   values JSONB NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(journal_id, account_id, currency, effective, version)
 );

@@ -2,6 +2,7 @@ mod helpers;
 
 use chrono::NaiveDate;
 use rand::distr::{Alphanumeric, SampleString};
+use rust_decimal_macros::dec;
 
 use cala_ledger::{tx_template::*, *};
 
@@ -33,12 +34,25 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     let date1 = NaiveDate::from_ymd_opt(2025, 5, 5).unwrap();
     params.insert("effective", date1);
 
-    let _tx = cala
-        .post_transaction(TransactionId::new(), &tx_code, params)
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
 
-    // Run it again to test balance updates
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date1)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(1290));
+
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date1)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(100));
+    assert_eq!(recipient_balance.pending(), dec!(100));
+
     let mut params = Params::new();
     params.insert("journal_id", journal.id());
     params.insert("sender", sender_account.id());
@@ -49,17 +63,35 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     cala.post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
-    // let recipient_balance = cala
-    //     .balances()
-    //     .effective()
-    //     .find_cumulative(
-    //         journal.id(),
-    //         recipient_account.id(),
-    //         "BTC".parse().unwrap(),
-    //         date2,
-    //     )
-    //     .await?;
 
-    // assert!(true);
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date2)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(1290));
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date2)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(100));
+    assert_eq!(recipient_balance.pending(), dec!(100));
+
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date1)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(2580));
+
+    let recipient_balance = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date1)
+        .await?;
+    assert_eq!(recipient_balance.settled(), dec!(200));
+    assert_eq!(recipient_balance.pending(), dec!(200));
+
     Ok(())
 }

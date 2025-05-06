@@ -43,7 +43,7 @@ impl BalanceRepo {
             .await
     }
 
-    pub async fn find_in_executor(
+    async fn find_in_executor(
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         journal_id: JournalId,

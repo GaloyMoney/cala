@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use cala_types::{
     balance::{BalanceAmount, BalanceSnapshot},
     entry::EntryValues,
-    primitives::{AccountId, EntryId},
+    primitives::{AccountId, Currency, EntryId},
 };
 
 use crate::balance::snapshot::Snapshots;
@@ -52,6 +52,7 @@ impl SnapshotOrEntry<'_> {
 
 pub(super) struct EffectiveBalanceData<'a> {
     account_id: AccountId,
+    currency: Currency,
     last_snapshot: Option<BalanceSnapshot>,
     updates: Vec<SnapshotOrEntry<'a>>,
 }
@@ -59,14 +60,25 @@ pub(super) struct EffectiveBalanceData<'a> {
 impl<'a> EffectiveBalanceData<'a> {
     pub fn new(
         account_id: AccountId,
+        currency: Currency,
         last_snapshot: Option<BalanceSnapshot>,
         updates: Vec<SnapshotOrEntry<'a>>,
     ) -> Self {
         Self {
             account_id,
+            currency,
             last_snapshot,
             updates,
         }
+    }
+
+    pub fn into_updates(
+        self,
+    ) -> impl Iterator<Item = (AccountId, Currency, NaiveDate, BalanceSnapshot)> + use<'a> {
+        self.updates.into_iter().map(move |update| {
+            let (values, effective) = update.snapshot();
+            (self.account_id, self.currency, effective, values)
+        })
     }
 
     pub fn push(&mut self, effective: NaiveDate, entry: &'a EntryValues) {
@@ -313,7 +325,7 @@ mod tests {
     #[test]
     fn empty_data() {
         let account_id = AccountId::new();
-        let mut data = EffectiveBalanceData::new(account_id, None, Vec::new());
+        let mut data = EffectiveBalanceData::new(account_id, Currency::USD, None, Vec::new());
 
         let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
         let entry = entry_values();
@@ -335,7 +347,12 @@ mod tests {
     #[test]
     fn existing_previous_balance() {
         let account_id = AccountId::new();
-        let mut data = EffectiveBalanceData::new(account_id, Some(random_snapshot()), Vec::new());
+        let mut data = EffectiveBalanceData::new(
+            account_id,
+            Currency::USD,
+            Some(random_snapshot()),
+            Vec::new(),
+        );
 
         let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
         let entry = entry_values();
@@ -357,7 +374,7 @@ mod tests {
     #[test]
     fn two_entries() {
         let account_id = AccountId::new();
-        let mut data = EffectiveBalanceData::new(account_id, None, Vec::new());
+        let mut data = EffectiveBalanceData::new(account_id, Currency::USD, None, Vec::new());
 
         let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
         let entry = entry_values();
@@ -393,6 +410,7 @@ mod tests {
         let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
         let mut data = EffectiveBalanceData::new(
             account_id,
+            Currency::USD,
             None,
             vec![SnapshotOrEntry::Snapshot {
                 effective,
@@ -422,6 +440,7 @@ mod tests {
         let future_balance = random_snapshot_with_pending();
         let mut data = EffectiveBalanceData::new(
             account_id,
+            Currency::USD,
             None,
             vec![SnapshotOrEntry::Snapshot {
                 effective: future,
