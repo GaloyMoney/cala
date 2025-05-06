@@ -623,6 +623,7 @@ dependencies = [
  "protobuf-src",
  "rand 0.9.1",
  "rust_decimal",
+ "rust_decimal_macros",
  "serde",
  "serde_json",
  "sqlx",

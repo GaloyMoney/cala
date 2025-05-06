@@ -66,21 +66,29 @@ impl EffectiveBalances {
         entries: Vec<EntryValues>,
         effective: NaiveDate,
         created_at: DateTime<Utc>,
-        account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
+        mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
     ) -> Result<(), BalanceError> {
         let mut all_datas = self
             .repo
             .find_for_update(db, journal_id, balance_ids, effective)
             .await?;
-        for ((account_id, currency), data) in all_datas.iter_mut() {
-            data.insert_entries(
-                effective,
-                entries
-                    .iter()
-                    .filter(|e| account_id == &e.account_id && currency == &e.currency),
-            );
-            // data.re_calculate_snapshots();
+        let empty = Vec::new();
+        for entry in entries.iter() {
+            for account_id in mappings
+                .get(&entry.account_id)
+                .unwrap_or(&empty)
+                .iter()
+                .map(AccountId::from)
+                .chain(std::iter::once(entry.account_id))
+            {
+                if let Some(data) = all_datas.get_mut(&(account_id, entry.currency)) {
+                    data.push(effective, entry);
+                }
+            }
+        }
+        for data in all_datas.values_mut() {
+            data.re_calculate_snapshots(created_at, effective);
         }
         // let entries = self.entries.find_for_recalculating_effective().await?;
         //

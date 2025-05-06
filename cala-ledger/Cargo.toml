@@ -48,6 +48,7 @@ rust_decimal = { workspace = true }
 anyhow = "1.0"
 rand = "0.9"
 tokio-test = "0.4"
+rust_decimal_macros = { workspace = true }
 
 [build-dependencies]
 protobuf-src = { workspace = true }
