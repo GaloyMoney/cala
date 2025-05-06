@@ -6,7 +6,6 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-// pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::primitives::JournalId;

@@ -192,7 +192,7 @@ impl EffectiveBalanceRepo {
             ),
             last AS (
               SELECT
-                true AS first, false AS last, values,
+                false AS first, true AS last, values,
                 normal_balance_type,
                 all_time_version,
                 h.journal_id, h.account_id, h.currency

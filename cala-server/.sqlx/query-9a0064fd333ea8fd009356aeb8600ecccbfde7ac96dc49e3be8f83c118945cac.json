@@ -1,0 +1,78 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH balance_ids AS (\n              SELECT journal_id, account_id, currency, normal_balance_type\n              FROM (\n                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])\n                AS v(journal_id, account_id, currency)\n              ) AS v\n              JOIN cala_accounts a\n              ON account_id = a.id\n            ),\n            first AS (\n              SELECT\n                true AS first, false AS last, values,\n                normal_balance_type,\n                all_time_version,\n                h.journal_id, h.account_id, h.currency\n                FROM balance_ids\n                JOIN LATERAL (\n                    SELECT DISTINCT ON (journal_id, account_id, currency)\n                        journal_id, account_id, currency, values, all_time_version\n                    FROM cala_cumulative_effective_balances\n                    WHERE journal_id = balance_ids.journal_id\n                      AND account_id = balance_ids.account_id\n                      AND currency = balance_ids.currency\n                      AND effective < $4\n                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC\n                ) h ON TRUE\n            ),\n            last AS (\n              SELECT\n                false AS first, true AS last, values,\n                normal_balance_type,\n                all_time_version,\n                h.journal_id, h.account_id, h.currency\n                FROM balance_ids\n                JOIN LATERAL (\n                    SELECT DISTINCT ON (journal_id, account_id, currency)\n                        journal_id, account_id, currency, values, all_time_version\n                    FROM cala_cumulative_effective_balances\n                    WHERE journal_id = balance_ids.journal_id\n                      AND account_id = balance_ids.account_id\n                      AND currency = balance_ids.currency\n                      AND effective <= COALESCE($5, NOW()::DATE)\n                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC\n                ) h ON TRUE\n            )\n            SELECT\n                first, last, values, \n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                all_time_version,\n                journal_id as \"journal_id: JournalId\",\n                account_id as \"account_id: AccountId\",\n                currency\n            FROM first\n            UNION ALL\n            SELECT\n                first, last, values,\n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                all_time_version,\n                journal_id as \"journal_id: JournalId\",\n                account_id as \"account_id: AccountId\",\n                currency\n            FROM last",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "last",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "all_time_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "journal_id: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "currency",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "Date",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "9a0064fd333ea8fd009356aeb8600ecccbfde7ac96dc49e3be8f83c118945cac"
+}
