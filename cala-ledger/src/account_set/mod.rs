@@ -226,7 +226,14 @@ impl AccountSets {
         let entries = self.entries.create_all_in_op(op, entries).await?;
         let mappings = std::iter::once((target_account_id, parents)).collect();
         self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+            .update_balances_in_op(
+                op,
+                account_set.values().journal_id,
+                entries,
+                time.date_naive(),
+                time,
+                mappings,
+            )
             .await?;
 
         Ok(account_set)
@@ -310,7 +317,14 @@ impl AccountSets {
         let entries = self.entries.create_all_in_op(op, entries).await?;
         let mappings = std::iter::once((target_account_id, parents)).collect();
         self.balances
-            .update_balances_in_op(op, time, account_set.values().journal_id, entries, mappings)
+            .update_balances_in_op(
+                op,
+                account_set.values().journal_id,
+                entries,
+                time.date_naive(),
+                time,
+                mappings,
+            )
             .await?;
 
         Ok(account_set)

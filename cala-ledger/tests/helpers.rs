@@ -19,6 +19,16 @@ pub fn test_journal() -> NewJournal {
         .unwrap()
 }
 
+pub fn test_journal_with_effective_balances() -> NewJournal {
+    let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    NewJournal::builder()
+        .id(JournalId::new())
+        .name(name)
+        .enable_effective_balance(true)
+        .build()
+        .unwrap()
+}
+
 pub fn test_accounts() -> (NewAccount, NewAccount) {
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let sender_account = NewAccount::builder()

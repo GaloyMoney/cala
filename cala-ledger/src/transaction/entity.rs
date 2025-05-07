@@ -62,6 +62,10 @@ impl Transaction {
             .expect("No persisted events")
     }
 
+    pub fn effective(&self) -> chrono::NaiveDate {
+        self.values.effective
+    }
+
     pub fn modified_at(&self) -> chrono::DateTime<chrono::Utc> {
         self.events
             .entity_last_modified_at()

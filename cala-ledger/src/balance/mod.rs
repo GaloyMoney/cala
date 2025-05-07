@@ -1,42 +1,55 @@
 mod account_balance;
+mod effective;
 pub mod error;
 mod repo;
+mod snapshot;
 
-use chrono::{DateTime, Utc};
-use rust_decimal::Decimal;
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::{Acquire, PgPool, Postgres, Transaction};
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-pub use cala_types::balance::{BalanceAmount, BalanceSnapshot};
+pub use cala_types::{
+    balance::{BalanceAmount, BalanceSnapshot},
+    journal::JournalValues,
+};
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
+    journal::Journals,
     ledger_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
 
 pub use account_balance::*;
+use effective::*;
 use error::BalanceError;
 use repo::*;
-
-const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
+pub(crate) use snapshot::*;
 
 #[derive(Clone)]
 pub struct Balances {
     repo: BalanceRepo,
     outbox: Outbox,
+    journals: Journals,
+    effective: EffectiveBalances,
     _pool: PgPool,
 }
 
 impl Balances {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, outbox: Outbox, journals: &Journals) -> Self {
         Self {
             repo: BalanceRepo::new(pool),
+            effective: EffectiveBalances::new(pool),
             outbox,
+            journals: journals.clone(),
             _pool: pool.clone(),
         }
+    }
+
+    pub fn effective(&self) -> &EffectiveBalances {
+        &self.effective
     }
 
     #[instrument(name = "cala_ledger.balance.find", skip(self), err)]
@@ -78,7 +91,11 @@ impl Balances {
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (start, Some(end)) => Ok(BalanceRange::new(start, end)),
+            (start, Some(end)) => {
+                let version_diff =
+                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
+                Ok(BalanceRange::new(start, end, version_diff))
+            }
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }
@@ -103,7 +120,9 @@ impl Balances {
         let mut res = HashMap::new();
         for (id, (start, end)) in ranges {
             if let Some(end) = end {
-                res.insert(id, BalanceRange::new(start, end));
+                let version_diff =
+                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
+                res.insert(id, BalanceRange::new(start, end, version_diff));
             }
         }
         Ok(res)
@@ -112,18 +131,24 @@ impl Balances {
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
-        created_at: DateTime<Utc>,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
+        effective: NaiveDate,
+        created_at: DateTime<Utc>,
         account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), BalanceError> {
-        let mut ids: HashSet<_> = entries
+        let journal = self.journals.find(journal_id).await?;
+        if journal.is_locked() {
+            return Err(BalanceError::JournalLocked(journal.id));
+        }
+
+        let mut all_involved_balances: HashSet<_> = entries
             .iter()
             .map(|entry| (entry.account_id, entry.currency))
             .collect();
         for entry in entries.iter() {
             if let Some(account_set_ids) = account_set_mappings.get(&entry.account_id) {
-                ids.extend(
+                all_involved_balances.extend(
                     account_set_ids
                         .iter()
                         .map(|account_set_id| (AccountId::from(account_set_id), entry.currency)),
@@ -131,14 +156,40 @@ impl Balances {
             }
         }
 
+        let all_involved_balances: (Vec<_>, Vec<_>) = all_involved_balances
+            .into_iter()
+            .map(|(a, c)| (a, c.code()))
+            .unzip();
+
         let mut db = op.tx().begin().await?;
 
-        let current_balances = self.repo.find_for_update(&mut db, journal_id, ids).await?;
-        let new_balances =
-            Self::new_snapshots(created_at, current_balances, entries, account_set_mappings);
-        self.repo
-            .insert_new_snapshots(&mut db, journal_id, &new_balances)
+        let current_balances = self
+            .repo
+            .find_for_update(&mut db, journal.id, &all_involved_balances)
             .await?;
+        let new_balances = Self::new_snapshots(
+            created_at,
+            current_balances,
+            &entries,
+            &account_set_mappings,
+        );
+        self.repo
+            .insert_new_snapshots(&mut db, journal.id, &new_balances)
+            .await?;
+
+        if journal.insert_effective_balances() {
+            self.effective
+                .update_cumulative_balances_in_tx(
+                    &mut db,
+                    journal_id,
+                    entries,
+                    effective,
+                    created_at,
+                    account_set_mappings,
+                    all_involved_balances,
+                )
+                .await?;
+        }
 
         db.commit().await?;
 
@@ -172,8 +223,8 @@ impl Balances {
     fn new_snapshots(
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
-        entries: Vec<EntryValues>,
-        mappings: HashMap<AccountId, Vec<AccountSetId>>,
+        entries: &[EntryValues],
+        mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Vec<BalanceSnapshot> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
         let mut new_balances = Vec::new();
@@ -198,7 +249,7 @@ impl Balances {
                     (_, Some(None)) => {
                         latest_balances.insert(
                             (account_id, &entry.currency),
-                            Self::new_snapshot(time, account_id, entry),
+                            Snapshots::new_snapshot(time, account_id, entry),
                         );
                         continue;
                     }
@@ -208,100 +259,12 @@ impl Balances {
                 };
                 latest_balances.insert(
                     (account_id, &entry.currency),
-                    Self::update_snapshot(time, balance, entry),
+                    Snapshots::update_snapshot(time, balance, entry),
                 );
             }
         }
         new_balances.extend(latest_balances.into_values());
         new_balances
-    }
-
-    pub(crate) fn new_snapshot(
-        time: DateTime<Utc>,
-        account_id: AccountId,
-        entry: &EntryValues,
-    ) -> BalanceSnapshot {
-        let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
-        Self::update_snapshot(
-            time,
-            BalanceSnapshot {
-                journal_id: entry.journal_id,
-                account_id,
-                entry_id,
-                currency: entry.currency,
-                settled: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                pending: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                encumbrance: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                version: 0,
-                modified_at: time,
-                created_at: time,
-            },
-            entry,
-        )
-    }
-
-    pub(crate) fn update_snapshot(
-        time: DateTime<Utc>,
-        mut snapshot: BalanceSnapshot,
-        entry: &EntryValues,
-    ) -> BalanceSnapshot {
-        snapshot.version += 1;
-        snapshot.modified_at = time;
-        snapshot.entry_id = entry.id;
-        match entry.layer {
-            Layer::Settled => {
-                snapshot.settled.entry_id = entry.id;
-                snapshot.settled.modified_at = time;
-                match entry.direction {
-                    DebitOrCredit::Debit => {
-                        snapshot.settled.dr_balance += entry.units;
-                    }
-                    DebitOrCredit::Credit => {
-                        snapshot.settled.cr_balance += entry.units;
-                    }
-                }
-            }
-            Layer::Pending => {
-                snapshot.pending.entry_id = entry.id;
-                snapshot.pending.modified_at = time;
-                match entry.direction {
-                    DebitOrCredit::Debit => {
-                        snapshot.pending.dr_balance += entry.units;
-                    }
-                    DebitOrCredit::Credit => {
-                        snapshot.pending.cr_balance += entry.units;
-                    }
-                }
-            }
-            Layer::Encumbrance => {
-                snapshot.encumbrance.entry_id = entry.id;
-                snapshot.encumbrance.modified_at = time;
-                match entry.direction {
-                    DebitOrCredit::Debit => {
-                        snapshot.encumbrance.dr_balance += entry.units;
-                    }
-                    DebitOrCredit::Credit => {
-                        snapshot.encumbrance.cr_balance += entry.units;
-                    }
-                }
-            }
-        }
-        snapshot
     }
 
     #[cfg(feature = "import")]

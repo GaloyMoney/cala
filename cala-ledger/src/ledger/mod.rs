@@ -77,7 +77,7 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, outbox.clone());
-        let balances = Balances::new(&pool, outbox.clone());
+        let balances = Balances::new(&pool, outbox.clone(), &journals);
         let velocities = Velocities::new(&pool, outbox.clone());
         let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts, &entries, &balances);
         Ok(Self {
@@ -212,9 +212,10 @@ impl CalaLedger {
         self.balances
             .update_balances_in_op(
                 db,
-                transaction.created_at(),
                 transaction.journal_id(),
                 entries,
+                transaction.effective(),
+                transaction.created_at(),
                 mappings,
             )
             .await?;

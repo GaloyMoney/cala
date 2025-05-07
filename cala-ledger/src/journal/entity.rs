@@ -52,6 +52,14 @@ impl Journal {
         &self.values
     }
 
+    pub fn is_locked(&self) -> bool {
+        matches!(self.values.status, Status::Locked)
+    }
+
+    pub(crate) fn insert_effective_balances(&self) -> bool {
+        self.values.config.enable_effective_balances
+    }
+
     pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
         let JournalUpdateValues {
             name,

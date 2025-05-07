@@ -115,33 +115,40 @@ impl<'a> BalanceWithDirection<'a> {
 
 #[derive(Debug, Clone)]
 pub struct BalanceRange {
-    pub start: AccountBalance,
-    pub diff: AccountBalance,
-    pub end: AccountBalance,
+    pub open: AccountBalance,
+    pub period: AccountBalance,
+    pub close: AccountBalance,
 }
 
 impl BalanceRange {
-    pub fn new(start: Option<AccountBalance>, end: AccountBalance) -> Self {
+    pub fn new(start: Option<AccountBalance>, end: AccountBalance, version_diff: u32) -> Self {
         match start {
-            Some(start) => Self {
-                end: end.clone(),
-                diff: end.derive_diff(&start),
-                start,
-            },
+            Some(start) => {
+                let close = end.clone();
+                let mut period = end.derive_diff(&start);
+                period.details.version = version_diff;
+                Self {
+                    close,
+                    period,
+                    open: start,
+                }
+            }
             None => {
                 use chrono::{TimeZone, Utc};
                 let zero_time = Utc.timestamp_opt(0, 0).single().expect("0 timestamp");
-                let zero_entry = EntryId::from(super::UNASSIGNED_ENTRY_ID);
+                let zero_entry = EntryId::from(super::snapshot::UNASSIGNED_ENTRY_ID);
                 let zero_amount = BalanceAmount {
                     dr_balance: Decimal::ZERO,
                     cr_balance: Decimal::ZERO,
                     entry_id: zero_entry,
                     modified_at: zero_time,
                 };
+                let mut range = end.clone();
+                range.details.version = version_diff;
                 Self {
-                    diff: end.clone(),
-                    end: end.clone(),
-                    start: AccountBalance {
+                    period: range,
+                    close: end.clone(),
+                    open: AccountBalance {
                         balance_type: end.balance_type,
                         details: BalanceSnapshot {
                             version: 0,

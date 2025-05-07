@@ -60,10 +60,10 @@ async fn balance_in_range() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(range.start.settled(), Decimal::ZERO);
-    assert_eq!(range.end.settled(), Decimal::from(1290));
-    assert_eq!(range.diff.settled(), Decimal::from(1290));
-    assert_eq!(range.end.details.version, 1);
+    assert_eq!(range.open.settled(), Decimal::ZERO);
+    assert_eq!(range.close.settled(), Decimal::from(1290));
+    assert_eq!(range.period.settled(), Decimal::from(1290));
+    assert_eq!(range.close.details.version, 1);
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let after_first_before_second_tx = Utc::now();
@@ -88,10 +88,10 @@ async fn balance_in_range() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(range.start.settled(), Decimal::ZERO);
-    assert_eq!(range.end.settled(), Decimal::from(1290));
-    assert_eq!(range.diff.settled(), Decimal::from(1290));
-    assert_eq!(range.end.details.version, 1);
+    assert_eq!(range.open.settled(), Decimal::ZERO);
+    assert_eq!(range.close.settled(), Decimal::from(1290));
+    assert_eq!(range.period.settled(), Decimal::from(1290));
+    assert_eq!(range.close.details.version, 1);
 
     let range = cala
         .balances()
@@ -104,10 +104,10 @@ async fn balance_in_range() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(range.start.settled(), Decimal::from(1290));
-    assert_eq!(range.end.settled(), Decimal::from(2580));
-    assert_eq!(range.diff.settled(), Decimal::from(1290));
-    assert_eq!(range.end.details.version, 2);
+    assert_eq!(range.open.settled(), Decimal::from(1290));
+    assert_eq!(range.close.settled(), Decimal::from(2580));
+    assert_eq!(range.period.settled(), Decimal::from(1290));
+    assert_eq!(range.close.details.version, 2);
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     let after_second_tx = Utc::now();
@@ -123,10 +123,10 @@ async fn balance_in_range() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert_eq!(range.start.settled(), Decimal::from(2580));
-    assert_eq!(range.end.settled(), Decimal::from(2580));
-    assert_eq!(range.diff.settled(), Decimal::ZERO);
-    assert_eq!(range.end.details.version, 2);
+    assert_eq!(range.open.settled(), Decimal::from(2580));
+    assert_eq!(range.close.settled(), Decimal::from(2580));
+    assert_eq!(range.period.settled(), Decimal::ZERO);
+    assert_eq!(range.close.details.version, 2);
 
     Ok(())
 }
@@ -188,10 +188,10 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .await?;
     for range in ranges.values() {
         let range = range.clone();
-        assert_eq!(range.start.settled(), Decimal::ZERO);
-        assert_eq!(range.end.settled(), Decimal::from(1290));
-        assert_eq!(range.diff.settled(), Decimal::from(1290));
-        assert_eq!(range.end.details.version, 1);
+        assert_eq!(range.open.settled(), Decimal::ZERO);
+        assert_eq!(range.close.settled(), Decimal::from(1290));
+        assert_eq!(range.period.settled(), Decimal::from(1290));
+        assert_eq!(range.close.details.version, 1);
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -220,10 +220,10 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .await?;
     for range in ranges.values() {
         let range = range.clone();
-        assert_eq!(range.start.settled(), Decimal::ZERO);
-        assert_eq!(range.end.settled(), Decimal::from(1290));
-        assert_eq!(range.diff.settled(), Decimal::from(1290));
-        assert_eq!(range.end.details.version, 1);
+        assert_eq!(range.open.settled(), Decimal::ZERO);
+        assert_eq!(range.close.settled(), Decimal::from(1290));
+        assert_eq!(range.period.settled(), Decimal::from(1290));
+        assert_eq!(range.close.details.version, 1);
     }
 
     let ranges = cala
@@ -232,10 +232,10 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .await?;
     for range in ranges.values() {
         let range = range.clone();
-        assert_eq!(range.start.settled(), Decimal::from(1290));
-        assert_eq!(range.end.settled(), Decimal::from(2580));
-        assert_eq!(range.diff.settled(), Decimal::from(1290));
-        assert_eq!(range.end.details.version, 2);
+        assert_eq!(range.open.settled(), Decimal::from(1290));
+        assert_eq!(range.close.settled(), Decimal::from(2580));
+        assert_eq!(range.period.settled(), Decimal::from(1290));
+        assert_eq!(range.close.details.version, 2);
     }
 
     tokio::time::sleep(std::time::Duration::from_millis(500)).await;
@@ -247,10 +247,10 @@ async fn balance_all_in_ranges() -> anyhow::Result<()> {
         .await?;
     for range in ranges.values() {
         let range = range.clone();
-        assert_eq!(range.start.settled(), Decimal::from(2580));
-        assert_eq!(range.end.settled(), Decimal::from(2580));
-        assert_eq!(range.diff.settled(), Decimal::ZERO);
-        assert_eq!(range.end.details.version, 2);
+        assert_eq!(range.open.settled(), Decimal::from(2580));
+        assert_eq!(range.close.settled(), Decimal::from(2580));
+        assert_eq!(range.period.settled(), Decimal::ZERO);
+        assert_eq!(range.close.details.version, 2);
     }
 
     Ok(())

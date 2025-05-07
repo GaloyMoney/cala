@@ -5,12 +5,11 @@ use tracing::instrument;
 use super::{account_balance::AccountBalance, error::BalanceError};
 #[cfg(feature = "import")]
 use cala_types::primitives::EntryId;
-use cala_types::primitives::{BalanceId, DebitOrCredit};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, Currency, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, JournalId},
 };
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -43,7 +42,7 @@ impl BalanceRepo {
             .await
     }
 
-    pub async fn find_in_executor(
+    async fn find_in_executor(
         &self,
         executor: impl Executor<'_, Database = Postgres>,
         journal_id: JournalId,
@@ -317,10 +316,8 @@ impl BalanceRepo {
         &self,
         db: &mut Transaction<'_, Postgres>,
         journal_id: JournalId,
-        ids: HashSet<(AccountId, Currency)>,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        let (account_ids, currencies): (Vec<_>, Vec<_>) =
-            ids.into_iter().map(|(a, c)| (a, c.code())).unzip();
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock(hashtext(concat($1::text, account_id::text, currency)))
@@ -340,17 +337,18 @@ impl BalanceRepo {
         let rows = sqlx::query!(
             r#"
             WITH pairs AS (
-              SELECT account_id, currency, eventually_consistent
+              SELECT account_id, currency
             FROM (
             SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             ) AS v
             JOIN cala_accounts a
             ON account_id = a.id
+            WHERE eventually_consistent = FALSE
             ),
           current_balances AS (
             SELECT b.journal_id, b.account_id, b.currency, b.latest_version
               FROM cala_current_balances b
-              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency AND p.eventually_consistent = FALSE
+              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency
               WHERE b.journal_id = $1
           ),
           values AS (
@@ -364,14 +362,15 @@ impl BalanceRepo {
               AND b.account_id = h.account_id
               AND b.currency = h.currency
               AND b.latest_version = h.version
-            WHERE p.eventually_consistent = FALSE
           )
           SELECT account_id AS "account_id!: AccountId", currency AS "currency!", values FROM values
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
             &currencies as &[&str]
-        ).fetch_all(&mut **db).await?;
+        )
+        .fetch_all(&mut **db)
+        .await?;
 
         let mut ret = HashMap::new();
         for row in rows {
