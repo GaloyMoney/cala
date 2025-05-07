@@ -77,55 +77,12 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_since", skip(self), err)]
-    pub async fn find_in_range(
-        &self,
-        journal_id: JournalId,
-        account_id: AccountId,
-        currency: Currency,
-        from: DateTime<Utc>,
-        until: Option<DateTime<Utc>>,
-    ) -> Result<BalanceRange, BalanceError> {
-        match self
-            .repo
-            .find_range(journal_id, account_id, currency, from, until)
-            .await?
-        {
-            (start, Some(end)) => {
-                let version_diff =
-                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
-                Ok(BalanceRange::new(start, end, version_diff))
-            }
-            _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
-        }
-    }
-
     #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all(ids).await
-    }
-
-    #[instrument(name = "cala_ledger.balance.find_all_in_range", skip(self), err)]
-    pub async fn find_all_in_range(
-        &self,
-        ids: &[BalanceId],
-        from: DateTime<Utc>,
-        until: Option<DateTime<Utc>>,
-    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
-        let ranges = self.repo.find_range_all(ids, from, until).await?;
-
-        let mut res = HashMap::new();
-        for (id, (start, end)) in ranges {
-            if let Some(end) = end {
-                let version_diff =
-                    end.details.version - start.as_ref().map(|s| s.details.version).unwrap_or(0);
-                res.insert(id, BalanceRange::new(start, end, version_diff));
-            }
-        }
-        Ok(res)
     }
 
     pub(crate) async fn update_balances_in_op(

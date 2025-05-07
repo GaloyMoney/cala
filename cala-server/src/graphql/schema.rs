@@ -122,34 +122,6 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
         Ok(balance.map(Balance::from))
     }
 
-    async fn balance_in_range(
-        &self,
-        ctx: &Context<'_>,
-        journal_id: UUID,
-        account_id: UUID,
-        currency: CurrencyCode,
-        from: Timestamp,
-        until: Option<Timestamp>,
-    ) -> async_graphql::Result<Option<RangedBalance>> {
-        let app = ctx.data_unchecked::<CalaApp>();
-        match app
-            .ledger()
-            .balances()
-            .find_in_range(
-                JournalId::from(journal_id),
-                AccountId::from(account_id),
-                Currency::from(currency),
-                from.into_inner(),
-                until.map(|ts| ts.into_inner()),
-            )
-            .await
-        {
-            Ok(balance) => Ok(Some(balance.into())),
-            Err(cala_ledger::balance::error::BalanceError::NotFound(_, _, _)) => Ok(None),
-            Err(err) => Err(err.into()),
-        }
-    }
-
     async fn transaction(
         &self,
         ctx: &Context<'_>,
