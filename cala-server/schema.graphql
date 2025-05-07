@@ -12,7 +12,6 @@ type Account {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
-	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	sets(first: Int!, after: String): AccountSetConnection!
 }
 
@@ -73,7 +72,6 @@ type AccountSet {
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
 	balance(currency: CurrencyCode!): Balance
-	balanceInRange(journalId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
 }
@@ -406,19 +404,12 @@ type Query {
 	accountSet(id: UUID!): AccountSet
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
-	balanceInRange(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!, from: Timestamp!, until: Timestamp): RangedBalance
 	transaction(id: UUID!): Transaction
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
 	velocityLimit(id: UUID!): VelocityLimit
 	velocityControl(id: UUID!): VelocityControl
-}
-
-type RangedBalance {
-	start: Balance!
-	end: Balance!
-	diff: Balance!
 }
 
 input RemoveFromAccountSetInput {
