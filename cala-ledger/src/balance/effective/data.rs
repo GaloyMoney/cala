@@ -409,7 +409,7 @@ mod tests {
         assert_eq!(snapshot.version, 1);
         assert_eq!(snapshot.settled.cr_balance, dec!(1));
 
-        assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
+        assert!(matches!(data.updates[1], SnapshotOrEntry::Snapshot { .. }));
 
         let (snapshot, update_effective) = data.updates[1].snapshot();
         assert_eq!(update_effective, effective);
