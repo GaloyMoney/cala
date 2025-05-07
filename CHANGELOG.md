@@ -1,3 +1,14 @@
+# [cala release v0.5.0](https://github.com/GaloyMoney/cala/releases/tag/0.5.0)
+
+
+### Documentation
+
+- Api reference and website examples update to 87fe49893c205246c2557d3c7f1d742197f1ba62
+
+### Miscellaneous Tasks
+
+- [**breaking**] Remove in_range queries from balance (#411)
+
 # [cala release v0.4.6](https://github.com/GaloyMoney/cala/releases/tag/0.4.6)
 
 
