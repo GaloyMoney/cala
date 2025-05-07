@@ -125,11 +125,11 @@ impl BalanceRange {
         match start {
             Some(start) => {
                 let close = end.clone();
-                let mut range = end.derive_diff(&start);
-                range.details.version = version_diff;
+                let mut period = end.derive_diff(&start);
+                period.details.version = version_diff;
                 Self {
                     close,
-                    period: range,
+                    period,
                     open: start,
                 }
             }

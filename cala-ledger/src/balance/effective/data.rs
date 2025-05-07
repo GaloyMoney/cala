@@ -104,22 +104,19 @@ impl<'a> EffectiveBalanceData<'a> {
         let start_idx = self
             .updates
             .iter()
-            .position(|item| matches!(item, SnapshotOrEntry::Entry { .. }));
-        let ((mut last_balance, mut last_effective), start_idx) =
-            match (start_idx, self.last_snapshot.take()) {
-                (Some(idx), _) if idx > 0 => (self.updates[idx - 1].snapshot(), idx),
-                (_, Some(snapshot)) => ((snapshot, effective - chrono::Days::new(1)), 0),
-                (_, None) => {
-                    let (entry, effective) = self.updates[0].entry();
-                    (
-                        (
-                            Self::first_snapshot(created_at, self.account_id, entry),
-                            effective,
-                        ),
-                        0,
-                    )
-                }
-            };
+            .position(|item| matches!(item, SnapshotOrEntry::Entry { .. }))
+            .expect("no entry found");
+        let (mut last_balance, mut last_effective) = match (start_idx, self.last_snapshot.take()) {
+            (idx, _) if idx > 0 => self.updates[idx - 1].snapshot(),
+            (_, Some(snapshot)) => (snapshot, effective - chrono::Days::new(1)),
+            (_, None) => {
+                let (entry, effective) = self.updates[0].entry();
+                (
+                    Self::first_snapshot(created_at, self.account_id, entry),
+                    effective,
+                )
+            }
+        };
 
         let mut diff_snapshot = None;
 
