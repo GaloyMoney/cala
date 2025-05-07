@@ -1,3 +1,29 @@
+# [cala release v0.4.6](https://github.com/GaloyMoney/cala/releases/tag/0.4.6)
+
+
+### Documentation
+
+- Api reference and website examples update to ac4d7cb730b13f2cdd46dd8fe6f811494c1403b3
+
+### Features
+
+- Effective balances (#404)
+
+### Miscellaneous Tasks
+
+- Bump tokio from 1.44.2 to 1.45.0 (#406)
+- Implement 'fetch_mappings_in_op' function (#408)
+- Bump chrono from 0.4.40 to 0.4.41 (#402)
+- Add JournalConfig (#403)
+- Bump clap from 4.5.36 to 4.5.37 (#398)
+- Bump syn from 2.0.100 to 2.0.101 (#400)
+- Bump rand from 0.9.0 to 0.9.1 (#397)
+
+### Refactor
+
+- No pub(super) events (#401)
+- Pub(super) is no longer needed on entity events
+
 # [cala release v0.4.5](https://github.com/GaloyMoney/cala/releases/tag/0.4.5)
 
 
