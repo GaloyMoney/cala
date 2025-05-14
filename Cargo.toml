@@ -32,6 +32,7 @@ derive_builder = "0.20.1"
 sqlx = { version = "0.8.3", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 thiserror = "2.0.12"
 uuid = { version = "1.16", features = ["serde", "v4"] }
+regex = "1.11.1"
 tracing = "0.1.40"
 tracing-opentelemetry = "0.25.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "json"] }
