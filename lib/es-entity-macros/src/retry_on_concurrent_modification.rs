@@ -4,6 +4,7 @@ use syn::ItemFn;
 #[derive(FromMeta)]
 struct MacroArgs {
     any_error: Option<bool>,
+    max_retries: Option<u32>,
 }
 
 pub fn make(
@@ -53,10 +54,11 @@ pub fn make(
         })
         .collect();
 
+    let max_retries = args.max_retries.unwrap_or(3);
     let outer_fn = quote::quote! {
         #( #attrs )*
         #vis #sig {
-            let max_retries = 3;
+            let max_retries = #max_retries;
             for n in 1..=max_retries {
                 let result = self.#inner_ident(#(#inputs),*).await;
                 if n == max_retries {
