@@ -622,6 +622,7 @@ dependencies = [
  "prost-wkt-types",
  "protobuf-src",
  "rand 0.9.1",
+ "regex",
  "rust_decimal",
  "rust_decimal_macros",
  "serde",
