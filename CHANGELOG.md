@@ -1,3 +1,19 @@
+# [cala release v0.5.1](https://github.com/GaloyMoney/cala/releases/tag/0.5.1)
+
+
+### Documentation
+
+- Api reference and website examples update to 272f6ca4327d3a79d8b1221205aced0687894ed6
+
+### Features
+
+- Max_retries in es_entity::retry_on_concurrent_modification (#415)
+
+### Miscellaneous Tasks
+
+- Bump clap from 4.5.37 to 4.5.38 (#412)
+- Add value to TransactionError::DuplicateXxx (#413)
+
 # [cala release v0.5.0](https://github.com/GaloyMoney/cala/releases/tag/0.5.0)
 
 
