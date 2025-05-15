@@ -58,9 +58,10 @@ pub fn make(
     let outer_fn = quote::quote! {
         #( #attrs )*
         #vis #sig {
-            for n in 1..=#max_retries {
+            let max_retries = #max_retries;
+            for n in 1..=max_retries {
                 let result = self.#inner_ident(#(#inputs),*).await;
-                if n == #max_retries {
+                if n == max_retries {
                     return result;
                 }
                 #err_match
