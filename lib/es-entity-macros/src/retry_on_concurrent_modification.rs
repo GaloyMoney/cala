@@ -60,7 +60,7 @@ pub fn make(
         #vis #sig {
             for n in 1..=#max_retries {
                 let result = self.#inner_ident(#(#inputs),*).await;
-                if n == max_retries {
+                if n == #max_retries {
                     return result;
                 }
                 #err_match
