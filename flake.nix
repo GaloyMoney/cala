@@ -40,6 +40,7 @@
           cargo-nextest
           cargo-audit
           cargo-watch
+          cargo-deny
           bacon
           postgresql
           docker-compose
@@ -73,4 +74,3 @@
         formatter = alejandra;
       });
 }
-
