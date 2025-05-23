@@ -86,7 +86,7 @@ impl TxTemplateRepo {
     key = "(TxTemplateId, i32)",
     convert = "{ (id, version) }",
     result = true,
-    sync_writes = true
+    sync_writes = "default"
 )]
 async fn find_versioned_template_cached(
     pool: &PgPool,

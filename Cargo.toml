@@ -20,12 +20,12 @@ members = [
 [workspace.dependencies]
 anyhow = "1.0.98"
 async-graphql = { version = "7.0.16", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
-async-graphql-axum = "7.0.13"
+async-graphql-axum = "=7.0.13"
 async-trait = "0.1.88"
 axum = { version = "0.7.9", features = ["macros"] }
 axum-extra = { version = "0.9.4", default-features = false, features = ["tracing", "typed-header"] }
 base64 = { version = "0.22.1" }
-cached = { version = "0.51", features = ["async"] }
+cached = { version = "0.55", features = ["async"] }
 chrono = { version = "0.4.41", features = ["clock", "serde"], default-features = false }
 clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.1"
