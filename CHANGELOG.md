@@ -1,3 +1,14 @@
+# [cala release v0.5.2](https://github.com/GaloyMoney/cala/releases/tag/0.5.2)
+
+
+### Bug Fixes
+
+- Advisories (#418)
+
+### Documentation
+
+- Api reference and website examples update to fdd659a046f2e02d112c857466a5f4fb1d658a16
+
 # [cala release v0.5.1](https://github.com/GaloyMoney/cala/releases/tag/0.5.1)
 
 
