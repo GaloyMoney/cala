@@ -3,6 +3,7 @@ set -euo pipefail
 
 echo "--- Setting up Nix environment ---"
 cachix use cala-ci
+pushd repo
 nix -L develop --command bash -c '
 set -euo pipefail
 
@@ -30,8 +31,6 @@ echo 'unqualified-search-registries = ["docker.io"]' > /etc/containers/registrie
 echo "--- Starting Dependencies with Podman Compose ---"
 ENGINE_DEFAULT=podman bin/docker-compose-up.sh integration-deps
 echo "--- Podman-compose up done ---"
-
-pushd repo
 
 make setup-db
 
