@@ -25,8 +25,8 @@ sleep 5 # Wait a bit for the socket to become active
 echo "--- Podman service started (attempted) ---"
 
 mkdir -p /etc/containers
-echo '{ "default": [{"type": "insecureAcceptAnything"}]}' > /etc/containers/policy.json
-echo 'unqualified-search-registries = ["docker.io"]' > /etc/containers/registries.conf
+echo "{\"default\": [{\"type\": \"insecureAcceptAnything\"}]}" > /etc/containers/policy.json
+echo "unqualified-search-registries = [\"docker.io\"]" > /etc/containers/registries.conf
 
 echo "--- Starting Dependencies with Podman Compose ---"
 ENGINE_DEFAULT=podman bin/docker-compose-up.sh integration-deps
