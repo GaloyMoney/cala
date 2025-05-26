@@ -14,7 +14,7 @@ command -v podman-compose
 echo "--- Podman-compose check done ---"
 
 echo "--- Testing Podman basic functionality ---"
-podman info || echo "Warning: 'podman info' failed."
+podman info || echo "Warning: podman info failed."
 echo "--- Podman info done ---"
 
 echo "--- Starting Podman service ---"
@@ -43,4 +43,4 @@ ENGINE_DEFAULT=podman bin/clean-deps.sh
 echo "--- Cleanup done ---"
 
 echo "--- All steps completed ---"
-\'
+'
