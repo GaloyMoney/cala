@@ -68,7 +68,25 @@ groups:
 
 jobs:
 - #@ check_code()
-- #@ on_nix_host("integration-tests", "make test-in-ci")
+
+- name: integration-tests
+  plan:
+    - in_parallel:
+      - get: repo
+        trigger: true
+      - { get: pipeline-tasks }
+    - task: integration-tests
+      attempts: 2
+      privileged: true
+      config:
+        platform: linux
+        image_resource: #@ nix_flake_cachix_image_config()
+        inputs:
+          - name: pipeline-tasks
+          - name: repo
+        run:
+          path: pipeline-tasks/ci/tasks/integration-test.sh
+
 - #@ on_nix_host("bats-tests", "make e2e")
 - #@ build_edge_image()
 
