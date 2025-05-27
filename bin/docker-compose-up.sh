@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE=docker-compose.yml
-OVERRIDE=docker-compose.docker.yml   # contains the extra_hosts entry
+FILE=docker-compose.yml
 
 # ── Pick container engine ───────────────────────────────────────────────────────
 if [[ -n "${ENGINE_DEFAULT:-}" ]]; then            # honour explicit choice
@@ -17,19 +16,15 @@ if ! command -v "$ENGINE" >/dev/null 2>&1; then
   exit 1
 fi
 
-# ── Compose file set ────────────────────────────────────────────────────────────
-FILES=(-f "$BASE")
-[[ "$ENGINE" == docker ]] && FILES+=(-f "$OVERRIDE")   # extra_hosts only on Docker
-
 # ── Pull images first (prevents concurrent map writes) ─────────────────────────
 echo "Pulling Docker images..."
-"$ENGINE" compose "${FILES[@]}" pull --no-parallel
+"$ENGINE" compose -f "$FILE" pull --no-parallel
 
 # ── Up ──────────────────────────────────────────────────────────────────────────
 echo "Starting services..."
-"$ENGINE" compose "${FILES[@]}" up -d "$@"
+"$ENGINE" compose -f "$FILE" up -d "$@"
 
-while ! pg_isready -d pg -p 5433 -U user; do
+while ! pg_isready -d pg -p 5432 -U user; do
   echo "PostgreSQL not yet ready..."
   sleep 1
 done
