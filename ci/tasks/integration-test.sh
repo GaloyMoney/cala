@@ -1,4 +1,4 @@
-#!/usr/bin/env nix-shell
+#!/usr/bin/env bash
 set -euo pipefail
 
 echo "--- Setting up Nix environment ---"

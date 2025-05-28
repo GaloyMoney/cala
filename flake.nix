@@ -32,31 +32,42 @@
       rustToolchain = rustVersion.override {
         extensions = ["rust-analyzer" "rust-src"];
       };
-      nativeBuildInputs = with pkgs;
-        [
-          rustToolchain
-          alejandra
-          sqlx-cli
-          cargo-nextest
-          cargo-audit
-          cargo-watch
-          cargo-deny
-          bacon
-          postgresql
-          docker-compose
-          bats
-          jq
-          napi-rs-cli
-          yarn
-          nodejs
-          typescript
-          ytt
-          podman
-          podman-compose
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [
-          darwin.apple_sdk.frameworks.SystemConfiguration
-        ];
+
+      # Common dependencies used in both dev and CI
+      commonDeps = with pkgs; [
+        rustToolchain
+        postgresql
+        sqlx-cli
+        cargo-nextest
+        jq
+        bats
+        cachix
+      ];
+
+      # Development-specific dependencies
+      devDeps = with pkgs; [
+        alejandra
+        cargo-audit
+        cargo-watch
+        cargo-deny
+        bacon
+        docker-compose
+        napi-rs-cli
+        yarn
+        nodejs
+        typescript
+        ytt
+      ] ++ lib.optionals pkgs.stdenv.isDarwin [
+        darwin.apple_sdk.frameworks.SystemConfiguration
+      ];
+
+      # CI-specific dependencies
+      ciDeps = with pkgs; [
+        podman
+        podman-compose
+        bash
+      ];
+
       devEnvVars = rec {
         OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
         PGDATABASE = "pg";
@@ -66,12 +77,44 @@
         DATABASE_URL = "postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/pg";
         PG_CON = "${DATABASE_URL}";
       };
+
+      # Development shell with all development tools
+      devShell = pkgs.mkShell (
+        devEnvVars
+        // {
+          buildInputs = commonDeps ++ devDeps;
+        }
+      );
+
+      # Build the CI image with only the necessary dependencies
+      ciImage = with pkgs.dockerTools; buildLayeredImage {
+        name = "cala-ci";
+        tag = "latest";
+
+        fromImage = pullImage {
+          imageName = "nixpkgs/cachix-flakes";
+          imageDigest = "sha256:48339bf3bc6cf7ab879f8973ba6728261044cefb873b6cc639bad63050e64538";
+          sha256 = "0xmbmr34qrrrcyihfppbx81mkx2jain8gnmd8psbikw1bs691gr7";
+        };
+
+        config = {
+          Cmd = ["bash"];
+          Env = [
+            "GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+            "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+          ];
+        };
+        contents = pkgs.buildEnv {
+          name = "root";
+          paths = commonDeps ++ ciDeps;
+          pathsToLink = [ "/bin" ];
+        };
+      };
     in
       with pkgs; {
-        devShells.default = mkShell (devEnvVars
-          // {
-            inherit nativeBuildInputs;
-          });
+        devShells.default = devShell;
+
+        packages.ciImage = ciImage;
 
         formatter = alejandra;
       });
