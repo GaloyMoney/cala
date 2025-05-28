@@ -99,13 +99,6 @@
           sha256 = "0xmbmr34qrrrcyihfppbx81mkx2jain8gnmd8psbikw1bs691gr7";
         };
 
-        config = {
-          Cmd = ["bash"];
-          Env = [
-            "GIT_SSL_CAINFO=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-            "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
-          ];
-        };
         contents = pkgs.buildEnv {
           name = "root";
           paths = commonDeps ++ ciDeps;
