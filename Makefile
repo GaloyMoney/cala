@@ -14,8 +14,8 @@ wait-for-dbs:
 	@echo "Databases are ready"
 
 setup-db:
-  cd cala-ledger && cargo sqlx migrate run
-  cd cala-server && cargo sqlx migrate run --ignore-missing
+	cd cala-ledger && cargo sqlx migrate run
+	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 
