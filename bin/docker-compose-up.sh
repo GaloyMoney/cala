@@ -18,7 +18,7 @@ fi
 
 # ── Pull images first (prevents concurrent map writes) ─────────────────────────
 echo "Pulling Docker images..."
-"$ENGINE" compose -f "$FILE" pull --no-parallel
+"$ENGINE" compose -f "$FILE" pull
 
 # ── Up ──────────────────────────────────────────────────────────────────────────
 echo "Starting services..."
