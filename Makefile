@@ -13,8 +13,9 @@ wait-for-dbs:
 	@until docker compose exec -T examples-pg pg_isready -U user; do sleep 1; done
 	@echo "Databases are ready"
 
-setup-db: cd cala-ledger && cargo sqlx migrate run
-	cd cala-server && cargo sqlx migrate run --ignore-missing
+setup-db:
+  cd cala-ledger && cargo sqlx migrate run
+  cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 
