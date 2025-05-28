@@ -42,6 +42,8 @@
         jq
         bats
         cachix
+        podman
+        podman-compose
       ];
 
       # Development-specific dependencies
