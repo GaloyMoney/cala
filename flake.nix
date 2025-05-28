@@ -42,8 +42,6 @@
         jq
         bats
         cachix
-        podman
-        podman-compose
       ];
 
       # Development-specific dependencies
@@ -103,6 +101,13 @@
           name = "root";
           paths = commonDeps ++ ciDeps;
           pathsToLink = [ "/bin" ];
+        };
+
+        config = {
+          Env = [
+            # required because /var/tmp does not exist in the image
+            "TMPDIR=/tmp"
+          ];
         };
       };
     in
