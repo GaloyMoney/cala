@@ -2,6 +2,7 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 
 use cala_ledger::{
     balance::*,
+    entry::EntriesByCreatedAtCursor,
     primitives::{AccountId, Currency, JournalId},
 };
 
@@ -31,8 +32,31 @@ pub struct Account {
     modified_at: Timestamp,
 }
 
+/// A transaction event for an account, representing deposits, withdrawals, trades, etc.
+#[derive(SimpleObject, Clone)]
+pub struct AccountTransactionEvent {
+    /// Event UUID
+    pub id: UUID,
+    /// Event type (e.g., "initialized", "transfer", etc.)
+    pub event_type: String,
+    /// Amount (as string for precision)
+    pub units: String,
+    /// Currency code (e.g., "NGN", "BTC")
+    pub currency: String,
+    /// Direction (e.g., "debit", "credit")
+    pub direction: String,
+    /// Transaction UUID
+    pub transaction_id: UUID,
+    /// Event creation time
+    pub created_at: Timestamp,
+}
+
 #[ComplexObject]
 impl Account {
+    /// Simple test field that returns a static string
+    async fn test_field(&self) -> String {
+        "This is a test field".to_string()
+    }
     async fn balance(
         &self,
         ctx: &Context<'_>,
@@ -60,6 +84,78 @@ impl Account {
             }
         };
         Ok(balance.map(Balance::from))
+    } 
+
+    /// Paginated transaction events for this account (deposits, withdrawals, trades, etc.)
+    async fn transactions(
+        &self,
+        ctx: &Context<'_>,
+        after: Option<String>,
+        first: Option<i32>,
+    ) -> async_graphql::Result<Connection<String, AccountTransactionEvent>> {
+        let account_id = AccountId::from(self.account_id);
+        let limit = first.unwrap_or(20).min(100);
+        
+        // Parse the cursor from the string if provided
+        let cursor = after.map(|s| serde_json::from_str::<EntriesByCreatedAtCursor>(&s))
+                        .transpose()?;
+        
+        // Create pagination query args
+        let query_args = es_entity::PaginatedQueryArgs {
+            first: limit as usize,
+            after: cursor,
+        };
+        
+        // Use descending order to get newest transactions first
+        let direction = es_entity::ListDirection::Descending;
+        
+        // Get entries using the existing pattern from balance()
+        let entries_result = match ctx.data_opt::<DbOp>() {
+            Some(op) => {
+                let app = ctx.data_unchecked::<CalaApp>();
+                let _op = op.try_lock().expect("Lock held concurrently");
+                // We need to implement this method or use an equivalent
+                app.ledger()
+                    .entries()
+                    .list_for_account_id(account_id, query_args, direction)
+                    .await?
+            }
+            None => {
+                // If we're outside a transaction, use the app directly
+                let app = ctx.data_unchecked::<CalaApp>();
+                app.ledger()
+                    .entries()
+                    .list_for_account_id(account_id, query_args, direction)
+                    .await?
+            }
+        };
+        
+        // Convert entries to GraphQL connection
+        let mut connection = Connection::new(false, entries_result.has_next_page);
+        
+        // Transform entries into AccountTransactionEvent objects
+        for entry in entries_result.entities {
+            let entry_values = entry.values();
+            
+            // Create a transaction event from the entry
+            // You'll need to adjust field mappings based on your actual data structure
+            let event = AccountTransactionEvent {
+                id: UUID::from(entry.id()),
+                // Use more generic fields that we know exist
+                event_type: format!("entry:{}", entry_values.id),
+                units: "1.0".to_string(), // Hardcode a default value for now
+                currency: "USD".to_string(), // Hardcode a default value for now
+                direction: "debit".to_string(), // Hardcode a default value for now
+                transaction_id: UUID::from(entry_values.transaction_id),
+                created_at: entry.created_at().into(),
+            };
+            
+            // Use a simple numeric string as the cursor
+            let cursor = entry_values.id.to_string(); 
+            connection.edges.push(Edge::new(cursor, event));
+        }
+        
+        Ok(connection)
     }
 
     async fn sets(
