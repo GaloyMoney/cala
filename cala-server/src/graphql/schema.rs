@@ -10,6 +10,8 @@ use super::{
     tx_template::*, velocity::*,
 };
 
+use cala_ledger::transaction::TransactionsByAccountIdCursor;
+
 pub type DbOp<'a> = Arc<Mutex<cala_ledger::LedgerOperation<'a>>>;
 
 #[derive(Default)]
@@ -150,6 +152,53 @@ impl<E: QueryExtensionMarker> CoreQuery<E> {
             Err(err) => Err(err.into()),
         }
     }
+
+    async fn transactions_by_account_id(
+    &self,
+    ctx: &Context<'_>,
+    account_id: UUID,
+    first: i32,
+    after: Option<String>,
+) -> Result<Connection<TransactionsByAccountIdCursor, Transaction, EmptyFields, EmptyFields>> {
+    let app = ctx.data_unchecked::<CalaApp>();
+    query(
+        after,
+        None,
+        Some(first),
+        None,
+        |after, _, first, _| async move {
+            let first = first.expect("First always exists");
+            let result = app
+                .ledger()
+                .transactions()
+                .find_by_account_id(
+                    AccountId::from(account_id),
+                    cala_ledger::es_entity::PaginatedQueryArgs { first, after },
+                )
+                .await?;
+            let mut connection = Connection::new(false, result.has_next_page);
+            connection
+                .edges
+                .extend(result.entities.into_iter().map(|entity| {
+                    let cursor = TransactionsByAccountIdCursor::from((&entity, AccountId::from(account_id)));
+                    Edge::new(cursor, Transaction::from(entity))
+                }));
+            
+            // Set pagination information
+            connection.has_next_page = result.has_next_page;
+            
+            // The last Edge already contains the end cursor for pagination
+            // We don't need to do anything special here, just check that there is an end cursor
+            if result.end_cursor.is_some() {
+                // In the async-graphql Connection implementation, each Edge contains its own cursor
+                // We don't need to manually set anything on the connection level
+                // The cursor is already set when we created each Edge above
+            }
+            Ok::<_, async_graphql::Error>(connection)
+        },
+    )
+    .await
+}
 
     async fn tx_template(
         &self,

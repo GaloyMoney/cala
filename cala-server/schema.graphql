@@ -51,7 +51,7 @@ An edge in a connection.
 """
 type AccountEdge {
 	"""
-	The item at the end of the edge
+	The item at the end of the edge.
 	"""
 	node: Account!
 	"""
@@ -339,7 +339,7 @@ type Mutation {
 }
 
 """
-Information about pagination in a connection
+Information about pagination in a connection.
 """
 type PageInfo {
 	"""
@@ -405,6 +405,7 @@ type Query {
 	journal(id: UUID!): Journal
 	balance(journalId: UUID!, accountId: UUID!, currency: CurrencyCode!): Balance
 	transaction(id: UUID!): Transaction
+	transactionsByAccountId(accountId: UUID!, first: Int!, after: String): TransactionConnection!
 	transactionByExternalId(externalId: String!): Transaction
 	txTemplate(id: UUID!): TxTemplate
 	txTemplateByCode(code: String!): TxTemplate
@@ -443,6 +444,32 @@ type Transaction {
 	metadata: JSON
 	createdAt: Timestamp!
 	modifiedAt: Timestamp!
+}
+
+type TransactionConnection {
+	"""
+    Information to aid in pagination.
+    """
+    pageInfo: PageInfo!
+    """
+    A list of edges.
+    """
+    edges: [TransactionEdge!]!
+    """
+    A list of nodes.
+    """
+    nodes: [Transaction!]!
+}
+
+type TransactionEdge {
+	"""
+    The item at the end of the edge
+    """
+    node: Transaction!
+    """
+    A cursor for use in pagination
+    """
+    cursor: String!
 }
 
 input TransactionInput {

@@ -46,6 +46,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      # Explicitly specify x86_64 platform for consistent builds
+      args:
+        - TARGETPLATFORM=linux/amd64
+    platform: linux/amd64
     depends_on:
       - server-pg
     ports:

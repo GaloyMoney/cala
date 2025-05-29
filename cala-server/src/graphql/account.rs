@@ -137,15 +137,13 @@ impl Account {
         for entry in entries_result.entities {
             let entry_values = entry.values();
             
-            // Create a transaction event from the entry
-            // You'll need to adjust field mappings based on your actual data structure
+            // Create a transaction event from the entry using actual values from the entry
             let event = AccountTransactionEvent {
                 id: UUID::from(entry.id()),
-                // Use more generic fields that we know exist
                 event_type: format!("entry:{}", entry_values.id),
-                units: "1.0".to_string(), // Hardcode a default value for now
-                currency: "USD".to_string(), // Hardcode a default value for now
-                direction: "debit".to_string(), // Hardcode a default value for now
+                units: entry_values.units.to_string(), // Use actual units
+                currency: entry_values.currency.to_string(), // Use actual currency
+                direction: entry_values.direction.to_string().to_lowercase(), // Use actual direction
                 transaction_id: UUID::from(entry_values.transaction_id),
                 created_at: entry.created_at().into(),
             };
