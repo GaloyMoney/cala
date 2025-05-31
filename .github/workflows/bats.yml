@@ -11,8 +11,6 @@ jobs:
     steps:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v4
-      - name: Run the Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v2
       - uses: actions/checkout@v3
       - name: Run e2e tests
         run: nix develop -c make e2e
