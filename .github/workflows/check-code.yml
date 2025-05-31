@@ -1,6 +1,3 @@
-#! Auto synced from Shared CI Resources repository
-#! Don't change this file, instead change it in github.com/GaloyMoney/concourse-shared
-
 name: Check Code
 
 on:
@@ -13,7 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v4
+        uses: DeterminateSystems/nix-installer-action@v16
+      - uses: cachix/cachix-action@v15
+        with:
+          name: lana-ci
+          authToken: ${{ env.CACHIX_AUTH_TOKEN }}
       - uses: actions/checkout@v4
       - name: Run check code
         run: nix develop -c make check-code

@@ -10,7 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v4
+        uses: DeterminateSystems/nix-installer-action@v16
+      - uses: cachix/cachix-action@v15
+        with:
+          name: lana-ci
+          authToken: ${{ env.CACHIX_AUTH_TOKEN }}
       - uses: actions/checkout@v3
       - name: Run integration tests
         run: nix develop -c make test-in-ci
