@@ -11,7 +11,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: DeterminateSystems/nix-installer-action@v12
-      - uses: DeterminateSystems/magic-nix-cache-action@v7
       - uses: actions/checkout@v4
 
       - name: Build the API reference
