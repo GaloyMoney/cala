@@ -2,6 +2,7 @@ pub mod account;
 pub mod account_set;
 pub mod balance;
 mod convert;
+pub mod entry;
 mod job;
 pub mod journal;
 pub mod loader;
