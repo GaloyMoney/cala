@@ -10,7 +10,6 @@ start-deps:
 wait-for-dbs:
 	@echo "Waiting for databases to be ready..."
 	@until docker compose exec -T server-pg pg_isready -U user; do sleep 1; done
-	@until docker compose exec -T examples-pg pg_isready -U user; do sleep 1; done
 	@echo "Databases are ready"
 
 setup-db: wait-for-dbs
