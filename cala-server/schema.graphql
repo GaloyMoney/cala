@@ -13,6 +13,7 @@ type Account {
 	modifiedAt: Timestamp!
 	balance(journalId: UUID!, currency: CurrencyCode!): Balance
 	sets(first: Int!, after: String): AccountSetConnection!
+	entries(first: Int!, after: String): EntryConnection!
 }
 
 type AccountConnection {
@@ -74,6 +75,7 @@ type AccountSet {
 	balance(currency: CurrencyCode!): Balance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
+	entries(first: Int!, after: String): EntryConnection!
 }
 
 type AccountSetConnection {
@@ -251,6 +253,53 @@ enum DebitOrCredit {
 }
 
 scalar Decimal
+
+type Entry {
+	id: ID!
+	entryId: UUID!
+	version: Int!
+	transactionId: UUID!
+	journalId: UUID!
+	accountId: UUID!
+	entryType: String!
+	sequence: Int!
+	layer: Layer!
+	units: Decimal!
+	direction: DebitOrCredit!
+	description: String
+	createdAt: Timestamp!
+	account: Account!
+	transaction: Transaction!
+}
+
+type EntryConnection {
+	"""
+	Information to aid in pagination.
+	"""
+	pageInfo: PageInfo!
+	"""
+	A list of edges.
+	"""
+	edges: [EntryEdge!]!
+	"""
+	A list of nodes.
+	"""
+	nodes: [Entry!]!
+}
+
+"""
+An edge in a connection.
+"""
+type EntryEdge {
+	"""
+	The item at the end of the edge
+	"""
+	node: Entry!
+	"""
+	A cursor for use in pagination
+	"""
+	cursor: String!
+}
 
 scalar Expression
 

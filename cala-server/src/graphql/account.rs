@@ -2,6 +2,7 @@ use async_graphql::{dataloader::*, types::connection::*, *};
 
 use cala_ledger::{
     balance::*,
+    entry::EntriesByCreatedAtCursor,
     primitives::{AccountId, Currency, JournalId},
 };
 
@@ -10,8 +11,8 @@ pub use cala_ledger::account::AccountsByNameCursor;
 use crate::app::CalaApp;
 
 use super::{
-    account_set::*, balance::Balance, convert::ToGlobalId, loader::LedgerDataLoader, primitives::*,
-    schema::DbOp,
+    account_set::*, balance::Balance, convert::ToGlobalId, entry::Entry, loader::LedgerDataLoader,
+    primitives::*, schema::DbOp,
 };
 
 #[derive(Clone, SimpleObject)]
@@ -100,6 +101,43 @@ impl Account {
                     .extend(result.entities.into_iter().map(|entity| {
                         let cursor = AccountSetsByNameCursor::from(&entity);
                         Edge::new(cursor, AccountSet::from(entity))
+                    }));
+                Ok::<_, async_graphql::Error>(connection)
+            },
+        )
+        .await
+    }
+
+    async fn entries(
+        &self,
+        ctx: &Context<'_>,
+        first: i32,
+        after: Option<String>,
+    ) -> Result<Connection<EntriesByCreatedAtCursor, Entry, EmptyFields, EmptyFields>> {
+        let app = ctx.data_unchecked::<CalaApp>();
+        let account_id = AccountId::from(self.account_id);
+        query(
+            after,
+            None,
+            Some(first),
+            None,
+            |after, _, first, _| async move {
+                let first = first.expect("First always exists");
+                let result = app
+                    .ledger()
+                    .entries()
+                    .list_for_account_id(
+                        account_id,
+                        cala_ledger::es_entity::PaginatedQueryArgs { first, after },
+                        cala_ledger::es_entity::ListDirection::Descending,
+                    )
+                    .await?;
+                let mut connection = Connection::new(false, result.has_next_page);
+                connection
+                    .edges
+                    .extend(result.entities.into_iter().map(|entity| {
+                        let cursor = EntriesByCreatedAtCursor::from(&entity);
+                        Edge::new(cursor, Entry::from(entity))
                     }));
                 Ok::<_, async_graphql::Error>(connection)
             },

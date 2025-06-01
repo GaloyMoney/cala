@@ -161,7 +161,7 @@ impl From<cala_types::primitives::Currency> for CurrencyCode {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct Decimal(rust_decimal::Decimal);
 scalar!(Decimal);
