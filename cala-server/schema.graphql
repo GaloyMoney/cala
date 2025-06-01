@@ -75,6 +75,7 @@ type AccountSet {
 	balance(currency: CurrencyCode!): Balance
 	members(first: Int!, after: String): AccountSetMemberConnection!
 	sets(first: Int!, after: String): AccountSetConnection!
+	entries(first: Int!, after: String): EntryConnection!
 }
 
 type AccountSetConnection {
