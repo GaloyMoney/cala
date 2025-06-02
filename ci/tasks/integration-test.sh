@@ -2,10 +2,10 @@
 set -euo pipefail
 
 echo "--- Setting up Nix environment ---"
-cachix use cala-ci
 pushd repo
 
 nix develop -L '
+cachix use cala-ci
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
