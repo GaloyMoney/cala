@@ -28,25 +28,40 @@
       pkgs = import nixpkgs {
         inherit system overlays;
       };
-      rustVersion = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      rustToolchain = rustVersion.override {
-        extensions = ["rust-analyzer" "rust-src"];
+
+      toolchain = (with builtins; fromTOML (readFile ./rust-toolchain.toml)).toolchain;
+
+      rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchain {
+        inherit (toolchain) channel profile targets components;
+      };
+
+      # rustToolchain = rustVersion.override {
+      #   extensions = ["rust-analyzer" "rust-src"];
+      # };
+
+      rustToolchainCi = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchain {
+        inherit (toolchain) channel components;
+        profile = "minimal";
+        # targets = ["x86_64-unknown-linux-musl"];
       };
 
       # Common dependencies used in both dev and CI
       commonDeps = with pkgs; [
-        rustToolchain
         postgresql
         sqlx-cli
         cargo-nextest
         jq
         bats
-        cachix
       ];
 
       # Development-specific dependencies
       devDeps = with pkgs; [
+        rustToolchain
+        cachix
+
         alejandra
+        podman
+        podman-compose
         cargo-audit
         cargo-watch
         cargo-deny
@@ -65,7 +80,11 @@
       ciDeps = with pkgs; [
         podman
         podman-compose
-        bash
+        bashInteractive
+        gnumake
+        gcc
+        rustToolchainCi
+        coreutils
       ];
 
       devEnvVars = rec {
@@ -85,6 +104,19 @@
           buildInputs = commonDeps ++ devDeps;
         }
       );
+
+      ciShell = pkgs.mkShell (
+        devEnvVars
+        // {
+          buildInputs = commonDeps ++ ciDeps;
+        }
+      );
+
+      ciNixImage = pkgs.dockerTools.buildImageWithNixDb {
+        name = "cala-ci-nix";
+
+        contents = commonDeps ++ ciDeps;
+      };
 
       # Build the CI image with only the necessary dependencies
       ciImage = with pkgs.dockerTools; buildLayeredImage {
@@ -107,14 +139,16 @@
           Env = [
             # required because /var/tmp does not exist in the image
             "TMPDIR=/tmp"
-          ];
+          ] ++ (pkgs.lib.mapAttrsToList (k: v: "${k}=${v}") devEnvVars);
         };
       };
     in
       with pkgs; {
         devShells.default = devShell;
+        devShells.ci = ciShell;
 
         packages.ciImage = ciImage;
+        packages.ciNixImage = ciNixImage;
 
         formatter = alejandra;
       });
