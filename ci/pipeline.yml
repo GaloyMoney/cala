@@ -89,7 +89,7 @@ jobs:
         run:
           path: pipeline-tasks/ci/tasks/integration-tests.sh
         params:
-          CACHIX_AUTH_TOKEN: eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYWQ0ZjNjZi01YjM2LTRlMGQtOTA1ZC01MTgxYWJjNmFkNjAiLCJzY29wZXMiOiJjYWNoZSJ9.6m8JFK8h3gSbsx28aftxESQV08PuDQRlFf1WNVUoUIQ
+          CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
 
 - name: bats-tests
   plan:
@@ -108,7 +108,7 @@ jobs:
       run:
         path: pipeline-tasks/ci/tasks/bats-tests.sh
       params:
-        CACHIX_AUTH_TOKEN: eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYWQ0ZjNjZi01YjM2LTRlMGQtOTA1ZC01MTgxYWJjNmFkNjAiLCJzY29wZXMiOiJjYWNoZSJ9.6m8JFK8h3gSbsx28aftxESQV08PuDQRlFf1WNVUoUIQ
+        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
 
 
 - #@ build_edge_image()
