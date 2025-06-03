@@ -1,3 +1,26 @@
+# [cala release v0.5.3](https://github.com/GaloyMoney/cala/releases/tag/0.5.3)
+
+
+### Bug Fixes
+
+- Missing $crate::prelude in entity_id
+
+### Documentation
+
+- Api reference and website examples update to 1bec50ecd5ccd76dbfa2a1ac766dccdfcddc9b67
+
+### Miscellaneous Tasks
+
+- Add Account.entries to GQL layer (#424)
+- Bump the all-dependencies group across 1 directory with 2 updates (#434)
+- Bump cross-spawn from 7.0.3 to 7.0.6 in /cala-nodejs (#435)
+- Bump path-to-regexp from 0.1.10 to 0.1.12 in /website (#430)
+- Bump nanoid from 3.3.7 to 3.3.11 in /website (#431)
+- Use workspace for sqlxprepare (#432)
+- Bump the all-dependencies group in /website with 13 updates (#428)
+- Update dependabot to group updates (#425)
+- Bump tokio from 1.45.0 to 1.45.1 (#421)
+
 # [cala release v0.5.2](https://github.com/GaloyMoney/cala/releases/tag/0.5.2)
 
 

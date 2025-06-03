@@ -2,7 +2,7 @@
 name = "cala-server"
 description = "Server to sync other cala deployments"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.5.3-dev"
+version = "0.5.3"
 edition = "2021"
 license = "Apache-2.0"
 
@@ -11,12 +11,12 @@ license = "Apache-2.0"
 fail-on-warnings = []
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.5.3-dev" }
-cala-ledger = { path = "../cala-ledger", features = ["import", "graphql"], package = "cala-ledger", version = "0.5.3-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.5.3-dev" }
-cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.5.3-dev" }
-cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.5.3-dev" }
-es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.5.3-dev" }
+cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.5.3" }
+cala-ledger = { path = "../cala-ledger", features = ["import", "graphql"], package = "cala-ledger", version = "0.5.3" }
+cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.5.3" }
+cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.5.3" }
+cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.5.3" }
+es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.5.3" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }
