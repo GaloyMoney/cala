@@ -16,8 +16,6 @@ pushd repo
 #   exit 1
 # fi
 
-nix -L develop --command bash -c '
-
 set -euo pipefail
 
 echo "--- Checking for Podman (via nix) ---"
@@ -64,4 +62,3 @@ ENGINE_DEFAULT=podman bin/clean-deps.sh
 echo "--- Cleanup done ---"
 
 echo "--- All steps completed ---"
-'

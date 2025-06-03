@@ -83,9 +83,11 @@
         podman-compose
         libtool
         gcc
+        gnumake
         rustToolchainCi
         coreutils
         nix
+        bashInteractive
       ];
 
       devEnvVars = rec {
