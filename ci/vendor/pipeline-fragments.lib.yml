@@ -20,6 +20,14 @@
 #@   return public_docker_registry() + "/release-pipeline"
 #@ end
 
+#@ def nix_flake_cachix_image_config():
+type: registry-image
+source:
+  repository: gcr.io/galoyorg/cala-ci
+  username: #@ data.values.gar_registry_user
+  password: #@ data.values.gar_registry_password
+#@ end
+
 #@ def nodejs_task_image_config():
 type: registry-image
 source:
@@ -47,7 +55,7 @@ source:
 #@ def nix_task_image_config():
 type: registry-image
 source:
-  repository: nixpkgs/nix-flakes
+  repository: ghcr.io/nix-community/docker-nixpkgs/cachix-flakes
 #@ end
 
 #@ def check_code():
@@ -403,7 +411,7 @@ source:
   ignore_paths: ["ci/*[^md]"]
   fetch_tags: true
   uri: #@ data.values.git_uri
-  branch: #@ data.values.git_branch
+  branch: ci--remove-nix-hosts
   private_key: #@ data.values.github_private_key
 #@ if webhook:
 webhook_token: ((webhook.secret))
@@ -416,7 +424,7 @@ type: git
 source:
   paths: [ci/vendor/*, ci/tasks/*, ci/config/*, Makefile]
   uri: #@ data.values.git_uri
-  branch: #@ data.values.git_branch
+  branch: ci--remove-nix-hosts
   private_key: #@ data.values.github_private_key
 #@ end
 

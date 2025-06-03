@@ -16,6 +16,8 @@
 #@   "rust_task_image_config",
 #@   "charts_repo_resource",
 #@   "charts_repo_bot_branch",
+#@   "nix_flake_cachix_image_config",
+#@   "nix_task_image_config",
 #@ )
 
 #@ def on_nix_host(name, cmd):
@@ -80,14 +82,35 @@ jobs:
       privileged: true
       config:
         platform: linux
-        image_resource: #@ nix_flake_cachix_image_config()
+        image_resource: #@ nix_task_image_config()
         inputs:
           - name: pipeline-tasks
           - name: repo
         run:
-          path: pipeline-tasks/ci/tasks/integration-test.sh
+          path: pipeline-tasks/ci/tasks/integration-tests.sh
+        params:
+          CACHIX_AUTH_TOKEN: eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYWQ0ZjNjZi01YjM2LTRlMGQtOTA1ZC01MTgxYWJjNmFkNjAiLCJzY29wZXMiOiJjYWNoZSJ9.6m8JFK8h3gSbsx28aftxESQV08PuDQRlFf1WNVUoUIQ
 
-- #@ on_nix_host("bats-tests", "make e2e")
+- name: bats-tests
+  plan:
+  - in_parallel:
+    - get: repo
+      trigger: true
+    - get: pipeline-tasks
+  - task: bats-tests
+    privileged: true
+    config:
+      platform: linux
+      image_resource: #@ nix_task_image_config()
+      inputs:
+      - name: pipeline-tasks
+      - name: repo
+      run:
+        path: pipeline-tasks/ci/tasks/bats-tests.sh
+      params:
+        CACHIX_AUTH_TOKEN: eyJhbGciOiJIUzI1NiJ9.eyJqdGkiOiIwYWQ0ZjNjZi01YjM2LTRlMGQtOTA1ZC01MTgxYWJjNmFkNjAiLCJzY29wZXMiOiJjYWNoZSJ9.6m8JFK8h3gSbsx28aftxESQV08PuDQRlFf1WNVUoUIQ
+
+
 - #@ build_edge_image()
 
 - name: release
@@ -371,10 +394,3 @@ resources:
     username: #@ data.values.gar_registry_user
     password: #@ data.values.gar_registry_password
     repository: #@ public_docker_registry() + "/" + data.values.gh_repository
-- name: nix-host
-  type: pool
-  source:
-    uri: git@github.com:GaloyMoney/galoy-concourse-locks.git
-    branch: main
-    pool: docker-hosts
-    private_key: #@ data.values.github_private_key
