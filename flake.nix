@@ -52,6 +52,7 @@
         cargo-nextest
         jq
         bats
+        curl
       ];
 
       # Development-specific dependencies
