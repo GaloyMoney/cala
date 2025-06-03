@@ -5,9 +5,6 @@ echo "--- Setting up Nix environment ---"
 cachix use cala-ci
 pushd repo
 
-nix -L develop --command bash -c '
-set -euo pipefail
-
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
 echo "--- Podman check done ---"
@@ -44,4 +41,3 @@ ENGINE_DEFAULT=podman bin/clean-deps.sh
 echo "--- Cleanup done ---"
 
 echo "--- All steps completed ---"
-'

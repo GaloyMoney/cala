@@ -40,7 +40,7 @@
       # };
 
       rustToolchainCi = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchain {
-        inherit (toolchain) channel components;
+        inherit (toolchain) channel;
         profile = "minimal";
         # targets = ["x86_64-unknown-linux-musl"];
       };
@@ -53,12 +53,12 @@
         jq
         bats
         curl
+        cachix
       ];
 
       # Development-specific dependencies
       devDeps = with pkgs; [
         rustToolchain
-        cachix
 
         alejandra
         podman
@@ -81,11 +81,11 @@
       ciDeps = with pkgs; [
         podman
         podman-compose
-        bashInteractive
-        gnumake
+        libtool
         gcc
         rustToolchainCi
         coreutils
+        nix
       ];
 
       devEnvVars = rec {
@@ -97,6 +97,15 @@
         DATABASE_URL = "postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/pg";
         PG_CON = "${DATABASE_URL}";
       };
+
+      ciEnvVars = [
+        # "ENV=/etc/profile.d/nix.sh"
+        # "BASH_ENV=/etc/profile.d/nix.sh"
+        # "NIX_BUILD_SHELL=/bin/bash"
+        # "PAGER=cat"
+        # "PATH=/usr/bin:/bin"
+        "USER=nobody"
+      ];
 
       # Development shell with all development tools
       devShell = pkgs.mkShell (
@@ -113,34 +122,32 @@
         }
       );
 
-      ciNixImage = pkgs.dockerTools.buildImageWithNixDb {
+      ciNixImage = with pkgs; dockerTools.buildLayeredImage {
         name = "cala-ci-nix";
-
-        contents = commonDeps ++ ciDeps;
-      };
-
-      # Build the CI image with only the necessary dependencies
-      ciImage = with pkgs.dockerTools; buildLayeredImage {
-        name = "cala-ci";
         tag = "latest";
+        maxLayers = 120;
 
-        fromImage = pullImage {
-          imageName = "nixpkgs/cachix-flakes";
-          imageDigest = "sha256:48339bf3bc6cf7ab879f8973ba6728261044cefb873b6cc639bad63050e64538";
-          sha256 = "0xmbmr34qrrrcyihfppbx81mkx2jain8gnmd8psbikw1bs691gr7";
-        };
-
-        contents = pkgs.buildEnv {
+        contents = buildEnv {
           name = "root";
-          paths = commonDeps ++ ciDeps;
-          pathsToLink = [ "/bin" ];
+          paths = commonDeps ++ ciDeps ++ (with pkgs.dockerTools; [
+            binSh
+            caCertificates
+            usrBinEnv
+            fakeNss
+          ]);
+          pathsToLink = [ "/bin" "/etc" "/usr" ];
         };
+
+        extraCommands = ''
+          # make sure /tmp exists
+          mkdir -m 1777 tmp
+        '';
 
         config = {
           Env = [
             # required because /var/tmp does not exist in the image
             "TMPDIR=/tmp"
-          ] ++ (pkgs.lib.mapAttrsToList (k: v: "${k}=${v}") devEnvVars);
+          ] ++ (lib.mapAttrsToList (k: v: "${k}=${v}") devEnvVars) ++ ciEnvVars;
         };
       };
     in
