@@ -179,7 +179,7 @@ macro_rules! entity_id {
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
             #[derive(
-                sqlx::Type,
+                $crate::prelude::sqlx::Type,
                 Debug,
                 Clone,
                 Copy,
