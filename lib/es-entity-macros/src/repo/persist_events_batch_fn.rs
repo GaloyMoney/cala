@@ -50,7 +50,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                 let mut n_events_map = std::collections::HashMap::new();
                 for events in all_events.iter_mut() {
                     let id = events.id();
-                    let offset = events.len_persisted();
+                    let offset = events.len_persisted() + 1;
                     let serialized = events.serialize_new_events();
                     let types = serialized.iter()
                         .map(|e| e.get("type")
@@ -63,7 +63,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_sequences.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
+                    all_sequences.extend((offset..).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
@@ -121,7 +121,7 @@ mod tests {
                 let mut n_events_map = std::collections::HashMap::new();
                 for events in all_events.iter_mut() {
                     let id = events.id();
-                    let offset = events.len_persisted();
+                    let offset = events.len_persisted() + 1;
                     let serialized = events.serialize_new_events();
                     let types = serialized.iter()
                         .map(|e| e.get("type")
@@ -134,7 +134,7 @@ mod tests {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_sequences.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
+                    all_sequences.extend((offset..).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
