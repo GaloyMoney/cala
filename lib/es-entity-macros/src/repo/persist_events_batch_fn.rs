@@ -44,7 +44,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                 let mut all_serialized = Vec::new();
                 let mut all_types = Vec::new();
                 let mut all_ids = Vec::new();
-                let mut all_offsets = Vec::new();
+                let mut all_sequences = Vec::new();
                 let now = op.now();
 
                 let mut n_events_map = std::collections::HashMap::new();
@@ -63,7 +63,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_offsets.extend((offset..).take(n_events).map(|i| i as i32));
+                    all_sequences.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
@@ -72,7 +72,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                         #query,
                         now,
                         #id_tokens,
-                        &all_offsets,
+                        &all_sequences,
                         &all_types,
                         &all_serialized,
                     ).fetch_all(&mut **op.tx()).await)?;
@@ -115,7 +115,7 @@ mod tests {
                 let mut all_serialized = Vec::new();
                 let mut all_types = Vec::new();
                 let mut all_ids = Vec::new();
-                let mut all_offsets = Vec::new();
+                let mut all_sequences = Vec::new();
                 let now = op.now();
 
                 let mut n_events_map = std::collections::HashMap::new();
@@ -134,7 +134,7 @@ mod tests {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_offsets.extend((offset..).take(n_events).map(|i| i as i32));
+                    all_sequences.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
@@ -143,7 +143,7 @@ mod tests {
                         "INSERT INTO entity_events (id, recorded_at, sequence, event_type, event) SELECT unnested.id, $1, unnested.sequence, unnested.event_type, unnested.event FROM UNNEST($2::UUID[], $3::INT[], $4::TEXT[], $5::JSONB[]) AS unnested(id, sequence, event_type, event)",
                          now,
                          &all_ids as &[EntityId],
-                         &all_offsets,
+                         &all_sequences,
                          &all_types,
                          &all_serialized,
                     ).fetch_all(&mut **op.tx()).await
