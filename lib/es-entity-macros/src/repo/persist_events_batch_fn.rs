@@ -63,7 +63,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_offsets.extend((offset..).take(n_events).map(|i| i as i32));
+                    all_offsets.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
