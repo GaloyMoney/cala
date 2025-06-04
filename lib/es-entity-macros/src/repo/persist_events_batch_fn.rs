@@ -44,7 +44,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                 let mut all_serialized = Vec::new();
                 let mut all_types = Vec::new();
                 let mut all_ids = Vec::new();
-                let mut all_offsets = Vec::new();
+                let mut all_sequences = Vec::new();
                 let now = op.now();
 
                 let mut n_events_map = std::collections::HashMap::new();
@@ -63,7 +63,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                     all_serialized.extend(serialized);
                     all_types.extend(types);
                     all_ids.extend(std::iter::repeat(id).take(n_events));
-                    all_offsets.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
+                    all_sequences.extend((offset..).skip(1).take(n_events).map(|i| i as i32));
                     n_events_map.insert(id.clone(), n_events);
                 }
 
@@ -72,7 +72,7 @@ impl ToTokens for PersistEventsBatchFn<'_> {
                         #query,
                         now,
                         #id_tokens,
-                        &all_offsets,
+                        &all_sequences,
                         &all_types,
                         &all_serialized,
                     ).fetch_all(&mut **op.tx()).await)?;
