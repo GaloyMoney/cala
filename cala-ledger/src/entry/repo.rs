@@ -57,7 +57,10 @@ impl EntryRepo {
                             SELECT created_at, id
                             FROM cala_entries
                             JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
-                            WHERE cala_balance_history.account_id = $4
+                            WHERE cala_balance_history.account_id IN (
+                                SELECT member_account_id FROM cala_account_set_member_accounts 
+                                WHERE account_set_id = $4
+                            )
                               AND (COALESCE((created_at, id) > ($3, $2), $2 IS NULL))
                             ORDER BY created_at ASC, id ASC
                             LIMIT $1"#,
@@ -77,7 +80,10 @@ impl EntryRepo {
                             SELECT created_at, id
                             FROM cala_entries
                             JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
-                            WHERE cala_balance_history.account_id = $4
+                            WHERE cala_balance_history.account_id IN (
+                                SELECT member_account_id FROM cala_account_set_member_accounts 
+WHERE account_set_id = $4
+                            )
                               AND (COALESCE((created_at, id) < ($3, $2), $2 IS NULL))
                             ORDER BY created_at DESC, id DESC
                             LIMIT $1"#,
