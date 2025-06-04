@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH max_sequence AS (\n                SELECT COALESCE(MAX(sequence), 0) AS max FROM cala_outbox_events\n            )\n            SELECT\n              g.seq AS \"sequence!: EventSequence\",\n              e.id AS \"id?\",\n              e.payload AS \"payload?\",\n              e.recorded_at AS \"recorded_at?\"\n            FROM\n                generate_series(LEAST($1 + 1, (SELECT max FROM max_sequence)),\n                  LEAST($1 + $2, (SELECT max FROM max_sequence)))\n                AS g(seq)\n            LEFT JOIN\n                cala_outbox_events e ON g.seq = e.sequence\n            WHERE\n                g.seq > $1\n            ORDER BY\n                g.seq ASC\n            LIMIT $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence!: EventSequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload?",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "recorded_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "4a2c66932678814aa7420c360acbb3de32b627d2421414dc139e4bda879fa839"
+}
