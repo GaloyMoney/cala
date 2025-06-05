@@ -44,11 +44,6 @@ services:
       - ./dev/otel-agent-config.yaml:/etc/otel-agent-config.yaml
   cala-server:
     image: us.gcr.io/galoy-org/cala:latest
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - TARGETPLATFORM=linux/amd64
     depends_on:
       - server-pg
     ports:
