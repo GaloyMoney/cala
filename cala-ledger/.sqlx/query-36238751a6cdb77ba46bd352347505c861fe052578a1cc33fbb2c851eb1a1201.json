@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_velocity_account_controls (account_id, velocity_control_id, values)\n            VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "36238751a6cdb77ba46bd352347505c861fe052578a1cc33fbb2c851eb1a1201"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id AS \"id?: TxTemplateId\", MAX(e.sequence) AS \"version\" \n            FROM cala_tx_templates t\n            JOIN cala_tx_template_events e ON t.id = e.id\n            WHERE t.code = $1\n            GROUP BY t.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?: TxTemplateId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "version",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "bf0ee7f3fd1db85944c916fc155dddccee12c4023ab3cd7319285f43a90d7aaf"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE job_executions\n                SET state = 'pending', reschedule_after = $2, next_attempt = $3\n                WHERE id = $1\n              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec2dd95159be86ad82129ad1f2f0b11d4092fa49ff76a707c20be5a05a55dc8b"
+}

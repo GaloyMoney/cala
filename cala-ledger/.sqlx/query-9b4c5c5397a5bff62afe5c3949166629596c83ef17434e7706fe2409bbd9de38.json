@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entities AS (SELECT name, external_id, id FROM cala_account_sets WHERE ((name = $1) AND ((external_id IS NOT DISTINCT FROM $4) AND COALESCE(id > $3, true) OR COALESCE(external_id > $4, external_id IS NOT NULL))) ORDER BY external_id ASC NULLS FIRST, id ASC LIMIT $2) SELECT i.id AS \"entity_id: AccountSetId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN cala_account_set_events e ON i.id = e.id ORDER BY i.external_id asc nulls first, i.id asc, i.id, e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9b4c5c5397a5bff62afe5c3949166629596c83ef17434e7706fe2409bbd9de38"
+}

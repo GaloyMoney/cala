@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_balance_history\n            (journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)\n            VALUES ($1, $2, $3, $4, $5, $6, $7)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Varchar",
+        "Int4",
+        "Uuid",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ff99cbe04b08785717868bc26f1004faa808f07cca3079a330447f16af6d69b"
+}

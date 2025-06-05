@@ -10,3 +10,5 @@ FROM ubuntu
   USER 1000
   WORKDIR /cala-server
   CMD ["cala-server"]
+
+
