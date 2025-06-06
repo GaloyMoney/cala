@@ -5,7 +5,6 @@ echo "--- Setting up Nix environment ---"
 cachix use cala-ci
 # print current working directory
 echo "Current working directory: $(pwd)"
-pushd repo
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
