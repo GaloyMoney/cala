@@ -5,7 +5,8 @@ echo "--- Setting up Nix environment ---"
 cachix use cala-ci
 pushd repo
 
-nix develop -L '
+nix -L develop --command bash -c '
+set -euo pipefail
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
