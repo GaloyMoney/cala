@@ -87,9 +87,22 @@ jobs:
           - name: pipeline-tasks
           - name: repo
         run:
-          path: pipeline-tasks/ci/tasks/integration-tests.sh
+          path: sh
+          args:
+            - -exc
+            - |
+              set -euo pipefail
+              pushd repo
+
+              cachix use "${CACHIX_CACHE_NAME}"
+
+              nix develop --profile dev -c true
+              cachix push "${CACHIX_CACHE_NAME}" dev
+
+              nix -L develop --command sh -exc ../pipeline-tasks/ci/tasks/integration-tests.sh
         params:
           CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
+          CACHIX_CACHE_NAME: cala-ci
 
 - name: bats-tests
   plan:

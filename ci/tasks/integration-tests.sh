@@ -3,10 +3,9 @@ set -euo pipefail
 
 echo "--- Setting up Nix environment ---"
 cachix use cala-ci
+# print current working directory
+echo "Current working directory: $(pwd)"
 pushd repo
-
-nix -L develop --command bash -c '
-set -euo pipefail
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
@@ -44,4 +43,3 @@ ENGINE_DEFAULT=podman bin/clean-deps.sh
 echo "--- Cleanup done ---"
 
 echo "--- All steps completed ---"
-'
