@@ -35,14 +35,10 @@
         inherit (toolchain) channel profile targets components;
       };
 
-      # rustToolchain = rustVersion.override {
-      #   extensions = ["rust-analyzer" "rust-src"];
-      # };
-
       rustToolchainCi = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchain {
         inherit (toolchain) channel;
         profile = "minimal";
-        # targets = ["x86_64-unknown-linux-musl"];
+        targets = ["x86_64-unknown-linux-musl"];
       };
 
       # Common dependencies used in both dev and CI
@@ -81,8 +77,9 @@
       ciDeps = with pkgs; [
         podman
         podman-compose
-        libtool
         gcc
+        glibc
+        libtool
         gnumake
         rustToolchainCi
         coreutils
@@ -117,14 +114,7 @@
         }
       );
 
-      ciShell = pkgs.mkShell (
-        devEnvVars
-        // {
-          buildInputs = commonDeps ++ ciDeps;
-        }
-      );
-
-      ciNixImage = with pkgs; dockerTools.buildLayeredImage {
+      ciImage = with pkgs; dockerTools.buildLayeredImage {
         name = "cala-ci-nix";
         tag = "latest";
         maxLayers = 120;
@@ -136,8 +126,17 @@
             caCertificates
             usrBinEnv
             fakeNss
-          ]);
-          pathsToLink = [ "/bin" "/etc" "/usr" ];
+          ]) ++ [
+            (writeTextFile {
+              name = "nix.conf";
+              destination = "/etc/nix/nix.conf";
+              text = ''
+                accept-flake-config = true
+                experimental-features = nix-command flakes
+              '';
+            })
+          ];
+          pathsToLink = [ "/bin" "/usr" "/etc" ];
         };
 
         extraCommands = ''
@@ -158,7 +157,6 @@
         devShells.ci = ciShell;
 
         packages.ciImage = ciImage;
-        packages.ciNixImage = ciNixImage;
 
         formatter = alejandra;
       });
