@@ -1,3 +1,32 @@
+# [cala release v0.5.4](https://github.com/GaloyMoney/cala/releases/tag/0.5.4)
+
+
+### Bug Fixes
+
+- Script and flake
+- Script and flake
+- Makefile indent
+
+### Miscellaneous Tasks
+
+- Flake update
+- Tmp commit
+- Add curl to flake
+- More refactoring
+- More refactoring
+- Remove deprecated compose flag
+- Make script executable
+- Add clean deps
+- Update makefile
+- Modify makefile
+- Update flake
+- Update flake
+- Try different shell
+- Add `bin/docker-compose-up.sh`
+- Add docker compose up script
+- Add podman comppose to flake
+- Add podman to flake
+
 # [cala release v0.5.2](https://github.com/GaloyMoney/cala/releases/tag/0.5.2)
 
 
