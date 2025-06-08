@@ -3,7 +3,6 @@ set -euo pipefail
 
 echo "--- Setting up Nix environment ---"
 cachix use cala-ci
-pushd repo
 
 # --- Source Helpers Early ---
 # Get REPO_ROOT early to source helpers
@@ -15,8 +14,6 @@ pushd repo
 #   echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
 #   exit 1
 # fi
-
-set -euo pipefail
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman

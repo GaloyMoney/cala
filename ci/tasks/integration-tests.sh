@@ -3,7 +3,8 @@ set -euo pipefail
 
 echo "--- Setting up Nix environment ---"
 cachix use cala-ci
-pushd repo
+# print current working directory
+echo "Current working directory: $(pwd)"
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
