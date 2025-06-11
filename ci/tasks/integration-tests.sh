@@ -1,10 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "--- Setting up Nix environment ---"
-cachix use cala-ci
-# print current working directory
-echo "Current working directory: $(pwd)"
+# Change to repo directory
+pushd repo
+
+echo "--- Setting up Cachix ---"
+cachix use "${CACHIX_CACHE_NAME}"
+
+# cannot call the profile dev as it fails with a symlink error
+# perhaps its a reserved keyword
+echo "--- Setting up Nix development environment ---"
+nix develop --profile dev-profile -c true
+cachix push "${CACHIX_CACHE_NAME}" dev-profile
+
+echo "--- Running integration tests in Nix environment ---"
+nix -L develop --command sh -exc '
+set -euo pipefail
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
@@ -42,3 +53,4 @@ ENGINE_DEFAULT=podman bin/clean-deps.sh
 echo "--- Cleanup done ---"
 
 echo "--- All steps completed ---"
+'
