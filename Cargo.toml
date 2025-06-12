@@ -62,6 +62,7 @@ lalrpop = { version = "0.20", features = ["lexer"] }
 rust_decimal_macros = "1.37.1"
 rust_decimal = "1.37.1"
 rusty-money = { version = "0.4", features = ["iso", "crypto"] }
+schemars = { version = "0.8", features = ["uuid1"] }
 
 [profile.release]
 lto = true

@@ -11,6 +11,7 @@ categories = ["data-structures", "database"]
 
 fail-on-warnings = []
 graphql = ["es-entity-macros/graphql", "dep:async-graphql", "dep:base64"]
+json-schema = ["dep:schemars"]
 sim-time = [ "dep:sim-time" ]
 
 [dependencies]
@@ -27,6 +28,7 @@ derive_builder = { workspace = true }
 uuid = { workspace = true }
 async-graphql = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio = { workspace = true }
