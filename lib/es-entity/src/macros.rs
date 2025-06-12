@@ -76,49 +76,10 @@ macro_rules! from_es_entity_error {
     };
 }
 
-// Helper macro for common entity_id derives
-#[allow(unused_macros)]
-macro_rules! entity_id_derives {
-    (json_schema) => {
-        #[derive(
-            $crate::prelude::sqlx::Type,
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            $crate::prelude::serde::Deserialize,
-            $crate::prelude::serde::Serialize,
-            $crate::prelude::schemars::JsonSchema,
-        )]
-        #[serde(transparent)]
-        #[sqlx(transparent)]
-    };
-    (no_json_schema) => {
-        #[derive(
-            $crate::prelude::sqlx::Type,
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            $crate::prelude::serde::Deserialize,
-            $crate::prelude::serde::Serialize,
-        )]
-        #[serde(transparent)]
-        #[sqlx(transparent)]
-    };
-}
-
-// Helper macro for common entity_id implementations
-#[allow(unused_macros)]
-macro_rules! entity_id_common_impls {
+// Helper macro for common entity_id implementations (internal use only)
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __entity_id_common_impls {
     ($name:ident) => {
         impl $name {
             #[allow(clippy::new_without_default)]
@@ -161,9 +122,10 @@ macro_rules! entity_id_common_impls {
     };
 }
 
-// Helper macro for GraphQL-specific entity_id implementations
-#[allow(unused_macros)]
-macro_rules! entity_id_graphql_impls {
+// Helper macro for GraphQL-specific entity_id implementations (internal use only)
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __entity_id_graphql_impls {
     ($name:ident) => {
         impl From<$crate::graphql::UUID> for $name {
             fn from(id: $crate::graphql::UUID) -> Self {
@@ -179,9 +141,10 @@ macro_rules! entity_id_graphql_impls {
     };
 }
 
-// Helper macro for additional conversions
-#[allow(unused_macros)]
-macro_rules! entity_id_conversions {
+// Helper macro for additional conversions (internal use only)
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __entity_id_conversions {
     ($($from:ty => $to:ty),* $(,)?) => {
         $(
             impl From<$from> for $to {
@@ -207,12 +170,27 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            entity_id_derives!(json_schema)
+            #[derive(
+                $crate::prelude::sqlx::Type,
+                Debug,
+                Clone,
+                Copy,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+                $crate::prelude::serde::Deserialize,
+                $crate::prelude::serde::Serialize,
+                $crate::prelude::schemars::JsonSchema,
+            )]
+            #[serde(transparent)]
+            #[sqlx(transparent)]
             pub struct $name($crate::prelude::uuid::Uuid);
-            entity_id_common_impls!($name);
-            entity_id_graphql_impls!($name);
+            $crate::__entity_id_common_impls!($name);
+            $crate::__entity_id_graphql_impls!($name);
         )+
-        entity_id_conversions!($($from => $to),*);
+        $crate::__entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -225,12 +203,26 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            entity_id_derives!(no_json_schema)
+            #[derive(
+                $crate::prelude::sqlx::Type,
+                Debug,
+                Clone,
+                Copy,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+                $crate::prelude::serde::Deserialize,
+                $crate::prelude::serde::Serialize,
+            )]
+            #[serde(transparent)]
+            #[sqlx(transparent)]
             pub struct $name($crate::prelude::uuid::Uuid);
-            entity_id_common_impls!($name);
-            entity_id_graphql_impls!($name);
+            $crate::__entity_id_common_impls!($name);
+            $crate::__entity_id_graphql_impls!($name);
         )+
-        entity_id_conversions!($($from => $to),*);
+        $crate::__entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -243,11 +235,26 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            entity_id_derives!(json_schema)
+            #[derive(
+                $crate::prelude::sqlx::Type,
+                Debug,
+                Clone,
+                Copy,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+                $crate::prelude::serde::Deserialize,
+                $crate::prelude::serde::Serialize,
+                $crate::prelude::schemars::JsonSchema,
+            )]
+            #[serde(transparent)]
+            #[sqlx(transparent)]
             pub struct $name($crate::prelude::uuid::Uuid);
-            entity_id_common_impls!($name);
+            $crate::__entity_id_common_impls!($name);
         )+
-        entity_id_conversions!($($from => $to),*);
+        $crate::__entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -260,10 +267,24 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            entity_id_derives!(no_json_schema)
+            #[derive(
+                $crate::prelude::sqlx::Type,
+                Debug,
+                Clone,
+                Copy,
+                PartialEq,
+                Eq,
+                PartialOrd,
+                Ord,
+                Hash,
+                $crate::prelude::serde::Deserialize,
+                $crate::prelude::serde::Serialize,
+            )]
+            #[serde(transparent)]
+            #[sqlx(transparent)]
             pub struct $name($crate::prelude::uuid::Uuid);
-            entity_id_common_impls!($name);
+            $crate::__entity_id_common_impls!($name);
         )+
-        entity_id_conversions!($($from => $to),*);
+        $crate::__entity_id_conversions!($($from => $to),*);
     };
 }
