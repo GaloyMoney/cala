@@ -4,16 +4,46 @@ use uuid::Uuid;
 
 use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
 
-crate::entity_id! { OutboxEventId }
-crate::entity_id! { AccountId }
-crate::entity_id! { AccountSetId }
-crate::entity_id! { JournalId }
-crate::entity_id! { DataSourceId }
-crate::entity_id! { TxTemplateId }
-crate::entity_id! { TransactionId }
-crate::entity_id! { EntryId }
-crate::entity_id! { VelocityLimitId }
-crate::entity_id! { VelocityControlId }
+es_entity::entity_id! { OutboxEventId }
+es_entity::entity_id! { AccountId }
+impl From<AccountId> for cel_interpreter::CelValue {
+    fn from(id: AccountId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { AccountSetId }
+impl From<AccountSetId> for cel_interpreter::CelValue {
+    fn from(id: AccountSetId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { JournalId }
+impl From<JournalId> for cel_interpreter::CelValue {
+    fn from(id: JournalId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { DataSourceId }
+es_entity::entity_id! { TxTemplateId }
+impl From<TxTemplateId> for cel_interpreter::CelValue {
+    fn from(id: TxTemplateId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { TransactionId }
+impl From<TransactionId> for cel_interpreter::CelValue {
+    fn from(id: TransactionId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { EntryId }
+impl From<EntryId> for cel_interpreter::CelValue {
+    fn from(id: EntryId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
+es_entity::entity_id! { VelocityLimitId }
+es_entity::entity_id! { VelocityControlId }
 
 pub type BalanceId = (JournalId, AccountId, Currency);
 impl From<&AccountSetId> for AccountId {
