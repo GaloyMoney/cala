@@ -16,7 +16,7 @@ cala-ledger = { path = "../cala-ledger", features = ["import", "graphql"], packa
 cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.5.4-dev" }
 cala-ledger-outbox-client = { path = "../cala-ledger-outbox-client", package = "cala-ledger-outbox-client", version = "0.5.4-dev" }
 cala-tracing = { path = "../cala-tracing", features = ["http", "grpc"], package = "cala-tracing", version = "0.5.4-dev" }
-es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.5.4-dev" }
+es-entity = { path = "../lib/es-entity", features = ["graphql"], package = "es-entity", version = "0.5.4-dev" }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }

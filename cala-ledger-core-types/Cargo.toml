@@ -9,11 +9,11 @@ license = "Apache-2.0"
 [features]
 
 fail-on-warnings = []
-graphql = ["dep:es-entity", "dep:async-graphql"]
+graphql = ["es-entity/graphql", "dep:async-graphql"]
 
 [dependencies]
 cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.5.4-dev" }
-es-entity = { path = "../lib/es-entity", optional = true, package = "es-entity", version = "0.5.4-dev" }
+es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.5.4-dev" }
 
 async-graphql = { workspace = true, optional = true }
 serde = { workspace = true }
