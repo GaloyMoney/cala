@@ -48,6 +48,9 @@ check-code: sdl
 build:
 	SQLX_OFFLINE=true cargo build --locked
 
+test-integration: reset-deps
+	cargo nextest run --verbose --locked
+
 e2e: clean-deps start-deps build
 	bats -t bats
 
