@@ -17,7 +17,7 @@ pub mod prelude {
     pub use serde_json;
     pub use sqlx;
     pub use uuid;
-    
+
     #[cfg(feature = "json-schema")]
     pub use schemars;
 }

@@ -76,85 +76,113 @@ macro_rules! from_es_entity_error {
     };
 }
 
-#[cfg(all(feature = "graphql", feature = "json-schema"))]
-#[macro_export]
-macro_rules! entity_id {
-    // Match identifiers without conversions
-    ($($name:ident),+ $(,)?) => {
-        $crate::entity_id! { $($name),+ ; }
+// Helper macro for common entity_id derives
+#[allow(unused_macros)]
+macro_rules! entity_id_derives {
+    (json_schema) => {
+        #[derive(
+            $crate::prelude::sqlx::Type,
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            $crate::prelude::serde::Deserialize,
+            $crate::prelude::serde::Serialize,
+            $crate::prelude::schemars::JsonSchema,
+        )]
+        #[serde(transparent)]
+        #[sqlx(transparent)]
     };
-    ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
-        $(
-            #[derive(
-                $crate::prelude::sqlx::Type,
-                Debug,
-                Clone,
-                Copy,
-                PartialEq,
-                Eq,
-                PartialOrd,
-                Ord,
-                Hash,
-                $crate::prelude::serde::Deserialize,
-                $crate::prelude::serde::Serialize,
-                $crate::prelude::schemars::JsonSchema,
-            )]
-            #[serde(transparent)]
-            #[sqlx(transparent)]
-            pub struct $name($crate::prelude::uuid::Uuid);
+    (no_json_schema) => {
+        #[derive(
+            $crate::prelude::sqlx::Type,
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            $crate::prelude::serde::Deserialize,
+            $crate::prelude::serde::Serialize,
+        )]
+        #[serde(transparent)]
+        #[sqlx(transparent)]
+    };
+}
 
-            impl $name {
-                #[allow(clippy::new_without_default)]
-                pub fn new() -> Self {
-                    $crate::prelude::uuid::Uuid::new_v4().into()
-                }
+// Helper macro for common entity_id implementations
+#[allow(unused_macros)]
+macro_rules! entity_id_common_impls {
+    ($name:ident) => {
+        impl $name {
+            #[allow(clippy::new_without_default)]
+            pub fn new() -> Self {
+                $crate::prelude::uuid::Uuid::new_v4().into()
             }
+        }
 
-            impl From<$crate::prelude::uuid::Uuid> for $name {
-                fn from(uuid: $crate::prelude::uuid::Uuid) -> Self {
-                    Self(uuid)
-                }
+        impl From<$crate::prelude::uuid::Uuid> for $name {
+            fn from(uuid: $crate::prelude::uuid::Uuid) -> Self {
+                Self(uuid)
             }
+        }
 
-            impl From<$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: $name) -> Self {
-                    id.0
-                }
+        impl From<$name> for $crate::prelude::uuid::Uuid {
+            fn from(id: $name) -> Self {
+                id.0
             }
+        }
 
-            impl From<&$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: &$name) -> Self {
-                    id.0
-                }
+        impl From<&$name> for $crate::prelude::uuid::Uuid {
+            fn from(id: &$name) -> Self {
+                id.0
             }
+        }
 
-            impl From<$crate::graphql::UUID> for $name {
-                fn from(id: $crate::graphql::UUID) -> Self {
-                    $name($crate::prelude::uuid::Uuid::from(&id))
-                }
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "{}", self.0)
             }
+        }
 
-            impl From<&$crate::graphql::UUID> for $name {
-                fn from(id: &$crate::graphql::UUID) -> Self {
-                    $name($crate::prelude::uuid::Uuid::from(id))
-                }
+        impl std::str::FromStr for $name {
+            type Err = $crate::prelude::uuid::Error;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                Ok(Self($crate::prelude::uuid::Uuid::parse_str(s)?))
             }
+        }
+    };
+}
 
-            impl std::fmt::Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.0)
-                }
+// Helper macro for GraphQL-specific entity_id implementations
+#[allow(unused_macros)]
+macro_rules! entity_id_graphql_impls {
+    ($name:ident) => {
+        impl From<$crate::graphql::UUID> for $name {
+            fn from(id: $crate::graphql::UUID) -> Self {
+                $name($crate::prelude::uuid::Uuid::from(&id))
             }
+        }
 
-            impl std::str::FromStr for $name {
-                type Err = $crate::prelude::uuid::Error;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(Self($crate::prelude::uuid::Uuid::parse_str(s)?))
-                }
+        impl From<&$crate::graphql::UUID> for $name {
+            fn from(id: &$crate::graphql::UUID) -> Self {
+                $name($crate::prelude::uuid::Uuid::from(id))
             }
-        )+
-        // Implement additional conversions
+        }
+    };
+}
+
+// Helper macro for additional conversions
+#[allow(unused_macros)]
+macro_rules! entity_id_conversions {
+    ($($from:ty => $to:ty),* $(,)?) => {
         $(
             impl From<$from> for $to {
                 fn from(id: $from) -> Self {
@@ -167,6 +195,24 @@ macro_rules! entity_id {
                 }
             }
         )*
+    };
+}
+
+#[cfg(all(feature = "graphql", feature = "json-schema"))]
+#[macro_export]
+macro_rules! entity_id {
+    // Match identifiers without conversions
+    ($($name:ident),+ $(,)?) => {
+        $crate::entity_id! { $($name),+ ; }
+    };
+    ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
+        $(
+            entity_id_derives!(json_schema)
+            pub struct $name($crate::prelude::uuid::Uuid);
+            entity_id_common_impls!($name);
+            entity_id_graphql_impls!($name);
+        )+
+        entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -179,87 +225,12 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            #[derive(
-                $crate::prelude::sqlx::Type,
-                Debug,
-                Clone,
-                Copy,
-                PartialEq,
-                Eq,
-                PartialOrd,
-                Ord,
-                Hash,
-                $crate::prelude::serde::Deserialize,
-                $crate::prelude::serde::Serialize,
-            )]
-            #[serde(transparent)]
-            #[sqlx(transparent)]
+            entity_id_derives!(no_json_schema)
             pub struct $name($crate::prelude::uuid::Uuid);
-
-            impl $name {
-                #[allow(clippy::new_without_default)]
-                pub fn new() -> Self {
-                    $crate::prelude::uuid::Uuid::new_v4().into()
-                }
-            }
-
-            impl From<$crate::prelude::uuid::Uuid> for $name {
-                fn from(uuid: $crate::prelude::uuid::Uuid) -> Self {
-                    Self(uuid)
-                }
-            }
-
-            impl From<$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: $name) -> Self {
-                    id.0
-                }
-            }
-
-            impl From<&$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: &$name) -> Self {
-                    id.0
-                }
-            }
-
-            impl From<$crate::graphql::UUID> for $name {
-                fn from(id: $crate::graphql::UUID) -> Self {
-                    $name($crate::prelude::uuid::Uuid::from(&id))
-                }
-            }
-
-            impl From<&$crate::graphql::UUID> for $name {
-                fn from(id: &$crate::graphql::UUID) -> Self {
-                    $name($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-
-            impl std::fmt::Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.0)
-                }
-            }
-
-            impl std::str::FromStr for $name {
-                type Err = $crate::prelude::uuid::Error;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(Self($crate::prelude::uuid::Uuid::parse_str(s)?))
-                }
-            }
+            entity_id_common_impls!($name);
+            entity_id_graphql_impls!($name);
         )+
-        // Implement additional conversions
-        $(
-            impl From<$from> for $to {
-                fn from(id: $from) -> Self {
-                    <$to>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-            impl From<$to> for $from {
-                fn from(id: $to) -> Self {
-                    <$from>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-        )*
+        entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -272,76 +243,11 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            #[derive(
-                $crate::prelude::sqlx::Type,
-                Debug,
-                Clone,
-                Copy,
-                PartialEq,
-                Eq,
-                PartialOrd,
-                Ord,
-                Hash,
-                $crate::prelude::serde::Deserialize,
-                $crate::prelude::serde::Serialize,
-                $crate::prelude::schemars::JsonSchema,
-            )]
-            #[serde(transparent)]
-            #[sqlx(transparent)]
+            entity_id_derives!(json_schema)
             pub struct $name($crate::prelude::uuid::Uuid);
-
-            impl $name {
-                #[allow(clippy::new_without_default)]
-                pub fn new() -> Self {
-                    $crate::prelude::uuid::Uuid::new_v4().into()
-                }
-            }
-
-            impl From<$crate::prelude::uuid::Uuid> for $name {
-                fn from(uuid: $crate::prelude::uuid::Uuid) -> Self {
-                    Self(uuid)
-                }
-            }
-
-            impl From<$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: $name) -> Self {
-                    id.0
-                }
-            }
-
-            impl From<&$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: &$name) -> Self {
-                    id.0
-                }
-            }
-
-            impl std::fmt::Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.0)
-                }
-            }
-
-            impl std::str::FromStr for $name {
-                type Err = $crate::prelude::uuid::Error;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(Self($crate::prelude::uuid::Uuid::parse_str(s)?))
-                }
-            }
+            entity_id_common_impls!($name);
         )+
-        // Implement additional conversions
-        $(
-            impl From<$from> for $to {
-                fn from(id: $from) -> Self {
-                    <$to>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-            impl From<$to> for $from {
-                fn from(id: $to) -> Self {
-                    <$from>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-        )*
+        entity_id_conversions!($($from => $to),*);
     };
 }
 
@@ -354,74 +260,10 @@ macro_rules! entity_id {
     };
     ($($name:ident),+ $(,)? ; $($from:ty => $to:ty),* $(,)?) => {
         $(
-            #[derive(
-                $crate::prelude::sqlx::Type,
-                Debug,
-                Clone,
-                Copy,
-                PartialEq,
-                Eq,
-                PartialOrd,
-                Ord,
-                Hash,
-                $crate::prelude::serde::Deserialize,
-                $crate::prelude::serde::Serialize,
-            )]
-            #[serde(transparent)]
-            #[sqlx(transparent)]
+            entity_id_derives!(no_json_schema)
             pub struct $name($crate::prelude::uuid::Uuid);
-
-            impl $name {
-                #[allow(clippy::new_without_default)]
-                pub fn new() -> Self {
-                    $crate::prelude::uuid::Uuid::new_v4().into()
-                }
-            }
-
-            impl From<$crate::prelude::uuid::Uuid> for $name {
-                fn from(uuid: $crate::prelude::uuid::Uuid) -> Self {
-                    Self(uuid)
-                }
-            }
-
-            impl From<$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: $name) -> Self {
-                    id.0
-                }
-            }
-
-            impl From<&$name> for $crate::prelude::uuid::Uuid {
-                fn from(id: &$name) -> Self {
-                    id.0
-                }
-            }
-
-            impl std::fmt::Display for $name {
-                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                    write!(f, "{}", self.0)
-                }
-            }
-
-            impl std::str::FromStr for $name {
-                type Err = $crate::prelude::uuid::Error;
-
-                fn from_str(s: &str) -> Result<Self, Self::Err> {
-                    Ok(Self($crate::prelude::uuid::Uuid::parse_str(s)?))
-                }
-            }
+            entity_id_common_impls!($name);
         )+
-        // Implement additional conversions
-        $(
-            impl From<$from> for $to {
-                fn from(id: $from) -> Self {
-                    <$to>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-            impl From<$to> for $from {
-                fn from(id: $to) -> Self {
-                    <$from>::from($crate::prelude::uuid::Uuid::from(id))
-                }
-            }
-        )*
+        entity_id_conversions!($($from => $to),*);
     };
 }
