@@ -1,3 +1,6 @@
+#! Auto synced from Shared CI Resources repository
+#! Don't change this file, instead change it in github.com/GaloyMoney/concourse-shared
+
 # To get started with Dependabot version updates, you'll need to specify which
 # package ecosystems to update and where the package manifests are located.
 # Please see the documentation for all configuration options:
@@ -5,20 +8,7 @@
 
 version: 2
 updates:
-- package-ecosystem: "cargo"
-  directory: "/"
+- package-ecosystem: "cargo" # See documentation for possible values
+  directory: "/" # Location of package manifests
   schedule:
     interval: "daily"
-  groups:
-    all-dependencies:
-      patterns:
-        - "*"
-
-- package-ecosystem: "npm"
-  directory: "/website"
-  schedule:
-    interval: "daily"
-  groups:
-    all-dependencies:
-      patterns:
-        - "*"
