@@ -10,12 +10,14 @@ license = "Apache-2.0"
 
 fail-on-warnings = []
 graphql = ["es-entity/graphql", "dep:async-graphql"]
+json-schema = ["es-entity/json-schema", "dep:schemars"]
 
 [dependencies]
 cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.5.4-dev" }
 es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.5.4-dev" }
 
 async-graphql = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 strum = { workspace = true }

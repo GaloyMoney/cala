@@ -652,6 +652,7 @@ dependencies = [
  "es-entity",
  "rust_decimal",
  "rusty-money",
+ "schemars",
  "serde",
  "serde_json",
  "sqlx",
