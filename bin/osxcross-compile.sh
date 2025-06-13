@@ -13,7 +13,7 @@ export LIBZ_SYS_STATIC=1
 export TARGET_CC=/workspace/osxcross/target/bin/x86_64h-apple-darwin23-cc
 export TARGET_AR=/workspace/osxcross/target/bin/x86_64h-apple-darwin23-ar
 
-SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target "${MACOS_TARGET}" --all-features
+SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target "${MACOS_TARGET}"
 
 echo
 echo Done
