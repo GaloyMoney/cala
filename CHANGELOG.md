@@ -1,3 +1,7 @@
+# [cala release v0.6.3](https://github.com/GaloyMoney/cala/releases/tag/0.6.3)
+
+
+
 # [cala release v0.5.3](https://github.com/GaloyMoney/cala/releases/tag/0.5.3)
 
 
