@@ -14,6 +14,7 @@ categories = ["finance"]
 fail-on-warnings = []
 import = []
 graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
+json-schema = ["cala-types/json-schema"]
 
 [dependencies]
 cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.5.4-dev" }
