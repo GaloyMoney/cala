@@ -261,6 +261,7 @@ type Entry {
 	transactionId: UUID!
 	journalId: UUID!
 	accountId: UUID!
+	currency: CurrencyCode!
 	entryType: String!
 	sequence: Int!
 	layer: Layer!
