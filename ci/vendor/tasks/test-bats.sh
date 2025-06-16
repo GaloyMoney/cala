@@ -15,14 +15,14 @@ cachix push "${CACHIX_CACHE_NAME}" dev-profile
 
 # --- Source Helpers Early ---
 # Get REPO_ROOT early to source helpers
-# export REPO_ROOT=$(git rev-parse --show-toplevel)
-# if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
-#   echo "--- Sourcing helpers ---"
-#   source "${REPO_ROOT}/bats/helpers.bash"
-# else
-#   echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
-#   exit 1
-# fi
+export REPO_ROOT=$(git rev-parse --show-toplevel)
+if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
+  echo "--- Sourcing helpers ---"
+  source "${REPO_ROOT}/bats/helpers.bash"
+else
+  echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
+  exit 1
+fi
 
 echo "--- Running bats tests in Nix environment ---"
 nix -L develop --command sh -exc '
