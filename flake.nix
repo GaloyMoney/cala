@@ -52,6 +52,7 @@
           typescript
           ytt
           podman
+          podman-compose
         ]
         ++ lib.optionals pkgs.stdenv.isDarwin [
           darwin.apple_sdk.frameworks.SystemConfiguration
