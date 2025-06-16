@@ -27,3 +27,6 @@ gh_org: GaloyMoney
 gh_repository: cala
 
 crates_api_token: ((crates.token))
+
+cachix_auth_token: ((cachix-token.token))
+cachix_cache_name: cala-ci
