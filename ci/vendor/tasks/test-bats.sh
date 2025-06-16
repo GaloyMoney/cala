@@ -13,19 +13,11 @@ echo "--- Setting up Nix development environment ---"
 nix develop --profile dev-profile -c true
 cachix push "${CACHIX_CACHE_NAME}" dev-profile
 
-# --- Source Helpers Early ---
-# Get REPO_ROOT early to source helpers
-export REPO_ROOT=$(git rev-parse --show-toplevel)
-if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
-  echo "--- Sourcing helpers ---"
-  source "${REPO_ROOT}/bats/helpers.bash"
-else
-  echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
-  exit 1
-fi
-
 echo "--- Running bats tests in Nix environment ---"
+
+# shellcheck disable=SC2016
 nix -L develop --command sh -exc '
+
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
@@ -59,6 +51,16 @@ echo "--- Building test artifacts---"
 # nix build . -L
 make build
 
+# --- Source Helpers ---
+# Get REPO_ROOT to source helpers
+export REPO_ROOT=$(git rev-parse --show-toplevel)
+if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
+  echo "--- Sourcing helpers ---"
+  source "${REPO_ROOT}/bats/helpers.bash"
+else
+  echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
+  exit 1
+fi
 
 # --- Run Bats Tests ---
 echo "--- Running BATS tests ---"
