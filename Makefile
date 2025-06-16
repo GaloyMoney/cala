@@ -7,13 +7,7 @@ clean-deps:
 start-deps:
 	docker compose up -d integration-deps
 
-wait-for-dbs:
-	@echo "Waiting for databases to be ready..."
-	@until docker compose exec -T server-pg pg_isready -U user; do sleep 1; done
-	@until docker compose exec -T examples-pg pg_isready -U user; do sleep 1; done
-	@echo "Databases are ready"
-
-setup-db: wait-for-dbs
+setup-db:
 	cd cala-ledger && cargo sqlx migrate run
 	cd cala-server && cargo sqlx migrate run --ignore-missing
 
@@ -47,9 +41,6 @@ check-code: sdl
 
 build:
 	SQLX_OFFLINE=true cargo build --locked
-
-test-integration: reset-deps
-	cargo nextest run --verbose --locked
 
 e2e: clean-deps start-deps build
 	bats -t bats
