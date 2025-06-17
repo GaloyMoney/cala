@@ -18,7 +18,7 @@ echo "--- Running bats tests in Nix environment ---"
 # shellcheck disable=SC2016
 nix -L develop --command sh -exc '
 cd ..
-source pipeline-tasks/ci/vendor/tasks/helpers.bash
+source pipeline-tasks/ci/vendor/tasks/helpers.sh
 pushd repo
 
 echo "--- Checking for Podman (via nix) ---"
