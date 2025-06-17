@@ -6,7 +6,6 @@
 #@   "nodejs_task_image_config",
 #@   "check_code",
 #@   "docker_host_pool",
-#@   "test_on_docker_host",
 #@   "repo_resource",
 #@   "edge_image_resource",
 #@   "version_resource",
