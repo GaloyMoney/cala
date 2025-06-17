@@ -54,11 +54,11 @@ echo "--- Building test artifacts---"
 make build
 
 # --- Source BatsHelpers ---
-if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
+if [[ -f "bats/helpers.bash" ]]; then
   echo "--- Sourcing helpers ---"
-  source "${REPO_ROOT}/bats/helpers.bash"
+  source "bats/helpers.bash"
 else
-  echo "Error: helpers.bash not found at ${REPO_ROOT}/bats/helpers.bash"
+  echo "Error: helpers.bash not found at bats/helpers.bash"
   exit 1
 fi
 
