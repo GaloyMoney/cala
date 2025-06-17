@@ -17,7 +17,9 @@ echo "--- Running bats tests in Nix environment ---"
 
 # shellcheck disable=SC2016
 nix -L develop --command sh -exc '
-
+cd ..
+source "${REPO_ROOT}/pipeline-tasks/ci/vendor/tasks/helpers.bash"
+pushd repo
 
 echo "--- Checking for Podman (via nix) ---"
 command -v podman
@@ -51,9 +53,7 @@ echo "--- Building test artifacts---"
 # nix build . -L
 make build
 
-# --- Source Helpers ---
-# Get REPO_ROOT to source helpers
-export REPO_ROOT=$(git rev-parse --show-toplevel)
+# --- Source BatsHelpers ---
 if [[ -f "${REPO_ROOT}/bats/helpers.bash" ]]; then
   echo "--- Sourcing helpers ---"
   source "${REPO_ROOT}/bats/helpers.bash"
