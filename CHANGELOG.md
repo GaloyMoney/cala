@@ -1,3 +1,24 @@
+# [cala release v0.6.4](https://github.com/GaloyMoney/cala/releases/tag/0.6.4)
+
+
+### Bug Fixes
+
+- Regen schema
+
+### Documentation
+
+- Api reference and website examples update to 17060a3157b879a40676dc381cdba30e7b5a0010
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 4 updates (#453)
+- Add curl to flake (#456)
+- Add currency field to entries query results (#450)
+
+### Refactor
+
+- Make setup-db in Makefile docker independent (#454)
+
 # [cala release v0.6.3](https://github.com/GaloyMoney/cala/releases/tag/0.6.3)
 
 
