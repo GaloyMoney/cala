@@ -251,6 +251,7 @@ impl ToTokens for ListByFn<'_> {
         let cursor_ident = cursor.ident();
         let cursor_mod = cursor.cursor_mod();
         let error = self.error;
+        let id_ty = self.id;
         let nested = self.nested_fn_names.iter().map(|f| {
             quote! {
                 self.#f(&mut entities).await?;
@@ -356,6 +357,7 @@ impl ToTokens for ListByFn<'_> {
                         es_entity::ListDirection::Ascending => {
                             es_entity::es_query!(
                                 #prefix_arg
+                                id_ty = #id_ty,
                                 executor,
                                 #asc_query,
                                 #arg_tokens
@@ -366,6 +368,7 @@ impl ToTokens for ListByFn<'_> {
                         es_entity::ListDirection::Descending => {
                             es_entity::es_query!(
                                 #prefix_arg
+                                id_ty = #id_ty,
                                 executor,
                                 #desc_query,
                                 #arg_tokens
@@ -532,6 +535,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT id FROM entities WHERE (COALESCE(id > $2, true)) AND deleted = FALSE ORDER BY id ASC LIMIT $1",
                             (first + 1) as i64,
@@ -542,6 +546,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT id FROM entities WHERE (COALESCE(id < $2, true)) AND deleted = FALSE ORDER BY id DESC LIMIT $1",
                             (first + 1) as i64,
@@ -592,6 +597,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT id FROM entities WHERE (COALESCE(id > $2, true)) ORDER BY id ASC LIMIT $1",
                             (first + 1) as i64,
@@ -602,6 +608,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT id FROM entities WHERE (COALESCE(id < $2, true)) ORDER BY id DESC LIMIT $1",
                             (first + 1) as i64,
@@ -683,6 +690,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT name, id FROM entities WHERE (COALESCE((name, id) > ($3, $2), $2 IS NULL)) ORDER BY name ASC, id ASC LIMIT $1",
                             (first + 1) as i64,
@@ -694,6 +702,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT name, id FROM entities WHERE (COALESCE((name, id) < ($3, $2), $2 IS NULL)) ORDER BY name DESC, id DESC LIMIT $1",
                             (first + 1) as i64,
@@ -778,6 +787,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT value, id FROM entities WHERE ((value IS NOT DISTINCT FROM $3) AND COALESCE(id > $2, true) OR COALESCE(value > $3, value IS NOT NULL)) ORDER BY value ASC NULLS FIRST, id ASC LIMIT $1",
                             (first + 1) as i64,
@@ -789,6 +799,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT value, id FROM entities WHERE ((value IS NOT DISTINCT FROM $3) AND COALESCE(id < $2, true) OR COALESCE(value < $3, value IS NOT NULL)) ORDER BY value DESC NULLS LAST, id DESC LIMIT $1",
                             (first + 1) as i64,

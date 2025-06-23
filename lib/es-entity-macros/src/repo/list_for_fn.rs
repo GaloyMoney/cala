@@ -51,6 +51,7 @@ impl ToTokens for ListForFn<'_> {
         let cursor_ident = cursor.ident();
         let cursor_mod = cursor.cursor_mod();
         let error = self.error;
+        let id_ty = self.id;
         let nested = self.nested_fn_names.iter().map(|f| {
             quote! {
                 self.#f(&mut entities).await?;
@@ -173,6 +174,7 @@ impl ToTokens for ListForFn<'_> {
                         es_entity::ListDirection::Ascending => {
                             es_entity::es_query!(
                                 #prefix_arg
+                                id_ty = #id_ty,
                                 executor,
                                 #asc_query,
                                 #filter_arg_name as #for_column_type,
@@ -184,6 +186,7 @@ impl ToTokens for ListForFn<'_> {
                         es_entity::ListDirection::Descending => {
                             es_entity::es_query!(
                                 #prefix_arg
+                                id_ty = #id_ty,
                                 executor,
                                 #desc_query,
                                 #filter_arg_name as #for_column_type,
@@ -283,6 +286,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT customer_id, id FROM entities WHERE ((customer_id = $1) AND (COALESCE(id > $3, true))) ORDER BY id ASC LIMIT $2",
                             filter_customer_id as Uuid,
@@ -294,6 +298,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT customer_id, id FROM entities WHERE ((customer_id = $1) AND (COALESCE(id < $3, true))) ORDER BY id DESC LIMIT $2",
                             filter_customer_id as Uuid,
@@ -380,6 +385,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT email, id FROM entities WHERE ((email = $1) AND (COALESCE((email, id) > ($4, $3), $3 IS NULL))) ORDER BY email ASC, id ASC LIMIT $2",
                             filter_email as String,
@@ -392,6 +398,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            id_ty = EntityId,
                             executor,
                             "SELECT email, id FROM entities WHERE ((email = $1) AND (COALESCE((email, id) < ($4, $3), $3 IS NULL))) ORDER BY email DESC, id DESC LIMIT $2",
                             filter_email as String,

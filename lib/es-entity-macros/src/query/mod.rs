@@ -51,7 +51,11 @@ impl ToTokens for EsQuery {
             &singular_without_prefix.to_case(Case::UpperCamel),
             Span::call_site(),
         );
-        let id = syn::Ident::new(&format!("{}Id", entity), Span::call_site());
+        let id = if let Some(id_ty) = &self.input.id_ty {
+            id_ty.clone()
+        } else {
+            syn::Ident::new(&format!("{}Id", entity), Span::call_site())
+        };
         let events_table = syn::Ident::new(&format!("{}_events", singular), Span::call_site());
         let args = &self.input.arg_exprs;
 
