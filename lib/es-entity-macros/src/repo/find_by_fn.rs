@@ -113,8 +113,8 @@ impl ToTokens for FindByFn<'_> {
                 ) -> Result<#entity, #error> {
                     let #column_name = #column_name.borrow();
                     let entity = es_entity::es_query!(
-                        #prefix_arg
                         id_ty = #id_ty,
+                        #prefix_arg
                         executor,
                         #query,
                         #column_name as &#column_type,

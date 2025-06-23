@@ -356,8 +356,8 @@ impl ToTokens for ListByFn<'_> {
                     let #maybe_mut_entities = match direction {
                         es_entity::ListDirection::Ascending => {
                             es_entity::es_query!(
-                                #prefix_arg
                                 id_ty = #id_ty,
+                                #prefix_arg
                                 executor,
                                 #asc_query,
                                 #arg_tokens
@@ -367,8 +367,8 @@ impl ToTokens for ListByFn<'_> {
                         },
                         es_entity::ListDirection::Descending => {
                             es_entity::es_query!(
-                                #prefix_arg
                                 id_ty = #id_ty,
+                                #prefix_arg
                                 executor,
                                 #desc_query,
                                 #arg_tokens

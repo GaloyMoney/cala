@@ -24,32 +24,17 @@ macro_rules! idempotency_guard {
 
 #[macro_export]
 macro_rules! es_query {
-    ($prefix:literal, id_ty = $id_ty:ident, $db:expr, $query:expr) => ({
+    (id_ty = $id_ty:ident, $prefix:literal, $db:expr, $query:expr) => ({
         $crate::expand_es_query!(
-            ignore_prefix = $prefix,
             id_ty = $id_ty,
-            executor = $db,
-            sql = $query
-        )
-    });
-    ($prefix:literal, id_ty = $id_ty:ident, $db:expr, $query:expr, $($args:tt)*) => ({
-        $crate::expand_es_query!(
-            ignore_prefix = $prefix,
-            id_ty = $id_ty,
-            executor = $db,
-            sql = $query,
-            args = [$($args)*]
-        )
-    });
-    ($prefix:literal, $db:expr, $query:expr) => ({
-        $crate::expand_es_query!(
             ignore_prefix = $prefix,
             executor = $db,
             sql = $query
         )
     });
-    ($prefix:literal, $db:expr, $query:expr, $($args:tt)*) => ({
+    (id_ty = $id_ty:ident, $prefix:literal, $db:expr, $query:expr, $($args:tt)*) => ({
         $crate::expand_es_query!(
+            id_ty = $id_ty,
             ignore_prefix = $prefix,
             executor = $db,
             sql = $query,
@@ -66,6 +51,21 @@ macro_rules! es_query {
     (id_ty = $id_ty:ident, $db:expr, $query:expr, $($args:tt)*) => ({
         $crate::expand_es_query!(
             id_ty = $id_ty,
+            executor = $db,
+            sql = $query,
+            args = [$($args)*]
+        )
+    });
+    ($prefix:literal, $db:expr, $query:expr) => ({
+        $crate::expand_es_query!(
+            ignore_prefix = $prefix,
+            executor = $db,
+            sql = $query
+        )
+    });
+    ($prefix:literal, $db:expr, $query:expr, $($args:tt)*) => ({
+        $crate::expand_es_query!(
+            ignore_prefix = $prefix,
             executor = $db,
             sql = $query,
             args = [$($args)*]
