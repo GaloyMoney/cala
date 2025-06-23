@@ -1,3 +1,23 @@
+# [cala release v0.6.5](https://github.com/GaloyMoney/cala/releases/tag/0.6.5)
+
+
+### Bug Fixes
+
+- Pass id_ty to es-query (#461)
+
+### Documentation
+
+- Api reference and website examples update to 5c7dcbd1305b4db2cb37e59de8dad97a05d1dbfd
+
+### Miscellaneous Tasks
+
+- Bump syn in the all-dependencies group (#460)
+- Bump brace-expansion from 1.1.11 to 1.1.12 in /cala-nodejs (#443)
+
+### Refactor
+
+- Reorder id_ty in es_query
+
 # [cala release v0.6.4](https://github.com/GaloyMoney/cala/releases/tag/0.6.4)
 
 

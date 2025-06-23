@@ -2,7 +2,7 @@
 name = "cala-cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.6.5-dev"
+version = "0.6.5"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["parsing", "compilers"]
@@ -12,7 +12,7 @@ categories = ["parsing", "compilers"]
 fail-on-warnings = []
 
 [dependencies]
-cel-parser = { path = "../cala-cel-parser/", package = "cala-cel-parser", version = "0.6.5-dev" }
+cel-parser = { path = "../cala-cel-parser/", package = "cala-cel-parser", version = "0.6.5" }
 
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
