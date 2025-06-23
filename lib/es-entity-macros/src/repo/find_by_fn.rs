@@ -113,6 +113,7 @@ impl ToTokens for FindByFn<'_> {
                 ) -> Result<#entity, #error> {
                     let #column_name = #column_name.borrow();
                     let entity = es_entity::es_query!(
+                        entity_ty = #entity,
                         id_ty = #id_ty,
                         #prefix_arg
                         executor,
@@ -183,6 +184,7 @@ mod tests {
             ) -> Result<Entity, es_entity::EsRepoError> {
                 let id = id.borrow();
                 let entity = es_entity::es_query!(
+                        entity_ty = Entity,
                         id_ty = EntityId,
                         executor,
                         "SELECT id FROM entities WHERE id = $1",
@@ -241,6 +243,7 @@ mod tests {
             ) -> Result<Entity, es_entity::EsRepoError> {
                 let id = id.borrow();
                 let entity = es_entity::es_query!(
+                        entity_ty = Entity,
                         id_ty = EntityId,
                         executor,
                         "SELECT id FROM entities WHERE id = $1 AND deleted = FALSE",
@@ -273,6 +276,7 @@ mod tests {
             ) -> Result<Entity, es_entity::EsRepoError> {
                 let id = id.borrow();
                 let entity = es_entity::es_query!(
+                        entity_ty = Entity,
                         id_ty = EntityId,
                         executor,
                         "SELECT id FROM entities WHERE id = $1",

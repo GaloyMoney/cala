@@ -22,8 +22,103 @@ macro_rules! idempotency_guard {
     };
 }
 
+/// Execute an event-sourced query with automatic entity reconstruction.
+///
+/// This macro supports the following optional parameters:
+/// - `entity_ty`: Override the entity type (useful when table name is customized)
+/// - `id_ty`: Override the ID type (defaults to {Entity}Id)
+/// - Prefix literal: Table prefix to ignore when deriving names
+/// - `executor`: The database executor
+/// - `sql`: The SQL query string
+/// - Additional arguments for the SQL query
+///
+/// # Examples
+/// ```ignore
+/// // Basic usage
+/// es_query!(executor, "SELECT id FROM users WHERE id = $1", id)
+///
+/// // With custom entity and ID types
+/// es_query!(
+///     entity_ty = MyEntity,
+///     id_ty = MyEntityId,
+///     executor,
+///     "SELECT id FROM custom_table WHERE id = $1",
+///     id
+/// )
+/// ```
 #[macro_export]
 macro_rules! es_query {
+    // With entity_ty and id_ty
+    (entity_ty = $entity_ty:ident, id_ty = $id_ty:ident, $prefix:literal, $db:expr, $query:expr) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            id_ty = $id_ty,
+            ignore_prefix = $prefix,
+            executor = $db,
+            sql = $query
+        )
+    });
+    (entity_ty = $entity_ty:ident, id_ty = $id_ty:ident, $prefix:literal, $db:expr, $query:expr, $($args:tt)*) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            id_ty = $id_ty,
+            ignore_prefix = $prefix,
+            executor = $db,
+            sql = $query,
+            args = [$($args)*]
+        )
+    });
+    (entity_ty = $entity_ty:ident, id_ty = $id_ty:ident, $db:expr, $query:expr) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            id_ty = $id_ty,
+            executor = $db,
+            sql = $query
+        )
+    });
+    (entity_ty = $entity_ty:ident, id_ty = $id_ty:ident, $db:expr, $query:expr, $($args:tt)*) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            id_ty = $id_ty,
+            executor = $db,
+            sql = $query,
+            args = [$($args)*]
+        )
+    });
+    // With only entity_ty
+    (entity_ty = $entity_ty:ident, $prefix:literal, $db:expr, $query:expr) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            ignore_prefix = $prefix,
+            executor = $db,
+            sql = $query
+        )
+    });
+    (entity_ty = $entity_ty:ident, $prefix:literal, $db:expr, $query:expr, $($args:tt)*) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            ignore_prefix = $prefix,
+            executor = $db,
+            sql = $query,
+            args = [$($args)*]
+        )
+    });
+    (entity_ty = $entity_ty:ident, $db:expr, $query:expr) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            executor = $db,
+            sql = $query
+        )
+    });
+    (entity_ty = $entity_ty:ident, $db:expr, $query:expr, $($args:tt)*) => ({
+        $crate::expand_es_query!(
+            entity_ty = $entity_ty,
+            executor = $db,
+            sql = $query,
+            args = [$($args)*]
+        )
+    });
+    // With only id_ty (existing patterns)
     (id_ty = $id_ty:ident, $prefix:literal, $db:expr, $query:expr) => ({
         $crate::expand_es_query!(
             id_ty = $id_ty,
@@ -56,6 +151,7 @@ macro_rules! es_query {
             args = [$($args)*]
         )
     });
+    // Without entity_ty or id_ty (existing patterns)
     ($prefix:literal, $db:expr, $query:expr) => ({
         $crate::expand_es_query!(
             ignore_prefix = $prefix,

@@ -51,6 +51,8 @@ impl EntryRepo {
         let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            entity_ty = Entry,
+                            id_ty = EntryId,
                             "cala",
                             executor,
                             r#"
@@ -71,6 +73,8 @@ impl EntryRepo {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            entity_ty = Entry,
+                            id_ty = EntryId,
                             "cala",
                             executor,
                             r#"

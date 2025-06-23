@@ -32,25 +32,29 @@ impl ToTokens for EsQuery {
             1,
             false,
         );
-        let singular_without_prefix = pluralizer::pluralize(
-            &self
-                .input
-                .table_name_without_prefix()
-                .expect("Could not identify table name"),
-            1,
-            false,
-        );
-        let repo_types_mod = syn::Ident::new(
-            &format!("{singular_without_prefix}_repo_types"),
-            Span::call_site(),
-        );
+        let entity = if let Some(entity_ty) = &self.input.entity_ty {
+            entity_ty.clone()
+        } else {
+            let singular_without_prefix = pluralizer::pluralize(
+                &self
+                    .input
+                    .table_name_without_prefix()
+                    .expect("Could not identify table name"),
+                1,
+                false,
+            );
+            syn::Ident::new(
+                &singular_without_prefix.to_case(Case::UpperCamel),
+                Span::call_site(),
+            )
+        };
+
+        let entity_snake = entity.to_string().to_case(Case::Snake);
+        let repo_types_mod =
+            syn::Ident::new(&format!("{}_repo_types", entity_snake), Span::call_site());
         let order_by = self.input.order_by();
 
         let executor = &self.input.executor;
-        let entity = syn::Ident::new(
-            &singular_without_prefix.to_case(Case::UpperCamel),
-            Span::call_site(),
-        );
         let id = if let Some(id_ty) = &self.input.id_ty {
             id_ty.clone()
         } else {
@@ -110,6 +114,37 @@ mod tests {
                     .fetch_all(self.pool())
                     .await?;
                 user_repo_types::QueryRes {
+                    rows,
+                }
+            }
+        };
+
+        assert_eq!(tokens.to_string(), expected.to_string());
+    }
+
+    #[test]
+    fn query_with_entity_ty() {
+        let input: QueryInput = parse_quote!(
+            entity_ty = MyCustomEntity,
+            executor = self.pool(),
+            sql = "SELECT * FROM my_custom_table WHERE id = $1",
+            args = [id as MyCustomEntityId]
+        );
+
+        let query = EsQuery::from(input);
+        let mut tokens = TokenStream::new();
+        query.to_tokens(&mut tokens);
+
+        let expected = quote! {
+            {
+                let rows = sqlx::query_as!(
+                    my_custom_entity_repo_types::Repo__DbEvent,
+                    "WITH entities AS (SELECT * FROM my_custom_table WHERE id = $1) SELECT i.id AS \"entity_id: MyCustomEntityId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN my_custom_table_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+                    id as MyCustomEntityId
+                )
+                    .fetch_all(self.pool())
+                    .await?;
+                my_custom_entity_repo_types::QueryRes {
                     rows,
                 }
             }

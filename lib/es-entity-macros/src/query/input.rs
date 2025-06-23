@@ -10,6 +10,7 @@ pub struct QueryInput {
     pub(super) sql: String,
     pub(super) sql_span: Span,
     pub(super) arg_exprs: Vec<syn::Expr>,
+    pub(super) entity_ty: Option<syn::Ident>,
     pub(super) id_ty: Option<syn::Ident>,
 }
 
@@ -73,6 +74,7 @@ impl Parse for QueryInput {
         let mut executor: Option<syn::Expr> = None;
         let mut expect_comma = false;
         let mut ignore_prefix = None;
+        let mut entity_ty = None;
         let mut id_ty = None;
 
         while !input.is_empty() {
@@ -98,6 +100,8 @@ impl Parse for QueryInput {
             } else if key == "args" {
                 let exprs = input.parse::<syn::ExprArray>()?;
                 args = Some(exprs.elems.into_iter().collect())
+            } else if key == "entity_ty" {
+                entity_ty = Some(input.parse::<syn::Ident>()?);
             } else if key == "id_ty" {
                 id_ty = Some(input.parse::<syn::Ident>()?);
             } else {
@@ -117,6 +121,7 @@ impl Parse for QueryInput {
             sql,
             sql_span,
             arg_exprs: args.unwrap_or_default(),
+            entity_ty,
             id_ty,
         })
     }
@@ -185,6 +190,7 @@ mod tests {
                 sql: sql.to_string(),
                 sql_span: Span::call_site(),
                 arg_exprs: vec![],
+                entity_ty: None,
                 id_ty: None,
             };
             assert_eq!(
