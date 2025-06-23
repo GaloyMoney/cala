@@ -173,6 +173,7 @@ impl ToTokens for ListForFn<'_> {
                     let #maybe_mut_entities = match direction {
                         es_entity::ListDirection::Ascending => {
                             es_entity::es_query!(
+                                entity = #entity,
                                 id_ty = #id_ty,
                                 #prefix_arg
                                 executor,
@@ -185,6 +186,7 @@ impl ToTokens for ListForFn<'_> {
                         },
                         es_entity::ListDirection::Descending => {
                             es_entity::es_query!(
+                                entity = #entity,
                                 id_ty = #id_ty,
                                 #prefix_arg
                                 executor,
@@ -286,6 +288,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            entity = Entity,
                             id_ty = EntityId,
                             executor,
                             "SELECT customer_id, id FROM entities WHERE ((customer_id = $1) AND (COALESCE(id > $3, true))) ORDER BY id ASC LIMIT $2",
@@ -298,6 +301,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            entity = Entity,
                             id_ty = EntityId,
                             executor,
                             "SELECT customer_id, id FROM entities WHERE ((customer_id = $1) AND (COALESCE(id < $3, true))) ORDER BY id DESC LIMIT $2",
@@ -385,6 +389,7 @@ mod tests {
                 let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
+                            entity = Entity,
                             id_ty = EntityId,
                             executor,
                             "SELECT email, id FROM entities WHERE ((email = $1) AND (COALESCE((email, id) > ($4, $3), $3 IS NULL))) ORDER BY email ASC, id ASC LIMIT $2",
@@ -398,6 +403,7 @@ mod tests {
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
+                            entity = Entity,
                             id_ty = EntityId,
                             executor,
                             "SELECT email, id FROM entities WHERE ((email = $1) AND (COALESCE((email, id) < ($4, $3), $3 IS NULL))) ORDER BY email DESC, id DESC LIMIT $2",
