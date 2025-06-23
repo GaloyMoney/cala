@@ -1,3 +1,14 @@
+# [cala release v0.6.6](https://github.com/GaloyMoney/cala/releases/tag/0.6.6)
+
+
+### Documentation
+
+- Api reference and website examples update to d582db2e1d0f9ed8189fc4797b6d0b690d3efc5e
+
+### Miscellaneous Tasks
+
+- Add entity_ty to es_query
+
 # [cala release v0.6.5](https://github.com/GaloyMoney/cala/releases/tag/0.6.5)
 
 
