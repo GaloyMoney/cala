@@ -1,3 +1,14 @@
+# [cala release v0.6.7](https://github.com/GaloyMoney/cala/releases/tag/0.6.7)
+
+
+### Bug Fixes
+
+- Attribute name in EsEntity (#466)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group in /website with 8 updates (#441)
+
 # [cala release v0.6.6](https://github.com/GaloyMoney/cala/releases/tag/0.6.6)
 
 
