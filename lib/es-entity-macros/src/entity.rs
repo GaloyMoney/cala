@@ -38,7 +38,7 @@ impl Field {
 }
 
 #[derive(Debug, FromDeriveInput)]
-#[darling(supports(struct_named), attributes(es_event))]
+#[darling(supports(struct_named), attributes(es_entity))]
 pub struct EsEntity {
     ident: syn::Ident,
     #[darling(default, rename = "new")]
