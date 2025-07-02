@@ -73,6 +73,11 @@ impl ToTokens for CreateAllFn<'_> {
                 op: &mut es_entity::DbOp<'_>,
                 new_entities: Vec<<#entity as es_entity::EsEntity>::New>
             ) -> Result<Vec<#entity>, #error> {
+                let mut res = Vec::new();
+                if new_entities.is_empty() {
+                    return Ok(res);
+                }
+
                 let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
                     #insert_fragment,
                 );
@@ -88,7 +93,6 @@ impl ToTokens for CreateAllFn<'_> {
                 let mut all_events: Vec<es_entity::EntityEvents<<#entity as es_entity::EsEntity>::Event>> = new_entities.into_iter().map(Self::convert_new).collect();
                 let mut n_persisted = self.persist_events_batch(op, &mut all_events).await?;
 
-                let mut res = Vec::new();
                 for events in all_events.into_iter() {
                     let n_events = n_persisted.remove(events.id()).expect("n_events exists");
                     let #maybe_mut_entity = Self::hydrate_entity(events)?;
@@ -150,6 +154,11 @@ mod tests {
                 op: &mut es_entity::DbOp<'_>,
                 new_entities: Vec<<Entity as es_entity::EsEntity>::New>
             ) -> Result<Vec<Entity>, es_entity::EsRepoError> {
+                let mut res = Vec::new();
+                if new_entities.is_empty() {
+                    return Ok(res);
+                }
+
                 let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> = sqlx::QueryBuilder::new(
                     "INSERT INTO entities (id, name, created_at)",
                 );
@@ -169,7 +178,6 @@ mod tests {
                 let mut all_events: Vec<es_entity::EntityEvents<<#entity as es_entity::EsEntity>::Event>> = new_entities.into_iter().map(Self::convert_new).collect();
                 let mut n_persisted = self.persist_events_batch(op, &mut all_events).await?;
 
-                let mut res = Vec::new();
                 for events in all_events.into_iter() {
                     let n_events = n_persisted.remove(events.id()).expect("n_events exists");
                     let entity = Self::hydrate_entity(events)?;
