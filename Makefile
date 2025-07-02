@@ -1,5 +1,5 @@
 next-watch:
-	cargo watch -s 'cargo nextest run'
+	nix develop --command cargo watch -s 'cargo nextest run'
 
 clean-deps:
 	docker compose down
@@ -8,57 +8,61 @@ start-deps:
 	docker compose up -d integration-deps
 
 setup-db:
-	cd cala-ledger && cargo sqlx migrate run
-	cd cala-server && cargo sqlx migrate run --ignore-missing
+	cd cala-ledger && nix develop --command cargo sqlx migrate run
+	cd cala-server && nix develop --command cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 
 run-server:
-	cargo run --bin cala-server -- --config ./bats/cala.yml
+	nix run .#cala-server -- --config ./bats/cala.yml
 
 rust-example:
-	cargo run --bin cala-ledger-example-rust
+	nix run .#cala-ledger-example-rust
 
 update-lib-in-nodejs-example:
-	cd cala-nodejs && SQLX_OFFLINE=true yarn build
+	cd cala-nodejs && SQLX_OFFLINE=true nix develop --command yarn build
 	cd examples/nodejs && rm -rf ./node_modules && yarn install
 
 re-run-nodejs-example: clean-deps start-deps
 	sleep 2
 	cd examples/nodejs && yarn run start
 
-check-code: sdl
-	git diff --exit-code cala-server/schema.graphql
-	SQLX_OFFLINE=true cargo fmt --check --all
-	SQLX_OFFLINE=true cargo check
-	SQLX_OFFLINE=true cargo clippy --package es-entity --all-features
-	SQLX_OFFLINE=true cargo clippy --package cala-server --features=
-	SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="import,graphql"
-	SQLX_OFFLINE=true cargo clippy --package cala-ledger-core-types --features="graphql"
-	SQLX_OFFLINE=true cargo clippy --workspace --exclude es-entity --exclude cala-server --exclude cala-ledger --exclude cala-ledger-core-types
-	SQLX_OFFLINE=true cargo audit
-	SQLX_OFFLINE=true cargo deny check
+check-code:
+	nix build .#checkCode
 
 build:
-	SQLX_OFFLINE=true cargo build --locked
+	nix build
 
 e2e: clean-deps start-deps build
-	bats -t bats
+	nix develop --command bats -t bats
 
 sdl:
-	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
+	nix run .#write-sdl > cala-server/schema.graphql
 
 sqlx-prepare:
-	cd cala-ledger && cargo sqlx prepare -- --all-features
-	cd cala-server && cargo sqlx prepare -- --all-features
+	cd cala-ledger && nix develop --command cargo sqlx prepare -- --all-features
+	cd cala-server && nix develop --command cargo sqlx prepare -- --all-features
 
 test-in-ci: start-deps setup-db
-	cargo nextest run --verbose --locked
-	cargo test --doc
-	cargo doc --no-deps
+	nix build .#testInCi
 
 build-x86_64-unknown-linux-musl-release:
-	SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target x86_64-unknown-linux-musl
+	nix build .#cala-server
 
 build-x86_64-apple-darwin-release:
-	bin/osxcross-compile.sh
+	nix build .#cala-server
+
+dev:
+	nix develop
+
+run-ledger:
+	nix run .#cala-ledger
+
+run-outbox-client:
+	nix run .#cala-ledger-outbox-client
+
+run-cel-parser:
+	nix run .#cala-cel-parser
+
+run-cel-interpreter:
+	nix run .#cala-cel-interpreter
