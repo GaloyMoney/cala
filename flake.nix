@@ -38,7 +38,6 @@
       
       craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
 
-      # Simplified source filtering
       rustSource = pkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type:
@@ -49,22 +48,12 @@
           || !(pkgs.lib.hasInfix "/target/" path);
       };
 
-      # Additional source with SQLx files
       sqlxSource = pkgs.lib.cleanSourceWith {
         src = ./.;
         filter = path: type:
           (builtins.match ".*/.sqlx/.*\\.json$" path != null);
       };
       
-      # Source filter for format checking - excludes generated files
-      rustSourceFormatCheck = pkgs.lib.cleanSourceWith {
-        src = ./.;
-        filter = path: type:
-          (craneLib.filterCargoSources path type)
-          && !(pkgs.lib.hasInfix "/target/" path)
-          && !(pkgs.lib.hasInfix "parser.rs" path)  # Exclude LALRPOP generated files
-          && !(pkgs.lib.hasInfix "generated" path); # Exclude other generated files
-      };
       
       commonArgs = {
         src = rustSource;
@@ -138,7 +127,6 @@
         version = "0.1.0";
       });
 
-      # Main packages
       cala = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "cala";
@@ -159,7 +147,6 @@
         cargoExtraArgs = "-p cala-ledger";
       });
 
-      # Write SDL derivation
       write-sdl = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "write-sdl";
@@ -167,7 +154,6 @@
         cargoExtraArgs = "--bin write_sdl";
       });
 
-      # Outbox client
       cala-ledger-outbox-client = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "cala-ledger-outbox-client";
@@ -175,7 +161,6 @@
         cargoExtraArgs = "-p cala-ledger-outbox-client";
       });
 
-      # CEL tools
       cala-cel-parser = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "cala-cel-parser";
@@ -190,21 +175,18 @@
         cargoExtraArgs = "-p cala-cel-interpreter";
       });
 
-      # Node.js bindings (shared library)
       cala-nodejs = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "cala-nodejs";
         doCheck = false;
         cargoExtraArgs = "-p galoymoney_cala-ledger";
         
-        # Additional build inputs for Node.js bindings
         nativeBuildInputs = commonArgs.nativeBuildInputs ++ (with pkgs; [
           napi-rs-cli
           nodejs
         ]);
       });
 
-      # Example packages
       cala-ledger-example-rust = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
         pname = "cala-ledger-example-rust";
@@ -212,7 +194,6 @@
         cargoExtraArgs = "--bin cala-ledger-example-rust";
       });
 
-          # Development and testing packages
     checkCode = pkgs.writeShellScriptBin "check-code" ''
       set -euo pipefail
       export PATH="${pkgs.git}/bin:${pkgs.cargo}/bin:$PATH"
@@ -257,13 +238,9 @@
       SQLX_OFFLINE=true cargo deny check
     '';
       
-      # Simplified check for Nix build
-      checkCodeNix = craneLib.cargoClippy (commonArgs // {
-        inherit cargoArtifacts;
-        cargoClippyExtraArgs = "--all-features -- --deny warnings";
-      });
 
-          testInCi = pkgs.writeShellScriptBin "test-in-ci" ''
+
+      testInCi = pkgs.writeShellScriptBin "test-in-ci" ''
       set -euo pipefail
       export PATH="${pkgs.cargo}/bin:$PATH"
       
@@ -277,13 +254,8 @@
       fi
     '';
 
-      # Simplified test for Nix build
-      testInCiNix = craneLib.cargoTest (commonArgs // {
-        inherit cargoArtifacts;
-        cargoTestExtraArgs = "--all-features";
-      });
 
-      # Development shell environment
+
       nativeBuildInputs = with pkgs;
         [
           rustToolchain
