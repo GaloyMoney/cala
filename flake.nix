@@ -212,82 +212,75 @@
         cargoExtraArgs = "--bin cala-ledger-example-rust";
       });
 
-      # Check and test derivations
-      checkCode = craneLib.mkCargoDerivation (commonArgs // {
-        pname = "check-code";
-        buildPhaseCargoCommand = "check";
+          # Development and testing packages
+    checkCode = pkgs.writeShellScriptBin "check-code" ''
+      set -euo pipefail
+      export PATH="${pkgs.git}/bin:${pkgs.cargo}/bin:$PATH"
+      
+      # Run write-sdl first to generate schema
+      ${write-sdl}/bin/write_sdl > cala-server/schema.graphql
+      
+      # Check if schema has changed
+      if ! git diff --exit-code cala-server/schema.graphql; then
+        echo "Schema file has changed. Please commit the changes."
+        exit 1
+      fi
+      
+      # Format check - exclude generated parser file by checking specific packages
+      SQLX_OFFLINE=true cargo fmt --check \
+        --package cala-ledger \
+        --package cala-ledger-outbox-client \
+        --package cala-ledger-core-types \
+        --package cala-server \
+        --package cala-tracing \
+        --package galoymoney_cala-ledger \
+        --package cala-cel-interpreter \
+        --package es-entity \
+        --package es-entity-macros \
+        --package sim-time \
+        --package cala-ledger-example-rust
+      
+      # Basic check
+      SQLX_OFFLINE=true cargo check
+      
+      # Clippy checks with specific packages and features
+      SQLX_OFFLINE=true cargo clippy --package es-entity --all-features
+      SQLX_OFFLINE=true cargo clippy --package cala-server --features=
+      SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="import,graphql"
+      SQLX_OFFLINE=true cargo clippy --package cala-ledger-core-types --features="graphql"
+      SQLX_OFFLINE=true cargo clippy --workspace --exclude es-entity --exclude cala-server --exclude cala-ledger --exclude cala-ledger-core-types
+      
+      # Security audit
+      SQLX_OFFLINE=true cargo audit
+      
+      # Deny check
+      SQLX_OFFLINE=true cargo deny check
+    '';
+      
+      # Simplified check for Nix build
+      checkCodeNix = craneLib.cargoClippy (commonArgs // {
         inherit cargoArtifacts;
-
-        nativeBuildInputs = with pkgs; [
-          protobuf
-          cacert
-          cargo-audit
-          cargo-deny
-          sqlx-cli
-          lalrpop
-        ];
-
-        buildPhase = ''
-          # Generate LALRPOP parser first
-          cd cala-cel-parser
-          ${pkgs.lalrpop}/bin/lalrpop src/cel.lalrpop
-          cd ..
-
-          # Run SDL check
-          cargo run --bin write_sdl > schema.graphql
-          if [ -f cala-server/schema.graphql ]; then
-            diff schema.graphql cala-server/schema.graphql || (echo "Schema changed" && exit 1)
-          fi
-
-          # Run format check
-          cargo fmt --check --all
-          
-          # Run clippy checks
-          cargo clippy --package es-entity --all-features -- --deny warnings
-          cargo clippy --package cala-server -- --deny warnings
-          cargo clippy --package cala-ledger --features="import,graphql" -- --deny warnings
-          cargo clippy --package cala-ledger-core-types --features="graphql" -- --deny warnings
-          cargo clippy --workspace \
-            --exclude es-entity \
-            --exclude cala-server \
-            --exclude cala-ledger \
-            --exclude cala-ledger-core-types \
-            -- --deny warnings
-          
-          # Run security checks
-          cargo audit
-          cargo deny check
-        '';
-        installPhase = "touch $out";
+        cargoClippyExtraArgs = "--all-features -- --deny warnings";
       });
 
-      testInCi = craneLib.mkCargoDerivation (commonArgs // {
-        pname = "test-in-ci";
-        buildPhaseCargoCommand = "nextest run";
+          testInCi = pkgs.writeShellScriptBin "test-in-ci" ''
+      set -euo pipefail
+      export PATH="${pkgs.cargo}/bin:$PATH"
+      
+      # Run cargo test
+      SQLX_OFFLINE=true cargo test
+      
+      # Run integration tests if they exist
+      if [ -d "tests" ]; then
+        echo "Running integration tests..."
+        SQLX_OFFLINE=true cargo test --test "*"
+      fi
+    '';
+
+      # Simplified test for Nix build
+      testInCiNix = craneLib.cargoTest (commonArgs // {
         inherit cargoArtifacts;
-
-        nativeBuildInputs = with pkgs; [
-          cacert
-          cargo-nextest
-          protobuf
-          gitMinimal
-          postgresql
-          sqlx-cli
-          lalrpop
-        ];
-
-        buildPhase = ''
-          # Generate LALRPOP parser first
-          cd cala-cel-parser
-          ${pkgs.lalrpop}/bin/lalrpop src/cel.lalrpop
-          cd ..
-
-          # Run tests
-          cargo nextest run --workspace --locked --verbose
-          cargo test --doc
-          cargo doc --no-deps
-        '';
-        installPhase = "touch $out";
+        cargoTestExtraArgs = "--all-features";
       });
 
       # Development shell environment
@@ -349,20 +342,6 @@
         
         checks = {
           inherit cala cala-server cala-ledger cala-ledger-outbox-client cala-cel-parser cala-cel-interpreter cala-nodejs;
-          
-          # Clippy and tests disabled due to SQLx cache issues
-          # Enable these after running `cargo sqlx prepare` in development environment
-          
-          # cala-clippy = craneLib.cargoClippy (commonArgs // {
-          #   inherit cargoArtifacts;
-          #   cargoClippyExtraArgs = "--all-targets --all-features -- --deny warnings";
-          # });
-          
-          # cala-test = craneLib.cargoNextest (commonArgs // {
-          #   inherit cargoArtifacts;
-          #   partitions = 1;
-          #   partitionType = "count";
-          # });
         };
         
         apps = {

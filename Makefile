@@ -28,7 +28,7 @@ re-run-nodejs-example: clean-deps start-deps
 	cd examples/nodejs && yarn run start
 
 check-code:
-	nix build .#checkCode
+	nix run .#checkCode
 
 build:
 	nix build
@@ -44,7 +44,7 @@ sqlx-prepare:
 	cd cala-server && nix develop --command cargo sqlx prepare -- --all-features
 
 test-in-ci: start-deps setup-db
-	nix build .#testInCi
+	nix run .#testInCi
 
 build-x86_64-unknown-linux-musl-release:
 	nix build .#cala-server
