@@ -74,6 +74,22 @@
             inherit nativeBuildInputs;
           });
 
+        # --- New lightweight shell for CI -----------
+        devShells.ci = mkShell {
+          inherit (devEnvVars) PGDATABASE PGUSER PGPASSWORD PGHOST DATABASE_URL PG_CON;
+          nativeBuildInputs = with pkgs; [
+            rustToolchain      # same version you already pin
+            cargo-nextest
+            sqlx-cli
+            postgresql         # client binaries for sqlx
+            podman podman-compose
+            jq curl
+          ];
+        };
+
+        # optional: a derivation to make pre-built caches clearer
+        packages.ci-env = devShells.ci;
+
         formatter = alejandra;
       });
 }
