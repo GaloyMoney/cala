@@ -21,7 +21,7 @@ impl<'a> ComboCursor<'a> {
     pub fn ident(&self) -> syn::Ident {
         let entity_name = pluralizer::pluralize(&format!("{}", self.entity), 2, false);
         syn::Ident::new(
-            &format!("{}_cursor", entity_name).to_case(Case::UpperCamel),
+            &format!("{entity_name}_cursor").to_case(Case::UpperCamel),
             Span::call_site(),
         )
     }
@@ -87,7 +87,7 @@ impl<'a> ComboCursor<'a> {
     pub fn sort_by_name(&self) -> syn::Ident {
         let entity_name = pluralizer::pluralize(&format!("{}", self.entity), 2, false);
         syn::Ident::new(
-            &format!("{}_sort_by", entity_name).to_case(Case::UpperCamel),
+            &format!("{entity_name}_sort_by").to_case(Case::UpperCamel),
             Span::call_site(),
         )
     }
@@ -113,8 +113,7 @@ impl<'a> ComboCursor<'a> {
         });
         let name = self.sort_by_name();
         #[cfg(feature = "graphql")]
-        let mod_name =
-            syn::Ident::new(&format!("{}", name).to_case(Case::Snake), Span::call_site());
+        let mod_name = syn::Ident::new(&format!("{name}").to_case(Case::Snake), Span::call_site());
         #[cfg(feature = "graphql")]
         let sort_by_enum = quote! {
             mod #mod_name {

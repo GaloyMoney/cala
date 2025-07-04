@@ -133,7 +133,7 @@ impl Columns {
             .filter(|c| c.opts.persist_on_create())
             .count();
         (1..=count)
-            .map(|i| format!("${}", i))
+            .map(|i| format!("${i}"))
             .collect::<Vec<_>>()
             .join(", ")
     }

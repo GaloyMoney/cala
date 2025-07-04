@@ -109,7 +109,7 @@ impl Stream for OutboxListener {
                 repo.load_next_page(last_sequence, buffer_size)
                     .await
                     .map_err(|e| {
-                        eprintln!("Error loading next page: {:?}", e);
+                        eprintln!("Error loading next page: {e:?}");
                         e
                     })
             }));

@@ -26,6 +26,7 @@ impl Clone for OutboxEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum OutboxEventPayload {
     Empty,
     AccountCreated {

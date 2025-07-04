@@ -21,7 +21,7 @@ impl<'a> ManyFilter<'a> {
     pub fn ident(&self) -> syn::Ident {
         let entity_name = pluralizer::pluralize(&format!("{}", self.entity), 2, false);
         syn::Ident::new(
-            &format!("find_many_{}", entity_name).to_case(Case::UpperCamel),
+            &format!("find_many_{entity_name}").to_case(Case::UpperCamel),
             Span::call_site(),
         )
     }

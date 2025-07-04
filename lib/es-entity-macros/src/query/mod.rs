@@ -51,16 +51,16 @@ impl ToTokens for EsQuery {
 
         let entity_snake = entity.to_string().to_case(Case::Snake);
         let repo_types_mod =
-            syn::Ident::new(&format!("{}_repo_types", entity_snake), Span::call_site());
+            syn::Ident::new(&format!("{entity_snake}_repo_types"), Span::call_site());
         let order_by = self.input.order_by();
 
         let executor = &self.input.executor;
         let id = if let Some(id_ty) = &self.input.id_ty {
             id_ty.clone()
         } else {
-            syn::Ident::new(&format!("{}Id", entity), Span::call_site())
+            syn::Ident::new(&format!("{entity}Id"), Span::call_site())
         };
-        let events_table = syn::Ident::new(&format!("{}_events", singular), Span::call_site());
+        let events_table = syn::Ident::new(&format!("{singular}_events"), Span::call_site());
         let args = &self.input.arg_exprs;
 
         let query = format!(

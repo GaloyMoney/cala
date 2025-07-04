@@ -86,13 +86,13 @@ impl RepositoryOptions {
         let entity_name = self.entity_ident.to_string();
         if self.event_ident.is_none() {
             self.event_ident = Some(syn::Ident::new(
-                &format!("{}Event", entity_name),
+                &format!("{entity_name}Event"),
                 proc_macro2::Span::call_site(),
             ));
         }
         if self.id_ty.is_none() {
             self.id_ty = Some(syn::Ident::new(
-                &format!("{}Id", entity_name),
+                &format!("{entity_name}Id"),
                 proc_macro2::Span::call_site(),
             ));
         }
@@ -113,7 +113,7 @@ impl RepositoryOptions {
         }
         if self.events_table_name.is_none() {
             self.events_table_name =
-                Some(format!("{prefix}{}Events", entity_name).to_case(Case::Snake));
+                Some(format!("{prefix}{entity_name}Events").to_case(Case::Snake));
         }
 
         self.columns

@@ -30,11 +30,11 @@ impl CursorStruct<'_> {
         let mut for_column_str = String::new();
         if let Some(for_column) = for_column {
             if self.column.name() != for_column {
-                for_column_str = format!("{}, ", for_column);
+                for_column_str = format!("{for_column}, ");
             }
         }
         if self.column.is_id() {
-            format!("{}id", for_column_str)
+            format!("{for_column_str}id")
         } else {
             format!("{}{}, id", for_column_str, self.column.name())
         }
