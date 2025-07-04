@@ -1,3 +1,20 @@
+# [cala release v0.6.8](https://github.com/GaloyMoney/cala/releases/tag/0.6.8)
+
+
+### Bug Fixes
+
+- Early return for empty vectors in 'create_all_in_op' (#470)
+- Early return for empty vectors in 'create_all_in_op'
+
+### Documentation
+
+- Api reference and website examples update to 43669726d308e9ad3b23562990bdcc27c7e8c464
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 4 updates (#468)
+- Bump flake
+
 # [cala release v0.6.7](https://github.com/GaloyMoney/cala/releases/tag/0.6.7)
 
 
