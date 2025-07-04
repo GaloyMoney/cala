@@ -14,11 +14,11 @@ cachix use "${CACHIX_CACHE_NAME}"
 # cannot call the profile dev as it fails with a symlink error
 # perhaps its a reserved keyword
 echo "--- Setting up Nix development environment ---"
-nix develop --store "$(pwd)/../nix-store" --profile dev-profile -c true
+nix develop .#ci --store "$(pwd)/../nix-store" --profile dev-profile -c true
 cachix push "${CACHIX_CACHE_NAME}" dev-profile
 
 echo "--- Running integration tests in Nix environment ---"
-nix -L develop --store "$(pwd)/../nix-store" --command sh -exc '
+nix -L develop .#ci --store "$(pwd)/../nix-store" --command sh -exc '
 set -euo pipefail
 
 cd ..
