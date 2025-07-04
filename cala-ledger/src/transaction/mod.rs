@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::primitives::TxTemplateId;
+use crate::primitives::{EntryId, TxTemplateId};
 use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
@@ -41,6 +41,41 @@ impl Transactions {
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db.op(), new_transaction).await?;
+        db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
+        Ok(transaction)
+    }
+
+    pub async fn create_voided_tx_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        original_tx_id: TransactionId,
+        new_tx_id: TransactionId,
+        entry_ids: impl IntoIterator<Item = EntryId>,
+    ) -> Result<Transaction, TransactionError> {
+        let original_tx_values = self.repo.find_by_id(original_tx_id).await?.into_values();
+
+        let mut builder = NewTransaction::builder();
+        builder
+            .id(new_tx_id)
+            .created_at(db.op().now())
+            .tx_template_id(original_tx_values.tx_template_id)
+            .entry_ids(entry_ids.into_iter().collect())
+            .effective(chrono::Utc::now().date_naive())
+            .journal_id(original_tx_values.journal_id)
+            .correlation_id(original_tx_values.correlation_id);
+
+        if let Some(external_id) = original_tx_values.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(description) = original_tx_values.description {
+            builder.description(description);
+        }
+        if let Some(metadata) = original_tx_values.metadata {
+            builder.metadata(metadata);
+        }
+        let new_transaction = builder.build().expect("Couldn't build voided transaction");
+
+        let transaction = self.create_in_op(db, new_transaction).await?;
         db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
