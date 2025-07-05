@@ -17,6 +17,10 @@ members = [
   "lib/sim-time",
 ]
 
+[workspace.metadata.crane]
+name = "cala"
+version = "0.1.0"
+
 [workspace.dependencies]
 anyhow = "1.0.98"
 async-graphql = { version = "7.0.17", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
