@@ -122,6 +122,10 @@ impl ToTokens for EsEntity {
                 fn events(&self) -> &es_entity::EntityEvents<#event> {
                     &self.#events_field
                 }
+                fn into_events(self) -> es_entity::EntityEvents<Self::Event> {
+                    self.#events_field
+                }
+
             }
 
             #(#nested)*
@@ -158,6 +162,9 @@ mod tests {
                 fn events(&self) -> &es_entity::EntityEvents<UserEvent> {
                     &self.the_events
                 }
+                fn into_events(self) -> es_entity::EntityEvents<Self::Event> {
+                    self.the_events
+                }
             }
         };
 
@@ -184,6 +191,9 @@ mod tests {
                 }
                 fn events(&self) -> &es_entity::EntityEvents<UserEvent> {
                     &self.events
+                }
+                fn into_events(self) -> es_entity::EntityEvents<Self::Event> {
+                    self.events
                 }
             }
         };
@@ -213,6 +223,9 @@ mod tests {
                 }
                 fn events(&self) -> &es_entity::EntityEvents<UserEvent> {
                     &self.events
+                }
+                fn into_events(self) -> es_entity::EntityEvents<Self::Event> {
+                    self.events
                 }
             }
 

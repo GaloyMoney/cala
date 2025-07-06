@@ -33,6 +33,7 @@ pub trait EsEntity: TryFromEvents<Self::Event> {
     }
 
     fn events_mut(&mut self) -> &mut EntityEvents<Self::Event>;
+    fn into_events(self) -> EntityEvents<Self::Event>;
 }
 
 pub trait Parent<T: EsEntity> {

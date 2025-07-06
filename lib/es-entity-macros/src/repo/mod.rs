@@ -14,6 +14,7 @@ mod persist_events_batch_fn;
 mod persist_events_fn;
 mod populate_nested;
 mod post_persist_hook;
+mod update_all_fn;
 mod update_fn;
 
 use darling::{FromDeriveInput, ToTokens};
@@ -33,6 +34,7 @@ pub struct EsRepo<'a> {
     persist_events_fn: persist_events_fn::PersistEventsFn<'a>,
     persist_events_batch_fn: persist_events_batch_fn::PersistEventsBatchFn<'a>,
     update_fn: update_fn::UpdateFn<'a>,
+    update_all_fn: update_all_fn::UpdateAllFn<'a>,
     create_fn: create_fn::CreateFn<'a>,
     create_all_fn: create_all_fn::CreateAllFn<'a>,
     delete_fn: delete_fn::DeleteFn<'a>,
@@ -83,6 +85,7 @@ impl<'a> From<&'a RepositoryOptions> for EsRepo<'a> {
             persist_events_fn: persist_events_fn::PersistEventsFn::from(opts),
             persist_events_batch_fn: persist_events_batch_fn::PersistEventsBatchFn::from(opts),
             update_fn: update_fn::UpdateFn::from(opts),
+            update_all_fn: update_all_fn::UpdateAllFn::from(opts),
             create_fn: create_fn::CreateFn::from(opts),
             create_all_fn: create_all_fn::CreateAllFn::from(opts),
             delete_fn: delete_fn::DeleteFn::from(opts),
@@ -105,6 +108,7 @@ impl ToTokens for EsRepo<'_> {
         let persist_events_fn = &self.persist_events_fn;
         let persist_events_batch_fn = &self.persist_events_batch_fn;
         let update_fn = &self.update_fn;
+        let update_all_fn = &self.update_all_fn;
         let create_fn = &self.create_fn;
         let create_all_fn = &self.create_all_fn;
         let delete_fn = &self.delete_fn;
@@ -219,6 +223,7 @@ impl ToTokens for EsRepo<'_> {
                 #create_fn
                 #create_all_fn
                 #update_fn
+                #update_all_fn
                 #delete_fn
                 #(#find_by_fns)*
                 #find_all_fn

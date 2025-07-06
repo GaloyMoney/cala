@@ -57,6 +57,22 @@ impl Columns {
         }
     }
 
+    pub fn variable_assignments_for_update_all(
+        &self,
+        ident: syn::Ident,
+    ) -> proc_macro2::TokenStream {
+        let assignments = self.all.iter().filter_map(|c| {
+            if c.opts.is_id || c.opts.persist_on_update() {
+                Some(c.variable_assignment_for_update_all(&ident))
+            } else {
+                None
+            }
+        });
+        quote! {
+            #(#assignments)*
+        }
+    }
+
     pub fn variable_assignments_for_create(&self, ident: syn::Ident) -> proc_macro2::TokenStream {
         let assignments = self.all.iter().filter_map(|c| {
             if c.opts.persist_on_create() {
@@ -158,6 +174,19 @@ impl Columns {
                 let ty = &column.opts.ty;
                 quote! {
                     #ident as &#ty
+                }
+            })
+            .collect()
+    }
+
+    pub fn update_query_builder_args(&self) -> Vec<proc_macro2::TokenStream> {
+        self.all
+            .iter()
+            .filter(|c| c.opts.persist_on_update() || c.opts.is_id)
+            .map(|column| {
+                let ident = &column.name;
+                quote! {
+                    builder.push_bind(#ident);
                 }
             })
             .collect()
@@ -334,6 +363,28 @@ impl Column {
         let accessor = self.opts.update_accessor(name);
         quote! {
             let #name = &#ident.#accessor;
+        }
+    }
+
+    fn variable_assignment_for_update_all(&self, ident: &syn::Ident) -> proc_macro2::TokenStream {
+        let name = &self.name;
+        let accessor = self.opts.update_accessor(name);
+        let needs_ref = self
+            .opts
+            .update_opts
+            .as_ref()
+            .map(|o| o.accessor.is_none())
+            .unwrap_or(true);
+        let ty = &self.opts.ty;
+
+        if needs_ref {
+            quote! {
+                let #name: &#ty = &#ident.#accessor;
+            }
+        } else {
+            quote! {
+                let #name: #ty = #ident.#accessor.clone();
+            }
         }
     }
 }
