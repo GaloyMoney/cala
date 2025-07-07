@@ -137,6 +137,7 @@ plan:
       - path: cargo-home/registry/index
       - path: cargo-home/registry/cache
       - path: cargo-target-dir
+      - path: nix-store
       run:
         path: pipeline-tasks/ci/vendor/tasks/test-integration.sh
       params:
@@ -163,6 +164,7 @@ plan:
     - path: cargo-home/registry/index
     - path: cargo-home/registry/cache
     - path: cargo-target-dir
+    - path: nix-store
     run:
       path: pipeline-tasks/ci/vendor/tasks/test-bats.sh
     params:
