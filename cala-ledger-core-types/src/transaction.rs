@@ -16,6 +16,8 @@ pub struct TransactionValues {
     pub correlation_id: String,
     pub external_id: Option<String>,
     pub description: Option<String>,
+    pub void_of: Option<TransactionId>,
+    pub voided_by: Option<TransactionId>,
     pub metadata: Option<serde_json::Value>,
 }
 

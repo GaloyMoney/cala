@@ -29,9 +29,10 @@ message CalaLedgerEvent {
     JournalUpdated journal_updated = 12;
     TxTemplateCreated tx_template_created = 13;
     TransactionCreated transaction_created = 14;
-    EntryCreated entry_created = 15;
-    BalanceCreated balance_created = 16;
-    BalanceUpdated balance_updated = 17;
+    TransactionUpdated transaction_updated = 15;
+    EntryCreated entry_created = 16;
+    BalanceCreated balance_created = 17;
+    BalanceUpdated balance_updated = 18;
   }
 }
 
@@ -204,6 +205,12 @@ message TransactionCreated {
   Transaction transaction = 2;
 }
 
+message TransactionUpdated {
+  string data_source_id = 1;
+  Transaction transaction = 2;
+  repeated string fields = 3;
+}
+
 message Transaction {
   string id = 1;
   uint32 version = 2;
@@ -213,10 +220,12 @@ message Transaction {
   string tx_template_id = 6;
   string effective = 7;
   string correlation_id = 8;
-  repeated string entry_ids = 9;
-  optional string external_id = 10;
-  optional string description = 11;
-  optional google.protobuf.Struct metadata = 12;
+  optional string voided_by = 9;
+  optional string void_of = 10;
+  repeated string entry_ids = 11;
+  optional string external_id = 12;
+  optional string description = 13;
+  optional google.protobuf.Struct metadata = 14;
 }
 
 message EntryCreated {

@@ -79,6 +79,8 @@ mod tests {
             correlation_id: "correlation_id".to_string(),
             external_id: Some("external_id".to_string()),
             description: None,
+            voided_by: None,
+            void_of: None,
             metadata: Some(serde_json::json!({
                 "tx": "metadata",
                 "test": true,

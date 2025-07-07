@@ -52,34 +52,15 @@ impl Transactions {
         new_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
     ) -> Result<Transaction, TransactionError> {
-        let original_tx_values = self.repo.find_by_id(original_tx_id).await?.into_values();
+        let mut original_tx = self.repo.find_by_id(original_tx_id).await?;
+        let new_tx = original_tx.void(new_tx_id, entry_ids.into_iter().collect(), db.op().now())?;
 
-        let mut builder = NewTransaction::builder();
-        builder
-            .id(new_tx_id)
-            .created_at(db.op().now())
-            .tx_template_id(original_tx_values.tx_template_id)
-            .entry_ids(entry_ids.into_iter().collect())
-            .effective(chrono::Utc::now().date_naive())
-            .journal_id(original_tx_values.journal_id)
-            .correlation_id(original_tx_values.correlation_id);
-
-        if let Some(external_id) = original_tx_values.external_id {
-            builder.external_id(external_id);
-        }
-        if let Some(description) = original_tx_values.description {
-            builder.description(description);
-        }
-        if let Some(metadata) = original_tx_values.metadata {
-            builder.metadata(metadata);
-        }
-        let new_transaction = builder.build().expect("Couldn't build voided transaction");
-
-        let transaction = self.create_in_op(db, new_transaction).await?;
+        self.repo.update_in_op(db.op(), &mut original_tx).await?;
+        let transaction = self.repo.create_in_op(db.op(), new_tx).await?;
         db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
+
         Ok(transaction)
     }
-
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(
         &self,
@@ -144,6 +125,28 @@ impl Transactions {
             .await?;
         Ok(())
     }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_transaction_update(
+        &self,
+        mut db: es_entity::DbOp<'_>,
+        origin: DataSourceId,
+        values: TransactionValues,
+    ) -> Result<(), TransactionError> {
+        let mut transaction = Transaction::import(origin, values);
+        self.repo
+            .import_in_op(&mut db, origin, &mut transaction)
+            .await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = transaction
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
+        self.outbox
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .await?;
+        Ok(())
+    }
 }
 
 impl From<&TransactionEvent> for OutboxEventPayload {
@@ -163,6 +166,13 @@ impl From<&TransactionEvent> for OutboxEventPayload {
                 source: DataSource::Local,
                 transaction: transaction.clone(),
             },
+            TransactionEvent::Updated { values, fields } => {
+                OutboxEventPayload::TransactionUpdated {
+                    source: DataSource::Local,
+                    transaction: values.clone(),
+                    fields: fields.clone(),
+                }
+            }
         }
     }
 }

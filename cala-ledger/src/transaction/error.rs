@@ -19,6 +19,8 @@ pub enum TransactionError {
     DuplicateExternalId(String),
     #[error("TransactionError - DuplicateId: id '{0}' already exists")]
     DuplicateId(String),
+    #[error("TransactionError - AlreadyVoided: transaction '{0}' is already voided")]
+    AlreadyVoided(TransactionId),
 }
 
 impl From<sqlx::Error> for TransactionError {

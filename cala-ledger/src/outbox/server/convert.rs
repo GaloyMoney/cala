@@ -134,6 +134,15 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
                 data_source_id: source.to_string(),
                 transaction: Some(proto::Transaction::from(transaction)),
             }),
+            OutboxEventPayload::TransactionUpdated {
+                source,
+                transaction,
+                fields,
+            } => proto::cala_ledger_event::Payload::TransactionUpdated(proto::TransactionUpdated {
+                data_source_id: source.to_string(),
+                transaction: Some(proto::Transaction::from(transaction)),
+                fields,
+            }),
             OutboxEventPayload::EntryCreated { source, entry } => {
                 proto::cala_ledger_event::Payload::EntryCreated(proto::EntryCreated {
                     data_source_id: source.to_string(),
@@ -416,6 +425,8 @@ impl From<TransactionValues> for proto::Transaction {
             description,
             metadata,
             entry_ids,
+            voided_by,
+            void_of,
         }: TransactionValues,
     ) -> Self {
         proto::Transaction {
@@ -428,6 +439,8 @@ impl From<TransactionValues> for proto::Transaction {
             entry_ids: entry_ids.into_iter().map(|id| id.to_string()).collect(),
             correlation_id,
             external_id,
+            void_of: void_of.map(|id| id.to_string()),
+            voided_by: voided_by.map(|id| id.to_string()),
             effective: effective.to_string(),
             description,
             metadata: metadata.map(|json| {

@@ -387,6 +387,12 @@ impl CalaLedger {
                     .sync_transaction_creation(op, origin, transaction)
                     .await?
             }
+            TransactionUpdated { transaction, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.transactions
+                    .sync_transaction_update(op, origin, transaction)
+                    .await?
+            }
             TxTemplateCreated { tx_template, .. } => {
                 let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.tx_templates
