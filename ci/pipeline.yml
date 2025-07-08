@@ -5,7 +5,6 @@
 #@   "public_docker_registry",
 #@   "nodejs_task_image_config",
 #@   "check_code",
-#@   "docker_host_pool",
 #@   "repo_resource",
 #@   "edge_image_resource",
 #@   "version_resource",
