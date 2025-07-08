@@ -33,9 +33,10 @@ impl ToTokens for UpdateAllFn<'_> {
         let error = self.error;
         let table_name = self.table_name;
 
-        let sql_updates = self.columns.sql_updates();
+        let column_names = self.columns.update_column_names().join(", ");
+        let sql_updates = self.columns.sql_update_batched();
 
-        let update_fragment = format!("UPDATE {table_name} SET {sql_updates} WHERE id = $1");
+        let update_fragment = format!("UPDATE {} SET {} FROM (VALUES ", table_name, sql_updates);
 
         let assignments = self
             .columns
@@ -70,17 +71,13 @@ impl ToTokens for UpdateAllFn<'_> {
                 op: &mut es_entity::DbOp<'_>,
                 entities: Vec<#entity>,
             ) -> Result<Vec<#entity>, #error> {
-                if entities.is_empty() {
-                    return Ok(Vec::new());
-                }
-
                 let entities_to_update: Vec<#entity> = entities
                     .into_iter()
                     .filter(|entity| entity.events().any_new())
                     .collect();
 
                 if entities_to_update.is_empty() {
-                    return Ok(Vec::new());
+                    return Ok(entities_to_update);
                 }
                     let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
                         sqlx::QueryBuilder::new(#update_fragment);
@@ -89,6 +86,12 @@ impl ToTokens for UpdateAllFn<'_> {
                         #assignments
                         #(#builder_args)*
                     });
+
+                    query_builder.push(&format!(
+                        ") AS v({}) WHERE {}.id = v.id",
+                        #column_names,
+                        #table_name
+                    ));
 
                     query_builder.build().execute(&mut **op.tx()).await?;
 
@@ -171,30 +174,33 @@ mod tests {
                 op: &mut es_entity::DbOp<'_>,
                 entities: Vec<Entity>,
             ) -> Result<Vec<Entity>, es_entity::EsRepoError> {
-                if entities.is_empty() {
-                    return Ok(Vec::new());
-                }
-
                 let entities_to_update: Vec<Entity> = entities
                     .into_iter()
                     .filter(|entity| entity.events().any_new())
                     .collect();
 
                 if entities_to_update.is_empty() {
-                    return Ok(Vec::new());
+                    return Ok(entities_to_update);
                 }
 
                 let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
-                    sqlx::QueryBuilder::new("UPDATE entities SET name = $2 WHERE id = $1");
+                    sqlx::QueryBuilder::new("UPDATE entities SET name = v.name FROM (VALUES ");
 
-                    query_builder.push_values(entities_to_update.iter(), |mut builder, entity| {
-                        let id: &EntityId = &entity.id;
-                        let name: &String = &entity.name;
+                query_builder.push_values(entities_to_update.iter(), |mut builder, entity| {
+                    let id: &EntityId = &entity.id;
+                    let name: &String = &entity.name;
 
-                        builder.push_bind(id);
-                        builder.push_bind(name);
-                    });
-                    query_builder.build().execute(&mut **op.tx()).await?;
+                    builder.push_bind(id);
+                    builder.push_bind(name);
+                });
+
+                query_builder.push(&format!(
+                    ") AS v({}) WHERE {}.id = v.id",
+                    "id, name",
+                    "entities"
+                ));
+
+                query_builder.build().execute(&mut **op.tx()).await?;
 
                 let mut all_events: Vec<_> = entities_to_update
                     .into_iter()

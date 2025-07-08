@@ -165,6 +165,24 @@ impl Columns {
             .join(", ")
     }
 
+    pub fn update_column_names(&self) -> Vec<String> {
+        self.all
+            .iter()
+            .filter(|c| c.opts.persist_on_update() || c.opts.is_id)
+            .map(|c| c.name.to_string())
+            .collect()
+    }
+
+    pub fn sql_update_batched(&self) -> String {
+        self.all
+            .iter()
+            .skip(1)
+            .filter(|c| c.opts.persist_on_update())
+            .map(|column| format!("{} = v.{}", column.name, column.name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
+
     pub fn update_query_args(&self) -> Vec<proc_macro2::TokenStream> {
         self.all
             .iter()
