@@ -56,10 +56,17 @@ impl Transactions {
         let new_tx = original_tx.void(new_tx_id, entry_ids.into_iter().collect(), db.op().now())?;
 
         self.repo.update_in_op(db.op(), &mut original_tx).await?;
-        let transaction = self.repo.create_in_op(db.op(), new_tx).await?;
-        db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
+        let voided_tx = self.repo.create_in_op(db.op(), new_tx).await?;
 
-        Ok(transaction)
+        db.accumulate(
+            original_tx
+                .last_persisted(1)
+                .map(|p| &p.event)
+                .into_iter()
+                .chain(voided_tx.last_persisted(1).map(|p| &p.event)),
+        );
+
+        Ok(voided_tx)
     }
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(

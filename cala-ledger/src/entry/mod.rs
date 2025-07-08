@@ -107,8 +107,6 @@ impl Entries {
             .into_iter()
             .map(|entry| {
                 let value = entry.into_values();
-                let mut units = value.units;
-                units.set_sign_negative(true);
 
                 let mut builder = NewEntry::builder();
                 builder
@@ -120,7 +118,7 @@ impl Entries {
                     .entry_type(format!("{}_VOID", value.entry_type))
                     .layer(value.layer)
                     .currency(value.currency)
-                    .units(units)
+                    .units(-value.units)
                     .direction(value.direction);
 
                 if let Some(description) = value.description {

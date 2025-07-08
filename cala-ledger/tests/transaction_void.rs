@@ -53,9 +53,7 @@ async fn transaction_post() -> anyhow::Result<()> {
     for (original_entry, voided_entry) in original_entries.iter().zip(voided_entries.iter()) {
         assert!(voided_entry.values().entry_type.ends_with("_VOID"));
 
-        let mut original_units = original_entry.values().units;
-        original_units.set_sign_negative(true);
-        assert_eq!(original_units, voided_entry.values().units);
+        assert_eq!(-original_entry.values().units, voided_entry.values().units);
     }
 
     Ok(())

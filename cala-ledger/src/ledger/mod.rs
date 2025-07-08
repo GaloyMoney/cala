@@ -246,7 +246,7 @@ impl CalaLedger {
         let new_tx_id = TransactionId::new();
 
         let new_entries = self
-            .entries()
+            .entries
             .new_entries_for_voided_tx(original_tx_id, new_tx_id)
             .await?;
 
