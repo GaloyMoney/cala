@@ -229,9 +229,6 @@ mod tests {
         fn events(&self) -> &EntityEvents<DummyEntityEvent> {
             &self.events
         }
-        fn into_events(self) -> EntityEvents<Self::Event> {
-            self.events
-        }
     }
 
     impl TryFromEvents<DummyEntityEvent> for DummyEntity {
