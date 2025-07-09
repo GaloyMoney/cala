@@ -96,6 +96,45 @@ impl Entries {
         Ok(entries)
     }
 
+    pub async fn new_entries_for_voided_tx(
+        &self,
+        original_tx_id: TransactionId,
+        new_tx_id: TransactionId,
+    ) -> Result<Vec<NewEntry>, EntryError> {
+        let entries = self.list_for_transaction_id(original_tx_id).await?;
+
+        let new_entries = entries
+            .into_iter()
+            .map(|entry| {
+                let value = entry.into_values();
+
+                let mut builder = NewEntry::builder();
+                builder
+                    .id(EntryId::new())
+                    .transaction_id(new_tx_id)
+                    .journal_id(value.journal_id)
+                    .sequence(value.sequence)
+                    .account_id(value.account_id)
+                    .entry_type(format!("{}_VOID", value.entry_type))
+                    .layer(value.layer)
+                    .currency(value.currency)
+                    .units(-value.units)
+                    .direction(value.direction);
+
+                if let Some(description) = value.description {
+                    builder.description(description);
+                }
+                if let Some(metadata) = value.metadata {
+                    builder.metadata(metadata);
+                }
+
+                builder.build().expect("Couldn't build voided entry")
+            })
+            .collect();
+
+        Ok(new_entries)
+    }
+
     pub(crate) async fn create_all_in_op(
         &self,
         db: &mut LedgerOperation<'_>,

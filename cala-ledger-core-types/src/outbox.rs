@@ -74,6 +74,11 @@ pub enum OutboxEventPayload {
         source: DataSource,
         transaction: TransactionValues,
     },
+    TransactionUpdated {
+        source: DataSource,
+        transaction: TransactionValues,
+        fields: Vec<String>,
+    },
     EntryCreated {
         source: DataSource,
         entry: EntryValues,

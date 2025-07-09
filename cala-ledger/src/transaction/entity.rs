@@ -5,6 +5,8 @@ use crate::primitives::*;
 pub use cala_types::{primitives::TransactionId, transaction::*};
 use es_entity::*;
 
+use super::TransactionError;
+
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TransactionId")]
@@ -16,6 +18,10 @@ pub enum TransactionEvent {
     },
     Initialized {
         values: TransactionValues,
+    },
+    Updated {
+        values: TransactionValues,
+        fields: Vec<String>,
     },
 }
 
@@ -71,6 +77,55 @@ impl Transaction {
             .entity_last_modified_at()
             .expect("Entity not persisted")
     }
+
+    fn is_voided(&self) -> bool {
+        self.events.iter_all()
+            .any(|event| matches!(event, TransactionEvent::Updated { values, .. } if values.voided_by.is_some()))
+    }
+
+    pub(super) fn void(
+        &mut self,
+        new_tx_id: TransactionId,
+        entry_ids: Vec<EntryId>,
+        created_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<NewTransaction, TransactionError> {
+        if self.is_voided() {
+            return Err(TransactionError::AlreadyVoided(self.id));
+        }
+
+        self.values.voided_by = Some(new_tx_id);
+        let fields = vec!["voided_by".to_string()];
+
+        self.events.push(TransactionEvent::Updated {
+            values: self.values.clone(),
+            fields,
+        });
+
+        let values = self.values();
+
+        let mut builder = NewTransaction::builder();
+        builder
+            .id(new_tx_id)
+            .tx_template_id(values.tx_template_id)
+            .void_of(values.id)
+            .entry_ids(entry_ids.into_iter().collect())
+            .effective(chrono::Utc::now().date_naive())
+            .journal_id(values.journal_id)
+            .correlation_id(values.correlation_id.clone())
+            .created_at(created_at);
+
+        if let Some(ref external_id) = values.external_id {
+            builder.external_id(external_id);
+        }
+        if let Some(ref description) = values.description {
+            builder.description(description);
+        }
+        if let Some(ref metadata) = values.metadata {
+            builder.metadata(metadata.clone());
+        }
+        let new_transaction = builder.build().expect("Couldn't build voided transaction");
+        Ok(new_transaction)
+    }
 }
 
 impl TryFromEvents<TransactionEvent> for Transaction {
@@ -83,6 +138,9 @@ impl TryFromEvents<TransactionEvent> for Transaction {
                     builder = builder.id(values.id).values(values.clone());
                 }
                 TransactionEvent::Initialized { values } => {
+                    builder = builder.id(values.id).values(values.clone());
+                }
+                TransactionEvent::Updated { values, .. } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
             }
@@ -104,6 +162,8 @@ pub struct NewTransaction {
     pub(super) effective: chrono::NaiveDate,
     #[builder(setter(into), default)]
     pub(super) correlation_id: String,
+    #[builder(setter(strip_option, into), default)]
+    pub(super) void_of: Option<TransactionId>,
     #[builder(setter(strip_option, into), default)]
     pub(super) external_id: Option<String>,
     #[builder(setter(strip_option, into), default)]
@@ -141,6 +201,8 @@ impl IntoEvents<TransactionEvent> for NewTransaction {
                     description: self.description,
                     metadata: self.metadata,
                     entry_ids: self.entry_ids,
+                    void_of: self.void_of,
+                    voided_by: None,
                 },
             }],
         )
@@ -160,6 +222,32 @@ impl NewTransactionBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn transaction() -> Transaction {
+        let id = TransactionId::new();
+        let values = TransactionValues {
+            id,
+            version: 1,
+            created_at: chrono::Utc::now(),
+            modified_at: chrono::Utc::now(),
+            journal_id: JournalId::new(),
+            tx_template_id: TxTemplateId::new(),
+            entry_ids: vec![],
+            effective: chrono::Utc::now().date_naive(),
+            correlation_id: "correlation_id".to_string(),
+            external_id: Some("external_id".to_string()),
+            description: None,
+            voided_by: None,
+            void_of: None,
+            metadata: Some(serde_json::json!({
+                "tx": "metadata",
+                "test": true,
+            })),
+        };
+
+        let events = es_entity::EntityEvents::init(id, [TransactionEvent::Initialized { values }]);
+        Transaction::try_from_events(events).unwrap()
+    }
 
     #[test]
     fn it_builds() {
@@ -197,5 +285,23 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(new_transaction.metadata, Some(json!({"foo": "bar"})));
+    }
+
+    #[test]
+    fn void_transaction() {
+        let mut transaction = transaction();
+        let new_tx_id = TransactionId::new();
+        let entry_ids = vec![EntryId::new()];
+        let created_at = chrono::Utc::now();
+
+        let new_tx = transaction.void(new_tx_id, entry_ids.clone(), created_at);
+        assert!(new_tx.is_ok());
+        assert!(transaction.is_voided());
+
+        let new_tx = new_tx.unwrap();
+        assert_eq!(new_tx.void_of, Some(transaction.id));
+
+        let new_tx = transaction.void(new_tx_id, entry_ids, created_at);
+        assert!(matches!(new_tx, Err(TransactionError::AlreadyVoided(_))));
     }
 }

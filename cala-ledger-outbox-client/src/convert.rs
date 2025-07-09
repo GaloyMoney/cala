@@ -165,6 +165,17 @@ impl TryFrom<proto::cala_ledger_event::Payload> for OutboxEventPayload {
                     transaction.ok_or(CalaLedgerOutboxClientError::MissingField)?,
                 )?,
             },
+            proto::cala_ledger_event::Payload::TransactionUpdated(proto::TransactionUpdated {
+                data_source_id,
+                transaction,
+                fields,
+            }) => TransactionUpdated {
+                source: data_source_id.parse()?,
+                transaction: TransactionValues::try_from(
+                    transaction.ok_or(CalaLedgerOutboxClientError::MissingField)?,
+                )?,
+                fields,
+            },
             proto::cala_ledger_event::Payload::EntryCreated(proto::EntryCreated {
                 data_source_id,
                 entry,
@@ -449,6 +460,8 @@ impl TryFrom<proto::Transaction> for TransactionValues {
             external_id,
             description,
             metadata,
+            void_of,
+            voided_by,
         }: proto::Transaction,
     ) -> Result<Self, Self::Error> {
         let res = Self {
@@ -467,6 +480,8 @@ impl TryFrom<proto::Transaction> for TransactionValues {
                 .map(|id| id.parse())
                 .collect::<Result<_, _>>()?,
             effective: effective.parse()?,
+            voided_by: voided_by.map(|id| id.parse()).transpose()?,
+            void_of: void_of.map(|id| id.parse()).transpose()?,
             correlation_id,
             external_id,
             description,

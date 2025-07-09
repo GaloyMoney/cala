@@ -222,6 +222,82 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    pub async fn void_transaction(
+        &self,
+        original_tx_id: TransactionId,
+    ) -> Result<Transaction, LedgerError> {
+        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let transaction = self.void_transaction_in_op(&mut db, original_tx_id).await?;
+        db.commit().await?;
+        Ok(transaction)
+    }
+
+    #[instrument(
+        name = "cala_ledger.transaction_void",
+        skip(self, db)
+        fields(transaction_id, external_id)
+        err
+    )]
+    pub async fn void_transaction_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        original_tx_id: TransactionId,
+    ) -> Result<Transaction, LedgerError> {
+        let new_tx_id = TransactionId::new();
+
+        let new_entries = self
+            .entries
+            .new_entries_for_voided_tx(original_tx_id, new_tx_id)
+            .await?;
+
+        let transaction = self
+            .transactions()
+            .create_voided_tx_in_op(
+                db,
+                original_tx_id,
+                new_tx_id,
+                new_entries.iter().map(|entry| entry.id),
+            )
+            .await?;
+
+        let span = tracing::Span::current();
+        span.record("transaction_id", transaction.id().to_string());
+        span.record("external_id", &transaction.values().external_id);
+
+        let entries = self.entries.create_all_in_op(db, new_entries).await?;
+
+        let account_ids = entries
+            .iter()
+            .map(|entry| entry.account_id)
+            .collect::<Vec<_>>();
+        let mappings = self
+            .account_sets
+            .fetch_mappings_in_op(db, transaction.values().journal_id, &account_ids)
+            .await?;
+
+        self.velocities
+            .update_balances_in_op(
+                db,
+                transaction.created_at(),
+                transaction.values(),
+                &entries,
+                &account_ids,
+            )
+            .await?;
+
+        self.balances
+            .update_balances_in_op(
+                db,
+                transaction.journal_id(),
+                entries,
+                transaction.effective(),
+                transaction.created_at(),
+                mappings,
+            )
+            .await?;
+        Ok(transaction)
+    }
+
     pub async fn register_outbox_listener(
         &self,
         start_after: Option<EventSequence>,
@@ -309,6 +385,12 @@ impl CalaLedger {
                 let op = es_entity::DbOp::new(db, event.recorded_at);
                 self.transactions
                     .sync_transaction_creation(op, origin, transaction)
+                    .await?
+            }
+            TransactionUpdated { transaction, .. } => {
+                let op = es_entity::DbOp::new(db, event.recorded_at);
+                self.transactions
+                    .sync_transaction_update(op, origin, transaction)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {

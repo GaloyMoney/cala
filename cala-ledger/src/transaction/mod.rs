@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::primitives::TxTemplateId;
+use crate::primitives::{EntryId, TxTemplateId};
 use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
 
 pub use entity::*;
@@ -45,6 +45,29 @@ impl Transactions {
         Ok(transaction)
     }
 
+    pub async fn create_voided_tx_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        original_tx_id: TransactionId,
+        new_tx_id: TransactionId,
+        entry_ids: impl IntoIterator<Item = EntryId>,
+    ) -> Result<Transaction, TransactionError> {
+        let mut original_tx = self.repo.find_by_id(original_tx_id).await?;
+        let new_tx = original_tx.void(new_tx_id, entry_ids.into_iter().collect(), db.op().now())?;
+
+        self.repo.update_in_op(db.op(), &mut original_tx).await?;
+        let voided_tx = self.repo.create_in_op(db.op(), new_tx).await?;
+
+        db.accumulate(
+            original_tx
+                .last_persisted(1)
+                .map(|p| &p.event)
+                .into_iter()
+                .chain(voided_tx.last_persisted(1).map(|p| &p.event)),
+        );
+
+        Ok(voided_tx)
+    }
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(
         &self,
@@ -109,6 +132,28 @@ impl Transactions {
             .await?;
         Ok(())
     }
+
+    #[cfg(feature = "import")]
+    pub async fn sync_transaction_update(
+        &self,
+        mut db: es_entity::DbOp<'_>,
+        origin: DataSourceId,
+        values: TransactionValues,
+    ) -> Result<(), TransactionError> {
+        let mut transaction = Transaction::import(origin, values);
+        self.repo
+            .import_in_op(&mut db, origin, &mut transaction)
+            .await?;
+        let recorded_at = db.now();
+        let outbox_events: Vec<_> = transaction
+            .last_persisted(1)
+            .map(|p| OutboxEventPayload::from(&p.event))
+            .collect();
+        self.outbox
+            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .await?;
+        Ok(())
+    }
 }
 
 impl From<&TransactionEvent> for OutboxEventPayload {
@@ -128,6 +173,13 @@ impl From<&TransactionEvent> for OutboxEventPayload {
                 source: DataSource::Local,
                 transaction: transaction.clone(),
             },
+            TransactionEvent::Updated { values, fields } => {
+                OutboxEventPayload::TransactionUpdated {
+                    source: DataSource::Local,
+                    transaction: values.clone(),
+                    fields: fields.clone(),
+                }
+            }
         }
     }
 }
