@@ -84,6 +84,7 @@
             postgresql         # client binaries for sqlx
             podman podman-compose
             jq curl
+            bashInteractive
           ];
         };
 
