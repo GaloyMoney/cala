@@ -49,35 +49,29 @@ impl ToTokens for UpdateAllFn<'_> {
             }
         });
 
-        let maybe_mut_entity = if self.nested_fn_names.is_empty() {
-            quote! { entity }
-        } else {
-            quote! { mut entity }
-        };
-
         tokens.append_all(quote! {
             pub async fn update_all(
                 &self,
-                entities: Vec<#entity>,
-            ) -> Result<Vec<#entity>, #error> {
+                entities: impl IntoIterator<Item = &mut #entity>,
+            ) -> Result<(), #error> {
                 let mut op = self.begin_op().await?;
-                let res = self.update_all_in_op(&mut op, entities).await?;
+                self.update_all_in_op(&mut op, entities).await?;
                 op.commit().await?;
-                Ok(res)
+                Ok(())
             }
 
             pub async fn update_all_in_op(
                 &self,
                 op: &mut es_entity::DbOp<'_>,
-                entities: Vec<#entity>,
-            ) -> Result<Vec<#entity>, #error> {
-                let entities_to_update: Vec<#entity> = entities
+                entities: impl IntoIterator<Item = &mut #entity>,
+            ) -> Result<(), #error> {
+                let mut entities_to_update: Vec<&mut #entity> = entities
                     .into_iter()
                     .filter(|entity| entity.events().any_new())
                     .collect();
 
                 if entities_to_update.is_empty() {
-                    return Ok(entities_to_update);
+                    return Ok(());
                 }
                     let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
                         sqlx::QueryBuilder::new(#update_fragment);
@@ -95,32 +89,27 @@ impl ToTokens for UpdateAllFn<'_> {
 
                     query_builder.build().execute(&mut **op.tx()).await?;
 
-                let mut all_events: Vec<_> = entities_to_update
-                    .into_iter()
-                    .map(|entity| entity.into_events())
-                    .collect();
 
-                let mut n_persisted = self.persist_events_batch(op, &mut all_events).await?;
+                    let mut n_persisted = self.persist_events_batch(
+                        op,
+                        entities_to_update.iter_mut().map(|entity| entity.events_mut())
+                    ).await?;
 
-                let mut res = Vec::with_capacity(all_events.len());
-                for events in all_events {
+                for entity in entities_to_update.iter_mut() {
                     let n_events = n_persisted
-                        .remove(events.id())
+                        .remove(&entity.id)
                         .expect("n_events exists");
-                    let mut #maybe_mut_entity = Self::hydrate_entity(events)?;
 
                     #(#nested)*
 
                     self.execute_post_persist_hook(
                         op,
-                        &entity,
-                        entity.events().last_persisted(n_events)
+                        entity,
+                        entity.events().last_persisted(n_events),
                     ).await?;
-
-                    res.push(entity);
                 }
 
-                Ok(res)
+                Ok(())
             }
         });
     }
@@ -161,26 +150,26 @@ mod tests {
         let expected = quote! {
             pub async fn update_all(
                 &self,
-                entities: Vec<Entity>,
-            ) -> Result<Vec<Entity>, es_entity::EsRepoError> {
+                entities: impl IntoIterator<Item = &mut Entity>,
+            ) -> Result<(), es_entity::EsRepoError> {
                 let mut op = self.begin_op().await?;
-                let res = self.update_all_in_op(&mut op, entities).await?;
+                self.update_all_in_op(&mut op, entities).await?;
                 op.commit().await?;
-                Ok(res)
+                Ok(())
             }
 
             pub async fn update_all_in_op(
                 &self,
                 op: &mut es_entity::DbOp<'_>,
-                entities: Vec<Entity>,
-            ) -> Result<Vec<Entity>, es_entity::EsRepoError> {
-                let entities_to_update: Vec<Entity> = entities
+                entities: impl IntoIterator<Item = &mut Entity>,
+            ) -> Result<(), es_entity::EsRepoError> {
+                let mut entities_to_update: Vec<&mut Entity> = entities
                     .into_iter()
                     .filter(|entity| entity.events().any_new())
                     .collect();
 
                 if entities_to_update.is_empty() {
-                    return Ok(entities_to_update);
+                    return Ok(());
                 }
 
                 let mut query_builder: sqlx::QueryBuilder<sqlx::Postgres> =
@@ -202,31 +191,24 @@ mod tests {
 
                 query_builder.build().execute(&mut **op.tx()).await?;
 
-                let mut all_events: Vec<_> = entities_to_update
-                    .into_iter()
-                    .map(|entity| entity.into_events())
-                    .collect();
+                let mut n_persisted = self.persist_events_batch(
+                        op,
+                        entities_to_update.iter_mut().map(|entity| entity.events_mut())
+                    ).await?;
 
-                let mut n_persisted = self.persist_events_batch(op, &mut all_events).await?;
-
-                let mut res = Vec::with_capacity(all_events.len());
-                for events in all_events {
+                for entity in entities_to_update.iter_mut() {
                     let n_events = n_persisted
-                        .remove(events.id())
+                        .remove(&entity.id)
                         .expect("n_events exists");
-
-                    let mut entity = Self::hydrate_entity(events)?;
 
                     self.execute_post_persist_hook(
                         op,
-                        &entity,
-                        entity.events().last_persisted(n_events)
+                        entity,
+                        entity.events().last_persisted(n_events),
                     ).await?;
-
-                    res.push(entity);
                 }
 
-                Ok(res)
+                Ok(())
             }
         };
 

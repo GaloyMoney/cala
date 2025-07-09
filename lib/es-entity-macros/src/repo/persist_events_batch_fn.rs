@@ -39,13 +39,15 @@ impl ToTokens for PersistEventsBatchFn<'_> {
             async fn persist_events_batch(
                 &self,
                 op: &mut es_entity::DbOp<'_>,
-                all_events: &mut [es_entity::EntityEvents<#event_type>]
+                all_events: impl IntoIterator<Item = &mut es_entity::EntityEvents<#event_type>>
             ) -> Result<std::collections::HashMap<#id_type, usize>, #error> {
                 let mut all_serialized = Vec::new();
                 let mut all_types = Vec::new();
                 let mut all_ids = Vec::new();
                 let mut all_sequences = Vec::new();
                 let now = op.now();
+
+                let mut all_events: Vec<_> = all_events.into_iter().collect();
 
                 let mut n_events_map = std::collections::HashMap::new();
                 for events in all_events.iter_mut() {
@@ -110,13 +112,15 @@ mod tests {
             async fn persist_events_batch(
                 &self,
                 op: &mut es_entity::DbOp<'_>,
-                all_events: &mut [es_entity::EntityEvents<EntityEvent>]
+                all_events: impl IntoIterator<Item = &mut es_entity::EntityEvents<EntityEvent>>
             ) -> Result<std::collections::HashMap<EntityId, usize>, es_entity::EsRepoError> {
                 let mut all_serialized = Vec::new();
                 let mut all_types = Vec::new();
                 let mut all_ids = Vec::new();
                 let mut all_sequences = Vec::new();
                 let now = op.now();
+
+                let mut all_events: Vec<_> = all_events.into_iter().collect();
 
                 let mut n_events_map = std::collections::HashMap::new();
                 for events in all_events.iter_mut() {
