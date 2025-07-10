@@ -31,8 +31,12 @@ impl ToTokens for FindAllFn<'_> {
         let error = self.error;
 
         let query = format!(
-            r#"SELECT i.id AS "id: {}", e.sequence, e.event, e.recorded_at FROM {} i JOIN {} e ON i.id = e.id WHERE i.id = ANY($1) ORDER BY i.id, e.sequence"#,
-            self.id, self.table_name, self.events_table_name
+            "SELECT i.id, e.sequence, e.event, e.recorded_at \
+             FROM {} i \
+             JOIN {} e ON i.id = e.id \
+             WHERE i.id = ANY($1) \
+             ORDER BY i.id, e.sequence",
+            self.table_name, self.events_table_name
         );
 
         tokens.append_all(quote! {
@@ -56,12 +60,19 @@ impl ToTokens for FindAllFn<'_> {
                 executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
                 ids: &[#id]
             ) -> Result<std::collections::HashMap<#id, Out>, #error> {
-                let rows = sqlx::query!(
-                    #query,
-                    ids as &[#id],
-                )
+                #[derive(sqlx::FromRow)]
+                struct EventRow {
+                    id: #id,
+                    sequence: i32,
+                    event: es_entity::prelude::serde_json::Value,
+                    recorded_at: es_entity::prelude::chrono::DateTime<es_entity::prelude::chrono::Utc>,
+                }
+
+                let rows: Vec<EventRow> = sqlx::query_as(#query)
+                    .bind(ids)
                     .fetch_all(executor)
                     .await?;
+
                 let n = rows.len();
                 let res = es_entity::EntityEvents::load_n::<#entity>(rows.into_iter().map(|r|
                         es_entity::GenericEvent {
@@ -121,12 +132,19 @@ mod tests {
                 executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
                 ids: &[EntityId]
             ) -> Result<std::collections::HashMap<EntityId, Out>, es_entity::EsRepoError> {
-                let rows = sqlx::query!(
-                    "SELECT i.id AS \"id: EntityId\", e.sequence, e.event, e.recorded_at FROM entities i JOIN entity_events e ON i.id = e.id WHERE i.id = ANY($1) ORDER BY i.id, e.sequence",
-                    ids as &[EntityId],
-                )
+                #[derive(sqlx::FromRow)]
+                struct EventRow {
+                    id: EntityId,
+                    sequence: i32,
+                    event: es_entity::prelude::serde_json::Value,
+                    recorded_at: es_entity::prelude::chrono::DateTime<es_entity::prelude::chrono::Utc>,
+                }
+
+                let rows: Vec<EventRow> = sqlx::query_as("SELECT i.id, e.sequence, e.event, e.recorded_at FROM entities i JOIN entity_events e ON i.id = e.id WHERE i.id = ANY($1) ORDER BY i.id, e.sequence")
+                    .bind(ids)
                     .fetch_all(executor)
                     .await?;
+
                 let n = rows.len();
                 let res = es_entity::EntityEvents::load_n::<Entity>(rows.into_iter().map(|r|
                         es_entity::GenericEvent {
