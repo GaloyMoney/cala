@@ -1,3 +1,23 @@
+# [cala release v0.6.9](https://github.com/GaloyMoney/cala/releases/tag/0.6.9)
+
+
+### Bug Fixes
+
+- Make fns work with non Copy ids (#476)
+
+### Documentation
+
+- Api reference and website examples update to a36a40a23b505c1eaa81b7ba8d5b2853e0e4bb86
+
+### Features
+
+- Void transaction  (#471)
+
+### Miscellaneous Tasks
+
+- Sqlx-prepare
+- Cleanup leftover docker host refs (#474)
+
 # [cala release v0.6.8](https://github.com/GaloyMoney/cala/releases/tag/0.6.8)
 
 
