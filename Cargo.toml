@@ -66,3 +66,4 @@ schemars = { version = "1.0", features = ["uuid1"] }
 
 [profile.release]
 lto = true
+
