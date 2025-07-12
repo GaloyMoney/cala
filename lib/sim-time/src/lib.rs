@@ -78,9 +78,9 @@ impl Time {
         }
     }
 
-    async fn sleep(&self, duration: Duration) {
+    fn real_ms(&self, duration: Duration) -> Duration {
         if self.config.realtime {
-            tokio::time::sleep(duration).await
+            duration
         } else {
             let sim_config = self
                 .config
@@ -92,17 +92,25 @@ impl Time {
             let real_now = Utc::now();
 
             if sim_config.transform_to_realtime && current_time >= real_now {
-                tokio::time::sleep(duration).await;
-                return;
+                return duration;
             }
 
             let sim_ms_per_real_ms = sim_config.tick_duration_secs.as_millis() as f64
                 / sim_config.tick_interval_ms as f64;
 
-            let real_ms = (duration.as_millis() as f64 / sim_ms_per_real_ms).ceil() as u64;
-
-            tokio::time::sleep(Duration::from_millis(real_ms)).await
+            Duration::from_millis((duration.as_millis() as f64 / sim_ms_per_real_ms).ceil() as u64)
         }
+    }
+
+    fn sleep(&self, duration: Duration) -> tokio::time::Sleep {
+        tokio::time::sleep(self.real_ms(duration))
+    }
+
+    fn timeout<F>(&self, duration: Duration, future: F) -> tokio::time::Timeout<F::IntoFuture>
+    where
+        F: core::future::IntoFuture,
+    {
+        tokio::time::timeout(self.real_ms(duration), future)
     }
 
     pub async fn wait_until_realtime(&self) {
@@ -141,11 +149,19 @@ pub fn now() -> DateTime<Utc> {
         .now()
 }
 
-pub async fn sleep(duration: Duration) {
+pub fn sleep(duration: Duration) -> tokio::time::Sleep {
     INSTANCE
         .get_or_init(|| Time::new(TimeConfig::default()))
         .sleep(duration)
-        .await
+}
+
+pub fn timeout<F>(duration: Duration, future: F) -> tokio::time::Timeout<F::IntoFuture>
+where
+    F: core::future::IntoFuture,
+{
+    INSTANCE
+        .get_or_init(|| Time::new(TimeConfig::default()))
+        .timeout(duration, future)
 }
 
 #[cfg(test)]
