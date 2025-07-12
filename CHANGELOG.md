@@ -1,3 +1,14 @@
+# [cala release v0.6.10](https://github.com/GaloyMoney/cala/releases/tag/0.6.10)
+
+
+### Documentation
+
+- Api reference and website examples update to 08b9a5f838b0de6c075d6360fe49bf5a50c2caa5
+
+### Miscellaneous Tasks
+
+- Add timeout to sim-time
+
 # [cala release v0.6.9](https://github.com/GaloyMoney/cala/releases/tag/0.6.9)
 
 
