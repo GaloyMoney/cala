@@ -98,10 +98,10 @@ impl Entries {
 
     pub async fn new_entries_for_voided_tx(
         &self,
-        original_tx_id: TransactionId,
-        new_tx_id: TransactionId,
+        voiding_tx_id: TransactionId,
+        existing_tx_id: TransactionId,
     ) -> Result<Vec<NewEntry>, EntryError> {
-        let entries = self.list_for_transaction_id(original_tx_id).await?;
+        let entries = self.list_for_transaction_id(existing_tx_id).await?;
 
         let new_entries = entries
             .into_iter()
@@ -111,7 +111,7 @@ impl Entries {
                 let mut builder = NewEntry::builder();
                 builder
                     .id(EntryId::new())
-                    .transaction_id(new_tx_id)
+                    .transaction_id(voiding_tx_id)
                     .journal_id(value.journal_id)
                     .sequence(value.sequence)
                     .account_id(value.account_id)
