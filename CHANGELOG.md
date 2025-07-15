@@ -1,3 +1,10 @@
+# [cala release v0.6.11](https://github.com/GaloyMoney/cala/releases/tag/0.6.11)
+
+
+### Refactor
+
+- Pass voiding_tx_id as param to void_transaction (#479)
+
 # [cala release v0.6.10](https://github.com/GaloyMoney/cala/releases/tag/0.6.10)
 
 
