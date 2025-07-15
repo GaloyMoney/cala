@@ -224,10 +224,13 @@ impl CalaLedger {
 
     pub async fn void_transaction(
         &self,
-        original_tx_id: TransactionId,
+        voiding_tx_id: TransactionId,
+        existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {
         let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
-        let transaction = self.void_transaction_in_op(&mut db, original_tx_id).await?;
+        let transaction = self
+            .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id)
+            .await?;
         db.commit().await?;
         Ok(transaction)
     }
@@ -241,21 +244,20 @@ impl CalaLedger {
     pub async fn void_transaction_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
-        original_tx_id: TransactionId,
+        voiding_tx_id: TransactionId,
+        existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {
-        let new_tx_id = TransactionId::new();
-
         let new_entries = self
             .entries
-            .new_entries_for_voided_tx(original_tx_id, new_tx_id)
+            .new_entries_for_voided_tx(voiding_tx_id, existing_tx_id)
             .await?;
 
         let transaction = self
             .transactions()
             .create_voided_tx_in_op(
                 db,
-                original_tx_id,
-                new_tx_id,
+                voiding_tx_id,
+                existing_tx_id,
                 new_entries.iter().map(|entry| entry.id),
             )
             .await?;

@@ -48,18 +48,23 @@ impl Transactions {
     pub async fn create_voided_tx_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
-        original_tx_id: TransactionId,
-        new_tx_id: TransactionId,
+        voiding_tx_id: TransactionId,
+        existing_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
     ) -> Result<Transaction, TransactionError> {
-        let mut original_tx = self.repo.find_by_id(original_tx_id).await?;
-        let new_tx = original_tx.void(new_tx_id, entry_ids.into_iter().collect(), db.op().now())?;
+        let mut existing_tx = self.repo.find_by_id(existing_tx_id).await?;
 
-        self.repo.update_in_op(db.op(), &mut original_tx).await?;
+        let new_tx = existing_tx.void(
+            voiding_tx_id,
+            entry_ids.into_iter().collect(),
+            db.op().now(),
+        )?;
+
+        self.repo.update_in_op(db.op(), &mut existing_tx).await?;
         let voided_tx = self.repo.create_in_op(db.op(), new_tx).await?;
 
         db.accumulate(
-            original_tx
+            existing_tx
                 .last_persisted(1)
                 .map(|p| &p.event)
                 .into_iter()
@@ -68,6 +73,7 @@ impl Transactions {
 
         Ok(voided_tx)
     }
+
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
     pub async fn find_by_external_id(
         &self,

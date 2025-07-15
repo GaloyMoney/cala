@@ -30,14 +30,18 @@ async fn transaction_post() -> anyhow::Result<()> {
     params.insert("sender", sender_account.id());
     params.insert("recipient", recipient_account.id());
 
-    let original_tx_id = TransactionId::new();
+    let existing_tx_id = TransactionId::new();
 
     let tx = cala
-        .post_transaction(original_tx_id, &tx_code, params)
+        .post_transaction(existing_tx_id, &tx_code, params)
         .await
         .unwrap();
 
-    let voided_tx = cala.void_transaction(original_tx_id).await.unwrap();
+    let voiding_tx_id = TransactionId::new();
+    let voided_tx = cala
+        .void_transaction(voiding_tx_id, existing_tx_id)
+        .await
+        .unwrap();
 
     let original_tx_entries = cala.entries().find_all(&tx.values().entry_ids).await?;
     let mut original_entries: Vec<_> = original_tx_entries.values().collect();
