@@ -31,8 +31,9 @@
         inherit system overlays;
       };
       
-      rustVersion = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-      rustToolchain = rustVersion.override {
+      rustToolchain = pkgs.pkgsBuildHost.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+      
+      nightlyRustToolchain = pkgs.pkgsBuildHost.rust-bin.nightly.latest.default.override {
         extensions = ["rust-analyzer" "rust-src" "rustfmt" "clippy"];
       };
       
@@ -196,7 +197,8 @@
 
     checkCode = pkgs.writeShellScriptBin "check-code" ''
       set -euo pipefail
-      export PATH="${pkgs.git}/bin:${pkgs.cargo}/bin:$PATH"
+      export PATH="${pkgs.git}/bin:${nightlyRustToolchain}/bin:$PATH"
+      export RUSTFLAGS="-Z unstable-options"
       
       # Run write-sdl first to generate schema
       ${write-sdl}/bin/write_sdl > cala-server/schema.graphql
