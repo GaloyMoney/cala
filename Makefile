@@ -14,7 +14,7 @@ setup-db:
 reset-deps: clean-deps start-deps setup-db
 
 run-server:
-	nix run .#cala-server -- --config ./bats/cala.yml
+	PG_CON=postgres://user:password@localhost:5432/pg nix run .#cala-server -- --config ./bats/cala.yml
 
 rust-example:
 	nix run .#cala-ledger-example-rust
@@ -63,4 +63,5 @@ run-outbox-client:
 
 run-cel-parser:
 	nix run .#cala-cel-parser
+
 
