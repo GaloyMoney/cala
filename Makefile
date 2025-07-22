@@ -64,5 +64,3 @@ run-outbox-client:
 run-cel-parser:
 	nix run .#cala-cel-parser
 
-run-cel-interpreter:
-	nix run .#cala-cel-interpreter

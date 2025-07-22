@@ -354,10 +354,7 @@
             name = "cala-cel-parser";
           };
 
-          cala-cel-interpreter = flake-utils.lib.mkApp {
-            drv = cala-cel-interpreter;
-            name = "cala-cel-interpreter";
-          };
+
         };
 
         devShells.default = mkShell (devEnvVars
