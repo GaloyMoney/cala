@@ -217,7 +217,8 @@ impl BalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.insert_new_snapshots",
-        skip(self, db)
+        skip(self, db, new_balances)
+        fields(n_new_balances)
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
@@ -225,6 +226,11 @@ impl BalanceRepo {
         journal_id: JournalId,
         new_balances: &[BalanceSnapshot],
     ) -> Result<(), BalanceError> {
+        tracing::Span::current().record(
+            "n_new_balances",
+            tracing::field::display(new_balances.len()),
+        );
+
         let mut query_builder = QueryBuilder::new(
             r#"
           WITH new_snapshots AS (
