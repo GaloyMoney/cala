@@ -229,15 +229,22 @@ impl BalanceRepo {
             tracing::field::display(new_balances.len()),
         );
 
-        let journal_ids: Vec<JournalId> = new_balances.iter().map(|b| b.journal_id).collect();
-        let account_ids: Vec<AccountId> = new_balances.iter().map(|b| b.account_id).collect();
-        let entry_ids: Vec<EntryId> = new_balances.iter().map(|b| b.entry_id).collect();
-        let currencies: Vec<&str> = new_balances.iter().map(|b| b.currency.code()).collect();
-        let versions: Vec<i32> = new_balances.iter().map(|b| b.version as i32).collect();
-        let values: Vec<serde_json::Value> = new_balances
-            .iter()
-            .map(|b| serde_json::to_value(b).expect("Failed to serialize balance snapshot"))
-            .collect();
+        let mut journal_ids = Vec::with_capacity(new_balances.len());
+        let mut account_ids = Vec::with_capacity(new_balances.len());
+        let mut entry_ids = Vec::with_capacity(new_balances.len());
+        let mut currencies = Vec::with_capacity(new_balances.len());
+        let mut versions = Vec::with_capacity(new_balances.len());
+        let mut values = Vec::with_capacity(new_balances.len());
+
+        for balance in new_balances {
+            journal_ids.push(balance.journal_id);
+            account_ids.push(balance.account_id);
+            entry_ids.push(balance.entry_id);
+            currencies.push(balance.currency.code());
+            versions.push(balance.version as i32);
+            values
+                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
+        }
 
         sqlx::query!(
             r#"
