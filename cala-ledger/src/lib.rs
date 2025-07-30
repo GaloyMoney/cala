@@ -74,7 +74,7 @@
 //!
 //!     let tx_code = "GENERAL_INCOME";
 //!     let new_template = NewTxTemplate::builder()
-//!         .id(uuid::Uuid::new_v4())
+//!         .id(uuid::Uuid::now_v7())
 //!         .code(tx_code)
 //!         .params(params)
 //!         .transaction(
