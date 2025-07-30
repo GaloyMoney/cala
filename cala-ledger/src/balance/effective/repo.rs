@@ -1,12 +1,12 @@
 use chrono::NaiveDate;
-use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{Executor, PgPool, Postgres, Transaction};
 use std::collections::HashMap;
 use tracing::instrument;
 
 use crate::balance::{account_balance::AccountBalance, error::BalanceError};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
 use super::data::*;
@@ -364,31 +364,66 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
     ) -> Result<(), BalanceError> {
-        let mut query_builder = QueryBuilder::new(
+        let mut journal_ids = Vec::with_capacity(data.len());
+        let mut account_ids = Vec::with_capacity(data.len());
+        let mut currencies = Vec::with_capacity(data.len());
+        let mut effectives = Vec::with_capacity(data.len());
+        let mut versions = Vec::with_capacity(data.len());
+        let mut all_time_versions = Vec::with_capacity(data.len());
+        let mut entry_ids = Vec::with_capacity(data.len());
+        let mut modified_timestamps = Vec::with_capacity(data.len());
+        let mut created_timestamps = Vec::with_capacity(data.len());
+        let mut values = Vec::with_capacity(data.len());
+
+        for (account_id, currency, effective, snapshot, all_time_version) in
+            data.into_values().flat_map(|d| d.into_updates())
+        {
+            journal_ids.push(journal_id);
+            account_ids.push(account_id);
+            currencies.push(currency.code());
+            effectives.push(effective);
+            versions.push(snapshot.version as i32);
+            all_time_versions.push(all_time_version as i32);
+            entry_ids.push(snapshot.entry_id);
+            modified_timestamps.push(snapshot.modified_at);
+            created_timestamps.push(snapshot.created_at);
+            values.push(
+                serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
+            );
+        }
+
+        sqlx::query!(
             r#"
             INSERT INTO cala_cumulative_effective_balances (
               journal_id, account_id, currency, effective, version, all_time_version, latest_entry_id, updated_at, created_at, values
             )
+            SELECT * FROM UNNEST(
+                $1::uuid[],
+                $2::uuid[],
+                $3::text[],
+                $4::date[],
+                $5::integer[],
+                $6::integer[],
+                $7::uuid[],
+                $8::timestamptz[],
+                $9::timestamptz[],
+                $10::jsonb[]
+            )
             "#,
-        );
-        query_builder.push_values(
-            data.into_values().flat_map(|d| d.into_updates()),
-            |mut builder, (account_id, currency, effective, snapshot, all_time_version)| {
-                builder.push_bind(journal_id);
-                builder.push_bind(account_id);
-                builder.push_bind(currency.code());
-                builder.push_bind(effective);
-                builder.push_bind(snapshot.version as i32);
-                builder.push_bind(all_time_version as i32);
-                builder.push_bind(snapshot.entry_id);
-                builder.push_bind(snapshot.modified_at);
-                builder.push_bind(snapshot.created_at);
-                builder.push_bind(
-                    serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
-                );
-            },
-        );
-        query_builder.build().execute(&mut **db).await?;
+            &journal_ids as &[JournalId],
+            &account_ids as &[AccountId],
+            &currencies[..] as &[&str],
+            &effectives[..],
+            &versions[..],
+            &all_time_versions[..],
+            &entry_ids as &[EntryId],
+            &modified_timestamps[..],
+            &created_timestamps[..],
+            &values[..]
+        )
+        .execute(&mut **db)
+        .await?;
+
         Ok(())
     }
 }
