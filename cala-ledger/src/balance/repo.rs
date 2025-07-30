@@ -1,12 +1,10 @@
-use sqlx::{Executor, PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{Executor, PgPool, Postgres, Transaction};
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
-#[cfg(feature = "import")]
-use cala_types::primitives::EntryId;
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 use std::collections::HashMap;
 
@@ -231,47 +229,61 @@ impl BalanceRepo {
             tracing::field::display(new_balances.len()),
         );
 
-        let mut query_builder = QueryBuilder::new(
+        let journal_ids: Vec<JournalId> = new_balances.iter().map(|b| b.journal_id).collect();
+        let account_ids: Vec<AccountId> = new_balances.iter().map(|b| b.account_id).collect();
+        let entry_ids: Vec<EntryId> = new_balances.iter().map(|b| b.entry_id).collect();
+        let currencies: Vec<&str> = new_balances.iter().map(|b| b.currency.code()).collect();
+        let versions: Vec<i32> = new_balances.iter().map(|b| b.version as i32).collect();
+        let values: Vec<serde_json::Value> = new_balances
+            .iter()
+            .map(|b| serde_json::to_value(b).expect("Failed to serialize balance snapshot"))
+            .collect();
+
+        sqlx::query!(
             r#"
-          WITH new_snapshots AS (
-            INSERT INTO cala_balance_history (journal_id, account_id, currency, version, latest_entry_id, values)
-            "#,
-        );
-        query_builder.push_values(new_balances, |mut builder, b| {
-            builder.push_bind(b.journal_id);
-            builder.push_bind(b.account_id);
-            builder.push_bind(b.currency.code());
-            builder.push_bind(b.version as i32);
-            builder.push_bind(b.entry_id);
-            builder
-                .push_bind(serde_json::to_value(b).expect("Failed to serialize balance snapshot"));
-        });
-        query_builder.push(
-            r#"
-            RETURNING *
-            ),
-            ranked_balances AS (
-              SELECT *,
-                ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version) AS rn,
-                MAX(version) OVER (PARTITION BY account_id, currency) AS max
-              FROM new_snapshots
-            ),
-            initial_balances AS (
-              INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version)
-              SELECT journal_id, account_id, currency, version
-              FROM ranked_balances
-              WHERE version = rn AND rn = max
+        WITH new_snapshots AS (
+            INSERT INTO cala_balance_history (
+                journal_id, account_id, currency, version, latest_entry_id, values
             )
-            UPDATE cala_current_balances c
-            SET latest_version = n.version
-            FROM ranked_balances n
-            WHERE n.account_id = c.account_id
-              AND n.currency = c.currency
-              AND c.journal_id = n.journal_id
-              AND version = max AND version != rn
-              "#,
-        );
-        query_builder.build().execute(&mut **db).await?;
+            SELECT * FROM UNNEST (
+                $1::uuid[],
+                $2::uuid[],
+                $3::text[],
+                $4::int4[],
+                $5::uuid[],
+                $6::jsonb[]
+            )
+            RETURNING *
+        ),
+        ranked_balances AS (
+            SELECT *,
+                   ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version) AS rn,
+                   MAX(version) OVER (PARTITION BY account_id, currency) AS max
+            FROM new_snapshots
+        ),
+        initial_balances AS (
+            INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version)
+            SELECT journal_id, account_id, currency, version
+            FROM ranked_balances
+            WHERE version = rn AND rn = max
+        )
+        UPDATE cala_current_balances c
+        SET latest_version = n.version
+        FROM ranked_balances n
+        WHERE n.account_id = c.account_id
+          AND n.currency = c.currency
+          AND c.journal_id = n.journal_id
+          AND version = max AND version != rn
+        "#,
+            &journal_ids as &[JournalId],
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+            &versions as &[i32],
+            &entry_ids as &[EntryId],
+            &values
+        )
+        .execute(&mut **db)
+        .await?;
         Ok(())
     }
 
