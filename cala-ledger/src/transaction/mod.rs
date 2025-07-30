@@ -67,7 +67,6 @@ impl Transactions {
             existing_tx
                 .last_persisted(1)
                 .map(|p| &p.event)
-                .into_iter()
                 .chain(voided_tx.last_persisted(1).map(|p| &p.event)),
         );
 
