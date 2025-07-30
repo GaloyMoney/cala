@@ -1,3 +1,14 @@
+# [cala release v0.6.12](https://github.com/GaloyMoney/cala/releases/tag/0.6.12)
+
+
+### Documentation
+
+- Api reference and website examples update to 1899a7926041f2f82ff95a982e8833dded40f7a3
+
+### Miscellaneous Tasks
+
+- Improve tracing for insert_new_snapshot (#485)
+
 # [cala release v0.6.11](https://github.com/GaloyMoney/cala/releases/tag/0.6.11)
 
 

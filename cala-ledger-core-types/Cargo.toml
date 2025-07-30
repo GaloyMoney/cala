@@ -2,7 +2,7 @@
 name = "cala-ledger-core-types"
 repository = "https://github.com/GaloyMoney/cala"
 description = "Core types for cala"
-version = "0.6.12-dev"
+version = "0.6.12"
 edition = "2021"
 license = "Apache-2.0"
 
@@ -13,8 +13,8 @@ graphql = ["es-entity/graphql", "dep:async-graphql"]
 json-schema = ["es-entity/json-schema", "dep:schemars"]
 
 [dependencies]
-cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.6.12-dev" }
-es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.6.12-dev" }
+cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.6.12" }
+es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.6.12" }
 
 async-graphql = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }
