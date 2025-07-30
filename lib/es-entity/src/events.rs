@@ -249,7 +249,7 @@ mod tests {
     impl IntoEvents<DummyEntityEvent> for NewDummyEntity {
         fn into_events(self) -> EntityEvents<DummyEntityEvent> {
             EntityEvents::init(
-                Uuid::new_v4(),
+                Uuid::now_v7(),
                 vec![DummyEntityEvent::Created("".to_owned())],
             )
         }
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn load_first() {
         let generic_events = vec![GenericEvent {
-            entity_id: uuid::Uuid::new_v4(),
+            entity_id: uuid::Uuid::now_v7(),
             sequence: 1,
             event: serde_json::to_value(DummyEntityEvent::Created("dummy-name".to_owned()))
                 .expect("Could not serialize"),
@@ -279,14 +279,14 @@ mod tests {
     fn load_n() {
         let generic_events = vec![
             GenericEvent {
-                entity_id: uuid::Uuid::new_v4(),
+                entity_id: uuid::Uuid::now_v7(),
                 sequence: 1,
                 event: serde_json::to_value(DummyEntityEvent::Created("dummy-name".to_owned()))
                     .expect("Could not serialize"),
                 recorded_at: chrono::Utc::now(),
             },
             GenericEvent {
-                entity_id: uuid::Uuid::new_v4(),
+                entity_id: uuid::Uuid::now_v7(),
                 sequence: 1,
                 event: serde_json::to_value(DummyEntityEvent::Created("other-name".to_owned()))
                     .expect("Could not serialize"),

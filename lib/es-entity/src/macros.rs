@@ -212,7 +212,7 @@ macro_rules! __entity_id_common_impls {
         impl $name {
             #[allow(clippy::new_without_default)]
             pub fn new() -> Self {
-                $crate::prelude::uuid::Uuid::new_v4().into()
+                $crate::prelude::uuid::Uuid::now_v7().into()
             }
         }
 
