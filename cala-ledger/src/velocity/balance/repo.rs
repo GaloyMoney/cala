@@ -1,5 +1,5 @@
 use es_entity::DbOp;
-use sqlx::{PgPool, QueryBuilder};
+use sqlx::PgPool;
 
 use std::collections::HashMap;
 
@@ -150,80 +150,107 @@ impl VelocityBalanceRepo {
         op: &mut DbOp<'_>,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
     ) -> Result<(), VelocityError> {
-        let mut query_builder = QueryBuilder::new(
-            r#"
-        WITH new_snapshots AS (
-            INSERT INTO cala_velocity_balance_history (
-                journal_id, account_id, currency, velocity_control_id, velocity_limit_id, partition_window, latest_entry_id, version, values
+        let mut journal_ids = Vec::new();
+        let mut account_ids = Vec::new();
+        let mut currencies = Vec::new();
+        let mut velocity_control_ids = Vec::new();
+        let mut velocity_limit_ids = Vec::new();
+        let mut partition_windows = Vec::new();
+        let mut latest_entry_ids = Vec::new();
+        let mut versions = Vec::new();
+        let mut values = Vec::new();
+
+        for (key, snapshot) in new_balances
+            .into_iter()
+            .flat_map(|(key, snapshots)| snapshots.into_iter().map(move |snapshot| (key, snapshot)))
+        {
+            let (window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id) =
+                key;
+
+            journal_ids.push(*journal_id);
+            account_ids.push(*account_id);
+            currencies.push(currency.code());
+            velocity_control_ids.push(*velocity_control_id);
+            velocity_limit_ids.push(*velocity_limit_id);
+            partition_windows.push(window.inner().clone());
+            latest_entry_ids.push(snapshot.entry_id);
+            versions.push(snapshot.version as i32);
+            values.push(
+                serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
+            );
+        }
+
+        sqlx::query!(
+        r#"
+            WITH new_snapshots AS (
+                INSERT INTO cala_velocity_balance_history (
+                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id, 
+                    partition_window, latest_entry_id, version, values
+                )
+                SELECT * FROM UNNEST(
+                    $1::uuid[],
+                    $2::uuid[],
+                    $3::text[],
+                    $4::uuid[],
+                    $5::uuid[],
+                    $6::jsonb[],
+                    $7::uuid[],
+                    $8::integer[],
+                    $9::jsonb[]
+                ) AS t(
+                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
+                    partition_window, latest_entry_id, version, values
+                )
+                RETURNING *
+            ),
+            ranked_balances AS (
+                SELECT *,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id 
+                        ORDER BY version
+                    ) AS rn,
+                    MAX(version) OVER (
+                        PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id
+                    ) AS max
+                FROM new_snapshots
+            ),
+            initial_balances AS (
+                INSERT INTO cala_velocity_current_balances (
+                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
+                    partition_window, latest_version
+                )
+                SELECT 
+                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
+                    partition_window, version
+                FROM ranked_balances
+                WHERE version = rn AND rn = max
+                ON CONFLICT (journal_id, account_id, currency, velocity_control_id, velocity_limit_id, partition_window)
+                DO NOTHING
             )
-        "#,
-        );
+            UPDATE cala_velocity_current_balances c
+            SET latest_version = n.version
+            FROM ranked_balances n
+            WHERE c.journal_id = n.journal_id
+                AND c.account_id = n.account_id
+                AND c.currency = n.currency
+                AND c.velocity_control_id = n.velocity_control_id
+                AND c.velocity_limit_id = n.velocity_limit_id
+                AND c.partition_window = n.partition_window
+                AND version = max AND version != rn
+            "#,
+            &journal_ids as &[JournalId],
+            &account_ids as &[AccountId],
+            &currencies  as &[&str],
+            &velocity_control_ids as &[VelocityControlId],
+            &velocity_limit_ids as &[VelocityLimitId],
+            &partition_windows[..],
+            &latest_entry_ids as &[EntryId],
+            &versions,
+            &values,
+            )
+            .execute(&mut **op.tx())
+            .await?;
 
-        query_builder.push_values(
-            new_balances.into_iter().flat_map(|(key, snapshots)| {
-                snapshots.into_iter().map(move |snapshot| (key, snapshot))
-            }),
-            |mut builder, (key, b)| {
-                let (
-                    window,
-                    currency,
-                    journal_id,
-                    account_id,
-                    velocity_control_id,
-                    velocity_limit_id,
-                ) = key;
-                builder.push_bind(journal_id);
-                builder.push_bind(account_id);
-                builder.push_bind(currency.code());
-                builder.push_bind(velocity_control_id);
-                builder.push_bind(velocity_limit_id);
-                builder.push_bind(window.inner());
-                builder.push_bind(b.entry_id);
-                builder.push_bind(b.version as i32);
-                builder.push_bind(
-                    serde_json::to_value(b).expect("Failed to serialize balance snapshot"),
-                );
-            },
-        );
-
-        query_builder.push(
-          r#"
-          RETURNING *
-          ),
-          ranked_balances AS (
-              SELECT *,
-                  ROW_NUMBER() OVER (
-                      PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id ORDER BY version
-                  ) AS rn,
-                  MAX(version) OVER (
-                      PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id
-                  ) AS max
-              FROM new_snapshots
-          ),
-          initial_balances AS (
-              INSERT INTO cala_velocity_current_balances (
-                  journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
-                  partition_window, latest_version
-              )
-              SELECT 
-                  journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
-                  partition_window, version
-              FROM ranked_balances
-              WHERE version = rn AND rn = max
-          )
-          UPDATE cala_velocity_current_balances c
-          SET latest_version = n.version
-          FROM ranked_balances n
-          WHERE c.journal_id = n.journal_id
-              AND c.account_id = n.account_id
-              AND c.currency = n.currency
-              AND c.velocity_control_id = n.velocity_control_id
-              AND c.velocity_limit_id = n.velocity_limit_id
-              AND c.partition_window = n.partition_window
-              AND version = max AND version != rn
-          "#,
-        );
-        query_builder.build().execute(&mut **op.tx()).await?;
         Ok(())
     }
 }
