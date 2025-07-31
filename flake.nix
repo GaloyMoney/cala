@@ -113,7 +113,7 @@
           fi
         '';
 
-        configurePhase = ''
+        preConfigure = ''
           export CARGO_NET_GIT_FETCH_WITH_CLI=true
           export PROTOC="${pkgs.protobuf}/bin/protoc"
           export PATH="${pkgs.protobuf}/bin:${pkgs.gitMinimal}/bin:${pkgs.coreutils}/bin:$PATH"
@@ -122,20 +122,28 @@
           export GIT_SSL_CAINFO="$SSL_CERT_FILE"
         '';
       };
+
+      cargoVendorDir = craneLib.vendorCargoDeps {
+        inherit (commonArgs) src cargoLock;
+
+      };
       
       cargoArtifacts = craneLib.buildDepsOnly (commonArgs // {
         pname = "cala-deps";
         version = "0.1.0";
+        cargoVendorDir = cargoVendorDir;
       });
 
       cala = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala";
         doCheck = false;
       });
 
       cala-server = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-server";
         doCheck = false;
         cargoExtraArgs = "-p cala-server";
@@ -143,6 +151,7 @@
 
       cala-ledger = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-ledger";
         doCheck = false;
         cargoExtraArgs = "-p cala-ledger";
@@ -150,6 +159,7 @@
 
       write-sdl = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "write-sdl";
         doCheck = false;
         cargoExtraArgs = "--bin write_sdl";
@@ -157,6 +167,7 @@
 
       cala-ledger-outbox-client = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-ledger-outbox-client";
         doCheck = false;
         cargoExtraArgs = "-p cala-ledger-outbox-client";
@@ -164,6 +175,7 @@
 
       cala-cel-parser = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-cel-parser";
         doCheck = false;
         cargoExtraArgs = "-p cala-cel-parser";
@@ -171,6 +183,7 @@
 
       cala-cel-interpreter = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-cel-interpreter";
         doCheck = false;
         cargoExtraArgs = "-p cala-cel-interpreter";
@@ -178,6 +191,7 @@
 
       cala-nodejs = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-nodejs";
         doCheck = false;
         cargoExtraArgs = "-p galoymoney_cala-ledger";
@@ -190,6 +204,7 @@
 
       cala-ledger-example-rust = craneLib.buildPackage (commonArgs // {
         inherit cargoArtifacts;
+        cargoVendorDir = cargoVendorDir;
         pname = "cala-ledger-example-rust";
         doCheck = false;
         cargoExtraArgs = "--bin cala-ledger-example-rust";
