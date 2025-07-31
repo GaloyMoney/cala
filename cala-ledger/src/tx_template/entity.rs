@@ -324,7 +324,7 @@ mod tests {
 
     #[test]
     fn it_builds() {
-        let journal_id = Uuid::new_v4();
+        let journal_id = Uuid::now_v7();
         let entries = vec![NewTxTemplateEntry::builder()
             .entry_type("'TEST_DR'")
             .account_id("param.recipient")

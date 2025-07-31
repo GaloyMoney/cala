@@ -251,12 +251,12 @@ mod tests {
 
     #[test]
     fn it_builds() {
-        let id = uuid::Uuid::new_v4();
+        let id = uuid::Uuid::now_v7();
         let new_transaction = NewTransaction::builder()
             .id(id)
             .created_at(chrono::Utc::now())
-            .journal_id(uuid::Uuid::new_v4())
-            .tx_template_id(uuid::Uuid::new_v4())
+            .journal_id(uuid::Uuid::now_v7())
+            .tx_template_id(uuid::Uuid::now_v7())
             .entry_ids(vec![EntryId::new()])
             .effective(chrono::NaiveDate::default())
             .build()
@@ -275,10 +275,10 @@ mod tests {
     fn accepts_metadata() {
         use serde_json::json;
         let new_transaction = NewTransaction::builder()
-            .id(uuid::Uuid::new_v4())
+            .id(uuid::Uuid::now_v7())
             .created_at(chrono::Utc::now())
-            .journal_id(uuid::Uuid::new_v4())
-            .tx_template_id(uuid::Uuid::new_v4())
+            .journal_id(uuid::Uuid::now_v7())
+            .tx_template_id(uuid::Uuid::now_v7())
             .effective(chrono::NaiveDate::default())
             .metadata(json!({"foo": "bar"}))
             .entry_ids(vec![EntryId::new()])
