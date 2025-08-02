@@ -616,7 +616,7 @@ dependencies = [
  "cala-tracing",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.6.10",
  "futures",
  "opentelemetry",
  "prost",
@@ -649,7 +649,7 @@ dependencies = [
  "cala-cel-interpreter",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.6.13-dev",
  "rust_decimal",
  "rusty-money",
  "schemars 1.0.3",
@@ -712,7 +712,7 @@ dependencies = [
  "chrono",
  "clap",
  "derive_builder",
- "es-entity",
+ "es-entity 0.6.10",
  "futures",
  "rust_decimal",
  "serde",
@@ -1134,6 +1134,23 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
+version = "0.6.10"
+dependencies = [
+ "async-graphql",
+ "async-trait",
+ "base64 0.22.1",
+ "chrono",
+ "derive_builder",
+ "es-entity-macros 0.6.10",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.12",
+ "uuid",
+]
+
+[[package]]
+name = "es-entity"
 version = "0.6.13-dev"
 dependencies = [
  "anyhow",
@@ -1142,7 +1159,7 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "derive_builder",
- "es-entity-macros",
+ "es-entity-macros 0.6.13-dev",
  "schemars 1.0.3",
  "serde",
  "serde_json",
@@ -1151,6 +1168,19 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "es-entity-macros"
+version = "0.6.10"
+dependencies = [
+ "convert_case 0.8.0",
+ "darling",
+ "pluralizer",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.104",
 ]
 
 [[package]]
