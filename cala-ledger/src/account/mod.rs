@@ -48,7 +48,7 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
-        let account = self.repo.create_in_op(db.op(), new_account).await?;
+        let account = self.repo.create_in_op(db, new_account).await?;
         db.accumulate(account.last_persisted(1).map(|p| &p.event));
         Ok(account)
     }
@@ -69,7 +69,7 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         new_accounts: Vec<NewAccount>,
     ) -> Result<Vec<Account>, AccountError> {
-        let accounts = self.repo.create_all_in_op(db.op(), new_accounts).await?;
+        let accounts = self.repo.create_all_in_op(db, new_accounts).await?;
         db.accumulate(
             accounts
                 .iter()
@@ -96,7 +96,7 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
-        self.repo.find_all_in_tx(db.tx(), account_ids).await
+        self.repo.find_all_in_op(db, account_ids).await
     }
 
     #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self), err)]
@@ -130,7 +130,7 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
-        let n_events = self.repo.update_in_op(db.op(), account).await?;
+        let n_events = self.repo.update_in_op(db, account).await?;
         db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
@@ -138,7 +138,7 @@ impl Accounts {
     #[cfg(feature = "import")]
     pub async fn sync_account_creation(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: AccountValues,
     ) -> Result<(), AccountError> {
@@ -146,13 +146,13 @@ impl Accounts {
         self.repo
             .import_in_op(&mut db, origin, &mut account)
             .await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = account
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let now = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, now)
             .await?;
         Ok(())
     }
@@ -160,20 +160,20 @@ impl Accounts {
     #[cfg(feature = "import")]
     pub async fn sync_account_update(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         values: AccountValues,
         fields: Vec<String>,
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id(values.id).await?;
         account.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = account
             .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }

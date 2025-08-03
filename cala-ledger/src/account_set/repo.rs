@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use es_entity::*;
-use sqlx::{Executor, PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
 use std::collections::HashMap;
 
@@ -127,26 +127,13 @@ impl AccountSetRepo {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.list_children_by_created_at_in_executor(&self.pool, id, args)
+        self.list_children_by_created_at_in_op(&self.pool, id, args)
             .await
     }
 
-    pub async fn list_children_by_created_at_in_tx(
+    pub async fn list_children_by_created_at_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
-        AccountSetError,
-    > {
-        self.list_children_by_created_at_in_executor(&mut **db, id, args)
-            .await
-    }
-
-    async fn list_children_by_created_at_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         account_set_id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
@@ -209,7 +196,7 @@ impl AccountSetRepo {
             created_at,
             uuid::Uuid::from(account_set_id),
         )
-        .fetch_all(executor)
+        .fetch_all(op.into_executor())
         .await?;
         let has_next_page = rows.len() > first;
         let mut end_cursor = None;
@@ -263,29 +250,13 @@ impl AccountSetRepo {
         >,
         AccountSetError,
     > {
-        self.list_children_by_external_id_in_executor(&self.pool, id, args)
+        self.list_children_by_external_id_in_op(&self.pool, id, args)
             .await
     }
 
-    pub async fn list_children_by_external_id_in_tx(
+    pub async fn list_children_by_external_id_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<
-            AccountSetMemberByExternalId,
-            AccountSetMembersByExternalIdCursor,
-        >,
-        AccountSetError,
-    > {
-        self.list_children_by_external_id_in_executor(&mut **db, id, args)
-            .await
-    }
-
-    async fn list_children_by_external_id_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         account_set_id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
     ) -> Result<
@@ -363,7 +334,7 @@ impl AccountSetRepo {
             external_id,
             uuid::Uuid::from(account_set_id),
         )
-        .fetch_all(executor)
+        .fetch_all(op.into_executor())
         .await?;
 
         let has_next_page = rows.len() > first;
@@ -411,12 +382,12 @@ impl AccountSetRepo {
 
     pub async fn add_member_account_and_return_parents(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(&mut **db)
+            .execute(db.as_executor())
             .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
@@ -449,7 +420,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .fetch_all(&mut **db)
+        .fetch_all(db.as_executor())
         .await?;
         let mut time = None;
         let ret = rows
@@ -470,12 +441,12 @@ impl AccountSetRepo {
 
     pub async fn remove_member_account_and_return_parents(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(&mut **db)
+            .execute(db.as_executor())
             .await?;
         let rows = sqlx::query!(
             r#"
@@ -505,7 +476,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .fetch_all(&mut **db)
+        .fetch_all(db.as_executor())
         .await?;
         let mut time = None;
         let ret = rows
@@ -526,12 +497,12 @@ impl AccountSetRepo {
 
     pub async fn add_member_set_and_return_parents(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(&mut **db)
+            .execute(db.as_executor())
             .await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
@@ -572,7 +543,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .fetch_all(&mut **db)
+        .fetch_all(db.as_executor())
         .await?;
         let mut time = None;
         let ret = rows
@@ -593,12 +564,12 @@ impl AccountSetRepo {
 
     pub async fn remove_member_set_and_return_parents(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(&mut **db)
+            .execute(db.as_executor())
             .await?;
         let rows = sqlx::query!(
             r#"
@@ -634,7 +605,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .fetch_all(&mut **db)
+        .fetch_all(db.as_executor())
         .await?;
         let mut time = None;
         let ret = rows
@@ -659,24 +630,13 @@ impl AccountSetRepo {
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        self.find_where_account_is_member_in_executor(&self.pool, account_id, query)
+        self.find_where_account_is_member_in_op(&self.pool, account_id, query)
             .await
     }
 
-    pub async fn find_where_account_is_member_in_tx(
+    pub async fn find_where_account_is_member_in_op(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
-        account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
-    {
-        self.find_where_account_is_member_in_executor(&mut **tx, account_id, query)
-            .await
-    }
-
-    async fn find_where_account_is_member_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
@@ -703,7 +663,7 @@ impl AccountSetRepo {
             query.after.map(|c| c.name),
             query.first as i64 + 1
         )
-        .fetch_all(executor)
+        .fetch_all(op.into_executor())
         .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
@@ -727,24 +687,13 @@ impl AccountSetRepo {
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        self.find_where_account_set_is_member_in_executor(&self.pool, account_set_id, query)
+        self.find_where_account_set_is_member_in_op(&self.pool, account_set_id, query)
             .await
     }
 
-    pub async fn find_where_account_set_is_member_in_tx(
+    pub async fn find_where_account_set_is_member_in_op(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
-        account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
-    {
-        self.find_where_account_set_is_member_in_executor(&mut **tx, account_set_id, query)
-            .await
-    }
-
-    async fn find_where_account_set_is_member_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
@@ -771,7 +720,7 @@ impl AccountSetRepo {
             query.after.map(|c| c.name),
             query.first as i64 + 1
         )
-        .fetch_all(executor)
+        .fetch_all(op.into_executor())
         .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
@@ -792,7 +741,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
@@ -807,25 +756,15 @@ impl AccountSetRepo {
             account_set.values().external_id,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, account_set.events_mut()).await?;
         Ok(())
     }
 
-    pub async fn fetch_mappings_in_tx(
+    pub async fn fetch_mappings_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        self.fetch_mappings_in_executor(&mut **db, journal_id, account_ids)
-            .await
-    }
-
-    async fn fetch_mappings_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
@@ -840,7 +779,7 @@ impl AccountSetRepo {
             journal_id as JournalId,
             account_ids as &[AccountId]
         )
-        .fetch_all(executor)
+        .fetch_all(op.into_executor())
         .await?;
         let mut mappings = HashMap::new();
         for row in rows {
@@ -855,7 +794,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_member_account_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
@@ -867,7 +806,7 @@ impl AccountSetRepo {
             account_id as AccountId,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
@@ -875,7 +814,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_remove_member_account(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
@@ -885,7 +824,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
@@ -893,7 +832,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_member_set_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
@@ -905,7 +844,7 @@ impl AccountSetRepo {
             member_account_set_id as AccountSetId,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
@@ -913,7 +852,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_remove_member_set(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
@@ -923,7 +862,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }

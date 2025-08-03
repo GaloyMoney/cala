@@ -1,4 +1,3 @@
-use es_entity::DbOp;
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -29,7 +28,7 @@ impl VelocityBalanceRepo {
     }
     pub async fn find_for_update(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
     ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
         let (windows, currencies, journal_ids, account_ids, control_ids, limit_ids) = keys.fold(
@@ -72,7 +71,7 @@ impl VelocityBalanceRepo {
         &control_ids  as &[VelocityControlId],
         &limit_ids  as &[VelocityLimitId],
     )
-    .execute(&mut **op.tx())
+    .execute(op.as_executor())
     .await?;
 
         let rows = sqlx::query!(
@@ -121,7 +120,7 @@ impl VelocityBalanceRepo {
        &control_ids  as &[VelocityControlId],
        &limit_ids  as &[VelocityLimitId],
     )
-    .fetch_all(&mut **op.tx())
+    .fetch_all(op.as_executor())
     .await?;
 
         let mut ret = HashMap::new();
@@ -147,7 +146,7 @@ impl VelocityBalanceRepo {
 
     pub(crate) async fn insert_new_snapshots(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
     ) -> Result<(), VelocityError> {
         let mut journal_ids = Vec::new();
@@ -248,7 +247,7 @@ impl VelocityBalanceRepo {
             &versions,
             &values,
             )
-            .execute(&mut **op.tx())
+            .execute(op.as_executor())
             .await?;
 
         Ok(())

@@ -8,13 +8,14 @@ members = [
   "cala-ledger-core-types",
   "cala-server",
   "cala-tracing",
-  "cala-nodejs",
+  # "cala-nodejs",
   "cala-cel-parser",
   "cala-cel-interpreter",
 ]
 
 [workspace.dependencies]
 es-entity = { path = "../es-entity" }
+# es-entity = { git = "https://github.com/GaloyMoney/es-entity" }
 anyhow = "1.0.98"
 async-graphql = { version = "7.0.17", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
 async-graphql-axum = "=7.0.13"

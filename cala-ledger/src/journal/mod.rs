@@ -46,7 +46,7 @@ impl Journals {
         db: &mut LedgerOperation<'_>,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_op(db.op(), new_journal).await?;
+        let journal = self.repo.create_in_op(db, new_journal).await?;
         db.accumulate(journal.last_persisted(1).map(|p| &p.event));
         Ok(journal)
     }
@@ -77,7 +77,7 @@ impl Journals {
         db: &mut LedgerOperation<'_>,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        let n_events = self.repo.update_in_op(db.op(), journal).await?;
+        let n_events = self.repo.update_in_op(db, journal).await?;
         db.accumulate(journal.last_persisted(n_events).map(|p| &p.event));
         Ok(())
     }
@@ -90,7 +90,7 @@ impl Journals {
     #[cfg(feature = "import")]
     pub async fn sync_journal_creation(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: JournalValues,
     ) -> Result<(), JournalError> {
@@ -98,13 +98,13 @@ impl Journals {
         self.repo
             .import_in_op(&mut db, origin, &mut journal)
             .await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = journal
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }
@@ -112,20 +112,20 @@ impl Journals {
     #[cfg(feature = "import")]
     pub async fn sync_journal_update(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         values: JournalValues,
         fields: Vec<String>,
     ) -> Result<(), JournalError> {
         let mut journal = self.repo.find_by_id(values.id).await?;
         journal.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut journal).await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = journal
             .last_persisted(n_events)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }

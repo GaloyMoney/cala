@@ -37,7 +37,7 @@ impl JobExecutor {
 
     pub async fn spawn_job<I: JobInitializer>(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut impl es_entity::AtomicOperation,
         job: &Job,
         schedule_at: Option<DateTime<Utc>>,
     ) -> Result<(), JobError> {
@@ -59,7 +59,7 @@ impl JobExecutor {
             job.name,
             schedule_at
         )
-        .execute(&mut **db)
+        .execute(db.as_executor())
         .await?;
         Ok(())
     }

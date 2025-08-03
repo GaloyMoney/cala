@@ -2,7 +2,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::EsEntity;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -22,6 +21,8 @@ use repo::*;
 #[derive(Clone)]
 pub struct Entries {
     repo: EntryRepo,
+    // Used only for "import" feature
+    #[allow(dead_code)]
     outbox: Outbox,
     _pool: PgPool,
 }
@@ -140,7 +141,7 @@ impl Entries {
         db: &mut LedgerOperation<'_>,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
-        let entries = self.repo.create_all_in_op(db.op(), entries).await?;
+        let entries = self.repo.create_all_in_op(db, entries).await?;
         db.accumulate(
             entries
                 .iter()
@@ -158,19 +159,21 @@ impl Entries {
     #[cfg(feature = "import")]
     pub(crate) async fn sync_entry_creation(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
+        use es_entity::EsEntity;
+
         let mut entry = Entry::import(origin, values);
         self.repo.import(&mut db, origin, &mut entry).await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = entry
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }

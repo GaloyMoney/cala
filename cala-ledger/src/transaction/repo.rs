@@ -1,6 +1,3 @@
-#[cfg(feature = "import")]
-use es_entity::DbOp;
-
 use es_entity::*;
 use sqlx::PgPool;
 
@@ -38,7 +35,7 @@ impl TransactionRepo {
     #[cfg(feature = "import")]
     pub async fn import_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         transaction: &mut Transaction,
     ) -> Result<(), TransactionError> {
@@ -54,7 +51,7 @@ impl TransactionRepo {
             transaction.values().correlation_id,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, transaction.events_mut()).await?;
         Ok(())

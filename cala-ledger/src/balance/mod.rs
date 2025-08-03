@@ -5,7 +5,7 @@ mod repo;
 mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use sqlx::{Acquire, PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
@@ -31,6 +31,8 @@ pub(crate) use snapshot::*;
 #[derive(Clone)]
 pub struct Balances {
     repo: BalanceRepo,
+    // Used only for "import" feature
+    #[allow(dead_code)]
     outbox: Outbox,
     journals: Journals,
     effective: EffectiveBalances,
@@ -73,7 +75,7 @@ impl Balances {
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
         self.repo
-            .find_in_tx(op.tx(), journal_id, account_id.into(), currency)
+            .find_in_op(op, journal_id, account_id.into(), currency)
             .await
     }
 
@@ -118,37 +120,41 @@ impl Balances {
             .map(|(a, c)| (a, c.code()))
             .unzip();
 
-        let mut db = op.tx().begin().await?;
+        let new_balances = {
+            let mut db = op.begin().await?;
 
-        let current_balances = self
-            .repo
-            .find_for_update(&mut db, journal.id, &all_involved_balances)
-            .await?;
-        let new_balances = Self::new_snapshots(
-            created_at,
-            current_balances,
-            &entries,
-            &account_set_mappings,
-        );
-        self.repo
-            .insert_new_snapshots(&mut db, journal.id, &new_balances)
-            .await?;
-
-        if journal.insert_effective_balances() {
-            self.effective
-                .update_cumulative_balances_in_tx(
-                    &mut db,
-                    journal_id,
-                    entries,
-                    effective,
-                    created_at,
-                    account_set_mappings,
-                    all_involved_balances,
-                )
+            let current_balances = self
+                .repo
+                .find_for_update(&mut db, journal.id, &all_involved_balances)
                 .await?;
-        }
+            let new_balances = Self::new_snapshots(
+                created_at,
+                current_balances,
+                &entries,
+                &account_set_mappings,
+            );
+            self.repo
+                .insert_new_snapshots(&mut db, journal.id, &new_balances)
+                .await?;
 
-        db.commit().await?;
+            if journal.insert_effective_balances() {
+                self.effective
+                    .update_cumulative_balances_in_op(
+                        &mut db,
+                        journal_id,
+                        entries,
+                        effective,
+                        created_at,
+                        account_set_mappings,
+                        all_involved_balances,
+                    )
+                    .await?;
+            }
+
+            db.commit().await?;
+
+            new_balances
+        };
 
         op.accumulate(new_balances.into_iter().map(|balance| {
             if balance.version == 1 {
@@ -168,7 +174,7 @@ impl Balances {
 
     pub(crate) async fn find_balances_for_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        db: &mut LedgerOperation<'_>,
         journal_id: JournalId,
         account_id: AccountId,
     ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {

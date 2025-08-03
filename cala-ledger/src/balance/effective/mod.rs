@@ -89,9 +89,9 @@ impl EffectiveBalances {
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(crate) async fn update_cumulative_balances_in_tx(
+    pub(crate) async fn update_cumulative_balances_in_op(
         &self,
-        db: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
         effective: NaiveDate,
@@ -101,7 +101,7 @@ impl EffectiveBalances {
     ) -> Result<(), BalanceError> {
         let mut all_data = self
             .repo
-            .find_for_update(db, journal_id, balance_ids, effective)
+            .find_for_update(&mut *op, journal_id, balance_ids, effective)
             .await?;
         let empty = Vec::new();
         for entry in entries.iter() {
@@ -122,7 +122,7 @@ impl EffectiveBalances {
         }
 
         self.repo
-            .insert_new_snapshots(db, journal_id, all_data)
+            .insert_new_snapshots(op, journal_id, all_data)
             .await?;
 
         Ok(())

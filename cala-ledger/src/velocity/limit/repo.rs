@@ -1,5 +1,5 @@
 use es_entity::{EntityEvents, GenericEvent, *};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
 use crate::{
     primitives::{DataSourceId, VelocityLimitId},
@@ -33,7 +33,7 @@ impl VelocityLimitRepo {
 
     pub async fn add_limit_to_control(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<(), VelocityError> {
@@ -43,14 +43,14 @@ impl VelocityLimitRepo {
             control as VelocityControlId,
             limit as VelocityLimitId,
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
 
     pub async fn list_for_control(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: impl es_entity::IntoExecutor<'_>,
         control: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
         let rows = sqlx::query_as!(
@@ -67,7 +67,7 @@ impl VelocityLimitRepo {
             ORDER BY l.id, e.sequence"#,
             control as VelocityControlId,
         )
-        .fetch_all(&mut **db)
+        .fetch_all(op.into_executor())
         .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;

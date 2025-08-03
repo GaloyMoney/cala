@@ -22,6 +22,8 @@ use repo::*;
 #[derive(Clone)]
 pub struct Transactions {
     repo: TransactionRepo,
+    // Used only for "import" feature
+    #[allow(dead_code)]
     outbox: Outbox,
     _pool: PgPool,
 }
@@ -40,7 +42,7 @@ impl Transactions {
         db: &mut LedgerOperation<'_>,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
-        let transaction = self.repo.create_in_op(db.op(), new_transaction).await?;
+        let transaction = self.repo.create_in_op(db, new_transaction).await?;
         db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
@@ -52,16 +54,12 @@ impl Transactions {
         existing_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
     ) -> Result<Transaction, TransactionError> {
-        let mut existing_tx = self.repo.find_by_id(existing_tx_id).await?;
+        let mut existing_tx = self.repo.find_by_id_in_op(&mut *db, existing_tx_id).await?;
 
-        let new_tx = existing_tx.void(
-            voiding_tx_id,
-            entry_ids.into_iter().collect(),
-            db.op().now(),
-        )?;
+        let new_tx = existing_tx.void(voiding_tx_id, entry_ids.into_iter().collect(), db.now())?;
 
-        self.repo.update_in_op(db.op(), &mut existing_tx).await?;
-        let voided_tx = self.repo.create_in_op(db.op(), new_tx).await?;
+        self.repo.update_in_op(db, &mut existing_tx).await?;
+        let voided_tx = self.repo.create_in_op(db, new_tx).await?;
 
         db.accumulate(
             existing_tx
@@ -119,7 +117,7 @@ impl Transactions {
     #[cfg(feature = "import")]
     pub async fn sync_transaction_creation(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
@@ -127,13 +125,13 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = transaction
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }
@@ -141,7 +139,7 @@ impl Transactions {
     #[cfg(feature = "import")]
     pub async fn sync_transaction_update(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: TransactionValues,
     ) -> Result<(), TransactionError> {
@@ -149,13 +147,13 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = transaction
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }

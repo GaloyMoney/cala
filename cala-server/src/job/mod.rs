@@ -44,17 +44,17 @@ impl Jobs {
     }
 
     #[instrument(name = "cala_server.jobs.create_and_spawn", skip(self, op, data))]
-    pub async fn create_and_spawn_in_op<I: JobInitializer + Default, D: serde::Serialize>(
+    pub async fn create_and_spawn_in_op<'a, I: JobInitializer + Default, D: serde::Serialize>(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut LedgerOperation<'a>,
         id: impl Into<JobId> + std::fmt::Debug,
         name: String,
         description: Option<String>,
         data: D,
     ) -> Result<Job, JobError> {
         let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
-        let job = self.repo.create_in_tx(op.tx(), new_job).await?;
-        self.executor.spawn_job::<I>(op.tx(), &job, None).await?;
+        let job = self.repo.create_in_op(op, new_job).await?;
+        self.executor.spawn_job::<I>(op, &job, None).await?;
         Ok(job)
     }
 
@@ -68,7 +68,7 @@ impl Jobs {
         schedule_at: DateTime<Utc>,
     ) -> Result<Job, JobError> {
         let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
-        let job = self.repo.create_in_tx(op.tx(), new_job).await?;
+        let job = self.repo.create_in_op(op, new_job).await?;
         self.executor
             .spawn_job::<I>(op.tx(), &job, Some(schedule_at))
             .await?;

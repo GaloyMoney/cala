@@ -47,7 +47,7 @@ impl AccountRepo {
     #[cfg(feature = "import")]
     pub async fn import_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         account: &mut Account,
     ) -> Result<(), AccountError> {
@@ -65,7 +65,7 @@ impl AccountRepo {
             recorded_at,
             serde_json::to_value(account.values()).expect("Failed to serialize account values"),
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, account.events_mut()).await?;
         Ok(())

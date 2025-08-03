@@ -96,7 +96,7 @@ impl AccountControls {
             velocity_limits,
         };
 
-        self.repo.create_in_tx(db.op(), control).await?;
+        self.repo.create_in_op(db, control).await?;
 
         Ok(())
     }
@@ -107,6 +107,6 @@ impl AccountControls {
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
     {
-        self.repo.find_for_enforcement(db.op(), account_ids).await
+        self.repo.find_for_enforcement(db, account_ids).await
     }
 }
