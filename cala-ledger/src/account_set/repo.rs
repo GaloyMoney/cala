@@ -133,7 +133,7 @@ impl AccountSetRepo {
 
     pub async fn list_children_by_created_at_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
@@ -155,8 +155,10 @@ impl AccountSetRepo {
             None => None,
         };
 
-        let rows = sqlx::query!(
-            r#"
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
             WITH member_accounts AS (
               SELECT
                 member_account_id AS member_id,
@@ -191,13 +193,12 @@ impl AccountSetRepo {
             ORDER BY created_at DESC, member_id DESC
             LIMIT $1
           "#,
-            (first + 1) as i64,
-            id.map(uuid::Uuid::from),
-            created_at,
-            uuid::Uuid::from(account_set_id),
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                (first + 1) as i64,
+                id.map(uuid::Uuid::from),
+                created_at,
+                uuid::Uuid::from(account_set_id),
+            ))
+            .await?;
         let has_next_page = rows.len() > first;
         let mut end_cursor = None;
         if let Some(last) = rows.last() {
@@ -256,7 +257,7 @@ impl AccountSetRepo {
 
     pub async fn list_children_by_external_id_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
     ) -> Result<
@@ -281,8 +282,10 @@ impl AccountSetRepo {
             None => None,
         };
 
-        let rows = sqlx::query!(
-            r#"
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
             WITH member_accounts AS (
               SELECT
                 member_account_id AS member_id,
@@ -329,13 +332,12 @@ impl AccountSetRepo {
             ORDER BY external_id ASC NULLS LAST, member_id ASC
             LIMIT $1
         "#,
-            (first + 1) as i64,
-            id.map(uuid::Uuid::from),
-            external_id,
-            uuid::Uuid::from(account_set_id),
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                (first + 1) as i64,
+                id.map(uuid::Uuid::from),
+                external_id,
+                uuid::Uuid::from(account_set_id),
+            ))
+            .await?;
 
         let has_next_page = rows.len() > first;
         let mut end_cursor = None;
@@ -636,14 +638,16 @@ impl AccountSetRepo {
 
     pub async fn find_where_account_is_member_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        let rows = sqlx::query_as!(
-            account_set_repo_types::Repo__DbEvent,
-            r#"
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query_as!(
+                account_set_repo_types::Repo__DbEvent,
+                r#"
             WITH member_account_sets AS (
               SELECT a.id, a.name, a.created_at
               FROM cala_account_set_member_accounts asm
@@ -658,13 +662,12 @@ impl AccountSetRepo {
               JOIN cala_account_set_events e ON mas.id = e.id
               ORDER BY mas.name, mas.id, e.sequence
             "#,
-            account_id as AccountId,
-            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
-            query.after.map(|c| c.name),
-            query.first as i64 + 1
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                account_id as AccountId,
+                query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+                query.after.map(|c| c.name),
+                query.first as i64 + 1
+            ))
+            .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
         let mut end_cursor = None;
@@ -693,14 +696,16 @@ impl AccountSetRepo {
 
     pub async fn find_where_account_set_is_member_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        let rows = sqlx::query_as!(
-            account_set_repo_types::Repo__DbEvent,
-            r#"
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query_as!(
+                account_set_repo_types::Repo__DbEvent,
+                r#"
             WITH member_account_sets AS (
               SELECT a.id, a.name, a.created_at
               FROM cala_account_set_member_account_sets asm
@@ -715,13 +720,12 @@ impl AccountSetRepo {
               JOIN cala_account_set_events e ON mas.id = e.id
               ORDER BY mas.name, mas.id, e.sequence
             "#,
-            account_set_id as AccountSetId,
-            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
-            query.after.map(|c| c.name),
-            query.first as i64 + 1
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                account_set_id as AccountSetId,
+                query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+                query.after.map(|c| c.name),
+                query.first as i64 + 1
+            ))
+            .await?;
 
         let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
         let mut end_cursor = None;
@@ -764,11 +768,11 @@ impl AccountSetRepo {
 
     pub async fn fetch_mappings_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        let rows = sqlx::query!(
+        let rows = op.into_executor().fetch_all(sqlx::query!(
             r#"
           SELECT m.account_set_id AS "set_id!: AccountSetId", m.member_account_id AS "account_id!: AccountId"
           FROM cala_account_set_member_accounts m
@@ -778,8 +782,7 @@ impl AccountSetRepo {
           "#,
             journal_id as JournalId,
             account_ids as &[AccountId]
-        )
-        .fetch_all(op.into_executor())
+        ))
         .await?;
         let mut mappings = HashMap::new();
         for row in rows {

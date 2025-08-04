@@ -3,7 +3,10 @@ use async_graphql::*;
 use super::job::*;
 use crate::{
     app::CalaApp,
-    graphql::{primitives::UUID, DbOp, Job},
+    graphql::{
+        primitives::{DbOp, UUID},
+        Job,
+    },
 };
 
 #[derive(InputObject)]

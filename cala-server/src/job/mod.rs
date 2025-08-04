@@ -44,9 +44,9 @@ impl Jobs {
     }
 
     #[instrument(name = "cala_server.jobs.create_and_spawn", skip(self, op, data))]
-    pub async fn create_and_spawn_in_op<'a, I: JobInitializer + Default, D: serde::Serialize>(
+    pub async fn create_and_spawn_in_op<I: JobInitializer + Default, D: serde::Serialize>(
         &self,
-        op: &mut LedgerOperation<'a>,
+        op: &mut LedgerOperation<'_>,
         id: impl Into<JobId> + std::fmt::Debug,
         name: String,
         description: Option<String>,
@@ -70,7 +70,7 @@ impl Jobs {
         let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
         let job = self.repo.create_in_op(op, new_job).await?;
         self.executor
-            .spawn_job::<I>(op.tx(), &job, Some(schedule_at))
+            .spawn_job::<I>(op, &job, Some(schedule_at))
             .await?;
         Ok(job)
     }

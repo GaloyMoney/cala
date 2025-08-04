@@ -50,12 +50,14 @@ impl VelocityLimitRepo {
 
     pub async fn list_for_control(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"WITH limits AS (
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query_as!(
+                GenericEvent,
+                r#"WITH limits AS (
               SELECT id, l.created_at AS entity_created_at
               FROM cala_velocity_limits l
               JOIN cala_velocity_control_limits ON id = velocity_limit_id
@@ -65,10 +67,9 @@ impl VelocityLimitRepo {
             FROM limits l
             JOIN cala_velocity_limit_events e ON l.id = e.id
             ORDER BY l.id, e.sequence"#,
-            control as VelocityControlId,
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                control as VelocityControlId,
+            ))
+            .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;
         Ok(ret)

@@ -30,13 +30,15 @@ impl BalanceRepo {
 
     pub async fn find_in_op(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        let row = sqlx::query!(
-            r#"
+        let row = op
+            .into_executor()
+            .fetch_optional(sqlx::query!(
+                r#"
             SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
             JOIN cala_current_balances c
@@ -50,12 +52,11 @@ impl BalanceRepo {
             AND c.account_id = $2
             AND c.currency = $3
             "#,
-            journal_id as JournalId,
-            account_id as AccountId,
-            currency.code(),
-        )
-        .fetch_optional(op.into_executor())
-        .await?;
+                journal_id as JournalId,
+                account_id as AccountId,
+                currency.code(),
+            ))
+            .await?;
 
         if let Some(row) = row {
             let details: BalanceSnapshot =

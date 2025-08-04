@@ -12,7 +12,7 @@ use crate::app::CalaApp;
 
 use super::{
     account_set::*, balance::Balance, convert::ToGlobalId, entry::Entry, loader::LedgerDataLoader,
-    primitives::*, schema::DbOp,
+    primitives::*,
 };
 
 #[derive(Clone, SimpleObject)]
@@ -184,7 +184,7 @@ pub(super) struct AccountUpdatePayload {
 
 impl ToGlobalId for cala_ledger::AccountId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("account:{}", self))
+        async_graphql::types::ID::from(format!("account:{self}"))
     }
 }
 

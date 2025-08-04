@@ -61,19 +61,11 @@ impl<'t> LedgerOperation<'t> {
 }
 
 impl<'t> es_entity::AtomicOperation for LedgerOperation<'t> {
-    type Executor<'c>
-        = <DbOpWithTime<'t> as es_entity::AtomicOperation>::Executor<'c>
-    where
-        Self: 'c;
-
     fn now(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         Some(self.now())
     }
 
-    fn as_executor<'a, 'c>(&'a mut self) -> Self::Executor<'c>
-    where
-        'a: 'c,
-    {
+    fn as_executor(&mut self) -> &mut sqlx::PgConnection {
         self.db_op.as_executor()
     }
 }

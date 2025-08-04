@@ -39,20 +39,21 @@ impl AccountControlRepo {
 
     pub async fn find_for_enforcement(
         &self,
-        op: impl es_entity::IntoExecutor<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
     {
-        let rows = sqlx::query!(
-            r#"SELECT values, latest_values
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"SELECT values, latest_values
             FROM cala_velocity_account_controls v
             JOIN cala_accounts a
             ON v.account_id = a.id
             WHERE account_id = ANY($1)"#,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(op.into_executor())
-        .await?;
+                account_ids as &[AccountId],
+            ))
+            .await?;
 
         let mut res: HashMap<AccountId, (AccountValues, Vec<_>)> = HashMap::new();
 

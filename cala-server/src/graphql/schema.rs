@@ -1,7 +1,5 @@
 use async_graphql::{dataloader::*, types::connection::*, *};
 use cala_ledger::{balance::AccountBalance, primitives::*, tx_template::NewParamDefinition};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::{app::CalaApp, extension::*};
 
@@ -9,8 +7,6 @@ use super::{
     account::*, account_set::*, balance::*, journal::*, loader::*, primitives::*, transaction::*,
     tx_template::*, velocity::*,
 };
-
-pub type DbOp = Arc<Mutex<cala_ledger::LedgerOperation<'static>>>;
 
 #[derive(Default)]
 pub struct CoreQuery<E: QueryExtensionMarker> {

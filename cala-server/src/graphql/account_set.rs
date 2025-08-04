@@ -11,7 +11,6 @@ pub use cala_ledger::account_set::{AccountSetMembersByCreatedAtCursor, AccountSe
 
 use super::{
     balance::*, convert::ToGlobalId, entry::Entry, loader::LedgerDataLoader, primitives::*,
-    schema::DbOp,
 };
 use crate::app::CalaApp;
 
@@ -311,7 +310,7 @@ pub(super) struct RemoveFromAccountSetPayload {
 
 impl ToGlobalId for cala_ledger::AccountSetId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("account_set:{}", self))
+        async_graphql::types::ID::from(format!("account_set:{self}"))
     }
 }
 
