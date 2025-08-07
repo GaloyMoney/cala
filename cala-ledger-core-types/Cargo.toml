@@ -13,7 +13,7 @@ graphql = ["es-entity/graphql", "dep:async-graphql"]
 json-schema = ["es-entity/json-schema", "dep:schemars"]
 
 [dependencies]
-cel-interpreter = { path = "../cala-cel-interpreter/", package = "cala-cel-interpreter", version = "0.6.13-dev" }
+cel-interpreter = { workspace = true }
 es-entity = { workspace = true }
 
 async-graphql = { workspace = true, optional = true }

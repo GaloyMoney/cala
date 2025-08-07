@@ -11,8 +11,8 @@ license = "Apache-2.0"
 fail-on-warnings = []
 
 [dependencies]
-cala_types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.6.13-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.6.13-dev" }
+cala-types = { workspace = true }
+cel-interpreter = { workspace = true }
 
 futures = { workspace = true }
 uuid = { workspace = true }
