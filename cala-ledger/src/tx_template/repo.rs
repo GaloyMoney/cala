@@ -62,7 +62,7 @@ impl TxTemplateRepo {
     #[cfg(feature = "import")]
     pub async fn import_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         tx_template: &mut TxTemplate,
     ) -> Result<(), TxTemplateError> {
@@ -75,7 +75,7 @@ impl TxTemplateRepo {
             tx_template.values().code,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, tx_template.events_mut()).await?;
         Ok(())

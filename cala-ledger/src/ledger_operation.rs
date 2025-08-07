@@ -1,26 +1,29 @@
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
-use es_entity::DbOp;
+use es_entity::{DbOp, DbOpWithTime};
 
 use crate::outbox::*;
 
 pub struct LedgerOperation<'t> {
-    db_op: DbOp<'t>,
+    db_op: DbOpWithTime<'t>,
     outbox: Outbox,
     accumulated_events: Vec<OutboxEventPayload>,
 }
 
 impl<'t> LedgerOperation<'t> {
-    pub(crate) async fn init(pool: &PgPool, outbox: &Outbox) -> Result<Self, sqlx::Error> {
-        let db_op = DbOp::init(pool).await?;
-        Ok(Self {
+    pub(crate) async fn init(
+        pool: &PgPool,
+        outbox: &Outbox,
+    ) -> Result<LedgerOperation<'static>, sqlx::Error> {
+        let db_op = DbOp::init(pool).await?.with_db_time().await?;
+        Ok(LedgerOperation {
             db_op,
             outbox: outbox.clone(),
             accumulated_events: Vec::new(),
         })
     }
 
-    pub(crate) fn new(db_op: DbOp<'t>, outbox: &Outbox) -> Self {
+    pub(crate) fn new(db_op: DbOpWithTime<'t>, outbox: &Outbox) -> Self {
         Self {
             db_op,
             outbox: outbox.clone(),
@@ -28,12 +31,12 @@ impl<'t> LedgerOperation<'t> {
         }
     }
 
-    pub fn tx(&mut self) -> &mut Transaction<'t, Postgres> {
-        self.db_op.tx()
+    pub fn now(&self) -> chrono::DateTime<chrono::Utc> {
+        self.db_op.now()
     }
 
-    pub fn op(&mut self) -> &mut DbOp<'t> {
-        &mut self.db_op
+    pub async fn begin(&mut self) -> Result<DbOpWithTime<'_>, sqlx::Error> {
+        self.db_op.begin().await
     }
 
     pub(crate) fn accumulate(
@@ -45,7 +48,7 @@ impl<'t> LedgerOperation<'t> {
     }
 
     pub async fn commit(self) -> Result<(), sqlx::Error> {
-        let tx = self.db_op.into_tx();
+        let tx = sqlx::Transaction::from(self.db_op);
         if self.accumulated_events.is_empty() {
             tx.commit().await?;
         } else {
@@ -54,5 +57,15 @@ impl<'t> LedgerOperation<'t> {
                 .await?;
         }
         Ok(())
+    }
+}
+
+impl<'t> es_entity::AtomicOperation for LedgerOperation<'t> {
+    fn now(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+        Some(self.now())
+    }
+
+    fn as_executor(&mut self) -> &mut sqlx::PgConnection {
+        self.db_op.as_executor()
     }
 }

@@ -14,9 +14,9 @@ impl JobRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn create_in_tx(
+    pub async fn create_in_op(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         job: Job,
     ) -> Result<Job, JobError> {
         sqlx::query!(
@@ -29,7 +29,7 @@ impl JobRepo {
             job.state::<serde_json::Value>()
                 .expect("Could not serialize state")
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(job)
     }

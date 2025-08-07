@@ -51,10 +51,7 @@ impl EntryRepo {
         let (entities, has_next_page) = match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
-                            entity_ty = Entry,
-                            id_ty = EntryId,
-                            "cala",
-                            executor,
+                            entity = Entry,
                             r#"
                             SELECT created_at, id
                             FROM cala_entries
@@ -68,15 +65,12 @@ impl EntryRepo {
                             created_at as Option<chrono::DateTime<chrono::Utc>>,
                             account_set_id as AccountSetId,
                         )
-                            .fetch_n(first)
+                            .fetch_n(executor, first)
                             .await?
                     },
                     es_entity::ListDirection::Descending => {
                         es_entity::es_query!(
-                            entity_ty = Entry,
-                            id_ty = EntryId,
-                            "cala",
-                            executor,
+                            entity = Entry,
                             r#"
                             SELECT created_at, id
                             FROM cala_entries
@@ -90,7 +84,7 @@ impl EntryRepo {
                             created_at as Option<chrono::DateTime<chrono::Utc>>,
                             account_set_id as AccountSetId,
                         )
-                            .fetch_n(first)
+                            .fetch_n(executor, first)
                             .await?
                     },
                 };
@@ -109,7 +103,7 @@ impl EntryRepo {
     #[cfg(feature = "import")]
     pub(super) async fn import(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         entry: &mut Entry,
     ) -> Result<(), EntryError> {
@@ -123,7 +117,7 @@ impl EntryRepo {
             entry.values().account_id as AccountId,
             recorded_at,
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, entry.events_mut()).await?;
         Ok(())

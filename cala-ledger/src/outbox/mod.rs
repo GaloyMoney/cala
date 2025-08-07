@@ -59,10 +59,11 @@ impl Outbox {
 
     pub(crate) async fn persist_events_at(
         &self,
-        mut db: Transaction<'_, Postgres>,
+        db: impl Into<Transaction<'_, Postgres>>,
         events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
         recorded_at: impl Into<Option<DateTime<Utc>>>,
     ) -> Result<(), sqlx::Error> {
+        let mut db = db.into();
         let recorded_at = recorded_at.into();
         let events = self
             .repo

@@ -32,7 +32,7 @@ impl JournalRepo {
     #[cfg(feature = "import")]
     pub async fn import_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         origin: DataSourceId,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
@@ -45,7 +45,7 @@ impl JournalRepo {
             journal.values().name,
             recorded_at
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         self.persist_events(op, journal.events_mut()).await?;
         Ok(())

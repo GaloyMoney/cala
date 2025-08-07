@@ -40,6 +40,8 @@ impl Integrations {
         name: String,
         data: impl serde::Serialize,
     ) -> Result<Integration, sqlx::Error> {
+        use es_entity::AtomicOperation;
+
         let integration = Integration::new(id.into(), name, data);
         sqlx::query!(
             r#"INSERT INTO integrations (id, name, data)
@@ -48,7 +50,7 @@ impl Integrations {
             integration.name,
             integration.data
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(integration)
     }

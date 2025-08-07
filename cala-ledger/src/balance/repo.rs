@@ -1,4 +1,4 @@
-use sqlx::{Executor, PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 use tracing::instrument;
 
 use super::{account_balance::AccountBalance, error::BalanceError};
@@ -24,30 +24,21 @@ impl BalanceRepo {
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        self.find_in_executor(&self.pool, journal_id, account_id, currency)
+        self.find_in_op(&self.pool, journal_id, account_id, currency)
             .await
     }
 
-    pub async fn find_in_tx(
+    pub async fn find_in_op(
         &self,
-        tx: &mut Transaction<'_, Postgres>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
-        self.find_in_executor(&mut **tx, journal_id, account_id, currency)
-            .await
-    }
-
-    async fn find_in_executor(
-        &self,
-        executor: impl Executor<'_, Database = Postgres>,
-        journal_id: JournalId,
-        account_id: AccountId,
-        currency: Currency,
-    ) -> Result<AccountBalance, BalanceError> {
-        let row = sqlx::query!(
-            r#"
+        let row = op
+            .into_executor()
+            .fetch_optional(sqlx::query!(
+                r#"
             SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
             JOIN cala_current_balances c
@@ -61,12 +52,11 @@ impl BalanceRepo {
             AND c.account_id = $2
             AND c.currency = $3
             "#,
-            journal_id as JournalId,
-            account_id as AccountId,
-            currency.code(),
-        )
-        .fetch_optional(executor)
-        .await?;
+                journal_id as JournalId,
+                account_id as AccountId,
+                currency.code(),
+            ))
+            .await?;
 
         if let Some(row) = row {
             let details: BalanceSnapshot =
@@ -133,11 +123,11 @@ impl BalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.find_for_update",
-        skip(self, db)
+        skip(self, op)
     )]
     pub(super) async fn find_for_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
@@ -155,7 +145,7 @@ impl BalanceRepo {
             &account_ids as &[AccountId],
             &currencies as &[&str],
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         let rows = sqlx::query!(
             r#"
@@ -192,7 +182,7 @@ impl BalanceRepo {
             &account_ids as &[AccountId],
             &currencies as &[&str]
         )
-        .fetch_all(&mut **db)
+        .fetch_all(op.as_executor())
         .await?;
 
         let mut ret = HashMap::new();
@@ -215,12 +205,12 @@ impl BalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.insert_new_snapshots",
-        skip(self, db, new_balances)
+        skip(self, op, new_balances)
         fields(n_new_balances)
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: &[BalanceSnapshot],
     ) -> Result<(), BalanceError> {
@@ -289,7 +279,7 @@ impl BalanceRepo {
             &entry_ids as &[EntryId],
             &values
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
@@ -297,7 +287,7 @@ impl BalanceRepo {
     #[cfg(feature = "import")]
     pub async fn import_balance(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         sqlx::query!(
@@ -310,7 +300,7 @@ impl BalanceRepo {
             balance.version as i32,
             balance.created_at
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
@@ -324,14 +314,14 @@ impl BalanceRepo {
             serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
             balance.created_at
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
 
     pub(crate) async fn load_all_for_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
     ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
@@ -360,7 +350,7 @@ impl BalanceRepo {
             account_id as AccountId,
             journal_id as JournalId
         )
-        .fetch_all(&mut **db)
+        .fetch_all(op.as_executor())
         .await?;
         let ret = rows
             .into_iter()
@@ -376,7 +366,7 @@ impl BalanceRepo {
     #[cfg(feature = "import")]
     pub async fn import_balance_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         sqlx::query!(
@@ -389,7 +379,7 @@ impl BalanceRepo {
             balance.account_id as AccountId,
             balance.currency.code(),
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         sqlx::query!(
             r#"INSERT INTO cala_balance_history
@@ -402,7 +392,7 @@ impl BalanceRepo {
             serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
             balance.modified_at,
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }

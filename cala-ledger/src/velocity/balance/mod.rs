@@ -47,15 +47,13 @@ impl VelocityBalances {
 
         let current_balances = self
             .repo
-            .find_for_update(db.op(), entries_to_enforce.keys())
+            .find_for_update(db, entries_to_enforce.keys())
             .await?;
 
         let new_balances =
             Self::new_snapshots(context, created_at, current_balances, &entries_to_enforce)?;
 
-        self.repo
-            .insert_new_snapshots(db.op(), new_balances)
-            .await?;
+        self.repo.insert_new_snapshots(db, new_balances).await?;
 
         Ok(())
     }

@@ -62,7 +62,7 @@ impl TxTemplates {
         db: &mut LedgerOperation<'_>,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let tx_template = self.repo.create_in_op(db.op(), new_tx_template).await?;
+        let tx_template = self.repo.create_in_op(db, new_tx_template).await?;
         db.accumulate(tx_template.last_persisted(1).map(|p| &p.event));
         Ok(tx_template)
     }
@@ -212,7 +212,7 @@ impl TxTemplates {
     #[cfg(feature = "import")]
     pub async fn sync_tx_template_creation(
         &self,
-        mut db: es_entity::DbOp<'_>,
+        mut db: es_entity::DbOpWithTime<'_>,
         origin: DataSourceId,
         values: TxTemplateValues,
     ) -> Result<(), TxTemplateError> {
@@ -220,13 +220,13 @@ impl TxTemplates {
         self.repo
             .import_in_op(&mut db, origin, &mut tx_template)
             .await?;
-        let recorded_at = db.now();
         let outbox_events: Vec<_> = tx_template
             .last_persisted(1)
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
+        let time = db.now();
         self.outbox
-            .persist_events_at(db.into_tx(), outbox_events, recorded_at)
+            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }

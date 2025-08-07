@@ -23,8 +23,7 @@ impl JobRegistry {
         let job_type = <I as JobInitializer>::job_type();
         assert!(
             !self.initializers.contains_key(&job_type),
-            "Job initializer {} already exists",
-            job_type
+            "Job initializer {job_type} already exists",
         );
 
         self.initializers

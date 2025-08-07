@@ -58,7 +58,7 @@ impl Velocities {
         db: &mut LedgerOperation<'_>,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let res = self.limits.create_in_op(db.op(), new_limit).await?;
+        let res = self.limits.create_in_op(db, new_limit).await?;
         Ok(res)
     }
 
@@ -77,7 +77,7 @@ impl Velocities {
         db: &mut LedgerOperation<'_>,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let res = self.controls.create_in_op(db.op(), new_control).await?;
+        let res = self.controls.create_in_op(db, new_control).await?;
         Ok(res)
     }
 
@@ -100,10 +100,8 @@ impl Velocities {
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
-        self.limits
-            .add_limit_to_control(db.op(), control, limit)
-            .await?;
-        self.controls.find_by_id_in_tx(db.op().tx(), control).await
+        self.limits.add_limit_to_control(db, control, limit).await?;
+        self.controls.find_by_id_in_op(db, control).await
     }
 
     pub async fn attach_control_to_account(
@@ -127,11 +125,10 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let tx = db.op().tx();
-        let control = self.controls.find_by_id_in_tx(tx, control_id).await?;
+        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
         let limits = self
             .limits
-            .list_for_control(tx, control_id)
+            .list_for_control(&mut *db, control_id)
             .await?
             .into_iter()
             .map(|l| l.into_values())
@@ -185,7 +182,7 @@ impl Velocities {
         op: &mut LedgerOperation<'_>,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        self.limits.list_for_control(op.tx(), control_id).await
+        self.limits.list_for_control(op, control_id).await
     }
 
     pub async fn find_all_limits<T: From<VelocityLimit>>(

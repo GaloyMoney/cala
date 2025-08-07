@@ -8,8 +8,8 @@ license = "Apache-2.0"
 crate-type = ["cdylib"]
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types" }
-cala-ledger = { path = "../cala-ledger" }
+cala-types = { workspace = true }
+cala-ledger = { workspace = true }
 
 base64 = { workspace = true }
 uuid = { workspace = true }

@@ -30,7 +30,7 @@ pub struct JournalCreatePayload {
 
 impl ToGlobalId for cala_ledger::JournalId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("journal:{}", self))
+        async_graphql::types::ID::from(format!("journal:{self}"))
     }
 }
 

@@ -81,10 +81,10 @@ async fn playground() -> impl axum::response::IntoResponse {
     ))
 }
 
-async fn maybe_init_atomic_operation<'a>(
+async fn maybe_init_atomic_operation(
     req: &mut async_graphql::Request,
     ledger: &CalaLedger,
-) -> Result<Option<Arc<Mutex<LedgerOperation<'a>>>>, cala_ledger::error::LedgerError> {
+) -> Result<Option<Arc<Mutex<LedgerOperation<'static>>>>, cala_ledger::error::LedgerError> {
     use async_graphql::parser::types::*;
 
     let operation_name = req

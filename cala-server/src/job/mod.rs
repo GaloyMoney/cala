@@ -53,8 +53,8 @@ impl Jobs {
         data: D,
     ) -> Result<Job, JobError> {
         let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
-        let job = self.repo.create_in_tx(op.tx(), new_job).await?;
-        self.executor.spawn_job::<I>(op.tx(), &job, None).await?;
+        let job = self.repo.create_in_op(op, new_job).await?;
+        self.executor.spawn_job::<I>(op, &job, None).await?;
         Ok(job)
     }
 
@@ -68,9 +68,9 @@ impl Jobs {
         schedule_at: DateTime<Utc>,
     ) -> Result<Job, JobError> {
         let new_job = Job::new(name, <I as JobInitializer>::job_type(), description, data);
-        let job = self.repo.create_in_tx(op.tx(), new_job).await?;
+        let job = self.repo.create_in_op(op, new_job).await?;
         self.executor
-            .spawn_job::<I>(op.tx(), &job, Some(schedule_at))
+            .spawn_job::<I>(op, &job, Some(schedule_at))
             .await?;
         Ok(job)
     }

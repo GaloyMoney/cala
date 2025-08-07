@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use sqlx::{Executor, PgPool, Postgres, Transaction};
+use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -256,11 +256,11 @@ impl EffectiveBalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.effective.find_for_update",
-        skip(self, db)
+        skip(self, op)
     )]
     pub(super) async fn find_for_update(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
@@ -325,7 +325,7 @@ impl EffectiveBalanceRepo {
             &currencies as &[&str],
             effective
         )
-        .fetch_all(&mut **db)
+        .fetch_all(op.as_executor())
         .await?;
 
         let mut ret = HashMap::new();
@@ -356,11 +356,11 @@ impl EffectiveBalanceRepo {
     #[instrument(
         level = "trace",
         name = "cala_ledger.balances.effective.insert_new_snapshots",
-        skip(self, db, data)
+        skip(self, op, data)
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
     ) -> Result<(), BalanceError> {
@@ -421,7 +421,7 @@ impl EffectiveBalanceRepo {
             &created_timestamps[..],
             &values[..]
         )
-        .execute(&mut **db)
+        .execute(op.as_executor())
         .await?;
 
         Ok(())

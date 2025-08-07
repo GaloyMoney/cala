@@ -1,4 +1,3 @@
-use es_entity::DbOp;
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -21,9 +20,9 @@ impl AccountControlRepo {
         }
     }
 
-    pub async fn create_in_tx(
+    pub async fn create_in_op(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         control: AccountVelocityControl,
     ) -> Result<(), VelocityError> {
         sqlx::query!(
@@ -33,27 +32,28 @@ impl AccountControlRepo {
             control.control_id as VelocityControlId,
             serde_json::to_value(control).expect("Failed to serialize control values"),
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
 
     pub async fn find_for_enforcement(
         &self,
-        op: &mut DbOp<'_>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
     {
-        let rows = sqlx::query!(
-            r#"SELECT values, latest_values
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"SELECT values, latest_values
             FROM cala_velocity_account_controls v
             JOIN cala_accounts a
             ON v.account_id = a.id
             WHERE account_id = ANY($1)"#,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(&mut **op.tx())
-        .await?;
+                account_ids as &[AccountId],
+            ))
+            .await?;
 
         let mut res: HashMap<AccountId, (AccountValues, Vec<_>)> = HashMap::new();
 

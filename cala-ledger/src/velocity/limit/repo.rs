@@ -1,5 +1,5 @@
 use es_entity::{EntityEvents, GenericEvent, *};
-use sqlx::{PgPool, Postgres, Transaction};
+use sqlx::PgPool;
 
 use crate::{
     primitives::{DataSourceId, VelocityLimitId},
@@ -33,7 +33,7 @@ impl VelocityLimitRepo {
 
     pub async fn add_limit_to_control(
         &self,
-        op: &mut DbOp<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<(), VelocityError> {
@@ -43,19 +43,21 @@ impl VelocityLimitRepo {
             control as VelocityControlId,
             limit as VelocityLimitId,
         )
-        .execute(&mut **op.tx())
+        .execute(op.as_executor())
         .await?;
         Ok(())
     }
 
     pub async fn list_for_control(
         &self,
-        db: &mut Transaction<'_, Postgres>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        let rows = sqlx::query_as!(
-            GenericEvent,
-            r#"WITH limits AS (
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query_as!(
+                GenericEvent,
+                r#"WITH limits AS (
               SELECT id, l.created_at AS entity_created_at
               FROM cala_velocity_limits l
               JOIN cala_velocity_control_limits ON id = velocity_limit_id
@@ -65,10 +67,9 @@ impl VelocityLimitRepo {
             FROM limits l
             JOIN cala_velocity_limit_events e ON l.id = e.id
             ORDER BY l.id, e.sequence"#,
-            control as VelocityControlId,
-        )
-        .fetch_all(&mut **db)
-        .await?;
+                control as VelocityControlId,
+            ))
+            .await?;
         let n = rows.len();
         let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;
         Ok(ret)

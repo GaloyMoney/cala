@@ -17,10 +17,10 @@ graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/g
 json-schema = ["cala-types/json-schema"]
 
 [dependencies]
-cala-types = { path = "../cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.6.13-dev" }
-cel-interpreter = { path = "../cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.6.13-dev" }
-cala-tracing = { path = "../cala-tracing", features = ["grpc"], package = "cala-tracing", version = "0.6.13-dev" }
-es-entity = { path = "../lib/es-entity", package = "es-entity", version = "0.6.13-dev" }
+cala-types = { workspace = true }
+cel-interpreter = { workspace = true }
+cala-tracing = { workspace = true, features = ["grpc"] }
+es-entity = { workspace = true }
 
 async-graphql = { workspace = true, optional = true }
 base64 = { workspace = true, optional = true }

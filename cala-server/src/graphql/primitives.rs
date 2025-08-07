@@ -5,6 +5,10 @@ use serde::{Deserialize, Serialize};
 
 pub use cala_ledger::primitives::{DebitOrCredit, Layer, Status};
 
+use std::sync::Arc;
+use tokio::sync::Mutex;
+pub type DbOp = Arc<Mutex<cala_ledger::LedgerOperation<'static>>>;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JSON(serde_json::Value);

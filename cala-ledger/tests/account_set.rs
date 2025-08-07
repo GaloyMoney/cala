@@ -427,7 +427,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                     .id(AccountId::new())
                     .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
-                    .external_id(format!("a-{}", random))
+                    .external_id(format!("a-{random}"))
                     .build()?,
             )
             .await?,
@@ -437,7 +437,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                     .id(AccountId::new())
                     .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
-                    .external_id(format!("z-{}", random))
+                    .external_id(format!("z-{random}"))
                     .build()?,
             )
             .await?,
@@ -466,7 +466,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
         .account_sets()
         .list_members_by_external_id(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities[0].external_id, Some(format!("a-{}", random)));
+    assert_eq!(ret.entities[0].external_id, Some(format!("a-{random}")));
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,
@@ -476,7 +476,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
         .account_sets()
         .list_members_by_external_id(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities[0].external_id, Some(format!("z-{}", random)));
+    assert_eq!(ret.entities[0].external_id, Some(format!("z-{random}")));
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,

@@ -8,7 +8,6 @@ use super::{
     convert::ToGlobalId,
     primitives::*,
     tx_template::{ParamDefinition, ParamDefinitionInput},
-    DbOp,
 };
 
 #[derive(SimpleObject, Clone)]
@@ -184,7 +183,7 @@ impl From<cala_ledger::velocity::VelocityControl> for VelocityControlAttachPaylo
 
 impl ToGlobalId for cala_ledger::VelocityControlId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("velocity_control:{}", self))
+        async_graphql::types::ID::from(format!("velocity_control:{self}"))
     }
 }
 
@@ -248,7 +247,7 @@ impl From<cala_ledger::velocity::VelocityControl> for VelocityControlAddLimitPay
 
 impl ToGlobalId for cala_ledger::VelocityLimitId {
     fn to_global_id(&self) -> async_graphql::types::ID {
-        async_graphql::types::ID::from(format!("velocity_limit:{}", self))
+        async_graphql::types::ID::from(format!("velocity_limit:{self}"))
     }
 }
 
