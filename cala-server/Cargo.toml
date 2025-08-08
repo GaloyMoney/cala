@@ -2,7 +2,7 @@
 name = "cala-server"
 description = "Server to sync other cala deployments"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.6.13-dev"
+version = "0.7.0"
 edition = "2021"
 license = "Apache-2.0"
 

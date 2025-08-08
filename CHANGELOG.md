@@ -1,3 +1,21 @@
+# [cala release v0.7.0](https://github.com/GaloyMoney/cala/releases/tag/0.7.0)
+
+
+### Documentation
+
+- Api reference and website examples update to e733b14069effe7ec606658ea042c2025734017b
+
+### Miscellaneous Tasks
+
+- Bump flake + clip 1.89 (#494)
+
+### Refactor
+
+- [**breaking**] Extract es entity (#491)
+- Use unnest in balance repos (#488)
+- Iterate once (#487)
+- Use unnest to mitigate large arguments (#486)
+
 # [cala release v0.6.12](https://github.com/GaloyMoney/cala/releases/tag/0.6.12)
 
 
