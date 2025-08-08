@@ -22,7 +22,7 @@ cala-ledger = { path = "cala-ledger", version = "0.6.13-dev" }
 cala-ledger-outbox-client = { path = "cala-ledger-outbox-client", version = "0.6.13-dev" }
 cala-server = { path = "cala-server", version = "0.6.13-dev" }
 
-es-entity = {version = "0.7.2" }
+es-entity = {version = "0.7.6" }
 anyhow = "1.0.98"
 async-graphql = { version = "7.0.17", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
 async-graphql-axum = "=7.0.13"
