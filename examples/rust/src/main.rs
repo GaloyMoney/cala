@@ -22,7 +22,7 @@ fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let random_number = rand::rng().random_range(0..1000);
-    let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{:03}", random_number));
+    let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{random_number:03}"));
 
     store_server_pid(".cala", std::process::id())?;
     let pg_con = "postgres://user:password@localhost:5433/pg".to_string();
@@ -40,10 +40,10 @@ async fn main() -> anyhow::Result<()> {
         .outbox(OutboxServerConfig::default())
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
-    let code_string = format!("USERS.{}", example_suffix);
+    let code_string = format!("USERS.{example_suffix}");
     let new_account = NewAccount::builder()
         .id(AccountId::new())
-        .name(format!("ACCOUNT #{:03}", random_number))
+        .name(format!("ACCOUNT #{random_number:03}"))
         .code(code_string)
         .description("description")
         .build()?;
@@ -53,7 +53,7 @@ async fn main() -> anyhow::Result<()> {
     // update account name and description
     let mut builder = AccountUpdate::default();
     builder
-        .name(format!("ACCOUNT #{:04}", random_number))
+        .name(format!("ACCOUNT #{random_number:04}"))
         .description("new description")
         .build()?;
     account.update(builder);
@@ -73,7 +73,7 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
     let mut journal = cala.journals().create(new_journal).await?;
     let journal_id = journal.id();
-    println!("journal_id: {}", journal_id);
+    println!("journal_id: {journal_id}");
 
     // update journal name and description
 
@@ -86,7 +86,7 @@ async fn main() -> anyhow::Result<()> {
     cala.journals().persist(&mut journal).await?;
 
     let transaction = NewTxTemplateTransaction::builder()
-        .journal_id(format!("uuid('{}')", journal_id))
+        .journal_id(format!("uuid('{journal_id}')"))
         .effective("date('2022-11-01')")
         .build()?;
     let entries = vec![
@@ -113,7 +113,7 @@ async fn main() -> anyhow::Result<()> {
 
     let new_tx_template = NewTxTemplate::builder()
         .id(tx_template_id)
-        .code(format!("CODE_{}", example_suffix))
+        .code(format!("CODE_{example_suffix}"))
         .transaction(transaction)
         .entries(entries)
         .build()
@@ -121,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
     let tx_template = cala.tx_templates().create(new_tx_template).await?;
     println!("tx_template_id: {}", tx_template.id());
     let code = tx_template.into_values().code;
-    println!("tx_template_code: {}", code);
+    println!("tx_template_code: {code}");
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;

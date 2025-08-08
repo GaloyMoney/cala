@@ -264,7 +264,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
           WITH pairs AS (

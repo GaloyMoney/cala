@@ -11,11 +11,6 @@ pub struct Job {
     pub description: Option<String>,
 }
 
-#[derive(SimpleObject)]
-pub struct JobCreatePayload {
-    pub job: Job,
-}
-
 #[derive(Serialize, Deserialize)]
 pub(super) struct JobByNameCursor {
     pub name: String,
