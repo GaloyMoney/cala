@@ -32,14 +32,14 @@ pub fn test_journal_with_effective_balances() -> NewJournal {
 pub fn test_accounts() -> (NewAccount, NewAccount) {
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let sender_account = NewAccount::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .name(format!("Test Sender Account {code}"))
         .code(code)
         .build()
         .unwrap();
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account = NewAccount::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .name(format!("Test Recipient Account {code}"))
         .code(code)
         .build()
@@ -129,7 +129,7 @@ pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
             .unwrap(),
     ];
     NewTxTemplate::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .code(code)
         .params(params)
         .transaction(
@@ -213,7 +213,7 @@ pub fn velocity_template(code: &str) -> NewTxTemplate {
             .unwrap(),
     ];
     NewTxTemplate::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .code(code)
         .params(params)
         .transaction(
