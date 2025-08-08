@@ -42,7 +42,6 @@ pub(super) struct Balance {
     pub(super) balance: cala_ledger::balance::AccountBalance,
 }
 
-
 #[ComplexObject]
 impl Balance {
     async fn available(&self, layer: Layer) -> BalanceAmount {
@@ -100,4 +99,3 @@ impl From<cala_ledger::balance::AccountBalance> for Balance {
         }
     }
 }
-
