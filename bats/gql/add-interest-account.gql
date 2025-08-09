@@ -1,0 +1,19 @@
+mutation CreateInterestAccount(
+  $interestAccountId: UUID!
+  $interestAccountCode: String!
+  $interestAccountName: String!
+  $interestRevenueControlAccountSetId: UUID!
+) {
+  interest: accountCreate(
+    input: {
+      accountId: $interestAccountId
+      code: $interestAccountCode
+      name: $interestAccountName
+      accountSetIds: [$interestRevenueControlAccountSetId]
+    }
+  ) {
+    account {
+      accountId
+    }
+  }
+}

@@ -51,6 +51,12 @@ sqlx-prepare:
 	cd cala-ledger && cargo sqlx prepare -- --all-features
 	cd cala-server && cargo sqlx prepare -- --all-features
 
+reset-tf-state:
+	rm -rf bats/tf/terraform.tfstate
+
+run-tf:
+	cd bats/tf && tofu init && tofu apply -auto-approve
+
 test-in-ci: start-deps setup-db
 	cargo nextest run --verbose --locked
 	cargo test --doc
