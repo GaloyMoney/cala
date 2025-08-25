@@ -172,7 +172,14 @@ impl Velocities {
             .await?;
 
         self.balances
-            .update_balances_in_op(db, created_at, transaction, entries, controls)
+            .update_balances_in_op(
+                db,
+                created_at,
+                transaction,
+                entries,
+                controls,
+                account_set_mappings,
+            )
             .await
     }
 
