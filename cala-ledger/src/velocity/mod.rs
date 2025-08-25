@@ -106,7 +106,7 @@ impl Velocities {
     pub async fn attach_control_to_account(
         &self,
         control: VelocityControlId,
-        account_id: AccountId,
+        account_id: impl Into<AccountId>,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
@@ -121,9 +121,11 @@ impl Velocities {
         &self,
         db: &mut LedgerOperation<'_>,
         control_id: VelocityControlId,
-        account_id: AccountId,
+        account_id: impl Into<AccountId>,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
+        let account_id = account_id.into();
+
         let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
         let limits = self
             .limits

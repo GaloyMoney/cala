@@ -769,7 +769,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .attach_control_to_account_in_op(
                 &mut op,
                 input.velocity_control_id.into(),
-                input.account_id.into(),
+                input.account_id,
                 params,
             )
             .await?;
