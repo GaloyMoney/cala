@@ -206,6 +206,7 @@ impl CalaLedger {
                 transaction.values(),
                 &entries,
                 &account_ids,
+                &mappings,
             )
             .await?;
 
@@ -284,6 +285,7 @@ impl CalaLedger {
                 transaction.values(),
                 &entries,
                 &account_ids,
+                &mappings,
             )
             .await?;
 
