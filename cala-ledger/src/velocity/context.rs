@@ -27,7 +27,7 @@ impl EvalContext {
         }
     }
 
-    pub fn context_for_entry(&mut self, entry: &EntryValues) -> CelContext {
+    pub fn context_for_entry(&mut self, account_id: AccountId, entry: &EntryValues) -> CelContext {
         let cel_entry = self
             .entry_values
             .entry(entry.id)
@@ -39,7 +39,7 @@ impl EvalContext {
         vars.insert(
             "account",
             self.account_values
-                .get(&entry.account_id)
+                .get(&account_id)
                 .expect("account values not set for context")
                 .clone(),
         );
@@ -133,7 +133,7 @@ mod tests {
         let tx = transaction();
         let entry = entry(account.id, &tx);
         let mut context = EvalContext::new(&tx, std::iter::once(&account));
-        let ctx = context.context_for_entry(&entry);
+        let ctx = context.context_for_entry(entry.account_id, &entry);
 
         let expr: CelExpression = "context.vars.transaction.id".parse().unwrap();
         let result: uuid::Uuid = expr.try_evaluate(&ctx).unwrap();

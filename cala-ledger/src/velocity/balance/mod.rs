@@ -78,8 +78,6 @@ impl VelocityBalances {
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
         for entry in entries {
-            let ctx = context.context_for_entry(entry);
-
             let account_id = entry.account_id;
             let mut ids = vec![account_id];
             ids.extend(
@@ -94,6 +92,8 @@ impl VelocityBalances {
                 let Some((_, controls)) = controls.get(&account_id) else {
                     continue;
                 };
+                let ctx = context.context_for_entry(account_id, entry);
+
                 for control in controls.iter() {
                     if !control.needs_enforcement(&ctx)? {
                         continue;
@@ -133,7 +133,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.context_for_entry(entry);
+                let ctx = context.context_for_entry(entry.account_id, entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
