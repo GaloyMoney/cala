@@ -77,18 +77,15 @@ impl VelocityBalances {
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
+        let empty = Vec::new();
         for entry in entries {
-            let account_id = entry.account_id;
-            let mut ids = vec![account_id];
-            ids.extend(
-                account_set_mappings
-                    .get(&account_id)
-                    .unwrap_or(&vec![])
-                    .iter()
-                    .map(AccountId::from)
-                    .collect::<Vec<_>>(),
-            );
-            for account_id in ids {
+            for account_id in account_set_mappings
+                .get(&entry.account_id)
+                .unwrap_or(&empty)
+                .iter()
+                .map(AccountId::from)
+                .chain(std::iter::once(entry.account_id))
+            {
                 let Some((_, controls)) = controls.get(&account_id) else {
                     continue;
                 };
