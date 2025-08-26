@@ -106,18 +106,59 @@ impl Velocities {
     pub async fn attach_control_to_account(
         &self,
         control: VelocityControlId,
-        account_id: impl Into<AccountId>,
+        account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let control = self
-            .attach_control_to_account_in_op(&mut op, control, account_id, params)
+            .attach_control_to_account_or_account_set_in_op(&mut op, control, account_id, params)
+            .await?;
+        op.commit().await?;
+        Ok(control)
+    }
+
+    pub async fn attach_control_to_account_set(
+        &self,
+        control: VelocityControlId,
+        account_set_id: AccountSetId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let control = self
+            .attach_control_to_account_or_account_set_in_op(
+                &mut op,
+                control,
+                account_set_id,
+                params,
+            )
             .await?;
         op.commit().await?;
         Ok(control)
     }
 
     pub async fn attach_control_to_account_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        control_id: VelocityControlId,
+        account_id: AccountId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        self.attach_control_to_account_or_account_set_in_op(db, control_id, account_id, params)
+            .await
+    }
+
+    pub async fn attach_control_to_account_set_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        control_id: VelocityControlId,
+        account_set_id: AccountSetId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        self.attach_control_to_account_or_account_set_in_op(db, control_id, account_set_id, params)
+            .await
+    }
+
+    async fn attach_control_to_account_or_account_set_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
         control_id: VelocityControlId,

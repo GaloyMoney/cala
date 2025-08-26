@@ -172,7 +172,7 @@ async fn create_control_on_account_set() -> anyhow::Result<()> {
         .await
         .unwrap();
     velocity
-        .attach_control_to_account(control_id, sender_account_set.id(), control_params)
+        .attach_control_to_account_set(control_id, sender_account_set.id(), control_params)
         .await?;
 
     let mut tx_params = Params::new();
