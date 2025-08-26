@@ -99,10 +99,10 @@ impl VelocityBalances {
                         if let Some(window) = limit.window_for_enforcement(&ctx, entry)? {
                             balances_to_check
                                 .entry(VelocityBalanceKey {
-                                    window: window,
+                                    window,
                                     currency: entry.currency,
                                     journal_id: entry.journal_id,
-                                    account_id: account_id,
+                                    account_id,
                                     control_id: control.control_id,
                                     limit_id: limit.limit_id,
                                 })

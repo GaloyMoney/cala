@@ -198,7 +198,7 @@ impl Velocities {
         account_ids: &[AccountId],
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
-        let mut all_account_ids = account_ids.iter().copied().collect::<Vec<_>>();
+        let mut all_account_ids = account_ids.to_vec();
         all_account_ids.extend(
             account_ids
                 .iter()
