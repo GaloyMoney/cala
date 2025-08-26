@@ -135,28 +135,23 @@ impl VelocityBalances {
 
             for (limit, entry) in entries {
                 let ctx = context.context_for_entry(key.account_id, entry);
-                let balance = match (latest_balance.take(), &current) {
-                    (Some(latest), _) => {
-                        new_balances.push(latest.clone());
-                        latest
-                    }
-                    (_, Some(balance)) => balance.clone(),
-                    (_, None) => {
+
+                let balance = match latest_balance.or_else(|| current.clone()) {
+                    Some(balance) => balance,
+                    None => {
                         let new_snapshot =
                             crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry);
                         limit.enforce(&ctx, time, &new_snapshot)?;
+                        new_balances.push(new_snapshot.clone());
                         latest_balance = Some(new_snapshot);
                         continue;
                     }
-                    _ => unreachable!(),
                 };
 
                 let new_snapshot = crate::balance::Snapshots::update_snapshot(time, balance, entry);
                 limit.enforce(&ctx, time, &new_snapshot)?;
+                new_balances.push(new_snapshot.clone());
                 latest_balance = Some(new_snapshot);
-            }
-            if let Some(latest) = latest_balance.take() {
-                new_balances.push(latest)
             }
             res.insert(key, new_balances);
         }
