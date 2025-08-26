@@ -6,14 +6,15 @@ use cala_types::{balance::BalanceSnapshot, velocity::Window};
 
 use crate::{primitives::*, velocity::error::VelocityError};
 
-pub(super) type VelocityBalanceKey = (
-    Window,
-    Currency,
-    JournalId,
-    AccountId,
-    VelocityControlId,
-    VelocityLimitId,
-);
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct VelocityBalanceKey {
+    pub(super) window: Window,
+    pub(super) currency: Currency,
+    pub(super) journal_id: JournalId,
+    pub(super) account_id: AccountId,
+    pub(super) control_id: VelocityControlId,
+    pub(super) limit_id: VelocityLimitId,
+}
 
 #[derive(Clone)]
 pub(super) struct VelocityBalanceRepo {
@@ -32,17 +33,46 @@ impl VelocityBalanceRepo {
         keys: impl Iterator<Item = &VelocityBalanceKey>,
     ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
         let (windows, currencies, journal_ids, account_ids, control_ids, limit_ids) = keys.fold(
-        (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
-        |(mut windows, mut currencies, mut journal_ids, mut account_ids, mut control_ids, mut limit_ids), &(ref window, ref currency, journal_id, account_id, control_id, limit_id)| {
-            windows.push(window.inner().clone());
-            currencies.push(currency.code());
-            journal_ids.push(journal_id);
-            account_ids.push(account_id);
-            control_ids.push(control_id);
-            limit_ids.push(limit_id);
-            (windows, currencies, journal_ids, account_ids, control_ids, limit_ids)
-        }
-    );
+            (
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ),
+            |(
+                mut windows,
+                mut currencies,
+                mut journal_ids,
+                mut account_ids,
+                mut control_ids,
+                mut limit_ids,
+            ),
+             &VelocityBalanceKey {
+                 ref window,
+                 ref currency,
+                 account_id,
+                 journal_id,
+                 control_id,
+                 limit_id,
+             }| {
+                windows.push(window.inner().clone());
+                currencies.push(currency.code());
+                journal_ids.push(journal_id);
+                account_ids.push(account_id);
+                control_ids.push(control_id);
+                limit_ids.push(limit_id);
+                (
+                    windows,
+                    currencies,
+                    journal_ids,
+                    account_ids,
+                    control_ids,
+                    limit_ids,
+                )
+            },
+        );
 
         sqlx::query!(
         r#"
@@ -130,14 +160,14 @@ impl VelocityBalanceRepo {
                     .expect("Failed to deserialize balance snapshot")
             });
             ret.insert(
-                (
-                    Window::from(row.partition_window),
-                    row.currency.parse().expect("Could not parse currency"),
-                    row.journal_id,
-                    row.account_id,
-                    row.velocity_control_id,
-                    row.velocity_limit_id,
-                ),
+                VelocityBalanceKey {
+                    window: Window::from(row.partition_window),
+                    currency: row.currency.parse().expect("Could not parse currency"),
+                    journal_id: row.journal_id,
+                    account_id: row.account_id,
+                    control_id: row.velocity_control_id,
+                    limit_id: row.velocity_limit_id,
+                },
                 snapshot,
             );
         }
@@ -163,8 +193,14 @@ impl VelocityBalanceRepo {
             .into_iter()
             .flat_map(|(key, snapshots)| snapshots.into_iter().map(move |snapshot| (key, snapshot)))
         {
-            let (window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id) =
-                key;
+            let VelocityBalanceKey {
+                window,
+                currency,
+                journal_id,
+                account_id,
+                control_id: velocity_control_id,
+                limit_id: velocity_limit_id,
+            } = key;
 
             journal_ids.push(*journal_id);
             account_ids.push(*account_id);

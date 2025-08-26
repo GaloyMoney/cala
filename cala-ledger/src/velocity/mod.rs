@@ -7,7 +7,6 @@ mod limit;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-
 use std::collections::HashMap;
 
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
@@ -112,7 +111,26 @@ impl Velocities {
     ) -> Result<VelocityControl, VelocityError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let control = self
-            .attach_control_to_account_in_op(&mut op, control, account_id, params)
+            .attach_control_to_account_or_account_set_in_op(&mut op, control, account_id, params)
+            .await?;
+        op.commit().await?;
+        Ok(control)
+    }
+
+    pub async fn attach_control_to_account_set(
+        &self,
+        control: VelocityControlId,
+        account_set_id: AccountSetId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let control = self
+            .attach_control_to_account_or_account_set_in_op(
+                &mut op,
+                control,
+                account_set_id,
+                params,
+            )
             .await?;
         op.commit().await?;
         Ok(control)
@@ -125,6 +143,30 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
+        self.attach_control_to_account_or_account_set_in_op(db, control_id, account_id, params)
+            .await
+    }
+
+    pub async fn attach_control_to_account_set_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        control_id: VelocityControlId,
+        account_set_id: AccountSetId,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        self.attach_control_to_account_or_account_set_in_op(db, control_id, account_set_id, params)
+            .await
+    }
+
+    async fn attach_control_to_account_or_account_set_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        control_id: VelocityControlId,
+        account_id: impl Into<AccountId>,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        let account_id = account_id.into();
+
         let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
         let limits = self
             .limits
@@ -154,14 +196,30 @@ impl Velocities {
         transaction: &TransactionValues,
         entries: &[EntryValues],
         account_ids: &[AccountId],
+        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
+        let mut all_account_ids = account_ids.to_vec();
+        all_account_ids.extend(
+            account_ids
+                .iter()
+                .filter_map(|id| account_set_mappings.get(id))
+                .flat_map(|ids| ids.iter().map(AccountId::from)),
+        );
+
         let controls = self
             .account_controls
-            .find_for_enforcement(db, account_ids)
+            .find_for_enforcement(db, &all_account_ids)
             .await?;
 
         self.balances
-            .update_balances_in_op(db, created_at, transaction, entries, controls)
+            .update_balances_in_op(
+                db,
+                created_at,
+                transaction,
+                entries,
+                controls,
+                account_set_mappings,
+            )
             .await
     }
 

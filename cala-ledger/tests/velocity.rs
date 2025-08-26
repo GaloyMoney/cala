@@ -5,20 +5,10 @@ use rust_decimal::Decimal;
 
 use cala_ledger::{velocity::*, *};
 
-#[tokio::test]
-async fn create_control() -> anyhow::Result<()> {
-    let pool = helpers::init_pool().await?;
-    let cala_config = CalaLedgerConfig::builder()
-        .pool(pool)
-        .exec_migrations(false)
-        .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
-
-    let new_journal = helpers::test_journal();
-    let journal = cala.journals().create(new_journal).await.unwrap();
-
-    let velocity = cala.velocities();
-
+async fn control_and_limits(
+    velocity: &Velocities,
+    limit: Decimal,
+) -> anyhow::Result<(VelocityControlId, Params)> {
     let withdrawal_limit = NewVelocityLimit::builder()
         .id(VelocityLimitId::new())
         .name("Withdrawal")
@@ -44,6 +34,7 @@ async fn create_control() -> anyhow::Result<()> {
         .expect("build limit");
 
     let withdrawal_limit = velocity.create_limit(withdrawal_limit).await?;
+
     let deposit_limit = NewVelocityLimit::builder()
         .id(VelocityLimitId::new())
         .name("Deposit")
@@ -67,7 +58,6 @@ async fn create_control() -> anyhow::Result<()> {
             .expect("param")])
         .build()
         .expect("build limit");
-
     let deposit_limit = velocity.create_limit(deposit_limit).await?;
 
     let control = NewVelocityControl::builder()
@@ -85,35 +75,117 @@ async fn create_control() -> anyhow::Result<()> {
         .add_limit_to_control(control.id(), deposit_limit.id())
         .await?;
 
-    let (sender, receiver) = helpers::test_accounts();
-    let sender_account = cala.accounts().create(sender).await.unwrap();
-    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+    let mut control_params = Params::new();
+    control_params.insert("withdrawal_limit", limit);
+    control_params.insert("deposit_limit", limit);
 
-    let mut params = Params::new();
+    Ok((control.id(), control_params))
+}
+
+#[tokio::test]
+async fn create_control_on_account() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
+
+    let velocity = cala.velocities();
+
     let limit = Decimal::ONE_HUNDRED;
-    params.insert("withdrawal_limit", limit);
-    params.insert("deposit_limit", limit);
-    velocity
-        .attach_control_to_account(control.id(), sender_account.id(), params)
-        .await?;
+    let (control_id, control_params) = control_and_limits(velocity, limit).await?;
 
     let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_template = helpers::velocity_template(&tx_code);
-
     cala.tx_templates().create(new_template).await.unwrap();
 
-    let mut params = Params::new();
-    params.insert("journal_id", journal.id().to_string());
-    params.insert("sender", sender_account.id());
-    params.insert("recipient", recipient_account.id());
-    params.insert("amount", limit);
-
-    let _ = cala
-        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+    velocity
+        .attach_control_to_account(control_id, sender_account.id(), control_params.clone())
         .await?;
-    params.insert("amount", Decimal::ONE);
+
+    let mut tx_params = Params::new();
+    tx_params.insert("journal_id", journal.id().to_string());
+    tx_params.insert("sender", sender_account.id());
+    tx_params.insert("recipient", recipient_account.id());
+    tx_params.insert("amount", limit);
+    let _ = cala
+        .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+        .await?;
+    tx_params.insert("amount", Decimal::ONE);
     let res = cala
-        .post_transaction(TransactionId::new(), &tx_code, params.clone())
+        .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+        .await;
+    assert!(res.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn create_control_on_account_set() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let new_journal = helpers::test_journal();
+    let journal = cala.journals().create(new_journal).await.unwrap();
+
+    let velocity = cala.velocities();
+
+    let limit = Decimal::ONE_HUNDRED;
+    let (control_id, control_params) = control_and_limits(velocity, limit).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let new_template = helpers::velocity_template(&tx_code);
+    cala.tx_templates().create(new_template).await.unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+    let (new_sender_account_set, new_recipient_account_set) =
+        helpers::test_account_sets(journal.id().into());
+    let sender_account_set = cala
+        .account_sets()
+        .create(new_sender_account_set)
+        .await
+        .unwrap();
+    let recipient_account_set = cala
+        .account_sets()
+        .create(new_recipient_account_set)
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(sender_account_set.id, sender_account.id)
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(recipient_account_set.id, recipient_account.id)
+        .await
+        .unwrap();
+    velocity
+        .attach_control_to_account_set(control_id, sender_account_set.id(), control_params)
+        .await?;
+
+    let mut tx_params = Params::new();
+    tx_params.insert("journal_id", journal.id().to_string());
+    tx_params.insert("sender", sender_account.id());
+    tx_params.insert("recipient", recipient_account.id());
+    tx_params.insert("amount", limit);
+    let _ = cala
+        .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+        .await?;
+    tx_params.insert("amount", Decimal::ONE);
+    let res = cala
+        .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
         .await;
     assert!(res.is_err());
 

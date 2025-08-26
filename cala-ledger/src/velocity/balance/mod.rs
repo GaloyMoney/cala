@@ -10,7 +10,10 @@ use cala_types::{
     transaction::TransactionValues,
 };
 
-use crate::{ledger_operation::*, primitives::AccountId};
+use crate::{
+    ledger_operation::*,
+    primitives::{AccountId, AccountSetId},
+};
 
 use super::{account_control::*, error::*};
 
@@ -35,11 +38,13 @@ impl VelocityBalances {
         transaction: &TransactionValues,
         entries: &[EntryValues],
         controls: HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
+        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
         let mut context =
             super::context::EvalContext::new(transaction, controls.values().map(|v| &v.0));
 
-        let entries_to_enforce = Self::balances_to_check(&mut context, entries, &controls)?;
+        let entries_to_enforce =
+            Self::balances_to_check(&mut context, entries, &controls, account_set_mappings)?;
 
         if entries_to_enforce.is_empty() {
             return Ok(());
@@ -63,6 +68,7 @@ impl VelocityBalances {
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
         controls: &'a HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
+        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<
         HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
         VelocityError,
@@ -71,26 +77,35 @@ impl VelocityBalances {
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
+        let empty = Vec::new();
         for entry in entries {
-            let (_, controls) = match controls.get(&entry.account_id) {
-                Some(control) => control,
-                None => continue,
-            };
-            for control in controls.iter() {
-                let ctx = context.context_for_entry(entry);
+            for account_id in account_set_mappings
+                .get(&entry.account_id)
+                .unwrap_or(&empty)
+                .iter()
+                .map(AccountId::from)
+                .chain(std::iter::once(entry.account_id))
+            {
+                let Some((_, controls)) = controls.get(&account_id) else {
+                    continue;
+                };
+                let ctx = context.context_for_entry(account_id, entry);
 
-                if control.needs_enforcement(&ctx)? {
+                for control in controls.iter() {
+                    if !control.needs_enforcement(&ctx)? {
+                        continue;
+                    }
                     for limit in &control.velocity_limits {
                         if let Some(window) = limit.window_for_enforcement(&ctx, entry)? {
                             balances_to_check
-                                .entry((
+                                .entry(VelocityBalanceKey {
                                     window,
-                                    entry.currency,
-                                    entry.journal_id,
-                                    entry.account_id,
-                                    control.control_id,
-                                    limit.limit_id,
-                                ))
+                                    currency: entry.currency,
+                                    journal_id: entry.journal_id,
+                                    account_id,
+                                    control_id: control.control_id,
+                                    limit_id: limit.limit_id,
+                                })
                                 .or_default()
                                 .push((limit, entry));
                         }
@@ -115,7 +130,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.context_for_entry(entry);
+                let ctx = context.context_for_entry(key.account_id, entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());

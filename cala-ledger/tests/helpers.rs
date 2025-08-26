@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account::*, journal::*, tx_template::*};
+use cala_ledger::{account::*, account_set::NewAccountSet, journal::*, tx_template::*};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
@@ -37,6 +37,7 @@ pub fn test_accounts() -> (NewAccount, NewAccount) {
         .code(code)
         .build()
         .unwrap();
+
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account = NewAccount::builder()
         .id(uuid::Uuid::now_v7())
@@ -45,6 +46,26 @@ pub fn test_accounts() -> (NewAccount, NewAccount) {
         .build()
         .unwrap();
     (sender_account, recipient_account)
+}
+
+pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSet) {
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let sender_account_set = NewAccountSet::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("Test Sender Account Set {code}"))
+        .journal_id(journal_id)
+        .build()
+        .unwrap();
+
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let recipient_account_set = NewAccountSet::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("Test Recipient Account Set {code}"))
+        .journal_id(journal_id)
+        .build()
+        .unwrap();
+
+    (sender_account_set, recipient_account_set)
 }
 
 pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
