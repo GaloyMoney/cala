@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn it_builds() {
         let new_account = NewAccount::builder()
-            .id(uuid::Uuid::new_v4())
+            .id(uuid::Uuid::now_v7())
             .code("code")
             .name("name")
             .build()
@@ -355,7 +355,7 @@ mod tests {
     fn accepts_metadata() {
         use serde_json::json;
         let new_account = NewAccount::builder()
-            .id(uuid::Uuid::new_v4())
+            .id(uuid::Uuid::now_v7())
             .code("code")
             .name("name")
             .metadata(json!({"foo": "bar"}))
