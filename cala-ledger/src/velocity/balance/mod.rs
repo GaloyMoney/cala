@@ -129,15 +129,19 @@ impl VelocityBalances {
             let mut latest_balance: Option<BalanceSnapshot> = None;
             let mut new_balances = Vec::new();
 
+            let current = current_balances
+                .remove(key)
+                .expect("entries_to_add key missing in current_balances");
+
             for (limit, entry) in entries {
                 let ctx = context.context_for_entry(key.account_id, entry);
-                let balance = match (latest_balance.take(), current_balances.remove(key)) {
+                let balance = match (latest_balance.take(), &current) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
                         latest
                     }
-                    (_, Some(Some(balance))) => balance,
-                    (_, Some(None)) => {
+                    (_, Some(balance)) => balance.clone(),
+                    (_, None) => {
                         let new_snapshot =
                             crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry);
                         limit.enforce(&ctx, time, &new_snapshot)?;
@@ -146,6 +150,7 @@ impl VelocityBalances {
                     }
                     _ => unreachable!(),
                 };
+
                 let new_snapshot = crate::balance::Snapshots::update_snapshot(time, balance, entry);
                 limit.enforce(&ctx, time, &new_snapshot)?;
                 latest_balance = Some(new_snapshot);
@@ -630,7 +635,7 @@ mod tests {
         }
 
         #[test]
-        #[should_panic(expected = "internal error: entered unreachable code")]
+        #[should_panic(expected = "entries_to_add key missing in current_balances")]
         fn new_snapshots_missing_key_in_current_balances() {
             let time = Utc::now();
             let key = create_test_key();
