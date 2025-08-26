@@ -51,7 +51,7 @@ pub fn test_accounts() -> (NewAccount, NewAccount) {
 pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSet) {
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let sender_account_set = NewAccountSet::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .name(format!("Test Sender Account Set {code}"))
         .journal_id(journal_id)
         .build()
@@ -59,7 +59,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
 
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account_set = NewAccountSet::builder()
-        .id(uuid::Uuid::new_v4())
+        .id(uuid::Uuid::now_v7())
         .name(format!("Test Recipient Account Set {code}"))
         .journal_id(journal_id)
         .build()
