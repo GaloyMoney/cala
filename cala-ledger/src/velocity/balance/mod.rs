@@ -105,7 +105,7 @@ impl VelocityBalances {
                                     window,
                                     entry.currency,
                                     entry.journal_id,
-                                    entry.account_id,
+                                    account_id,
                                     control.control_id,
                                     limit.limit_id,
                                 ))
@@ -133,7 +133,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.context_for_entry(entry.account_id, entry);
+                let ctx = context.context_for_entry(key.3, entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
