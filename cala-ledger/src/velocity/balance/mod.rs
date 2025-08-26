@@ -101,14 +101,14 @@ impl VelocityBalances {
                     for limit in &control.velocity_limits {
                         if let Some(window) = limit.window_for_enforcement(&ctx, entry)? {
                             balances_to_check
-                                .entry((
-                                    window,
-                                    entry.currency,
-                                    entry.journal_id,
-                                    account_id,
-                                    control.control_id,
-                                    limit.limit_id,
-                                ))
+                                .entry(VelocityBalanceKey {
+                                    window: window,
+                                    currency: entry.currency,
+                                    journal_id: entry.journal_id,
+                                    account_id: account_id,
+                                    control_id: control.control_id,
+                                    limit_id: limit.limit_id,
+                                })
                                 .or_default()
                                 .push((limit, entry));
                         }
@@ -133,7 +133,7 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.context_for_entry(key.3, entry);
+                let ctx = context.context_for_entry(key.account_id, entry);
                 let balance = match (latest_balance.take(), current_balances.remove(key)) {
                     (Some(latest), _) => {
                         new_balances.push(latest.clone());
