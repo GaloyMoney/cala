@@ -126,17 +126,15 @@ impl VelocityBalances {
         let mut res = HashMap::new();
 
         for (key, entries) in entries_to_add.iter() {
-            let mut latest_balance: Option<BalanceSnapshot> = None;
             let mut new_balances = Vec::new();
-
-            let current = current_balances
+            let mut latest_balance = current_balances
                 .remove(key)
                 .expect("entries_to_add key missing in current_balances");
 
             for (limit, entry) in entries {
                 let ctx = context.context_for_entry(key.account_id, entry);
 
-                let balance = match latest_balance.or_else(|| current.clone()) {
+                let balance = match latest_balance {
                     Some(balance) => balance,
                     None => {
                         let new_snapshot =
