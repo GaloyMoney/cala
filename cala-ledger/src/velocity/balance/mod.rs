@@ -126,30 +126,25 @@ impl VelocityBalances {
         let mut res = HashMap::new();
 
         for (key, entries) in entries_to_add.iter() {
-            let mut new_balances = Vec::new();
             let mut latest_balance = current_balances
                 .remove(key)
                 .expect("entries_to_add key missing in current_balances");
 
-            for (limit, entry) in entries {
-                let ctx = context.context_for_entry(key.account_id, entry);
+            let mut new_balances = Vec::new();
 
-                match latest_balance {
+            for (limit, entry) in entries {
+                let new_balance = match &latest_balance {
                     Some(balance) => {
-                        let new_snapshot =
-                            crate::balance::Snapshots::update_snapshot(time, balance, entry);
-                        limit.enforce(&ctx, time, &new_snapshot)?;
-                        new_balances.push(new_snapshot.clone());
-                        latest_balance = Some(new_snapshot);
+                        crate::balance::Snapshots::update_snapshot(time, balance.clone(), entry)
                     }
-                    None => {
-                        let new_snapshot =
-                            crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry);
-                        limit.enforce(&ctx, time, &new_snapshot)?;
-                        new_balances.push(new_snapshot.clone());
-                        latest_balance = Some(new_snapshot);
-                    }
+                    None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
                 };
+
+                let ctx = context.context_for_entry(key.account_id, entry);
+                limit.enforce(&ctx, time, &new_balance)?;
+
+                new_balances.push(new_balance.clone());
+                latest_balance = Some(new_balance);
             }
 
             res.insert(key, new_balances);
