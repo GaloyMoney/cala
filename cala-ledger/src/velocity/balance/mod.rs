@@ -133,9 +133,9 @@ impl VelocityBalances {
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let new_balance = match &latest_balance {
+                let new_balance = match latest_balance.take() {
                     Some(balance) => {
-                        crate::balance::Snapshots::update_snapshot(time, balance.clone(), entry)
+                        crate::balance::Snapshots::update_snapshot(time, balance, entry)
                     }
                     None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
                 };
