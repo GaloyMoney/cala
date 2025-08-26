@@ -7,7 +7,7 @@ mod limit;
 
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
@@ -157,18 +157,17 @@ impl Velocities {
         account_ids: &[AccountId],
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
-        let mut unique_ids = account_ids.iter().copied().collect::<HashSet<_>>();
-        unique_ids.extend(
+        let mut all_account_ids = account_ids.iter().copied().collect::<Vec<_>>();
+        all_account_ids.extend(
             account_ids
                 .iter()
                 .filter_map(|id| account_set_mappings.get(id))
                 .flat_map(|ids| ids.iter().map(AccountId::from)),
         );
-        let account_and_set_ids = unique_ids.into_iter().collect::<Vec<_>>();
 
         let controls = self
             .account_controls
-            .find_for_enforcement(db, &account_and_set_ids)
+            .find_for_enforcement(db, &all_account_ids)
             .await?;
 
         self.balances
