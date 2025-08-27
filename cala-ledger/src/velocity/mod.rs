@@ -189,7 +189,7 @@ impl Velocities {
         Ok(control)
     }
 
-    pub(crate) async fn update_balances_in_op(
+    pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
@@ -212,7 +212,7 @@ impl Velocities {
             .await?;
 
         self.balances
-            .update_balances_in_op(
+            .update_balances_with_limit_enforcement_in_op(
                 db,
                 created_at,
                 transaction,
