@@ -207,14 +207,8 @@ impl Balances {
                     } else {
                         None
                     };
-
                 let current = current_balances.remove(&(account_id, entry.currency));
-
-                let balance = if let Some(latest) = latest {
-                    Some(latest)
-                } else if let Some(current) = current {
-                    current
-                } else {
+                let Some(balance) = latest.map(Some).or(current) else {
                     continue;
                 };
 
