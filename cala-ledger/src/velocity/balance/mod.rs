@@ -126,35 +126,391 @@ impl VelocityBalances {
         let mut res = HashMap::new();
 
         for (key, entries) in entries_to_add.iter() {
-            let mut latest_balance: Option<BalanceSnapshot> = None;
+            let mut latest_balance = current_balances
+                .remove(key)
+                .expect("entries_to_add key missing in current_balances");
+
             let mut new_balances = Vec::new();
 
             for (limit, entry) in entries {
-                let ctx = context.context_for_entry(key.account_id, entry);
-                let balance = match (latest_balance.take(), current_balances.remove(key)) {
-                    (Some(latest), _) => {
-                        new_balances.push(latest.clone());
-                        latest
+                let new_balance = match latest_balance.take() {
+                    Some(balance) => {
+                        crate::balance::Snapshots::update_snapshot(time, balance, entry)
                     }
-                    (_, Some(Some(balance))) => balance,
-                    (_, Some(None)) => {
-                        let new_snapshot =
-                            crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry);
-                        limit.enforce(&ctx, time, &new_snapshot)?;
-                        latest_balance = Some(new_snapshot);
-                        continue;
-                    }
-                    _ => unreachable!(),
+                    None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
                 };
-                let new_snapshot = crate::balance::Snapshots::update_snapshot(time, balance, entry);
-                limit.enforce(&ctx, time, &new_snapshot)?;
-                latest_balance = Some(new_snapshot);
+
+                let ctx = context.context_for_entry(key.account_id, entry);
+                limit.enforce(&ctx, time, &new_balance)?;
+
+                new_balances.push(new_balance.clone());
+                latest_balance = Some(new_balance);
             }
-            if let Some(latest) = latest_balance.take() {
-                new_balances.push(latest)
-            }
+
             res.insert(key, new_balances);
         }
         Ok(res)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod new_snapshots {
+        use super::*;
+
+        use chrono::Utc;
+        use rust_decimal::Decimal;
+        use std::collections::HashMap;
+
+        use cala_types::{account::AccountConfig, balance::BalanceAmount, velocity::Window};
+
+        use crate::{
+            primitives::{
+                Currency, DebitOrCredit, EntryId, JournalId, Layer, Status, TransactionId,
+                TxTemplateId, VelocityControlId, VelocityLimitId,
+            },
+            velocity::{
+                account_control::{AccountBalanceLimit, AccountLimit, AccountVelocityLimit},
+                context::EvalContext,
+            },
+        };
+
+        fn create_test_entry(
+            units: Decimal,
+            direction: DebitOrCredit,
+            layer: Layer,
+            currency: &str,
+        ) -> EntryValues {
+            EntryValues {
+                id: EntryId::new(),
+                version: 1,
+                transaction_id: TransactionId::new(),
+                journal_id: JournalId::new(),
+                account_id: AccountId::new(),
+                entry_type: "TEST_ENTRY".to_string(),
+                sequence: 1,
+                layer,
+                currency: currency.parse().unwrap(),
+                direction,
+                units,
+                description: None,
+                metadata: None,
+            }
+        }
+
+        fn dummy_test_limit() -> AccountVelocityLimit {
+            AccountVelocityLimit {
+                limit_id: VelocityLimitId::new(),
+                window: Default::default(),
+                condition: None,
+                currency: None,
+                limit: AccountLimit {
+                    timestamp_source: None,
+                    balance: Default::default(),
+                },
+            }
+        }
+
+        fn create_test_balance_snapshot(
+            account_id: AccountId,
+            journal_id: JournalId,
+            currency: Currency,
+            version: u32,
+        ) -> BalanceSnapshot {
+            let time = Utc::now();
+            let entry_id = EntryId::new();
+            BalanceSnapshot {
+                journal_id,
+                account_id,
+                entry_id,
+                currency,
+                settled: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                pending: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                encumbrance: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                version,
+                modified_at: time,
+                created_at: time,
+            }
+        }
+
+        fn create_test_key() -> VelocityBalanceKey {
+            VelocityBalanceKey {
+                window: Window::from(serde_json::json!({"test": "test_window"})),
+                currency: "USD".parse().unwrap(),
+                journal_id: JournalId::new(),
+                account_id: AccountId::new(),
+                control_id: VelocityControlId::new(),
+                limit_id: VelocityLimitId::new(),
+            }
+        }
+
+        fn create_test_transaction() -> TransactionValues {
+            TransactionValues {
+                id: TransactionId::new(),
+                version: 1,
+                created_at: chrono::Utc::now(),
+                modified_at: chrono::Utc::now(),
+                journal_id: JournalId::new(),
+                tx_template_id: TxTemplateId::new(),
+                entry_ids: vec![],
+                effective: chrono::Utc::now().date_naive(),
+                correlation_id: "test-correlation".to_string(),
+                external_id: Some("test-external".to_string()),
+                description: None,
+                void_of: None,
+                voided_by: None,
+                metadata: None,
+            }
+        }
+
+        fn create_test_account(id: AccountId) -> AccountValues {
+            AccountValues {
+                id,
+                version: 1,
+                code: "TEST_ACCOUNT".to_string(),
+                name: "Test Account".to_string(),
+                external_id: None,
+                normal_balance_type: DebitOrCredit::Debit,
+                status: Status::Active,
+                description: None,
+                config: AccountConfig::default(),
+                metadata: None,
+            }
+        }
+
+        #[test]
+        fn new_snapshots_from_single_entry_with_existing_balance() {
+            let key = create_test_key();
+            let limit = dummy_test_limit();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account(key.account_id);
+            let context = EvalContext::new(&transaction, [&account].into_iter());
+
+            let mut entry = create_test_entry(
+                Decimal::from(50),
+                DebitOrCredit::Credit,
+                Layer::Pending,
+                "USD",
+            );
+            entry.account_id = key.account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
+
+            let version = 5;
+            let existing_balance =
+                create_test_balance_snapshot(key.account_id, key.journal_id, key.currency, version);
+            let mut current_balances = HashMap::new();
+            current_balances.insert(key.clone(), Some(existing_balance));
+
+            let result = VelocityBalances::new_snapshots(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            )
+            .unwrap();
+
+            assert_eq!(result.len(), 1);
+            let snapshots = result.get(&key).unwrap();
+            assert_eq!(snapshots.len(), 1);
+            let snapshot = &snapshots[0];
+            assert_eq!(snapshot.version, version + 1);
+        }
+
+        #[test]
+        fn new_snapshots_from_single_entry_no_previous_balance() {
+            let key = create_test_key();
+            let limit = dummy_test_limit();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account(key.account_id);
+            let context = EvalContext::new(&transaction, [&account].into_iter());
+
+            let mut entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+            );
+            entry.account_id = key.account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert(key.clone(), None);
+
+            let result = VelocityBalances::new_snapshots(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            )
+            .unwrap();
+
+            assert_eq!(result.len(), 1);
+            let snapshots = result.get(&key).unwrap();
+            assert_eq!(snapshots.len(), 1);
+            let snapshot = &snapshots[0];
+            assert_eq!(snapshot.version, 1);
+        }
+
+        #[test]
+        fn new_snapshots_can_update_from_multiple_entries() {
+            let key = create_test_key();
+            let limit = dummy_test_limit();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account(key.account_id);
+            let context = EvalContext::new(&transaction, [&account].into_iter());
+
+            let initial_debit = Decimal::from(100);
+            let initial_credit = Decimal::from(25);
+            let version = 3;
+            let mut current_balance =
+                create_test_balance_snapshot(key.account_id, key.journal_id, key.currency, version);
+            current_balance.settled.dr_balance = initial_debit;
+            current_balance.settled.cr_balance = initial_credit;
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert(key.clone(), Some(current_balance));
+
+            // First entry will create a latest balance
+            let entry1_debit = Decimal::from(50);
+            let mut entry1 =
+                create_test_entry(entry1_debit, DebitOrCredit::Debit, Layer::Settled, "USD");
+            entry1.account_id = key.account_id;
+
+            // Second entry should use the latest balance, not the current
+            let entry2_credit = Decimal::from(30);
+            let mut entry2 =
+                create_test_entry(entry2_credit, DebitOrCredit::Credit, Layer::Settled, "USD");
+            entry2.account_id = key.account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry1), (&limit, &entry2)]);
+
+            let result = VelocityBalances::new_snapshots(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            )
+            .unwrap();
+
+            assert_eq!(result.len(), 1);
+            let snapshots = result.get(&key).unwrap();
+            assert_eq!(snapshots.len(), 2);
+
+            assert_eq!(snapshots[0].version, version + 1);
+            assert_eq!(
+                snapshots[0].settled.dr_balance,
+                initial_debit + entry1_debit
+            );
+
+            assert_eq!(snapshots[1].version, version + 2);
+            assert_eq!(
+                snapshots[1].settled.cr_balance,
+                initial_credit + entry2_credit
+            );
+        }
+
+        #[test]
+        #[should_panic(expected = "entries_to_add key missing in current_balances")]
+        fn new_snapshots_fails_for_missing_key_in_current_balances() {
+            let key = create_test_key();
+            let limit = dummy_test_limit();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account(key.account_id);
+            let context = EvalContext::new(&transaction, [&account].into_iter());
+
+            let mut entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+            );
+            entry.account_id = key.account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
+
+            let current_balances = HashMap::new();
+
+            let _ = VelocityBalances::new_snapshots(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            );
+        }
+
+        #[test]
+        fn new_snapshots_checks_limits() {
+            let key = create_test_key();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account(key.account_id);
+            let context = EvalContext::new(&transaction, [&account].into_iter());
+
+            let limit = AccountVelocityLimit {
+                limit_id: key.limit_id,
+                window: Default::default(),
+                condition: None,
+                currency: None,
+                limit: AccountLimit {
+                    timestamp_source: None,
+                    balance: vec![AccountBalanceLimit {
+                        layer: Layer::Settled,
+                        amount: Decimal::from(100),
+                        enforcement_direction: DebitOrCredit::Debit,
+                        start: Utc::now() - chrono::Duration::seconds(1), // Start 1 second ago to ensure it's active
+                        end: None,
+                    }],
+                },
+            };
+
+            let mut entry = create_test_entry(
+                Decimal::from(500),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+            );
+            entry.account_id = key.account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert(key.clone(), None);
+
+            let result = VelocityBalances::new_snapshots(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            );
+            assert!(matches!(result, Err(VelocityError::Enforcement(_))));
+        }
     }
 }

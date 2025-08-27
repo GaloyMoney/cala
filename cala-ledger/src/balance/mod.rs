@@ -200,30 +200,24 @@ impl Balances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                let balance = match (
-                    latest_balances.remove(&(account_id, &entry.currency)),
-                    current_balances.remove(&(account_id, entry.currency)),
-                ) {
-                    (Some(latest), _) => {
+                let latest =
+                    if let Some(latest) = latest_balances.remove(&(account_id, &entry.currency)) {
                         new_balances.push(latest.clone());
-                        latest
-                    }
-                    (_, Some(Some(balance))) => balance,
-                    (_, Some(None)) => {
-                        latest_balances.insert(
-                            (account_id, &entry.currency),
-                            Snapshots::new_snapshot(time, account_id, entry),
-                        );
-                        continue;
-                    }
-                    _ => {
-                        continue;
-                    }
+                        Some(latest)
+                    } else {
+                        None
+                    };
+                let current = current_balances.remove(&(account_id, entry.currency));
+                let Some(balance) = latest.map(Some).or(current) else {
+                    continue;
                 };
-                latest_balances.insert(
-                    (account_id, &entry.currency),
-                    Snapshots::update_snapshot(time, balance, entry),
-                );
+
+                let new_snapshot = match balance {
+                    Some(balance) => Snapshots::update_snapshot(time, balance, entry),
+                    None => Snapshots::new_snapshot(time, account_id, entry),
+                };
+
+                latest_balances.insert((account_id, &entry.currency), new_snapshot);
             }
         }
         new_balances.extend(latest_balances.into_values());
@@ -272,5 +266,238 @@ impl Balances {
             )
             .await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    mod new_snapshots {
+        use super::*;
+
+        use chrono::Utc;
+        use rust_decimal::Decimal;
+        use std::collections::HashMap;
+
+        use cala_types::{
+            balance::BalanceAmount,
+            entry::EntryValues,
+            primitives::{DebitOrCredit, Layer},
+        };
+
+        use crate::primitives::{Currency, EntryId, JournalId, TransactionId};
+
+        fn create_test_entry(
+            units: Decimal,
+            direction: DebitOrCredit,
+            layer: Layer,
+            currency: &str,
+            account_id: AccountId,
+        ) -> EntryValues {
+            EntryValues {
+                id: EntryId::new(),
+                version: 1,
+                transaction_id: TransactionId::new(),
+                journal_id: JournalId::new(),
+                account_id,
+                entry_type: "TEST_ENTRY".to_string(),
+                sequence: 1,
+                layer,
+                currency: currency.parse().unwrap(),
+                direction,
+                units,
+                description: None,
+                metadata: None,
+            }
+        }
+
+        fn create_test_balance_snapshot(
+            account_id: AccountId,
+            journal_id: JournalId,
+            currency: Currency,
+            version: u32,
+        ) -> BalanceSnapshot {
+            let time = Utc::now();
+            let entry_id = EntryId::new();
+            BalanceSnapshot {
+                journal_id,
+                account_id,
+                entry_id,
+                currency,
+                settled: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                pending: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                encumbrance: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                version,
+                modified_at: time,
+                created_at: time,
+            }
+        }
+
+        #[test]
+        fn new_snapshots_creates_new_snapshot_when_no_current_balance() {
+            let account_id = AccountId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            let entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert((account_id, currency), None);
+
+            let entries = vec![entry];
+
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+
+            assert_eq!(result.len(), 1);
+            let snapshot = &result[0];
+            assert_eq!(snapshot.version, 1); // New snapshot starts at version 1
+        }
+
+        #[test]
+        fn new_snapshots_updates_current_balance_with_entry() {
+            let account_id = AccountId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            let mut current_balances = HashMap::new();
+            let version = 5;
+            let mut current_balance =
+                create_test_balance_snapshot(account_id, JournalId::new(), currency, version);
+            current_balance.settled.dr_balance = Decimal::from(200);
+            current_balance.settled.cr_balance = Decimal::from(50);
+            current_balances.insert((account_id, currency), Some(current_balance));
+
+            let entry = create_test_entry(
+                Decimal::from(75),
+                DebitOrCredit::Credit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+            let entries = vec![entry];
+
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+
+            assert_eq!(result.len(), 1);
+            let snapshot = &result[0];
+            assert_eq!(snapshot.version, version + 1);
+        }
+
+        #[test]
+        fn new_snapshots_can_update_from_multiple_entries() {
+            let account_id = AccountId::new();
+            let journal_id = JournalId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            let initial_debit = Decimal::from(100);
+            let initial_credit = Decimal::from(25);
+            let mut current_balances = HashMap::new();
+            let version = 3;
+            let mut current_balance =
+                create_test_balance_snapshot(account_id, journal_id, currency, version);
+            current_balance.settled.dr_balance = initial_debit;
+            current_balance.settled.cr_balance = initial_credit;
+            current_balances.insert((account_id, currency), Some(current_balance));
+
+            // First entry will create a latest balance
+            let entry1_debit = Decimal::from(50);
+            let entry1 = create_test_entry(
+                entry1_debit,
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+            // Second entry should use the latest balance, not the current
+            let entry2_credit = Decimal::from(30);
+            let entry2 = create_test_entry(
+                entry2_credit,
+                DebitOrCredit::Credit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+            let entries = vec![entry1, entry2];
+
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+
+            assert_eq!(result.len(), 2);
+
+            assert_eq!(result[0].version, version + 1);
+            assert_eq!(result[0].settled.dr_balance, initial_debit + entry1_debit);
+
+            assert_eq!(result[1].version, version + 2);
+            assert_eq!(result[1].settled.cr_balance, initial_credit + entry2_credit);
+        }
+
+        #[test]
+        fn new_snapshots_skips_update_when_no_balance_value_exists() {
+            let current_balances = HashMap::new();
+
+            let entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                AccountId::new(),
+            );
+            let entries = vec![entry];
+
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+
+            assert!(result.is_empty());
+        }
+
+        #[test]
+        fn new_snapshots_creates_snapshots_for_mapped_account_sets() {
+            let account_id = AccountId::new();
+            let account_set_id = AccountSetId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            let entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert((account_id, currency), None);
+            current_balances.insert((AccountId::from(&account_set_id), currency), None);
+
+            let mut mappings = HashMap::new();
+            mappings.insert(account_id, vec![account_set_id]);
+
+            let entries = vec![entry];
+
+            let result = Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings);
+
+            assert_eq!(result.len(), 2);
+        }
     }
 }
