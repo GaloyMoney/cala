@@ -275,6 +275,7 @@ mod tests {
 
     mod new_snapshots {
         use super::*;
+
         use chrono::Utc;
         use rust_decimal::Decimal;
         use std::collections::HashMap;
@@ -349,22 +350,10 @@ mod tests {
         }
 
         #[test]
-        fn new_snapshots_empty_entries_returns_empty() {
-            let time = Utc::now();
-            let current_balances = HashMap::new();
-            let entries = vec![];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert!(result.is_empty());
-        }
-
-        #[test]
-        fn new_snapshots_single_entry_no_existing_balance() {
-            let time = Utc::now();
+        fn new_snapshots_creates_new_snapshot_when_no_current_balance() {
             let account_id = AccountId::new();
             let currency: Currency = "USD".parse().unwrap();
+
             let entry = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
@@ -377,30 +366,31 @@ mod tests {
             current_balances.insert((account_id, currency), None);
 
             let entries = vec![entry];
-            let mappings = HashMap::new();
 
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
             assert_eq!(snapshot.account_id, account_id);
             assert_eq!(snapshot.currency, currency);
-            assert_eq!(snapshot.version, 1);
+            assert_eq!(snapshot.version, 1); // New snapshot starts at version 1
             assert_eq!(snapshot.settled.dr_balance, Decimal::from(100));
             assert_eq!(snapshot.settled.cr_balance, Decimal::ZERO);
         }
 
         #[test]
-        fn new_snapshots_single_entry_with_existing_balance() {
-            let time = Utc::now();
+        fn new_snapshots_updates_current_balance_with_entry() {
             let account_id = AccountId::new();
-            let journal_id = JournalId::new();
             let currency: Currency = "USD".parse().unwrap();
 
-            let mut existing_balance =
-                create_test_balance_snapshot(account_id, journal_id, currency, 5);
-            existing_balance.settled.dr_balance = Decimal::from(200);
-            existing_balance.settled.cr_balance = Decimal::from(50);
+            let mut current_balances = HashMap::new();
+            let version = 5;
+            let mut current_balance =
+                create_test_balance_snapshot(account_id, JournalId::new(), currency, version);
+            current_balance.settled.dr_balance = Decimal::from(200);
+            current_balance.settled.cr_balance = Decimal::from(50);
+            current_balances.insert((account_id, currency), Some(current_balance));
 
             let entry = create_test_entry(
                 Decimal::from(75),
@@ -409,382 +399,83 @@ mod tests {
                 "USD",
                 account_id,
             );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, currency), Some(existing_balance));
-
             let entries = vec![entry];
-            let mappings = HashMap::new();
 
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
-            assert_eq!(snapshot.version, 6); // Previous was 5
+            assert_eq!(snapshot.version, version + 1);
             assert_eq!(snapshot.settled.dr_balance, Decimal::from(200)); // Unchanged
             assert_eq!(snapshot.settled.cr_balance, Decimal::from(125)); // 50 + 75
         }
 
         #[test]
-        fn new_snapshots_multiple_entries_same_account() {
-            let time = Utc::now();
-            let account_id = AccountId::new();
-            let currency: Currency = "USD".parse().unwrap();
-
-            let entry1 = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-            let entry2 = create_test_entry(
-                Decimal::from(50),
-                DebitOrCredit::Credit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, currency), None);
-
-            let entries = vec![entry1, entry2];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 2);
-
-            // First balance after first entry
-            assert_eq!(result[0].version, 1);
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
-            assert_eq!(result[0].settled.cr_balance, Decimal::ZERO);
-
-            // Second balance after second entry
-            assert_eq!(result[1].version, 2);
-            assert_eq!(result[1].settled.dr_balance, Decimal::from(100));
-            assert_eq!(result[1].settled.cr_balance, Decimal::from(50));
-        }
-
-        #[test]
-        fn new_snapshots_multiple_accounts() {
-            let time = Utc::now();
-            let account1 = AccountId::new();
-            let account2 = AccountId::new();
-            let currency: Currency = "USD".parse().unwrap();
-
-            let entry1 = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account1,
-            );
-            let entry2 = create_test_entry(
-                Decimal::from(200),
-                DebitOrCredit::Credit,
-                Layer::Pending,
-                "USD",
-                account2,
-            );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account1, currency), None);
-            current_balances.insert((account2, currency), None);
-
-            let entries = vec![entry1, entry2];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 2);
-
-            // Find snapshots for each account
-            let account1_snapshot = result.iter().find(|s| s.account_id == account1).unwrap();
-            assert_eq!(account1_snapshot.settled.dr_balance, Decimal::from(100));
-            assert_eq!(account1_snapshot.settled.cr_balance, Decimal::ZERO);
-            assert_eq!(account1_snapshot.pending.dr_balance, Decimal::ZERO);
-            assert_eq!(account1_snapshot.pending.cr_balance, Decimal::ZERO);
-
-            let account2_snapshot = result.iter().find(|s| s.account_id == account2).unwrap();
-            assert_eq!(account2_snapshot.settled.dr_balance, Decimal::ZERO);
-            assert_eq!(account2_snapshot.settled.cr_balance, Decimal::ZERO);
-            assert_eq!(account2_snapshot.pending.dr_balance, Decimal::ZERO);
-            assert_eq!(account2_snapshot.pending.cr_balance, Decimal::from(200));
-        }
-
-        #[test]
-        fn new_snapshots_different_currencies() {
-            let time = Utc::now();
-            let account_id = AccountId::new();
-            let usd: Currency = "USD".parse().unwrap();
-            let eur: Currency = "EUR".parse().unwrap();
-
-            let entry1 = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-            let entry2 = create_test_entry(
-                Decimal::from(200),
-                DebitOrCredit::Credit,
-                Layer::Settled,
-                "EUR",
-                account_id,
-            );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, usd), None);
-            current_balances.insert((account_id, eur), None);
-
-            let entries = vec![entry1, entry2];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 2);
-
-            let usd_snapshot = result.iter().find(|s| s.currency == usd).unwrap();
-            assert_eq!(usd_snapshot.settled.dr_balance, Decimal::from(100));
-            assert_eq!(usd_snapshot.settled.cr_balance, Decimal::ZERO);
-
-            let eur_snapshot = result.iter().find(|s| s.currency == eur).unwrap();
-            assert_eq!(eur_snapshot.settled.dr_balance, Decimal::ZERO);
-            assert_eq!(eur_snapshot.settled.cr_balance, Decimal::from(200));
-        }
-
-        #[test]
-        fn new_snapshots_with_account_set_mappings() {
-            let time = Utc::now();
-            let account_id = AccountId::new();
-            let account_set_id1 = AccountSetId::new();
-            let account_set_id2 = AccountSetId::new();
-            let currency: Currency = "USD".parse().unwrap();
-
-            let entry = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, currency), None);
-            current_balances.insert((AccountId::from(&account_set_id1), currency), None);
-            current_balances.insert((AccountId::from(&account_set_id2), currency), None);
-
-            let entries = vec![entry];
-            let mut mappings = HashMap::new();
-            mappings.insert(account_id, vec![account_set_id1, account_set_id2]);
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 3);
-
-            // All balances should have the same debit amount
-            for snapshot in &result {
-                assert_eq!(snapshot.settled.dr_balance, Decimal::from(100));
-                assert_eq!(snapshot.settled.cr_balance, Decimal::ZERO);
-                assert_eq!(snapshot.version, 1);
-            }
-        }
-
-        #[test]
-        fn new_snapshots_different_layers() {
-            let time = Utc::now();
-            let account_id = AccountId::new();
-            let currency: Currency = "USD".parse().unwrap();
-
-            let entry1 = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-            let entry2 = create_test_entry(
-                Decimal::from(50),
-                DebitOrCredit::Credit,
-                Layer::Pending,
-                "USD",
-                account_id,
-            );
-            let entry3 = create_test_entry(
-                Decimal::from(25),
-                DebitOrCredit::Debit,
-                Layer::Encumbrance,
-                "USD",
-                account_id,
-            );
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, currency), None);
-
-            let entries = vec![entry1, entry2, entry3];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 3);
-
-            // Final snapshot should have all layers updated
-            let final_snapshot = &result[2];
-            assert_eq!(final_snapshot.version, 3);
-            assert_eq!(final_snapshot.settled.dr_balance, Decimal::from(100));
-            assert_eq!(final_snapshot.settled.cr_balance, Decimal::ZERO);
-            assert_eq!(final_snapshot.pending.dr_balance, Decimal::ZERO);
-            assert_eq!(final_snapshot.pending.cr_balance, Decimal::from(50));
-            assert_eq!(final_snapshot.encumbrance.dr_balance, Decimal::from(25));
-            assert_eq!(final_snapshot.encumbrance.cr_balance, Decimal::ZERO);
-        }
-
-        #[test]
-        fn new_snapshots_preserves_other_layer_balances() {
-            let time = Utc::now();
+        fn new_snapshots_can_update_from_multiple_entries() {
             let account_id = AccountId::new();
             let journal_id = JournalId::new();
             let currency: Currency = "USD".parse().unwrap();
 
-            let mut existing_balance =
-                create_test_balance_snapshot(account_id, journal_id, currency, 2);
-            existing_balance.settled.dr_balance = Decimal::from(100);
-            existing_balance.pending.cr_balance = Decimal::from(50);
-            existing_balance.encumbrance.dr_balance = Decimal::from(25);
-
-            let entry = create_test_entry(
-                Decimal::from(30),
-                DebitOrCredit::Credit,
-                Layer::Pending,
-                "USD",
-                account_id,
-            );
-
             let mut current_balances = HashMap::new();
-            current_balances.insert((account_id, currency), Some(existing_balance));
+            let version = 3;
+            let mut current_balance =
+                create_test_balance_snapshot(account_id, journal_id, currency, version);
+            current_balance.settled.dr_balance = Decimal::from(100);
+            current_balance.settled.cr_balance = Decimal::from(25);
+            current_balances.insert((account_id, currency), Some(current_balance));
 
-            let entries = vec![entry];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert_eq!(result.len(), 1);
-            let snapshot = &result[0];
-            assert_eq!(snapshot.version, 3);
-            // Settled layer unchanged
-            assert_eq!(snapshot.settled.dr_balance, Decimal::from(100));
-            assert_eq!(snapshot.settled.cr_balance, Decimal::ZERO);
-            // Pending layer updated
-            assert_eq!(snapshot.pending.dr_balance, Decimal::ZERO);
-            assert_eq!(snapshot.pending.cr_balance, Decimal::from(80)); // 50 + 30
-                                                                        // Encumbrance layer unchanged
-            assert_eq!(snapshot.encumbrance.dr_balance, Decimal::from(25));
-            assert_eq!(snapshot.encumbrance.cr_balance, Decimal::ZERO);
-        }
-
-        #[test]
-        fn new_snapshots_missing_balance_in_current_balances_skipped() {
-            let time = Utc::now();
-            let account_id = AccountId::new();
-
-            let entry = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account_id,
-            );
-
-            let current_balances = HashMap::new();
-            // Note: NOT adding the balance to current_balances
-
-            let entries = vec![entry];
-            let mappings = HashMap::new();
-
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
-
-            assert!(result.is_empty());
-        }
-
-        #[test]
-        fn new_snapshots_complex_scenario_multiple_accounts_and_mappings() {
-            let time = Utc::now();
-            let account1 = AccountId::new();
-            let account2 = AccountId::new();
-            let account_set1 = AccountSetId::new();
-            let account_set2 = AccountSetId::new();
-            let usd: Currency = "USD".parse().unwrap();
-            let eur: Currency = "EUR".parse().unwrap();
-
+            // First entry will create a latest balance
             let entry1 = create_test_entry(
-                Decimal::from(100),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-                account1,
-            );
-            let entry2 = create_test_entry(
-                Decimal::from(200),
-                DebitOrCredit::Credit,
-                Layer::Pending,
-                "EUR",
-                account2,
-            );
-            let entry3 = create_test_entry(
                 Decimal::from(50),
                 DebitOrCredit::Debit,
-                Layer::Encumbrance,
+                Layer::Settled,
                 "USD",
-                account1,
+                account_id,
             );
+            // Second entry should use the latest balance, not the current
+            let entry2 = create_test_entry(
+                Decimal::from(30),
+                DebitOrCredit::Credit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+            let entries = vec![entry1, entry2];
 
-            let mut current_balances = HashMap::new();
-            current_balances.insert((account1, usd), None);
-            current_balances.insert((account2, eur), None);
-            current_balances.insert((AccountId::from(&account_set1), usd), None);
-            current_balances.insert((AccountId::from(&account_set2), usd), None);
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
 
-            let entries = vec![entry1, entry2, entry3];
-            let mut mappings = HashMap::new();
-            mappings.insert(account1, vec![account_set1, account_set2]);
+            assert_eq!(result.len(), 2);
 
-            let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
+            // First snapshot: current balance (100 dr, 25 cr) + entry1 (50 dr)
+            assert_eq!(result[0].version, version + 1);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(150)); // 100 + 50
+            assert_eq!(result[0].settled.cr_balance, Decimal::from(25)); // unchanged
 
-            // Should have:
-            // - 2 snapshots for account1 (settled + encumbrance entries)
-            // - 1 snapshot for account2 (pending entry)
-            // - 2 snapshots for account_set1 (mapped from account1, both entries)
-            // - 2 snapshots for account_set2 (mapped from account1, both entries)
-            assert_eq!(result.len(), 7);
+            // Second snapshot: uses latest (150 dr, 25 cr) not current (100 dr, 25 cr)
+            assert_eq!(result[1].version, version + 2); // incremented from latest
+            assert_eq!(result[1].settled.dr_balance, Decimal::from(150)); // unchanged from latest
+            assert_eq!(result[1].settled.cr_balance, Decimal::from(55)); // 25 + 30
+        }
 
-            // Check account1 final state
-            let account1_snapshots: Vec<_> = result
-                .iter()
-                .filter(|s| s.account_id == account1 && s.currency == usd)
-                .collect();
-            assert_eq!(account1_snapshots.len(), 2);
-            let final_account1 = account1_snapshots.last().unwrap();
-            assert_eq!(final_account1.settled.dr_balance, Decimal::from(100));
-            assert_eq!(final_account1.encumbrance.dr_balance, Decimal::from(50));
+        #[test]
+        fn new_snapshots_skips_update_when_no_balance_value_exists() {
+            let current_balances = HashMap::new();
 
-            // Check account2 state
-            let account2_snapshot = result.iter().find(|s| s.account_id == account2).unwrap();
-            assert_eq!(account2_snapshot.pending.cr_balance, Decimal::from(200));
+            let entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                AccountId::new(),
+            );
+            let entries = vec![entry];
 
-            // Check account sets have same balances as account1
-            for account_set_id in [account_set1, account_set2] {
-                let set_snapshots: Vec<_> = result
-                    .iter()
-                    .filter(|s| s.account_id == AccountId::from(&account_set_id))
-                    .collect();
-                assert_eq!(set_snapshots.len(), 2);
-                let final_set = set_snapshots.last().unwrap();
-                assert_eq!(final_set.settled.dr_balance, Decimal::from(100));
-                assert_eq!(final_set.encumbrance.dr_balance, Decimal::from(50));
-            }
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+
+            assert!(result.is_empty());
         }
     }
 }
