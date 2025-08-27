@@ -339,12 +339,14 @@ mod tests {
         fn new_snapshots_single_entry_no_previous_balance() {
             let time = Utc::now();
             let key = create_test_key();
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(1000),
@@ -353,7 +355,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -380,12 +382,14 @@ mod tests {
         fn new_snapshots_single_entry_with_existing_balance() {
             let time = Utc::now();
             let key = create_test_key();
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(50),
                 DebitOrCredit::Credit,
                 Layer::Pending,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(1000),
@@ -394,7 +398,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let existing_balance =
@@ -424,7 +428,6 @@ mod tests {
         fn new_snapshots_multiple_entries_same_key() {
             let time = Utc::now();
             let key = create_test_key();
-            let account_id = AccountId::new();
             let mut entry1 = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
@@ -437,9 +440,9 @@ mod tests {
                 Layer::Settled,
                 "USD",
             );
-            // Ensure both entries use the same account ID
-            entry1.account_id = account_id;
-            entry2.account_id = account_id;
+            // Ensure both entries use the same account ID as the key
+            entry1.account_id = key.account_id;
+            entry2.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(1000),
@@ -448,7 +451,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -490,18 +493,21 @@ mod tests {
                 limit_id: VelocityLimitId::new(),
             };
 
-            let entry1 = create_test_entry(
+            let mut entry1 = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
-            let entry2 = create_test_entry(
+            let mut entry2 = create_test_entry(
                 Decimal::from(200),
                 DebitOrCredit::Credit,
                 Layer::Pending,
                 "EUR",
             );
+            // Ensure entries use the same account_id as their respective keys
+            entry1.account_id = key1.account_id;
+            entry2.account_id = key2.account_id;
             let limit1 = create_test_limit(
                 key1.limit_id,
                 Decimal::from(1000),
@@ -516,8 +522,8 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account1 = create_test_account(entry1.account_id);
-            let account2 = create_test_account(entry2.account_id);
+            let account1 = create_test_account(key1.account_id);
+            let account2 = create_test_account(key2.account_id);
             let context = EvalContext::new(&transaction, [&account1, &account2].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -542,12 +548,14 @@ mod tests {
             let time = Utc::now();
             let key = create_test_key();
             // Entry tries to debit 500, but limit only allows 100
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(500),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(100),
@@ -556,7 +564,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -586,12 +594,14 @@ mod tests {
             let key = create_test_key();
 
             // Entry on Settled layer, limit enforces Pending layer (which includes Settled)
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(150),
@@ -600,7 +610,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -624,12 +634,14 @@ mod tests {
         fn new_snapshots_missing_key_in_current_balances() {
             let time = Utc::now();
             let key = create_test_key();
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(1000),
@@ -638,7 +650,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             // Don't add the key to current_balances
@@ -655,12 +667,14 @@ mod tests {
         fn new_snapshots_multiple_limits_per_entry() {
             let time = Utc::now();
             let key = create_test_key();
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(100),
                 DebitOrCredit::Debit,
                 Layer::Settled,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit1 = create_test_limit(
                 VelocityLimitId::new(),
                 Decimal::from(200),
@@ -675,7 +689,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -704,12 +718,14 @@ mod tests {
             let key = create_test_key();
 
             // Test credit enforcement
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(300),
                 DebitOrCredit::Credit,
                 Layer::Pending,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(500),
@@ -718,7 +734,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
@@ -741,12 +757,14 @@ mod tests {
             let time = Utc::now();
             let key = create_test_key();
 
-            let entry = create_test_entry(
+            let mut entry = create_test_entry(
                 Decimal::from(75),
                 DebitOrCredit::Debit,
                 Layer::Encumbrance,
                 "USD",
             );
+            // Ensure entry uses the same account_id as the key
+            entry.account_id = key.account_id;
             let limit = create_test_limit(
                 key.limit_id,
                 Decimal::from(100),
@@ -755,7 +773,7 @@ mod tests {
             );
 
             let transaction = create_test_transaction();
-            let account = create_test_account(entry.account_id);
+            let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut current_balances = HashMap::new();
