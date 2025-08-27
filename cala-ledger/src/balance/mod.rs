@@ -200,32 +200,30 @@ impl Balances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                let balance = if let Some(latest) =
-                    latest_balances.remove(&(account_id, &entry.currency))
-                {
-                    new_balances.push(latest.clone());
+                let latest =
+                    if let Some(latest) = latest_balances.remove(&(account_id, &entry.currency)) {
+                        new_balances.push(latest.clone());
+                        Some(latest)
+                    } else {
+                        None
+                    };
+
+                let current = current_balances.remove(&(account_id, entry.currency));
+
+                let balance = if let Some(latest) = latest {
                     Some(latest)
-                } else if let Some(current) = current_balances.remove(&(account_id, entry.currency))
-                {
+                } else if let Some(current) = current {
                     current
                 } else {
                     continue;
                 };
 
-                match balance {
-                    Some(balance) => {
-                        latest_balances.insert(
-                            (account_id, &entry.currency),
-                            Snapshots::update_snapshot(time, balance, entry),
-                        );
-                    }
-                    None => {
-                        latest_balances.insert(
-                            (account_id, &entry.currency),
-                            Snapshots::new_snapshot(time, account_id, entry),
-                        );
-                    }
-                }
+                let new_snapshot = match balance {
+                    Some(balance) => Snapshots::update_snapshot(time, balance, entry),
+                    None => Snapshots::new_snapshot(time, account_id, entry),
+                };
+
+                latest_balances.insert((account_id, &entry.currency), new_snapshot);
             }
         }
         new_balances.extend(latest_balances.into_values());
