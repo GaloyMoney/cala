@@ -200,7 +200,7 @@ impl CalaLedger {
             .await?;
 
         self.velocities
-            .update_balances_in_op(
+            .update_balances_with_limit_enforcement_in_op(
                 db,
                 transaction.created_at(),
                 transaction.values(),
@@ -279,7 +279,7 @@ impl CalaLedger {
             .await?;
 
         self.velocities
-            .update_balances_in_op(
+            .update_balances_with_limit_enforcement_in_op(
                 db,
                 transaction.created_at(),
                 transaction.values(),

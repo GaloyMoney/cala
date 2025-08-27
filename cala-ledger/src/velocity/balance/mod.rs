@@ -31,7 +31,7 @@ impl VelocityBalances {
         }
     }
 
-    pub(crate) async fn update_balances_in_op(
+    pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
         created_at: DateTime<Utc>,
