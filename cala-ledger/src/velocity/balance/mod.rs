@@ -55,8 +55,12 @@ impl VelocityBalances {
             .find_for_update(db, entries_to_enforce.keys())
             .await?;
 
-        let new_balances =
-            Self::new_snapshots(context, created_at, current_balances, &entries_to_enforce)?;
+        let new_balances = Self::new_snapshots_with_limit_enforcement(
+            context,
+            created_at,
+            current_balances,
+            &entries_to_enforce,
+        )?;
 
         self.repo.insert_new_snapshots(db, new_balances).await?;
 
@@ -117,7 +121,7 @@ impl VelocityBalances {
         Ok(balances_to_check)
     }
 
-    fn new_snapshots<'a>(
+    fn new_snapshots_with_limit_enforcement<'a>(
         mut context: super::context::EvalContext,
         time: DateTime<Utc>,
         mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
@@ -157,7 +161,7 @@ impl VelocityBalances {
 mod tests {
     use super::*;
 
-    mod new_snapshots {
+    mod new_snapshots_with_limit_enforcement {
         use super::*;
 
         use chrono::Utc;
@@ -321,7 +325,7 @@ mod tests {
             let mut current_balances = HashMap::new();
             current_balances.insert(key.clone(), Some(existing_balance));
 
-            let result = VelocityBalances::new_snapshots(
+            let result = VelocityBalances::new_snapshots_with_limit_enforcement(
                 context,
                 Utc::now(),
                 current_balances,
@@ -359,7 +363,7 @@ mod tests {
             let mut current_balances = HashMap::new();
             current_balances.insert(key.clone(), None);
 
-            let result = VelocityBalances::new_snapshots(
+            let result = VelocityBalances::new_snapshots_with_limit_enforcement(
                 context,
                 Utc::now(),
                 current_balances,
@@ -409,7 +413,7 @@ mod tests {
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry1), (&limit, &entry2)]);
 
-            let result = VelocityBalances::new_snapshots(
+            let result = VelocityBalances::new_snapshots_with_limit_enforcement(
                 context,
                 Utc::now(),
                 current_balances,
@@ -457,7 +461,7 @@ mod tests {
 
             let current_balances = HashMap::new();
 
-            let _ = VelocityBalances::new_snapshots(
+            let _ = VelocityBalances::new_snapshots_with_limit_enforcement(
                 context,
                 Utc::now(),
                 current_balances,
@@ -504,7 +508,7 @@ mod tests {
             let mut current_balances = HashMap::new();
             current_balances.insert(key.clone(), None);
 
-            let result = VelocityBalances::new_snapshots(
+            let result = VelocityBalances::new_snapshots_with_limit_enforcement(
                 context,
                 Utc::now(),
                 current_balances,
