@@ -200,30 +200,32 @@ impl Balances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                let balance = match (
+                match (
                     latest_balances.remove(&(account_id, &entry.currency)),
                     current_balances.remove(&(account_id, entry.currency)),
                 ) {
-                    (Some(latest), _) => {
-                        new_balances.push(latest.clone());
-                        latest
+                    (Some(balance), _) => {
+                        new_balances.push(balance.clone());
+                        latest_balances.insert(
+                            (account_id, &entry.currency),
+                            Snapshots::update_snapshot(time, balance, entry),
+                        );
                     }
-                    (_, Some(Some(balance))) => balance,
+                    (_, Some(Some(balance))) => {
+                        latest_balances.insert(
+                            (account_id, &entry.currency),
+                            Snapshots::update_snapshot(time, balance, entry),
+                        );
+                    }
                     (_, Some(None)) => {
                         latest_balances.insert(
                             (account_id, &entry.currency),
                             Snapshots::new_snapshot(time, account_id, entry),
                         );
-                        continue;
                     }
-                    _ => {
-                        continue;
-                    }
+
+                    (_, None) => (),
                 };
-                latest_balances.insert(
-                    (account_id, &entry.currency),
-                    Snapshots::update_snapshot(time, balance, entry),
-                );
             }
         }
         new_balances.extend(latest_balances.into_values());
@@ -278,22 +280,20 @@ impl Balances {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     mod new_snapshots {
         use super::*;
         use chrono::Utc;
         use rust_decimal::Decimal;
         use std::collections::HashMap;
-        
+
         use cala_types::{
             balance::BalanceAmount,
             entry::EntryValues,
             primitives::{DebitOrCredit, Layer},
         };
-        
-        use crate::primitives::{
-            Currency, EntryId, JournalId, TransactionId,
-        };
+
+        use crate::primitives::{Currency, EntryId, JournalId, TransactionId};
 
         fn create_test_entry(
             units: Decimal,
@@ -404,8 +404,9 @@ mod tests {
             let account_id = AccountId::new();
             let journal_id = JournalId::new();
             let currency: Currency = "USD".parse().unwrap();
-            
-            let mut existing_balance = create_test_balance_snapshot(account_id, journal_id, currency, 5);
+
+            let mut existing_balance =
+                create_test_balance_snapshot(account_id, journal_id, currency, 5);
             existing_balance.settled.dr_balance = Decimal::from(200);
             existing_balance.settled.cr_balance = Decimal::from(50);
 
@@ -462,12 +463,12 @@ mod tests {
             let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 2);
-            
+
             // First balance after first entry
             assert_eq!(result[0].version, 1);
             assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
             assert_eq!(result[0].settled.cr_balance, Decimal::ZERO);
-            
+
             // Second balance after second entry
             assert_eq!(result[1].version, 2);
             assert_eq!(result[1].settled.dr_balance, Decimal::from(100));
@@ -506,7 +507,7 @@ mod tests {
             let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 2);
-            
+
             // Find snapshots for each account
             let account1_snapshot = result.iter().find(|s| s.account_id == account1).unwrap();
             assert_eq!(account1_snapshot.settled.dr_balance, Decimal::from(100));
@@ -553,7 +554,7 @@ mod tests {
             let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 2);
-            
+
             let usd_snapshot = result.iter().find(|s| s.currency == usd).unwrap();
             assert_eq!(usd_snapshot.settled.dr_balance, Decimal::from(100));
             assert_eq!(usd_snapshot.settled.cr_balance, Decimal::ZERO);
@@ -591,7 +592,7 @@ mod tests {
             let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 3);
-            
+
             // All balances should have the same debit amount
             for snapshot in &result {
                 assert_eq!(snapshot.settled.dr_balance, Decimal::from(100));
@@ -637,7 +638,7 @@ mod tests {
             let result = Balances::new_snapshots(time, current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 3);
-            
+
             // Final snapshot should have all layers updated
             let final_snapshot = &result[2];
             assert_eq!(final_snapshot.version, 3);
@@ -655,8 +656,9 @@ mod tests {
             let account_id = AccountId::new();
             let journal_id = JournalId::new();
             let currency: Currency = "USD".parse().unwrap();
-            
-            let mut existing_balance = create_test_balance_snapshot(account_id, journal_id, currency, 2);
+
+            let mut existing_balance =
+                create_test_balance_snapshot(account_id, journal_id, currency, 2);
             existing_balance.settled.dr_balance = Decimal::from(100);
             existing_balance.pending.cr_balance = Decimal::from(50);
             existing_balance.encumbrance.dr_balance = Decimal::from(25);
@@ -686,7 +688,7 @@ mod tests {
             // Pending layer updated
             assert_eq!(snapshot.pending.dr_balance, Decimal::ZERO);
             assert_eq!(snapshot.pending.cr_balance, Decimal::from(80)); // 50 + 30
-            // Encumbrance layer unchanged
+                                                                        // Encumbrance layer unchanged
             assert_eq!(snapshot.encumbrance.dr_balance, Decimal::from(25));
             assert_eq!(snapshot.encumbrance.cr_balance, Decimal::ZERO);
         }
@@ -767,7 +769,8 @@ mod tests {
             assert_eq!(result.len(), 7);
 
             // Check account1 final state
-            let account1_snapshots: Vec<_> = result.iter()
+            let account1_snapshots: Vec<_> = result
+                .iter()
                 .filter(|s| s.account_id == account1 && s.currency == usd)
                 .collect();
             assert_eq!(account1_snapshots.len(), 2);
@@ -776,14 +779,13 @@ mod tests {
             assert_eq!(final_account1.encumbrance.dr_balance, Decimal::from(50));
 
             // Check account2 state
-            let account2_snapshot = result.iter()
-                .find(|s| s.account_id == account2)
-                .unwrap();
+            let account2_snapshot = result.iter().find(|s| s.account_id == account2).unwrap();
             assert_eq!(account2_snapshot.pending.cr_balance, Decimal::from(200));
 
             // Check account sets have same balances as account1
             for account_set_id in [account_set1, account_set2] {
-                let set_snapshots: Vec<_> = result.iter()
+                let set_snapshots: Vec<_> = result
+                    .iter()
                     .filter(|s| s.account_id == AccountId::from(&account_set_id))
                     .collect();
                 assert_eq!(set_snapshots.len(), 2);
