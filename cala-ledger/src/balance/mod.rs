@@ -200,32 +200,32 @@ impl Balances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                match (
-                    latest_balances.remove(&(account_id, &entry.currency)),
-                    current_balances.remove(&(account_id, entry.currency)),
-                ) {
-                    (Some(balance), _) => {
-                        new_balances.push(balance.clone());
+                let balance = if let Some(latest) =
+                    latest_balances.remove(&(account_id, &entry.currency))
+                {
+                    new_balances.push(latest.clone());
+                    Some(latest)
+                } else if let Some(current) = current_balances.remove(&(account_id, entry.currency))
+                {
+                    current
+                } else {
+                    continue;
+                };
+
+                match balance {
+                    Some(balance) => {
                         latest_balances.insert(
                             (account_id, &entry.currency),
                             Snapshots::update_snapshot(time, balance, entry),
                         );
                     }
-                    (_, Some(Some(balance))) => {
-                        latest_balances.insert(
-                            (account_id, &entry.currency),
-                            Snapshots::update_snapshot(time, balance, entry),
-                        );
-                    }
-                    (_, Some(None)) => {
+                    None => {
                         latest_balances.insert(
                             (account_id, &entry.currency),
                             Snapshots::new_snapshot(time, account_id, entry),
                         );
                     }
-
-                    (_, None) => (),
-                };
+                }
             }
         }
         new_balances.extend(latest_balances.into_values());
