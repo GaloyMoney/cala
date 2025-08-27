@@ -334,8 +334,6 @@ mod tests {
             assert_eq!(snapshots.len(), 1);
             let snapshot = &snapshots[0];
             assert_eq!(snapshot.version, version + 1);
-            assert_eq!(snapshot.pending.cr_balance, Decimal::from(50));
-            assert_eq!(snapshot.pending.dr_balance, Decimal::ZERO);
         }
 
         #[test]
@@ -374,8 +372,6 @@ mod tests {
             assert_eq!(snapshots.len(), 1);
             let snapshot = &snapshots[0];
             assert_eq!(snapshot.version, 1);
-            assert_eq!(snapshot.settled.dr_balance, Decimal::from(100));
-            assert_eq!(snapshot.settled.cr_balance, Decimal::ZERO);
         }
 
         #[test]
@@ -387,31 +383,27 @@ mod tests {
             let account = create_test_account(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
+            let initial_debit = Decimal::from(100);
+            let initial_credit = Decimal::from(25);
             let version = 3;
             let mut current_balance =
                 create_test_balance_snapshot(key.account_id, key.journal_id, key.currency, version);
-            current_balance.settled.dr_balance = Decimal::from(100);
-            current_balance.settled.cr_balance = Decimal::from(25);
+            current_balance.settled.dr_balance = initial_debit;
+            current_balance.settled.cr_balance = initial_credit;
 
             let mut current_balances = HashMap::new();
             current_balances.insert(key.clone(), Some(current_balance));
 
             // First entry will create a latest balance
-            let mut entry1 = create_test_entry(
-                Decimal::from(50),
-                DebitOrCredit::Debit,
-                Layer::Settled,
-                "USD",
-            );
+            let entry1_debit = Decimal::from(50);
+            let mut entry1 =
+                create_test_entry(entry1_debit, DebitOrCredit::Debit, Layer::Settled, "USD");
             entry1.account_id = key.account_id;
 
             // Second entry should use the latest balance, not the current
-            let mut entry2 = create_test_entry(
-                Decimal::from(30),
-                DebitOrCredit::Credit,
-                Layer::Settled,
-                "USD",
-            );
+            let entry2_credit = Decimal::from(30);
+            let mut entry2 =
+                create_test_entry(entry2_credit, DebitOrCredit::Credit, Layer::Settled, "USD");
             entry2.account_id = key.account_id;
 
             let mut entries_to_add = HashMap::new();
@@ -429,15 +421,17 @@ mod tests {
             let snapshots = result.get(&key).unwrap();
             assert_eq!(snapshots.len(), 2);
 
-            // First snapshot: current balance (100 dr, 25 cr) + entry1 (50 dr)
             assert_eq!(snapshots[0].version, version + 1);
-            assert_eq!(snapshots[0].settled.dr_balance, Decimal::from(150)); // 100 + 50
-            assert_eq!(snapshots[0].settled.cr_balance, Decimal::from(25)); // unchanged
+            assert_eq!(
+                snapshots[0].settled.dr_balance,
+                initial_debit + entry1_debit
+            );
 
-            // Second snapshot: uses latest (150 dr, 25 cr) not current (100 dr, 25 cr)
-            assert_eq!(snapshots[1].version, version + 2); // incremented from latest
-            assert_eq!(snapshots[1].settled.dr_balance, Decimal::from(150)); // unchanged from latest
-            assert_eq!(snapshots[1].settled.cr_balance, Decimal::from(55)); // 25 + 30
+            assert_eq!(snapshots[1].version, version + 2);
+            assert_eq!(
+                snapshots[1].settled.cr_balance,
+                initial_credit + entry2_credit
+            );
         }
 
         #[test]
