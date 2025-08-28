@@ -5,7 +5,7 @@ clean-deps:
 	docker compose down
 
 start-deps:
-	docker compose up -d integration-deps
+	./dev/bin/docker-compose-up.sh integration-deps
 
 setup-db:
 	cd cala-ledger && cargo sqlx migrate run
