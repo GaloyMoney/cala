@@ -2,10 +2,10 @@ next-watch:
 	cargo watch -s 'cargo nextest run'
 
 clean-deps:
-	docker compose down
+	./dev/bin/clean-deps.sh
 
 start-deps:
-	docker compose up -d integration-deps
+	./dev/bin/docker-compose-up.sh integration-deps
 
 setup-db:
 	cd cala-ledger && cargo sqlx migrate run

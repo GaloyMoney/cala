@@ -34,6 +34,7 @@
       };
       nativeBuildInputs = with pkgs;
         [
+          wait4x
           rustToolchain
           alejandra
           sqlx-cli
@@ -60,11 +61,7 @@
         ];
       devEnvVars = rec {
         OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
-        PGDATABASE = "pg";
-        PGUSER = "user";
-        PGPASSWORD = "password";
-        PGHOST = "127.0.0.1";
-        DATABASE_URL = "postgres://${PGUSER}:${PGPASSWORD}@${PGHOST}:5432/pg";
+        DATABASE_URL = "postgres://user:password@127.0.0.1:5432/pg?sslmode=disable";
         PG_CON = "${DATABASE_URL}";
       };
     in

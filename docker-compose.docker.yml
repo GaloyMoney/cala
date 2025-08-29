@@ -1,0 +1,5 @@
+# Linux-Docker or old Docker-Desktop need this extra_hosts entry.
+# Podman and modern Desktop skip this file and work out of the box.
+x-hostgw: &hostgw
+  extra_hosts:
+    - "host.containers.internal:host-gateway"
