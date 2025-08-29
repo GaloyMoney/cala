@@ -250,6 +250,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l < r)),
             (Double(l), Double(r)) => Ok(Bool(l < r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l < r)),
+            (Date(l), Date(r)) => Ok(Bool(l < r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l < r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '<' to {:?} and {:?}",
                 CelType::from(&left),
@@ -261,6 +263,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l <= r)),
             (Double(l), Double(r)) => Ok(Bool(l <= r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l <= r)),
+            (Date(l), Date(r)) => Ok(Bool(l <= r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l <= r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '<=' to {:?} and {:?}",
                 CelType::from(&left),
@@ -272,6 +276,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l > r)),
             (Double(l), Double(r)) => Ok(Bool(l > r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l > r)),
+            (Date(l), Date(r)) => Ok(Bool(l > r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l > r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '>' to {:?} and {:?}",
                 CelType::from(&left),
@@ -283,6 +289,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l >= r)),
             (Double(l), Double(r)) => Ok(Bool(l >= r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l >= r)),
+            (Date(l), Date(r)) => Ok(Bool(l >= r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l >= r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '>=' to {:?} and {:?}",
                 CelType::from(&left),
@@ -294,6 +302,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l == r)),
             (Double(l), Double(r)) => Ok(Bool(l == r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l == r)),
+            (Date(l), Date(r)) => Ok(Bool(l == r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l == r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '==' to {:?} and {:?}",
                 CelType::from(&left),
@@ -305,6 +315,8 @@ fn evaluate_relation(
             (Int(l), Int(r)) => Ok(Bool(l != r)),
             (Double(l), Double(r)) => Ok(Bool(l != r)),
             (Decimal(l), Decimal(r)) => Ok(Bool(l != r)),
+            (Date(l), Date(r)) => Ok(Bool(l != r)),
+            (Timestamp(l), Timestamp(r)) => Ok(Bool(l != r)),
             _ => Err(CelError::NoMatchingOverload(format!(
                 "Cannot apply '!=' to {:?} and {:?}",
                 CelType::from(&left),
