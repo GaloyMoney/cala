@@ -110,6 +110,7 @@ use members_cursor::*;
     ),
     tbl_prefix = "cala"
 )]
+#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
 }

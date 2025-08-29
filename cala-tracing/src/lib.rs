@@ -1,19 +1,13 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
-use opentelemetry::{trace::TracerProvider, KeyValue};
-use opentelemetry_sdk::{
-    resource::{EnvResourceDetector, SdkProvidedResourceDetector},
-    trace::Config,
-    Resource,
-};
-use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_NAMESPACE};
+use opentelemetry::{trace::TracerProvider as _, KeyValue};
+use opentelemetry_sdk::Resource;
+use opentelemetry_semantic_conventions::resource::SERVICE_NAMESPACE;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 pub use tracing::*;
-
-use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TracingConfig {
@@ -29,11 +23,14 @@ impl Default for TracingConfig {
 }
 
 pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
-    let provider = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
-        .with_trace_config(Config::default().with_resource(telemetry_resource(&config)))
-        .install_batch(opentelemetry_sdk::runtime::Tokio)?;
+    let exporter = opentelemetry_otlp::SpanExporter::builder()
+        .with_tonic()
+        .build()?;
+
+    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(telemetry_resource(&config))
+        .build();
     let telemetry =
         tracing_opentelemetry::layer().with_tracer(provider.tracer(config.service_name));
 
@@ -51,17 +48,10 @@ pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
 }
 
 fn telemetry_resource(config: &TracingConfig) -> Resource {
-    Resource::from_detectors(
-        Duration::from_secs(3),
-        vec![
-            Box::new(EnvResourceDetector::new()),
-            Box::new(SdkProvidedResourceDetector),
-        ],
-    )
-    .merge(&Resource::new(vec![
-        KeyValue::new(SERVICE_NAME, config.service_name.clone()),
-        KeyValue::new(SERVICE_NAMESPACE, "lava"),
-    ]))
+    Resource::builder()
+        .with_service_name(config.service_name.clone())
+        .with_attributes([KeyValue::new(SERVICE_NAMESPACE, "cala")])
+        .build()
 }
 
 pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display) {
