@@ -20,6 +20,7 @@ use super::{entity::*, error::JournalError};
     ),
     tbl_prefix = "cala"
 )]
+#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct JournalRepo {
     pool: PgPool,
 }

@@ -20,6 +20,7 @@ CREATE TABLE cala_account_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
@@ -38,6 +39,7 @@ CREATE TABLE cala_journal_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL,
   UNIQUE(id, sequence)
 );
@@ -58,6 +60,7 @@ CREATE TABLE cala_account_set_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
@@ -89,6 +92,7 @@ CREATE TABLE cala_tx_template_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence),
   FOREIGN KEY (id) REFERENCES cala_tx_templates(id)
@@ -111,6 +115,7 @@ CREATE TABLE cala_transaction_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
@@ -130,6 +135,7 @@ CREATE TABLE cala_entry_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
@@ -184,6 +190,7 @@ CREATE TABLE cala_velocity_limit_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
@@ -202,6 +209,7 @@ CREATE TABLE cala_velocity_control_events (
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(id, sequence)
 );
