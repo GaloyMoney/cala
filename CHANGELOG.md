@@ -1,3 +1,24 @@
+# [cala release v0.8.0](https://github.com/GaloyMoney/cala/releases/tag/0.8.0)
+
+
+### Features
+
+- [**breaking**] Event-context feature (#508)
+- Implement account-set-aware velocities (#502)
+
+### Miscellaneous Tasks
+
+- Improve deps lifecycle make commands (#506)
+
+### Performance
+
+- Use uuid v7 (#489)
+
+### Refactor
+
+- Add limit context to velocity balance function names (#505)
+- Clean up velocity `new_snapshot` logic (#503)
+
 # [cala release v0.7.0](https://github.com/GaloyMoney/cala/releases/tag/0.7.0)
 
 
