@@ -115,6 +115,47 @@ fn evaluate_expression_inner<'a>(
             let ident = evaluate_expression(expr, ctx)?;
             evaluate_member(ident, member, ctx)
         }
+        Has(expr) => {
+            // The 'has' macro checks if a field exists in a map
+            // It expects an expression of the form e.f or e.f.g.h (a Member expression)
+            // For nested fields like a.b.c.d, it evaluates a.b.c and checks if 'd' exists
+
+            // Helper function to extract the last field and the target expression
+            fn extract_last_field(
+                expr: &Expression,
+            ) -> Option<(&Expression, &std::sync::Arc<String>)> {
+                match expr {
+                    Expression::Member(target, member) => match member.as_ref() {
+                        ast::Member::Attribute(field_name) => Some((target.as_ref(), field_name)),
+                        _ => None,
+                    },
+                    _ => None,
+                }
+            }
+
+            if let Some((target_expr, field_name)) = extract_last_field(expr.as_ref()) {
+                // Evaluate the target expression (everything except the last field)
+                let target = evaluate_expression(target_expr, ctx)?;
+
+                // Check if the field exists in the map
+                let has_field = match target {
+                    EvalType::Value(CelValue::Map(map)) => map.contains_key(field_name.as_str()),
+                    EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
+                        map.contains_key(field_name.as_str())
+                    }
+                    _ => {
+                        // For non-map types, has() should return an error
+                        return Err(CelError::IllegalTarget);
+                    }
+                };
+
+                Ok(EvalType::Value(CelValue::Bool(has_field)))
+            } else {
+                Err(CelError::Unexpected(
+                    "has() expects a member expression".to_string(),
+                ))
+            }
+        }
         Map(entries) => {
             let mut map = CelMap::new();
             for (k, v) in entries {
@@ -430,6 +471,70 @@ mod tests {
         let context = CelContext::new();
         assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(3.into()));
         Ok(())
+    }
+
+    #[test]
+    fn has_macro_with_map() {
+        // Test 'has' with existing field
+        let expression = "has(params.hello)".parse::<CelExpression>().unwrap();
+        let mut params = CelMap::new();
+        params.insert("hello", "world");
+        let mut context = CelContext::new();
+        context.add_variable("params", params);
+        assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
+
+        // Test 'has' with non-existing field
+        let expression = "has(params.missing)".parse::<CelExpression>().unwrap();
+        let mut params = CelMap::new();
+        params.insert("hello", "world");
+        let mut context = CelContext::new();
+        context.add_variable("params", params);
+        assert_eq!(
+            expression.evaluate(&context).unwrap(),
+            CelValue::Bool(false)
+        );
+
+        // Test 'has' with nested maps
+        let expression = "has(params.nested.field)".parse::<CelExpression>().unwrap();
+        let mut nested = CelMap::new();
+        nested.insert("field", 42);
+        let mut params = CelMap::new();
+        params.insert("nested", nested);
+        let mut context = CelContext::new();
+        context.add_variable("params", params);
+        assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
+
+        // Test 'has' with deeply nested maps (a.b.c.d)
+        let expression = "has(config.database.settings.maxConnections)"
+            .parse::<CelExpression>()
+            .unwrap();
+        let mut settings = CelMap::new();
+        settings.insert("maxConnections", 100);
+        settings.insert("timeout", 30);
+        let mut database = CelMap::new();
+        database.insert("settings", settings);
+        let mut config = CelMap::new();
+        config.insert("database", database);
+        let mut context = CelContext::new();
+        context.add_variable("config", config);
+        assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
+
+        // Test 'has' with deeply nested maps - missing final field
+        let expression = "has(config.database.settings.missingField)"
+            .parse::<CelExpression>()
+            .unwrap();
+        let mut settings = CelMap::new();
+        settings.insert("maxConnections", 100);
+        let mut database = CelMap::new();
+        database.insert("settings", settings);
+        let mut config = CelMap::new();
+        config.insert("database", database);
+        let mut context = CelContext::new();
+        context.add_variable("config", config);
+        assert_eq!(
+            expression.evaluate(&context).unwrap(),
+            CelValue::Bool(false)
+        );
     }
 
     #[test]
