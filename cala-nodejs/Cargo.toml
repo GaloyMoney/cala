@@ -16,7 +16,7 @@ uuid = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 napi = { version = "2.16.17", default-features = false, features = ["tokio_rt", "serde-json"] }
-napi-derive = "2.16.13"
+napi-derive = "3.2.4"
 
 [build-dependencies]
 napi-build = "2.2.2"
