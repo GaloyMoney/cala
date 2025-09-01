@@ -1,8 +1,13 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
-use opentelemetry::{trace::TracerProvider as _, KeyValue};
-use opentelemetry_sdk::Resource;
+use opentelemetry::{global, trace::TracerProvider, KeyValue};
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_sdk::{
+    propagation::TraceContextPropagator,
+    trace::{Sampler, SdkTracerProvider},
+    Resource,
+};
 use opentelemetry_semantic_conventions::resource::SERVICE_NAMESPACE;
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{filter::EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -23,16 +28,25 @@ impl Default for TracingConfig {
 }
 
 pub fn init_tracer(config: TracingConfig) -> anyhow::Result<()> {
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
+    let endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
+        .unwrap_or_else(|_| "http://localhost:4317".to_string());
+
     let exporter = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
+        .with_endpoint(endpoint)
         .build()?;
 
-    let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
-        .with_batch_exporter(exporter)
+    let provider = SdkTracerProvider::builder()
         .with_resource(telemetry_resource(&config))
+        .with_batch_exporter(exporter)
+        .with_sampler(Sampler::AlwaysOn)
         .build();
-    let telemetry =
-        tracing_opentelemetry::layer().with_tracer(provider.tracer(config.service_name));
+
+    global::set_tracer_provider(provider.clone());
+    let tracer = provider.tracer("cala-tracer");
+    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
     let fmt_layer = fmt::layer().json();
     let filter_layer = EnvFilter::try_from_default_env()
