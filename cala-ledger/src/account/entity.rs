@@ -9,6 +9,7 @@ use crate::primitives::*;
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "AccountId")]
+#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
 pub enum AccountEvent {
     #[cfg(feature = "import")]
     Imported {

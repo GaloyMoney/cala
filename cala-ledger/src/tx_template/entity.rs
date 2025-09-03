@@ -10,6 +10,7 @@ use es_entity::*;
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TxTemplateId")]
+#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
 pub enum TxTemplateEvent {
     #[cfg(feature = "import")]
     Imported {

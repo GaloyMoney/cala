@@ -110,7 +110,6 @@ use members_cursor::*;
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
 }
@@ -644,33 +643,24 @@ impl AccountSetRepo {
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query_as!(
-                account_set_repo_types::Repo__DbEvent,
-                r#"
-            WITH member_account_sets AS (
-              SELECT a.id, a.name, a.created_at
-              FROM cala_account_set_member_accounts asm
-              JOIN cala_account_sets a ON asm.account_set_id = a.id
+        let (entities, has_next_page) = es_entity::es_query!(
+            tbl_prefix = "cala",
+            r#"SELECT a.id, a.name, a.created_at
+              FROM cala_account_sets a
+              JOIN cala_account_set_member_accounts asm
+              ON asm.account_set_id = a.id
               WHERE asm.member_account_id = $1 AND transitive IS FALSE
               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
               ORDER BY a.name, a.id
-              LIMIT $4
-            )
-            SELECT mas.id AS "entity_id!: AccountSetId", e.sequence, e.event, e.recorded_at
-              FROM member_account_sets mas
-              JOIN cala_account_set_events e ON mas.id = e.id
-              ORDER BY mas.name, mas.id, e.sequence
-            "#,
-                account_id as AccountId,
-                query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
-                query.after.map(|c| c.name),
-                query.first as i64 + 1
-            ))
-            .await?;
+              LIMIT $4"#,
+            account_id as AccountId,
+            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+            query.after.map(|c| c.name),
+            query.first as i64 + 1
+        )
+        .fetch_n(op, query.first)
+        .await?;
 
-        let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
             end_cursor = Some(AccountSetsByNameCursor {
@@ -702,33 +692,23 @@ impl AccountSetRepo {
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
     {
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query_as!(
-                account_set_repo_types::Repo__DbEvent,
-                r#"
-            WITH member_account_sets AS (
-              SELECT a.id, a.name, a.created_at
-              FROM cala_account_set_member_account_sets asm
-              JOIN cala_account_sets a ON asm.account_set_id = a.id
-              WHERE asm.member_account_set_id = $1
-              AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
-              ORDER BY a.name, a.id
-              LIMIT $4
-            )
-            SELECT mas.id AS "entity_id!: AccountSetId", e.sequence, e.event, e.recorded_at
-              FROM member_account_sets mas
-              JOIN cala_account_set_events e ON mas.id = e.id
-              ORDER BY mas.name, mas.id, e.sequence
-            "#,
-                account_set_id as AccountSetId,
-                query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
-                query.after.map(|c| c.name),
-                query.first as i64 + 1
-            ))
-            .await?;
-
-        let (entities, has_next_page) = EntityEvents::load_n::<AccountSet>(rows, query.first)?;
+        let (entities, has_next_page) = es_entity::es_query!(
+            tbl_prefix = "cala",
+            r#"SELECT a.id, a.name, a.created_at
+               FROM cala_account_sets a
+               JOIN cala_account_set_member_account_sets asm
+               ON asm.account_set_id = a.id
+               WHERE asm.member_account_set_id = $1
+               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
+               ORDER BY a.name, a.id
+               LIMIT $4"#,
+            account_set_id as AccountSetId,
+            query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
+            query.after.map(|c| c.name),
+            query.first as i64 + 1
+        )
+        .fetch_n(op, query.first)
+        .await?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
             end_cursor = Some(AccountSetsByNameCursor {
