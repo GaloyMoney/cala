@@ -2,7 +2,7 @@
 name = "cala-cel-interpreter"
 description = "An interpreter for the Common Expression Language (CEL)"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.8.1"
+version = "0.8.2-dev"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["parsing", "compilers"]
