@@ -1,3 +1,25 @@
+# [cala release v0.8.1](https://github.com/GaloyMoney/cala/releases/tag/0.8.1)
+
+
+### Bug Fixes
+
+- Tracing with updated libs
+
+### Miscellaneous Tasks
+
+- Add metadata accessor to transaction
+- Bump es-entity (#525)
+- Bump async-trait from 0.1.88 to 0.1.89 (#522)
+- Bump anyhow from 1.0.98 to 1.0.99 (#523)
+- Bump rand from 0.9.1 to 0.9.2 (#524)
+- Bump schemars from 1.0.3 to 1.0.4 (#521)
+- Bump clap from 4.5.42 to 4.5.46 (#520)
+- Bump tokio from 1.46.0 to 1.47.1 (#519)
+- Bump axum (#518)
+- Bump thiserror from 2.0.12 to 2.0.16 (#513)
+- Bump serde_json from 1.0.140 to 1.0.143 (#514)
+- Bump tracing-subscriber from 0.3.19 to 0.3.20 (#510)
+
 # [cala release v0.8.0](https://github.com/GaloyMoney/cala/releases/tag/0.8.0)
 
 
