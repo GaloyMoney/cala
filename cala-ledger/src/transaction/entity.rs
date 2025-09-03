@@ -79,6 +79,13 @@ impl Transaction {
             .expect("Entity not persisted")
     }
 
+    pub fn metadata<T: serde::de::DeserializeOwned>(&self) -> Result<Option<T>, serde_json::Error> {
+        match &self.values.metadata {
+            Some(metadata) => Ok(Some(serde_json::from_value(metadata.clone())?)),
+            None => Ok(None),
+        }
+    }
+
     fn is_voided(&self) -> bool {
         self.events.iter_all()
             .any(|event| matches!(event, TransactionEvent::Updated { values, .. } if values.voided_by.is_some()))
