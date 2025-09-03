@@ -20,7 +20,6 @@ use super::{entity::*, error::*};
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(crate) struct EntryRepo {
     #[allow(dead_code)]
     pool: PgPool,

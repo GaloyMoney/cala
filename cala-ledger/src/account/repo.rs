@@ -35,7 +35,6 @@ use super::{entity::*, error::AccountError};
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct AccountRepo {
     pool: PgPool,
 }

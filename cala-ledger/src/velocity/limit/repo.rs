@@ -22,7 +22,6 @@ use super::entity::*;
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub struct VelocityLimitRepo {
     pool: PgPool,
 }
@@ -64,7 +63,7 @@ impl VelocityLimitRepo {
               JOIN cala_velocity_control_limits ON id = velocity_limit_id
               WHERE velocity_control_id = $1
             )
-            SELECT l.id as entity_id, e.sequence, e.event, e.recorded_at
+            SELECT l.id as entity_id, e.sequence, e.event, NULL as "context: es_entity::ContextData", e.recorded_at
             FROM limits l
             JOIN cala_velocity_limit_events e ON l.id = e.id
             ORDER BY l.id, e.sequence"#,

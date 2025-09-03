@@ -27,7 +27,6 @@ use super::{entity::*, error::TxTemplateError};
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct TxTemplateRepo {
     pool: PgPool,
 }

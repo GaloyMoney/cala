@@ -23,7 +23,6 @@ use super::{entity::*, error::TransactionError};
     ),
     tbl_prefix = "cala"
 )]
-#[cfg_attr(not(feature = "event-context"), es_repo(event_context = false))]
 pub(super) struct TransactionRepo {
     pool: PgPool,
 }
