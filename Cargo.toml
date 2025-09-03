@@ -36,7 +36,7 @@ clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.1"
 sqlx = { version = "0.8.3", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 thiserror = "2.0.16"
-uuid = { version = "1.17", features = ["serde", "v7"] }
+uuid = { version = "1.18", features = ["serde", "v7"] }
 regex = "1.11.1"
 tracing = "0.1.41"
 tracing-opentelemetry = "0.31.0"
