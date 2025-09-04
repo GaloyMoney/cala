@@ -16,6 +16,29 @@ pub struct AccountValues {
     pub config: AccountConfig,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct AccountValuesForContext {
+    pub id: AccountId,
+    pub code: String,
+    pub name: String,
+    pub normal_balance_type: DebitOrCredit,
+    pub external_id: String,
+    pub metadata: Option<serde_json::Value>,
+}
+
+impl From<&AccountValues> for AccountValuesForContext {
+    fn from(values: &AccountValues) -> Self {
+        Self {
+            id: values.id,
+            code: values.code.clone(),
+            name: values.name.clone(),
+            normal_balance_type: values.normal_balance_type,
+            external_id: values.external_id.clone().unwrap_or(values.code.clone()),
+            metadata: values.metadata.clone(),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
 pub struct AccountConfig {
     pub is_account_set: bool,
@@ -25,13 +48,13 @@ pub struct AccountConfig {
 mod cel {
     use cel_interpreter::{CelMap, CelValue};
 
-    impl From<&super::AccountValues> for CelValue {
-        fn from(account: &super::AccountValues) -> Self {
+    impl From<super::AccountValuesForContext> for CelValue {
+        fn from(account: super::AccountValuesForContext) -> Self {
             let mut map = CelMap::new();
             map.insert("id", account.id);
             map.insert("code", account.code.clone());
             map.insert("name", account.name.clone());
-            map.insert("externalId", account.code.clone());
+            map.insert("externalId", account.external_id.clone());
             map.insert("normalBalanceType", account.normal_balance_type);
             if let Some(metadata) = &account.metadata {
                 map.insert("metadata", metadata.clone());

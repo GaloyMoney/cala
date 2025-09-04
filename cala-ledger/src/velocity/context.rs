@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use cala_types::{account::AccountValues, entry::EntryValues, transaction::TransactionValues};
+use cala_types::{
+    account::AccountValuesForContext, entry::EntryValues, transaction::TransactionValues,
+};
 use cel_interpreter::{CelMap, CelValue};
 
 use crate::{
@@ -15,11 +17,16 @@ pub struct EvalContext {
 }
 
 impl EvalContext {
-    pub fn new<'a>(
+    pub fn new(
         transaction: &TransactionValues,
-        accounts: impl Iterator<Item = &'a AccountValues>,
+        accounts: impl Iterator<Item = impl Into<AccountValuesForContext>>,
     ) -> Self {
-        let account_values = accounts.map(|a| (a.id, a.into())).collect();
+        let account_values = accounts
+            .map(|a| {
+                let a: AccountValuesForContext = a.into();
+                (a.id, a.into())
+            })
+            .collect();
         Self {
             transaction: transaction.into(),
             entry_values: HashMap::new(),
@@ -59,7 +66,7 @@ mod tests {
     use rust_decimal::Decimal;
     use serde_json::json;
 
-    use cala_types::account::AccountConfig;
+    use cala_types::account::{AccountConfig, AccountValues};
     use cel_interpreter::CelExpression;
 
     use crate::{primitives::*, velocity::context::EvalContext};
