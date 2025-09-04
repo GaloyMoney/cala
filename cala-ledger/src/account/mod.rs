@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use cala_types::account_set::AccountSetValues;
 use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -133,6 +134,22 @@ impl Accounts {
         let n_events = self.repo.update_in_op(db, account).await?;
         db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
         Ok(())
+    }
+
+    pub async fn cache_values_from_account_set_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        values: &AccountSetValues,
+    ) -> Result<(), AccountError> {
+        self.repo.update_latest_values_in_op(db, values).await
+    }
+
+    pub async fn cache_all_values_from_account_sets_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        values: Vec<&AccountSetValues>,
+    ) -> Result<(), AccountError> {
+        self.repo.update_all_latest_values_in_op(db, values).await
     }
 
     #[cfg(feature = "import")]
