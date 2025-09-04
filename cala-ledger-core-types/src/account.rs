@@ -58,8 +58,8 @@ pub struct AccountConfig {
 mod cel {
     use cel_interpreter::{CelMap, CelValue};
 
-    impl From<super::AccountValuesForContext> for CelValue {
-        fn from(account: super::AccountValuesForContext) -> Self {
+    impl From<&super::AccountValuesForContext> for CelValue {
+        fn from(account: &super::AccountValuesForContext) -> Self {
             let mut map = CelMap::new();
             map.insert("id", account.id);
             map.insert("name", account.name.clone());

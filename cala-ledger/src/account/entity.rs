@@ -59,7 +59,8 @@ impl Account {
     }
 
     pub(super) fn values_json(&self) -> serde_json::Value {
-        serde_json::to_value(self.values()).expect("Failed to serialize account values")
+        serde_json::to_value(AccountValuesForContext::from(self.values()))
+            .expect("Failed to serialize account values")
     }
 
     pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
@@ -275,7 +276,7 @@ impl NewAccount {
     }
 
     pub(super) fn values_json(&self) -> serde_json::Value {
-        serde_json::to_value(self.clone().into_values())
+        serde_json::to_value(AccountValuesForContext::from(&self.clone().into_values()))
             .expect("Failed to serialize account values")
     }
 

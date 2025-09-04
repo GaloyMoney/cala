@@ -2,7 +2,7 @@ use sqlx::PgPool;
 
 use std::collections::HashMap;
 
-use cala_types::account::AccountValues;
+use cala_types::account::AccountValuesForContext;
 
 use crate::primitives::{AccountId, VelocityControlId};
 
@@ -41,8 +41,10 @@ impl AccountControlRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
-    {
+    ) -> Result<
+        HashMap<AccountId, (AccountValuesForContext, Vec<AccountVelocityControl>)>,
+        VelocityError,
+    > {
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
@@ -55,7 +57,7 @@ impl AccountControlRepo {
             ))
             .await?;
 
-        let mut res: HashMap<AccountId, (AccountValues, Vec<_>)> = HashMap::new();
+        let mut res: HashMap<AccountId, (AccountValuesForContext, Vec<_>)> = HashMap::new();
 
         for row in rows {
             let values: AccountVelocityControl =

@@ -17,16 +17,11 @@ pub struct EvalContext {
 }
 
 impl EvalContext {
-    pub fn new(
+    pub fn new<'a>(
         transaction: &TransactionValues,
-        accounts: impl Iterator<Item = impl Into<AccountValuesForContext>>,
+        accounts: impl Iterator<Item = &'a AccountValuesForContext>,
     ) -> Self {
-        let account_values = accounts
-            .map(|a| {
-                let a: AccountValuesForContext = a.into();
-                (a.id, a.into())
-            })
-            .collect();
+        let account_values = accounts.map(|a| (a.id, a.into())).collect();
         Self {
             transaction: transaction.into(),
             entry_values: HashMap::new(),
@@ -66,7 +61,6 @@ mod tests {
     use rust_decimal::Decimal;
     use serde_json::json;
 
-    use cala_types::account::{AccountConfig, AccountValues};
     use cel_interpreter::CelExpression;
 
     use crate::{primitives::*, velocity::context::EvalContext};
@@ -95,24 +89,17 @@ mod tests {
         }
     }
 
-    fn account() -> AccountValues {
-        AccountValues {
-            id: AccountId::new(),
-            version: 1,
-            code: "code".to_string(),
+    fn account_values() -> AccountValuesForContext {
+        let id = AccountId::new();
+        AccountValuesForContext {
+            id,
             name: "name".to_string(),
             normal_balance_type: DebitOrCredit::Credit,
-            status: Status::Active,
-            external_id: None,
-            description: None,
+            external_id: id.to_string(),
             metadata: Some(json!({
                 "account": "metadata",
                 "test": true,
             })),
-            config: AccountConfig {
-                is_account_set: false,
-                eventually_consistent: false,
-            },
         }
     }
 
@@ -136,7 +123,7 @@ mod tests {
 
     #[test]
     fn context_for_entry() {
-        let account = account();
+        let account = account_values();
         let tx = transaction();
         let entry = entry(account.id, &tx);
         let mut context = EvalContext::new(&tx, std::iter::once(&account));
