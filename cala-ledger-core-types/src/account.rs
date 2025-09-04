@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::primitives::*;
+use super::{account_set::AccountSetValues, primitives::*};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountValues {
@@ -29,6 +29,18 @@ impl From<&AccountValues> for AccountValuesForContext {
     fn from(values: &AccountValues) -> Self {
         Self {
             id: values.id,
+            name: values.name.clone(),
+            normal_balance_type: values.normal_balance_type,
+            external_id: values.external_id.clone().unwrap_or(values.id.to_string()),
+            metadata: values.metadata.clone(),
+        }
+    }
+}
+
+impl From<&AccountSetValues> for AccountValuesForContext {
+    fn from(values: &AccountSetValues) -> Self {
+        Self {
+            id: values.id.into(),
             name: values.name.clone(),
             normal_balance_type: values.normal_balance_type,
             external_id: values.external_id.clone().unwrap_or(values.id.to_string()),
