@@ -19,7 +19,6 @@ pub struct AccountValues {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountValuesForContext {
     pub id: AccountId,
-    pub code: String,
     pub name: String,
     pub normal_balance_type: DebitOrCredit,
     pub external_id: String,
@@ -30,10 +29,9 @@ impl From<&AccountValues> for AccountValuesForContext {
     fn from(values: &AccountValues) -> Self {
         Self {
             id: values.id,
-            code: values.code.clone(),
             name: values.name.clone(),
             normal_balance_type: values.normal_balance_type,
-            external_id: values.external_id.clone().unwrap_or(values.code.clone()),
+            external_id: values.external_id.clone().unwrap_or(values.id.to_string()),
             metadata: values.metadata.clone(),
         }
     }
@@ -52,7 +50,6 @@ mod cel {
         fn from(account: super::AccountValuesForContext) -> Self {
             let mut map = CelMap::new();
             map.insert("id", account.id);
-            map.insert("code", account.code.clone());
             map.insert("name", account.name.clone());
             map.insert("externalId", account.external_id.clone());
             map.insert("normalBalanceType", account.normal_balance_type);
