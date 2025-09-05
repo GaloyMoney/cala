@@ -14,14 +14,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v23
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
       - name: Generate performance data
         id: perf
         run: |
-          # Your performance testing commands here
-          echo "load_time=2.34" >> $GITHUB_OUTPUT
-          echo "memory_mb=256" >> $GITHUB_OUTPUT
-          echo "cpu_percent=45" >> $GITHUB_OUTPUT
-          echo "bundle_kb=2048" >> $GITHUB_OUTPUT
+          # Run the performance report script
+          report_output=$(nix develop -c ./bin/perf-report.sh 2>&1)
+          
+          # Save the output to a multiline string
+          {
+            echo 'report_content<<EOF'
+            echo "$report_output"
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
           # Generate timestamp
           echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
@@ -47,11 +56,6 @@ jobs:
             **Commit:** ${{ github.event.pull_request.head.sha }}
             **Updated:** ${{ steps.perf.outputs.timestamp }}
 
-            | Metric | Value | Trend |
-            |--------|-------|-------|
-            | Load Time | `${{ steps.perf.outputs.load_time }}s` | - |
-            | Memory | `${{ steps.perf.outputs.memory_mb }} MB` | - |
-            | CPU | `${{ steps.perf.outputs.cpu_percent }}%` | - |
-            | Bundle | `${{ steps.perf.outputs.bundle_kb }} KB` | - |
+            ${{ steps.perf.outputs.report_content }}
 
             _Last updated by commit ${{ github.event.pull_request.head.sha }}_
