@@ -11,6 +11,7 @@ members = [
   "cala-nodejs",
   "cala-cel-parser",
   "cala-cel-interpreter",
+  "cala-perf",
 ]
 
 [workspace.dependencies]
@@ -72,6 +73,7 @@ rust_decimal_macros = "1.37.1"
 rust_decimal = "1.37.2"
 rusty-money = { version = "0.4", features = ["iso", "crypto"] }
 schemars = { version = "1.0", features = ["uuid1"] }
+rand = "0.9"
 
 [profile.release]
 lto = true

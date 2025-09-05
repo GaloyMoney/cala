@@ -48,8 +48,8 @@ futures = { workspace = true }
 rust_decimal = { workspace = true }
 
 [dev-dependencies]
-anyhow = "1.0"
-rand = "0.9"
+anyhow = { workspace = true }
+rand = { workspace = true }
 tokio-test = "0.4"
 rust_decimal_macros = { workspace = true }
 
