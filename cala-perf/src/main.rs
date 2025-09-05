@@ -49,8 +49,7 @@ async fn main() -> anyhow::Result<()> {
         println!("{}", "=".repeat(80));
 
         let tx_per_sec =
-            transactions_with_contention(&cala, journal.id(), 4, parallel_count, Some(1))
-                .await?;
+            transactions_with_contention(&cala, journal.id(), 4, parallel_count, Some(1)).await?;
         results.push((format!("{} acct_sets", parallel_count), tx_per_sec));
 
         println!("\n");
