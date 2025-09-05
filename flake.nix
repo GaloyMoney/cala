@@ -35,6 +35,7 @@
       nativeBuildInputs = with pkgs;
         [
           wait4x
+          gnuplot
           rustToolchain
           alejandra
           sqlx-cli
