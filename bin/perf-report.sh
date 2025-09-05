@@ -17,6 +17,8 @@ cd "$(dirname "$0")/.."
 make reset-deps
 
 cargo bench -p cala-perf
+# Run load tests and extract just the summary table
+load_output=$(cargo run -p cala-perf 2>&1)
 
 {
 echo "## 🚀 Cala Performance Benchmark Results"
@@ -52,7 +54,7 @@ for json_file in target/criterion/*/new/estimates.json; do
                 baseline_time=$time_ns
                 perc_diff="0 (baseline)"
             else
-                perc_diff=$(echo "scale=1; ($time_ns - $baseline_time) / $baseline_time * 100" | bc -l)
+                perc_diff=$(echo "scale=2; ($time_ns - $baseline_time) / $baseline_time * 100" | bc -l | xargs printf "%.1f")
                 if (( $(echo "$perc_diff >= 0" | bc -l) )); then
                     perc_diff="+${perc_diff}%"
                 else
@@ -66,6 +68,12 @@ for json_file in target/criterion/*/new/estimates.json; do
 done
 
 echo ""
+echo "### 🏋️ Load Testing Results"
+echo ""
+
+# Extract the summary table section
+echo "$load_output" | sed -n '/📋 PERFORMANCE SUMMARY TABLE/,/✅ All performance tests completed!/p' | sed '$d'
+
 echo "---"
 echo ""
 echo "💡 **Note**: Performance results may vary based on system resources and database state."
