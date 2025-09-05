@@ -55,10 +55,11 @@ for json_file in target/criterion/*/new/estimates.json; do
                 perc_diff="0 (baseline)"
             else
                 perc_diff=$(echo "scale=2; ($time_ns - $baseline_time) / $baseline_time * 100" | bc -l | xargs printf "%.1f")
+                # Flip the sign: slower (higher time) = negative %, faster (lower time) = positive %
                 if (( $(echo "$perc_diff >= 0" | bc -l) )); then
-                    perc_diff="+${perc_diff}%"
+                    perc_diff="-${perc_diff}%"
                 else
-                    perc_diff="${perc_diff}%"
+                    perc_diff="+${perc_diff#-}%"
                 fi
             fi
 
