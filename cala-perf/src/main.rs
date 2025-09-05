@@ -2,37 +2,8 @@ use cala_ledger::{account::AccountId, account_set::*, journal::JournalId, CalaLe
 use cala_perf::{init_accounts, init_cala, init_journal, templates::simple_transfer};
 use rand::Rng;
 
-#[derive(Debug)]
-struct Args {
-    account_sets: bool,
-    only_account_sets: bool,
-}
-
-impl Args {
-    fn parse() -> Self {
-        let mut account_sets = false;
-        let mut only_account_sets = false;
-
-        for arg in std::env::args() {
-            if arg == "--account-sets" {
-                account_sets = true;
-            }
-            if arg == "--only-account-sets" {
-                only_account_sets = true;
-                account_sets = true; // Implies account_sets should be enabled
-            }
-        }
-
-        Args {
-            account_sets,
-            only_account_sets,
-        }
-    }
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
     let cala = init_cala().await?;
     simple_transfer::init(&cala).await.unwrap();
     let journal = init_journal(&cala).await.unwrap();
@@ -41,60 +12,48 @@ async fn main() -> anyhow::Result<()> {
 
     let mut results = Vec::new();
 
-    if !args.only_account_sets {
-        for &pool_count in &[2, 5] {
-            println!("{}", "=".repeat(80));
-            println!("🏊 Testing with {} parallel pools", pool_count);
-            println!("{}", "=".repeat(80));
+    for &pool_count in &[2, 5] {
+        println!("{}", "=".repeat(80));
+        println!("🏊 Testing with {} parallel pools", pool_count);
+        println!("{}", "=".repeat(80));
 
-            let tx_per_sec = transactions_in_parallel(&cala, journal.id(), pool_count).await?;
-            results.push((format!("{} parallel", pool_count), tx_per_sec));
+        let tx_per_sec = transactions_in_parallel(&cala, journal.id(), pool_count).await?;
+        results.push((format!("{} parallel", pool_count), tx_per_sec));
 
-            println!("\n");
-        }
+        println!("\n");
+    }
 
-        // Test contention scenarios
-        for &parallel_count in &[2, 5] {
-            println!("{}", "=".repeat(80));
-            println!(
-                "⚔️  Testing with contention - {} parallel tasks on shared pool",
-                parallel_count
-            );
-            println!("{}", "=".repeat(80));
+    // Test contention scenarios
+    for &parallel_count in &[2, 5] {
+        println!("{}", "=".repeat(80));
+        println!(
+            "⚔️  Testing with contention - {} parallel tasks on shared pool",
+            parallel_count
+        );
+        println!("{}", "=".repeat(80));
 
-            let tx_per_sec =
-                transactions_with_contention(&cala, journal.id(), 3, parallel_count, None).await?;
-            results.push((format!("{} contention", parallel_count), tx_per_sec));
+        let tx_per_sec =
+            transactions_with_contention(&cala, journal.id(), 3, parallel_count, None).await?;
+        results.push((format!("{} contention", parallel_count), tx_per_sec));
 
-            println!("\n");
-        }
-    } else {
-        println!("⏭️  Skipping parallel and contention tests (--only-account-sets enabled)");
+        println!("\n");
     }
 
     // Test account sets scenarios
     for &parallel_count in &[2, 5] {
-        if args.account_sets {
-            println!("{}", "=".repeat(80));
-            println!(
-                "🗂️  Testing with account sets - {} parallel tasks, 1 account set",
-                parallel_count
-            );
-            println!("{}", "=".repeat(80));
+        println!("{}", "=".repeat(80));
+        println!(
+            "🗂️  Testing with account sets - {} parallel tasks, 1 account set",
+            parallel_count
+        );
+        println!("{}", "=".repeat(80));
 
-            let tx_per_sec =
-                transactions_with_contention(&cala, journal.id(), 4, parallel_count, Some(1))
-                    .await?;
-            results.push((format!("{} acct_sets", parallel_count), tx_per_sec));
+        let tx_per_sec =
+            transactions_with_contention(&cala, journal.id(), 4, parallel_count, Some(1))
+                .await?;
+        results.push((format!("{} acct_sets", parallel_count), tx_per_sec));
 
-            println!("\n");
-        } else {
-            println!(
-                "⏭️  Skipping account sets test for {} parallel tasks (use --account-sets to enable)",
-                parallel_count
-            );
-            results.push((format!("{} acct_sets", parallel_count), 0.0));
-        }
+        println!("\n");
     }
 
     // Final summary table
