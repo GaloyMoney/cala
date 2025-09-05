@@ -5,13 +5,66 @@ set -e
 # Change to the project root directory
 cd "$(dirname "$0")/.."
 
+make reset-deps 2>&1 > /dev/null
+
 echo "## 🚀 Cala Performance Benchmark Results"
 echo ""
 echo "Running performance tests..."
 echo ""
 
-# Run the performance tests and capture output
-cargo run -p cala-perf 2>&1 | sed 's/^/    /'
+# Run Criterion benchmarks first
+echo "### 🏃 Criterion Benchmark Results"
+echo ""
+
+cargo bench -p cala-perf 2>&1 > /dev/null
+
+echo "| Benchmark | Time per Run | Throughput | % vs Baseline |"
+echo "|-----------|--------------|------------|---------------|"
+
+# Parse the generated JSON files in target/criterion/
+baseline_time=""
+
+# Find all estimates.json files in target/criterion subdirectories (in the 'new' subdirectory)
+for json_file in target/criterion/*/new/estimates.json; do
+    if [[ -f "$json_file" ]]; then
+        # Extract benchmark name from path (parent of the 'new' directory)
+        bench_name=$(basename "$(dirname "$(dirname "$json_file")")")
+
+        # Extract the mean estimate (in nanoseconds)
+        time_ns=$(jq -r '.mean.point_estimate' "$json_file")
+
+        if [[ -n "$time_ns" && "$time_ns" != "null" ]]; then
+            # Convert nanoseconds to milliseconds
+            time_ms=$(echo "scale=3; $time_ns / 1000000" | bc -l)
+            time_display="${time_ms}ms"
+
+            # Convert to tx/s (assuming single operation per benchmark)
+            tx_per_sec=$(echo "scale=0; 1000000000 / $time_ns" | bc -l)
+
+            # Calculate percentage difference from baseline
+            if [[ -z "$baseline_time" ]]; then
+                baseline_time=$time_ns
+                perc_diff="0 (baseline)"
+            else
+                perc_diff=$(echo "scale=1; ($time_ns - $baseline_time) / $baseline_time * 100" | bc -l)
+                if (( $(echo "$perc_diff >= 0" | bc -l) )); then
+                    perc_diff="+${perc_diff}%"
+                else
+                    perc_diff="${perc_diff}%"
+                fi
+            fi
+
+            echo "| $bench_name | $time_display | ${tx_per_sec} tx/s | $perc_diff |"
+        fi
+    fi
+done
+
+# echo ""
+# echo "### 📊 Load Testing Results"
+# echo ""
+
+# # Run the load testing benchmarks
+# cargo run -p cala-perf 2>&1 | sed 's/^/    /'
 
 echo ""
 echo "---"

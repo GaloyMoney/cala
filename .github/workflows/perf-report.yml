@@ -1,4 +1,4 @@
-name: Performance Report - Simple Update
+name: Performance Report
 
 on:
   pull_request:
