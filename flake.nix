@@ -35,6 +35,7 @@
       nativeBuildInputs = with pkgs;
         [
           wait4x
+          gnuplot
           rustToolchain
           alejandra
           sqlx-cli
@@ -46,6 +47,7 @@
           postgresql
           docker-compose
           bats
+          bc
           jq
           napi-rs-cli
           yarn

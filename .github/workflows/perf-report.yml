@@ -1,0 +1,61 @@
+name: Performance Report
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  performance-report:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v23
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+
+      - name: Generate performance data
+        id: perf
+        run: |
+          # Run the performance report script and output to file
+          nix develop -c ./bin/perf-report.sh perf-report.md
+          
+          # Save the file content to a multiline string
+          {
+            echo 'report_content<<EOF'
+            cat perf-report.md
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
+
+          # Generate timestamp
+          echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
+      - name: Find Comment
+        uses: peter-evans/find-comment@v2
+        id: fc
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: <!-- performance-report-marker -->
+
+      - name: Create or Update Comment
+        uses: peter-evans/create-or-update-comment@v3
+        with:
+          comment-id: ${{ steps.fc.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          edit-mode: replace
+          body: |
+            <!-- performance-report-marker -->
+            # 📊 Performance Report
+
+            **Commit:** ${{ github.event.pull_request.head.sha }}
+            **Updated:** ${{ steps.perf.outputs.timestamp }}
+
+            ${{ steps.perf.outputs.report_content }}
+
+            _Last updated by commit ${{ github.event.pull_request.head.sha }}_
