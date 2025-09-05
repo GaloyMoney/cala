@@ -40,7 +40,7 @@ pub async fn init(cala: &CalaLedger) -> anyhow::Result<()> {
             .unwrap(),
         NewParamDefinition::builder()
             .name("amount")
-            .default_expr("decimal('1000')")
+            .default_expr("decimal('10')")
             .r#type(ParamDataType::Decimal)
             .build()
             .unwrap(),

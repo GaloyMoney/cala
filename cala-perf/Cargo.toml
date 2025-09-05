@@ -14,8 +14,9 @@ tokio = { workspace = true }
 criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 rust_decimal = { workspace = true }
+serde = { workspace = true }
 
 [[bench]]
 name = "ledger_benchmarks"
