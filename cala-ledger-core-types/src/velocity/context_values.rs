@@ -7,7 +7,7 @@ pub struct VelocityContextAccountValues {
     pub id: AccountId,
     pub name: String,
     pub normal_balance_type: DebitOrCredit,
-    pub external_id: String,
+    pub external_id: Option<String>,
     pub metadata: Option<serde_json::Value>,
 }
 
@@ -17,7 +17,7 @@ impl From<&AccountValues> for VelocityContextAccountValues {
             id: values.id,
             name: values.name.clone(),
             normal_balance_type: values.normal_balance_type,
-            external_id: values.external_id.clone().unwrap_or(values.id.to_string()),
+            external_id: values.external_id.clone(),
             metadata: values.metadata.clone(),
         }
     }
@@ -29,7 +29,7 @@ impl From<AccountValues> for VelocityContextAccountValues {
             id: values.id,
             name: values.name,
             normal_balance_type: values.normal_balance_type,
-            external_id: values.external_id.unwrap_or(values.id.to_string()),
+            external_id: values.external_id,
             metadata: values.metadata,
         }
     }
@@ -41,7 +41,7 @@ impl From<&AccountSetValues> for VelocityContextAccountValues {
             id: values.id.into(),
             name: values.name.clone(),
             normal_balance_type: values.normal_balance_type,
-            external_id: values.external_id.clone().unwrap_or(values.id.to_string()),
+            external_id: values.external_id.clone(),
             metadata: values.metadata.clone(),
         }
     }
@@ -55,7 +55,10 @@ mod cel {
             let mut map = CelMap::new();
             map.insert("id", account.id);
             map.insert("name", account.name.clone());
-            map.insert("externalId", account.external_id.clone());
+            map.insert(
+                "externalId",
+                account.external_id.clone().unwrap_or_default(),
+            );
             map.insert("normalBalanceType", account.normal_balance_type);
             if let Some(metadata) = &account.metadata {
                 map.insert("metadata", metadata.clone());

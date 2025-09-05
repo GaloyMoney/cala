@@ -253,16 +253,18 @@ pub struct NewAccount {
     pub(super) external_id: Option<String>,
     #[builder(default)]
     pub(super) normal_balance_type: DebitOrCredit,
-    #[builder(setter(strip_option, into), default)]
-    pub(super) description: Option<String>,
     #[builder(default)]
     pub(super) status: Status,
-    #[builder(setter(custom), default)]
-    pub(super) metadata: Option<serde_json::Value>,
     #[builder(setter(custom), default)]
     pub(super) eventually_consistent: bool,
     #[builder(setter(custom), default)]
     pub(super) is_account_set: bool,
+    #[builder(setter(custom), default)]
+    velocity_context_values: Option<VelocityContextAccountValues>,
+    #[builder(setter(strip_option, into), default)]
+    description: Option<String>,
+    #[builder(setter(custom), default)]
+    metadata: Option<serde_json::Value>,
 }
 
 impl NewAccount {
@@ -275,7 +277,9 @@ impl NewAccount {
     }
 
     pub(super) fn context_values(&self) -> VelocityContextAccountValues {
-        VelocityContextAccountValues::from(self.clone().into_values())
+        self.velocity_context_values
+            .clone()
+            .unwrap_or_else(|| VelocityContextAccountValues::from(self.clone().into_values()))
     }
 
     pub(super) fn into_values(self) -> AccountValues {
@@ -311,6 +315,14 @@ impl NewAccountBuilder {
     ) -> Result<&mut Self, serde_json::Error> {
         self.metadata = Some(Some(serde_json::to_value(metadata)?));
         Ok(self)
+    }
+
+    pub(crate) fn velocity_context_values(
+        &mut self,
+        values: impl Into<VelocityContextAccountValues>,
+    ) -> &mut Self {
+        self.velocity_context_values = Some(Some(values.into()));
+        self
     }
 
     pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {

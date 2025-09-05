@@ -74,9 +74,8 @@ impl AccountRepo {
     pub async fn update_velocity_context_values_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        latest_values: impl Into<VelocityContextAccountValues>,
+        latest_values: VelocityContextAccountValues,
     ) -> Result<(), AccountError> {
-        let latest_values: VelocityContextAccountValues = latest_values.into();
         let account_id = latest_values.id;
 
         sqlx::query!(
@@ -88,38 +87,6 @@ impl AccountRepo {
         )
         .execute(op.as_executor())
         .await?;
-        Ok(())
-    }
-
-    pub async fn update_all_velocity_context_values_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        latest_values_list: Vec<impl Into<VelocityContextAccountValues>>,
-    ) -> Result<(), AccountError> {
-        if latest_values_list.is_empty() {
-            return Ok(());
-        }
-
-        let mut id_collection: Vec<AccountId> = Vec::new();
-        let mut latest_values_collection: Vec<VelocityContextAccountValues> = Vec::new();
-
-        for latest_values in latest_values_list {
-            let latest_values: VelocityContextAccountValues = latest_values.into();
-            id_collection.push(latest_values.id);
-            latest_values_collection.push(latest_values);
-        }
-
-        sqlx::query!(
-            r#"UPDATE cala_accounts
-            SET velocity_context_values = unnested.latest_values
-            FROM UNNEST($1::UUID[], $2::JSONB[]) AS unnested(id, latest_values)
-            WHERE cala_accounts.id = unnested.id"#,
-            &id_collection as &[AccountId],
-            &latest_values_collection as &[VelocityContextAccountValues]
-        )
-        .execute(op.as_executor())
-        .await?;
-
         Ok(())
     }
 }

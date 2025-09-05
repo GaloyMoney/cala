@@ -291,7 +291,7 @@ mod tests {
             VelocityContextAccountValues {
                 id,
                 name: "Test Account".to_string(),
-                external_id: id.to_string(),
+                external_id: None,
                 normal_balance_type: DebitOrCredit::Debit,
                 metadata: None,
             }

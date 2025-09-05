@@ -3,7 +3,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-use cala_types::account_set::AccountSetValues;
 use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -136,23 +135,13 @@ impl Accounts {
         Ok(())
     }
 
-    pub async fn cache_values_from_account_set_in_op(
+    pub(crate) async fn update_velocity_context_values_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
-        values: &AccountSetValues,
+        values: impl Into<VelocityContextAccountValues>,
     ) -> Result<(), AccountError> {
         self.repo
-            .update_velocity_context_values_in_op(db, values)
-            .await
-    }
-
-    pub async fn cache_all_values_from_account_sets_in_op(
-        &self,
-        db: &mut LedgerOperation<'_>,
-        values: Vec<&AccountSetValues>,
-    ) -> Result<(), AccountError> {
-        self.repo
-            .update_all_velocity_context_values_in_op(db, values)
+            .update_velocity_context_values_in_op(db, values.into())
             .await
     }
 

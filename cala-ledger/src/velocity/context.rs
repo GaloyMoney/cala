@@ -95,7 +95,7 @@ mod tests {
             id,
             name: "name".to_string(),
             normal_balance_type: DebitOrCredit::Credit,
-            external_id: id.to_string(),
+            external_id: None,
             metadata: Some(json!({
                 "account": "metadata",
                 "test": true,

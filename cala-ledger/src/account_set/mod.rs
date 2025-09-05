@@ -77,16 +77,13 @@ impl AccountSets {
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
             .is_account_set(true)
+            .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
         self.accounts.create_in_op(db, new_account).await?;
 
         let account_set = self.repo.create_in_op(db, new_account_set).await?;
         db.accumulate(account_set.last_persisted(1).map(|p| &p.event));
-
-        self.accounts
-            .cache_values_from_account_set_in_op(db, account_set.values())
-            .await?;
 
         Ok(account_set)
     }
@@ -115,6 +112,7 @@ impl AccountSets {
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
                 .is_account_set(true)
+                .velocity_context_values(new_account_set.context_values())
                 .build()
                 .expect("Failed to build account");
             new_accounts.push(new_account);
@@ -127,13 +125,6 @@ impl AccountSets {
                 .iter()
                 .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
         );
-
-        self.accounts
-            .cache_all_values_from_account_sets_in_op(
-                db,
-                account_sets.iter().map(|s| s.values()).collect::<Vec<_>>(),
-            )
-            .await?;
 
         Ok(account_sets)
     }
@@ -159,7 +150,7 @@ impl AccountSets {
         db.accumulate(account_set.last_persisted(n_events).map(|p| &p.event));
 
         self.accounts
-            .cache_values_from_account_set_in_op(db, account_set.values())
+            .update_velocity_context_values_in_op(db, account_set.values())
             .await?;
 
         Ok(())
