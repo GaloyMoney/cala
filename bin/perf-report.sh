@@ -21,9 +21,9 @@ cargo bench -p cala-perf
 load_output=$(cargo run -p cala-perf 2>&1)
 
 {
-echo "## 🚀 Cala Performance Benchmark Results"
+echo "## 🚀 Cala Performance Benchmark Results (non-representative)"
 
-echo "### 🏃 Criterion Benchmark Results"
+echo "### 🏃 Criterion Benchmark Results (singe-threaded)"
 echo ""
 
 echo "| Benchmark | Time per Run | Throughput | % vs Baseline |"
@@ -69,11 +69,11 @@ for json_file in target/criterion/*/new/estimates.json; do
 done
 
 echo ""
-echo "### 🏋️ Load Testing Results"
+echo "### 🏋️ Load Testing Results (parallel-execution)"
 echo ""
 
-# Extract the summary table section
-echo "$load_output" | sed -n '/📋 PERFORMANCE SUMMARY TABLE/,/✅ All performance tests completed!/p' | sed '$d'
+# Extract the summary table section, skip the header and separator lines
+echo "$load_output" | sed -n '/📋 PERFORMANCE SUMMARY TABLE/,/✅ All performance tests completed!/p' | sed '$d' | sed '1,2d'
 
 echo "---"
 echo ""
