@@ -2,7 +2,7 @@ pub mod templates;
 
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account::*, journal::*, velocity::*, *};
+use cala_ledger::{account::*, account_set::*, journal::*, velocity::*, *};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
@@ -127,4 +127,37 @@ pub async fn attach_velocity_to_account(
         .await?;
 
     Ok(())
+}
+
+pub async fn init_accounts_with_account_sets(
+    cala: &CalaLedger,
+    journal: &Journal,
+    check_velocity: bool,
+) -> anyhow::Result<(Account, Account, AccountSet, AccountSet)> {
+    let (sender, recipient) = init_accounts(cala, check_velocity).await?;
+
+    let sender_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Sender Account Set")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let sender_set = cala.account_sets().create(sender_set).await?;
+
+    let recipient_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Recipient Account Set")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let recipient_set = cala.account_sets().create(recipient_set).await?;
+
+    cala.account_sets()
+        .add_member(sender_set.id(), sender.id())
+        .await?;
+    cala.account_sets()
+        .add_member(recipient_set.id(), recipient.id())
+        .await?;
+
+    Ok((sender, recipient, sender_set, recipient_set))
 }

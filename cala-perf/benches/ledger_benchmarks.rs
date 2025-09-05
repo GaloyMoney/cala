@@ -1,9 +1,10 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
 use tokio::runtime::Runtime;
 
 use cala_perf::{
-    attach_velocity_to_account, init_accounts, init_cala, init_journal,
+    attach_velocity_to_account, init_accounts, init_accounts_with_account_sets, init_cala,
+    init_journal,
     templates::{multi_layer_template, simple_transfer},
 };
 
@@ -141,10 +142,39 @@ fn post_simple_transaction_with_hit_velocity(c: &mut Criterion) {
     });
 }
 
+fn post_simple_transaction_with_account_sets(c: &mut Criterion) {
+    let rt = Runtime::new().unwrap();
+
+    let (cala, journal, sender, recipient, _sender_set, _recipient_set) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala).await.unwrap();
+        let (sender, recipient, sender_set, recipient_set) =
+            init_accounts_with_account_sets(&cala, &journal, false)
+                .await
+                .unwrap();
+        (cala, journal, sender, recipient, sender_set, recipient_set)
+    });
+
+    c.bench_function("post_simple_transaction_with_account_sets", |b| {
+        b.to_async(&rt).iter(|| async {
+            simple_transfer::execute(
+                black_box(&cala),
+                black_box(journal.id()),
+                black_box(sender.id()),
+                black_box(recipient.id()),
+            )
+            .await
+            .unwrap()
+        })
+    });
+}
+
 criterion_group!(
     benches,
     post_simple_transaction,
     post_multi_layer_transaction,
+    post_simple_transaction_with_account_sets,
     post_simple_transaction_with_velocity,
     post_simple_transaction_with_skipped_velocity,
     post_simple_transaction_with_hit_velocity,
