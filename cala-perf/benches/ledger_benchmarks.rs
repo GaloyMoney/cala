@@ -1,6 +1,7 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use std::hint::black_box;
 use tokio::runtime::Runtime;
+
+use std::hint::black_box;
 
 use cala_perf::{
     attach_velocity_to_account, init_accounts, init_accounts_with_account_sets, init_cala,
