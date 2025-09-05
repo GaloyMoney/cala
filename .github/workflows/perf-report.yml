@@ -9,11 +9,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Generate performance data
         id: perf
         run: |
@@ -22,7 +22,10 @@ jobs:
           echo "memory_mb=256" >> $GITHUB_OUTPUT
           echo "cpu_percent=45" >> $GITHUB_OUTPUT
           echo "bundle_kb=2048" >> $GITHUB_OUTPUT
-      
+
+          # Generate timestamp
+          echo "timestamp=$(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_OUTPUT
+
       - name: Find Comment
         uses: peter-evans/find-comment@v2
         id: fc
@@ -42,7 +45,7 @@ jobs:
             # 📊 Performance Report
 
             **Commit:** ${{ github.event.pull_request.head.sha }}
-            **Updated:** ${{ github.event.head_commit.timestamp }}
+            **Updated:** ${{ steps.perf.outputs.timestamp }}
 
             | Metric | Value | Trend |
             |--------|-------|-------|
