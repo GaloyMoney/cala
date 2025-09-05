@@ -48,6 +48,7 @@ Primary: Expression = {
             let inner = Expression::Ident(identifier);
             Expression::Member(Box::new(inner), Box::new(Member::FunctionCall(arguments)))
     },
+    "has" "(" <expr:Expression> ")" => Expression::Has(Box::new(expr)),
     "(" <Expression> ")",
     "[" <members:CommaSeparated<Expression>> "]" => Expression::List(<>),
     "{" <fields:CommaSeparated<MapInits>> "}" => Expression::Map(<>),

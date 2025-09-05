@@ -49,6 +49,7 @@ pub enum Expression {
     Unary(UnaryOp, Box<Expression>),
 
     Member(Box<Expression>, Box<Member>),
+    Has(Box<Expression>),
 
     List(Vec<Expression>),
     Map(Vec<(Expression, Expression)>),
@@ -173,5 +174,42 @@ mod tests {
                 Index(Literal(Int(1)).into()).into(),
             ),
         )
+    }
+
+    #[test]
+    fn has_macro() {
+        assert_parse_eq(
+            "has(a.b)",
+            Has(Member(
+                Ident("a".to_string().into()).into(),
+                Attribute("b".to_string().into()).into(),
+            )
+            .into()),
+        );
+        assert_parse_eq(
+            "has(params.field)",
+            Has(Member(
+                Ident("params".to_string().into()).into(),
+                Attribute("field".to_string().into()).into(),
+            )
+            .into()),
+        );
+        // Test deeply nested has expression
+        assert_parse_eq(
+            "has(a.b.c.d)",
+            Has(Member(
+                Member(
+                    Member(
+                        Ident("a".to_string().into()).into(),
+                        Attribute("b".to_string().into()).into(),
+                    )
+                    .into(),
+                    Attribute("c".to_string().into()).into(),
+                )
+                .into(),
+                Attribute("d".to_string().into()).into(),
+            )
+            .into()),
+        );
     }
 }
