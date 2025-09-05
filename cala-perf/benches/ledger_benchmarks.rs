@@ -1,4 +1,4 @@
-use criterion::{Criterion, criterion_group, criterion_main};
+use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
 use tokio::runtime::Runtime;
 
@@ -100,7 +100,7 @@ fn post_simple_transaction_with_skipped_velocity(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_simple_transaction_with_skiped_velocity", |b| {
+    c.bench_function("post_simple_transaction_with_skipped_velocity", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
