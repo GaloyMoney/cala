@@ -8,13 +8,7 @@ async fn main() -> anyhow::Result<()> {
     simple_transfer::init(&cala).await.unwrap();
     let journal = init_journal(&cala).await.unwrap();
 
-    let (a, b) = init_accounts(&cala, false).await?;
-    let (c, d) = init_accounts(&cala, false).await?;
-
-    let pool_a = vec![a.id(), b.id()];
-    let pool_b = vec![c.id(), d.id()];
-
-    transactions_in_parallel(&cala, journal.id(), &pool_a, &pool_b).await?;
+    transactions_in_parallel(&cala, journal.id(), 2).await?;
 
     Ok(())
 }
@@ -22,12 +16,25 @@ async fn main() -> anyhow::Result<()> {
 async fn transactions_in_parallel(
     cala: &CalaLedger,
     journal_id: JournalId,
-    pool_a: &[AccountId],
-    pool_b: &[AccountId],
+    n: usize,
 ) -> anyhow::Result<()> {
-    let task_a = {
+    // Setup phase: create all pools first
+    let mut pools = Vec::new();
+    println!("Setting up {} pools...", n);
+    
+    for i in 0..n {
+        let (account1, account2) = init_accounts(cala, false).await?;
+        let pool = vec![account1.id(), account2.id()];
+        pools.push((i, pool));
+        println!("Pool {} created", i);
+    }
+    
+    println!("Setup complete. Starting concurrent execution...");
+    
+    // Spawn all tasks close together
+    let spawn_start = std::time::Instant::now();
+    let tasks: Vec<_> = pools.into_iter().map(|(i, pool)| {
         let cala = cala.clone();
-        let pool = pool_a.to_vec();
         tokio::spawn(async move {
             let start = std::time::Instant::now();
             for _ in 0..1000 {
@@ -36,39 +43,33 @@ async fn transactions_in_parallel(
                     .unwrap();
             }
             let duration = start.elapsed();
-            println!("Pool A: 1000 transactions completed in {:?}", duration);
-            duration
+            println!("Pool {}: 1000 transactions completed in {:?}", i, duration);
+            (i, duration)
         })
-    };
-
-    let task_b = {
-        let cala = cala.clone();
-        let pool = pool_b.to_vec();
-        tokio::spawn(async move {
-            let start = std::time::Instant::now();
-            for _ in 0..1000 {
-                execute_one_simple_transaction(&cala, journal_id, &pool)
-                    .await
-                    .unwrap();
-            }
-            let duration = start.elapsed();
-            println!("Pool B: 1000 transactions completed in {:?}", duration);
-            duration
-        })
-    };
-
-    let (duration_a, duration_b) = tokio::try_join!(task_a, task_b)?;
-
-    println!(
-        "Total execution time - Pool A: {:?}, Pool B: {:?}",
-        duration_a, duration_b
-    );
-    println!(
-        "Average per transaction - Pool A: {:?}, Pool B: {:?}",
-        duration_a / 1000,
-        duration_b / 1000
-    );
-
+    }).collect();
+    
+    // Join all tasks and measure total time
+    let mut task_results = Vec::new();
+    for task in tasks {
+        task_results.push(task.await?);
+    }
+    let total_execution_time = spawn_start.elapsed();
+    
+    println!("All tasks completed in {:?}", total_execution_time);
+    
+    for (pool_id, duration) in &task_results {
+        println!(
+            "Pool {}: Average per transaction: {:?}",
+            pool_id,
+            *duration / 1000
+        );
+    }
+    
+    let total_task_duration: std::time::Duration = task_results.iter().map(|(_, d)| *d).sum();
+    let avg_task_duration = total_task_duration / task_results.len() as u32;
+    println!("Average pool task duration: {:?}", avg_task_duration);
+    println!("Total wall-clock time: {:?}", total_execution_time);
+    
     Ok(())
 }
 
