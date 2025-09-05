@@ -50,6 +50,10 @@ impl Account {
         self.values.id
     }
 
+    pub(super) fn is_account_set(&self) -> bool {
+        self.values.config.is_account_set
+    }
+
     pub fn values(&self) -> &AccountValues {
         &self.values
     }

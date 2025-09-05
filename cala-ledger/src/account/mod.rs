@@ -130,6 +130,10 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
+        if account.is_account_set() {
+            return Err(AccountError::CannotUpdateAccountSetAccounts);
+        }
+
         let n_events = self.repo.update_in_op(db, account).await?;
         db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
         Ok(())

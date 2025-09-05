@@ -72,7 +72,7 @@ impl AccountSets {
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
-            .id(uuid::Uuid::from(new_account_set.id))
+            .id(new_account_set.id)
             .name(String::new())
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
@@ -107,7 +107,7 @@ impl AccountSets {
         let mut new_accounts = Vec::new();
         for new_account_set in new_account_sets.iter() {
             let new_account = NewAccount::builder()
-                .id(uuid::Uuid::from(new_account_set.id))
+                .id(new_account_set.id)
                 .name(String::new())
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
