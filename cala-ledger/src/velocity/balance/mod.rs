@@ -6,8 +6,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
-    account::AccountValuesForContext, balance::BalanceSnapshot, entry::EntryValues,
-    transaction::TransactionValues,
+    balance::BalanceSnapshot, entry::EntryValues, transaction::TransactionValues,
+    velocity::VelocityContextAccountValues,
 };
 
 use crate::{
@@ -37,7 +37,7 @@ impl VelocityBalances {
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
-        controls: HashMap<AccountId, (AccountValuesForContext, Vec<AccountVelocityControl>)>,
+        controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
         let mut context =
@@ -71,7 +71,10 @@ impl VelocityBalances {
     fn balances_to_check<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
-        controls: &'a HashMap<AccountId, (AccountValuesForContext, Vec<AccountVelocityControl>)>,
+        controls: &'a HashMap<
+            AccountId,
+            (VelocityContextAccountValues, Vec<AccountVelocityControl>),
+        >,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<
         HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
@@ -284,8 +287,8 @@ mod tests {
             }
         }
 
-        fn create_test_account_values(id: AccountId) -> AccountValuesForContext {
-            AccountValuesForContext {
+        fn create_test_account_values(id: AccountId) -> VelocityContextAccountValues {
+            VelocityContextAccountValues {
                 id,
                 name: "Test Account".to_string(),
                 external_id: id.to_string(),

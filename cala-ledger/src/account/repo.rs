@@ -22,10 +22,10 @@ use super::{entity::*, error::AccountError};
             update(accessor = "values().normal_balance_type")
         ),
         eventually_consistent(ty = "bool", update(persist = false)),
-        latest_values(
-            ty = "serde_json::Value",
-            create(accessor = "values_json()"),
-            update(accessor = "values_json()")
+        velocity_context_values(
+            ty = "VelocityContextAccountValues",
+            create(accessor = "context_values()"),
+            update(accessor = "context_values()")
         ),
         data_source_id(
             ty = "DataSourceId",
@@ -53,7 +53,7 @@ impl AccountRepo {
     ) -> Result<(), AccountError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, latest_values)
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, velocity_context_values)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
@@ -63,7 +63,7 @@ impl AccountRepo {
             account.values().normal_balance_type as DebitOrCredit,
             account.values().config.eventually_consistent,
             recorded_at,
-            serde_json::to_value(account.values()).expect("Failed to serialize account values"),
+            account.context_values() as VelocityContextAccountValues,
         )
         .execute(op.as_executor())
         .await?;
@@ -71,53 +71,51 @@ impl AccountRepo {
         Ok(())
     }
 
-    pub async fn update_latest_values_in_op(
+    pub async fn update_velocity_context_values_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        latest_values: impl Into<AccountValuesForContext>,
+        latest_values: impl Into<VelocityContextAccountValues>,
     ) -> Result<(), AccountError> {
-        let latest_values: AccountValuesForContext = latest_values.into();
+        let latest_values: VelocityContextAccountValues = latest_values.into();
         let account_id = latest_values.id;
 
         sqlx::query!(
             r#"UPDATE cala_accounts
-            SET latest_values = $2
+            SET velocity_context_values = $2
             WHERE id = $1"#,
             account_id as AccountId,
-            serde_json::to_value(latest_values).expect("Failed to serialize account values"),
+            latest_values as VelocityContextAccountValues
         )
         .execute(op.as_executor())
         .await?;
         Ok(())
     }
 
-    pub async fn update_all_latest_values_in_op(
+    pub async fn update_all_velocity_context_values_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        latest_values_list: Vec<impl Into<AccountValuesForContext>>,
+        latest_values_list: Vec<impl Into<VelocityContextAccountValues>>,
     ) -> Result<(), AccountError> {
         if latest_values_list.is_empty() {
             return Ok(());
         }
 
         let mut id_collection: Vec<AccountId> = Vec::new();
-        let mut latest_values_collection: Vec<serde_json::Value> = Vec::new();
+        let mut latest_values_collection: Vec<VelocityContextAccountValues> = Vec::new();
 
         for latest_values in latest_values_list {
-            let latest_values: AccountValuesForContext = latest_values.into();
+            let latest_values: VelocityContextAccountValues = latest_values.into();
             id_collection.push(latest_values.id);
-            latest_values_collection.push(
-                serde_json::to_value(latest_values).expect("Failed to serialize account values"),
-            );
+            latest_values_collection.push(latest_values);
         }
 
         sqlx::query!(
             r#"UPDATE cala_accounts
-            SET latest_values = unnested.latest_values
+            SET velocity_context_values = unnested.latest_values
             FROM UNNEST($1::UUID[], $2::JSONB[]) AS unnested(id, latest_values)
             WHERE cala_accounts.id = unnested.id"#,
             &id_collection as &[AccountId],
-            &latest_values_collection,
+            &latest_values_collection as &[VelocityContextAccountValues]
         )
         .execute(op.as_executor())
         .await?;

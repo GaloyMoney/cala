@@ -7,9 +7,8 @@ use sqlx::PgPool;
 
 use std::collections::HashMap;
 
-use cala_types::{
-    account::AccountValuesForContext,
-    velocity::{VelocityControlValues, VelocityLimitValues},
+use cala_types::velocity::{
+    VelocityContextAccountValues, VelocityControlValues, VelocityLimitValues,
 };
 
 use crate::{
@@ -106,7 +105,7 @@ impl AccountControls {
         db: &mut LedgerOperation<'_>,
         account_ids: &[AccountId],
     ) -> Result<
-        HashMap<AccountId, (AccountValuesForContext, Vec<AccountVelocityControl>)>,
+        HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         VelocityError,
     > {
         self.repo.find_for_enforcement(db, account_ids).await

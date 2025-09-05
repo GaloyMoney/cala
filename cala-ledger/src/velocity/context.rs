@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use cala_types::{
-    account::AccountValuesForContext, entry::EntryValues, transaction::TransactionValues,
+    entry::EntryValues, transaction::TransactionValues, velocity::VelocityContextAccountValues,
 };
 use cel_interpreter::{CelMap, CelValue};
 
@@ -19,7 +19,7 @@ pub struct EvalContext {
 impl EvalContext {
     pub fn new<'a>(
         transaction: &TransactionValues,
-        accounts: impl Iterator<Item = &'a AccountValuesForContext>,
+        accounts: impl Iterator<Item = &'a VelocityContextAccountValues>,
     ) -> Self {
         let account_values = accounts.map(|a| (a.id, a.into())).collect();
         Self {
@@ -89,9 +89,9 @@ mod tests {
         }
     }
 
-    fn account_values() -> AccountValuesForContext {
+    fn account_values() -> VelocityContextAccountValues {
         let id = AccountId::new();
-        AccountValuesForContext {
+        VelocityContextAccountValues {
             id,
             name: "name".to_string(),
             normal_balance_type: DebitOrCredit::Credit,

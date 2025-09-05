@@ -141,7 +141,9 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         values: &AccountSetValues,
     ) -> Result<(), AccountError> {
-        self.repo.update_latest_values_in_op(db, values).await
+        self.repo
+            .update_velocity_context_values_in_op(db, values)
+            .await
     }
 
     pub async fn cache_all_values_from_account_sets_in_op(
@@ -149,7 +151,9 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         values: Vec<&AccountSetValues>,
     ) -> Result<(), AccountError> {
-        self.repo.update_all_latest_values_in_op(db, values).await
+        self.repo
+            .update_all_velocity_context_values_in_op(db, values)
+            .await
     }
 
     #[cfg(feature = "import")]

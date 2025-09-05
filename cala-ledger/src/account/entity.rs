@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
-pub use cala_types::{account::*, primitives::AccountId};
+pub use cala_types::{account::*, primitives::AccountId, velocity::VelocityContextAccountValues};
 
 use crate::primitives::*;
 
@@ -58,9 +58,8 @@ impl Account {
         self.values
     }
 
-    pub(super) fn values_json(&self) -> serde_json::Value {
-        serde_json::to_value(AccountValuesForContext::from(self.values()))
-            .expect("Failed to serialize account values")
+    pub(super) fn context_values(&self) -> VelocityContextAccountValues {
+        VelocityContextAccountValues::from(self.values())
     }
 
     pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
@@ -275,9 +274,8 @@ impl NewAccount {
         DataSource::Local
     }
 
-    pub(super) fn values_json(&self) -> serde_json::Value {
-        serde_json::to_value(AccountValuesForContext::from(&self.clone().into_values()))
-            .expect("Failed to serialize account values")
+    pub(super) fn context_values(&self) -> VelocityContextAccountValues {
+        VelocityContextAccountValues::from(self.clone().into_values())
     }
 
     pub(super) fn into_values(self) -> AccountValues {
