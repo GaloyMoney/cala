@@ -10,7 +10,7 @@ CREATE TABLE cala_accounts (
   data_source_id UUID NOT NULL,
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
-  latest_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
+  velocity_context_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
