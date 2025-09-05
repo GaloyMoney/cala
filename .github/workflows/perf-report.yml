@@ -22,13 +22,13 @@ jobs:
       - name: Generate performance data
         id: perf
         run: |
-          # Run the performance report script
-          report_output=$(nix develop -c ./bin/perf-report.sh 2>&1)
+          # Run the performance report script and output to file
+          nix develop -c ./bin/perf-report.sh perf-report.md
           
-          # Save the output to a multiline string
+          # Save the file content to a multiline string
           {
             echo 'report_content<<EOF'
-            echo "$report_output"
+            cat perf-report.md
             echo 'EOF'
           } >> $GITHUB_OUTPUT
 

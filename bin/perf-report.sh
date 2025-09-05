@@ -2,21 +2,27 @@
 
 set -e
 
+# Check for output file argument
+if [ $# -eq 0 ]; then
+    echo "Usage: $0 <output-file>"
+    echo "Example: $0 perf-report.md"
+    exit 1
+fi
+
+OUTPUT_FILE="$1"
+
 # Change to the project root directory
 cd "$(dirname "$0")/.."
 
-make reset-deps 2>&1 > /dev/null
+make reset-deps
 
+cargo bench -p cala-perf
+
+{
 echo "## 🚀 Cala Performance Benchmark Results"
-echo ""
-echo "Running performance tests..."
-echo ""
 
-# Run Criterion benchmarks first
 echo "### 🏃 Criterion Benchmark Results"
 echo ""
-
-cargo bench -p cala-perf 2>&1 > /dev/null
 
 echo "| Benchmark | Time per Run | Throughput | % vs Baseline |"
 echo "|-----------|--------------|------------|---------------|"
@@ -54,20 +60,17 @@ for json_file in target/criterion/*/new/estimates.json; do
                 fi
             fi
 
-            echo "| $bench_name | $time_display | ${tx_per_sec} tx/s | $perc_diff |"
+            echo "| ${bench_name#* } | $time_display | ${tx_per_sec} tx/s | $perc_diff |"
         fi
     fi
 done
-
-# echo ""
-# echo "### 📊 Load Testing Results"
-# echo ""
-
-# # Run the load testing benchmarks
-# cargo run -p cala-perf 2>&1 | sed 's/^/    /'
 
 echo ""
 echo "---"
 echo ""
 echo "💡 **Note**: Performance results may vary based on system resources and database state."
 echo "These benchmarks help identify performance trends and potential bottlenecks."
+
+} > "$OUTPUT_FILE"
+
+echo "Performance report generated: $OUTPUT_FILE"

@@ -20,7 +20,7 @@ fn post_simple_transaction(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_simple_transaction", |b| {
+    c.bench_function("1. post_simple_transaction", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
@@ -45,7 +45,7 @@ fn post_multi_layer_transaction(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_multi_layer_transaction", |b| {
+    c.bench_function("2. post_multi_layer_transaction", |b| {
         b.to_async(&rt).iter(|| async {
             multi_layer_template::execute(
                 black_box(&cala),
@@ -73,7 +73,7 @@ fn post_simple_transaction_with_velocity(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_simple_transaction_with_velocity", |b| {
+    c.bench_function("3. post_simple_transaction_with_velocity", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
@@ -101,7 +101,7 @@ fn post_simple_transaction_with_skipped_velocity(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_simple_transaction_with_skipped_velocity", |b| {
+    c.bench_function("3. post_simple_transaction_with_skipped_velocity", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
@@ -129,7 +129,7 @@ fn post_simple_transaction_with_hit_velocity(c: &mut Criterion) {
         (cala, journal, sender, recipient)
     });
 
-    c.bench_function("post_simple_transaction_with_hit_velocity", |b| {
+    c.bench_function("5. post_simple_transaction_with_hit_velocity", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
@@ -157,7 +157,7 @@ fn post_simple_transaction_with_account_sets(c: &mut Criterion) {
         (cala, journal, sender, recipient, sender_set, recipient_set)
     });
 
-    c.bench_function("post_simple_transaction_with_account_sets", |b| {
+    c.bench_function("6. post_simple_transaction_with_account_sets", |b| {
         b.to_async(&rt).iter(|| async {
             simple_transfer::execute(
                 black_box(&cala),
