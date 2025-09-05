@@ -1,0 +1,40 @@
+name: Performance Report - New Comment Per Commit
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  performance-report:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Add performance report comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const commitSha = context.payload.pull_request.head.sha;
+            const shortSha = commitSha.substring(0, 7);
+            
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 📊 Performance Report for ${shortSha}
+              
+              **Commit:** ${commitSha}
+              **Timestamp:** ${new Date().toISOString()}
+              
+              ### Results
+              _Performance report will be generated here_
+              
+              | Metric | Value |
+              |--------|-------|
+              | TBD | TBD |
+              `
+            });
