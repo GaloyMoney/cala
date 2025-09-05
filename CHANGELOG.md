@@ -1,3 +1,30 @@
+# [cala release v0.9.0](https://github.com/GaloyMoney/cala/releases/tag/0.9.0)
+
+
+### Bug Fixes
+
+- Avoid deadlock in post_transaction by using consistent order of lock aquistion (#532)
+
+### Features
+
+- Add Date and Timestamp cel comparison handling (#531)
+- [**breaking**] Cache VelocityContextAccountValues values on accounts table (#529)
+
+### Miscellaneous Tasks
+
+- Bump regex from 1.11.1 to 1.11.2 (#526)
+- Add support for 'has()' macro (#517)
+- Bump uuid from 1.17.0 to 1.18.1 (#527)
+- Bump clap from 4.5.46 to 4.5.47 (#528)
+
+### Performance
+
+- Add some benchmarking (#530)
+
+### Testing
+
+- Add velocity date condition on account set case (#507)
+
 # [cala release v0.8.1](https://github.com/GaloyMoney/cala/releases/tag/0.8.1)
 
 
