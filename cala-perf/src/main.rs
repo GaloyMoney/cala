@@ -1,4 +1,4 @@
-use cala_ledger::{account::AccountId, account_set::*, journal::JournalId, CalaLedger};
+use cala_ledger::{CalaLedger, account::AccountId, account_set::*, journal::JournalId};
 use cala_perf::{init_accounts, init_cala, init_journal, templates::simple_transfer};
 use rand::Rng;
 
@@ -76,7 +76,10 @@ async fn main() -> anyhow::Result<()> {
 
             println!("\n");
         } else {
-            println!("⏭️  Skipping account sets test for {} parallel tasks (use --account-sets to enable)", parallel_count);
+            println!(
+                "⏭️  Skipping account sets test for {} parallel tasks (use --account-sets to enable)",
+                parallel_count
+            );
             results.push((format!("{} acct_sets", parallel_count), 0.0));
         }
     }
@@ -238,7 +241,10 @@ async fn transactions_with_contention(
             println!("  ➤ Account {} assigned to set {}", account_idx, set_idx);
         }
 
-        println!("🎯 Setup complete. Starting {} concurrent tasks with shared pool and {} account sets...", parallel_tasks, n_sets);
+        println!(
+            "🎯 Setup complete. Starting {} concurrent tasks with shared pool and {} account sets...",
+            parallel_tasks, n_sets
+        );
     } else {
         println!(
             "🎯 Setup complete. Starting {} concurrent tasks with shared pool...",
