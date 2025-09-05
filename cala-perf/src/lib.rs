@@ -73,24 +73,20 @@ async fn create_velocity_control(
         .window(vec![])
         .limit(
             NewLimit::builder()
-                .balance(vec![
-                    NewBalanceLimit::builder()
-                        .layer("SETTLED")
-                        .amount("params.transfer_limit")
-                        .enforcement_direction("DEBIT")
-                        .build()
-                        .unwrap(),
-                ])
+                .balance(vec![NewBalanceLimit::builder()
+                    .layer("SETTLED")
+                    .amount("params.transfer_limit")
+                    .enforcement_direction("DEBIT")
+                    .build()
+                    .unwrap()])
                 .build()
                 .unwrap(),
         )
-        .params(vec![
-            NewParamDefinition::builder()
-                .r#type(ParamDataType::Decimal)
-                .name("transfer_limit")
-                .build()
-                .unwrap(),
-        ])
+        .params(vec![NewParamDefinition::builder()
+            .r#type(ParamDataType::Decimal)
+            .name("transfer_limit")
+            .build()
+            .unwrap()])
         .build()
         .unwrap();
 

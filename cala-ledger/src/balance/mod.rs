@@ -6,7 +6,7 @@ mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use tracing::instrument;
 
 pub use cala_types::{
@@ -101,18 +101,24 @@ impl Balances {
             return Err(BalanceError::JournalLocked(journal.id));
         }
 
-        let mut all_involved_balances: HashSet<_> = entries
-            .iter()
-            .map(|entry| (entry.account_id, entry.currency))
-            .collect();
+        // Using BTreeSet ensures consistent ordering of account/currency pairs
+        // across all transactions. This prevents deadlocks when acquiring
+        // advisory locks in find_for_update, as all transactions will attempt
+        // to lock the same resources in the same order. Without this ordering,
+        // concurrent transactions could acquire locks in different orders and
+        // deadlock waiting for each other.
+        let mut all_involved_balances: BTreeSet<_> = BTreeSet::new();
+        let empty = Vec::new();
         for entry in entries.iter() {
-            if let Some(account_set_ids) = account_set_mappings.get(&entry.account_id) {
-                all_involved_balances.extend(
-                    account_set_ids
-                        .iter()
-                        .map(|account_set_id| (AccountId::from(account_set_id), entry.currency)),
-                );
-            }
+            all_involved_balances.extend(
+                account_set_mappings
+                    .get(&entry.account_id)
+                    .unwrap_or(&empty)
+                    .iter()
+                    .map(AccountId::from)
+                    .chain(std::iter::once(entry.account_id))
+                    .map(|id| (id, entry.currency)),
+            );
         }
 
         let all_involved_balances: (Vec<_>, Vec<_>) = all_involved_balances

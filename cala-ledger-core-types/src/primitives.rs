@@ -217,6 +217,18 @@ impl PartialEq for Currency {
     }
 }
 
+impl Ord for Currency {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.code().cmp(other.code())
+    }
+}
+
+impl PartialOrd for Currency {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(thiserror::Error, Debug)]
 pub enum ParseCurrencyError {
     #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
