@@ -72,16 +72,19 @@ impl AccountSets {
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
-            .id(uuid::Uuid::from(new_account_set.id))
+            .id(new_account_set.id)
             .name(String::new())
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
             .is_account_set(true)
+            .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
         self.accounts.create_in_op(db, new_account).await?;
+
         let account_set = self.repo.create_in_op(db, new_account_set).await?;
         db.accumulate(account_set.last_persisted(1).map(|p| &p.event));
+
         Ok(account_set)
     }
 
@@ -104,22 +107,25 @@ impl AccountSets {
         let mut new_accounts = Vec::new();
         for new_account_set in new_account_sets.iter() {
             let new_account = NewAccount::builder()
-                .id(uuid::Uuid::from(new_account_set.id))
+                .id(new_account_set.id)
                 .name(String::new())
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
                 .is_account_set(true)
+                .velocity_context_values(new_account_set.context_values())
                 .build()
                 .expect("Failed to build account");
             new_accounts.push(new_account);
         }
         self.accounts.create_all_in_op(db, new_accounts).await?;
+
         let account_sets = self.repo.create_all_in_op(db, new_account_sets).await?;
         db.accumulate(
             account_sets
                 .iter()
                 .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
         );
+
         Ok(account_sets)
     }
 
@@ -142,6 +148,11 @@ impl AccountSets {
     ) -> Result<(), AccountSetError> {
         let n_events = self.repo.update_in_op(db, account_set).await?;
         db.accumulate(account_set.last_persisted(n_events).map(|p| &p.event));
+
+        self.accounts
+            .update_velocity_context_values_in_op(db, account_set.values())
+            .await?;
+
         Ok(())
     }
 

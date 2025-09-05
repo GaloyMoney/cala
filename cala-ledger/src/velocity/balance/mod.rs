@@ -6,8 +6,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
-    account::AccountValues, balance::BalanceSnapshot, entry::EntryValues,
-    transaction::TransactionValues,
+    balance::BalanceSnapshot, entry::EntryValues, transaction::TransactionValues,
+    velocity::VelocityContextAccountValues,
 };
 
 use crate::{
@@ -37,7 +37,7 @@ impl VelocityBalances {
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
-        controls: HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
+        controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
         let mut context =
@@ -71,7 +71,10 @@ impl VelocityBalances {
     fn balances_to_check<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
-        controls: &'a HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>,
+        controls: &'a HashMap<
+            AccountId,
+            (VelocityContextAccountValues, Vec<AccountVelocityControl>),
+        >,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<
         HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
@@ -168,12 +171,12 @@ mod tests {
         use rust_decimal::Decimal;
         use std::collections::HashMap;
 
-        use cala_types::{account::AccountConfig, balance::BalanceAmount, velocity::Window};
+        use cala_types::{balance::BalanceAmount, velocity::Window};
 
         use crate::{
             primitives::{
-                Currency, DebitOrCredit, EntryId, JournalId, Layer, Status, TransactionId,
-                TxTemplateId, VelocityControlId, VelocityLimitId,
+                Currency, DebitOrCredit, EntryId, JournalId, Layer, TransactionId, TxTemplateId,
+                VelocityControlId, VelocityLimitId,
             },
             velocity::{
                 account_control::{AccountBalanceLimit, AccountLimit, AccountVelocityLimit},
@@ -284,17 +287,12 @@ mod tests {
             }
         }
 
-        fn create_test_account(id: AccountId) -> AccountValues {
-            AccountValues {
+        fn create_test_account_values(id: AccountId) -> VelocityContextAccountValues {
+            VelocityContextAccountValues {
                 id,
-                version: 1,
-                code: "TEST_ACCOUNT".to_string(),
                 name: "Test Account".to_string(),
                 external_id: None,
                 normal_balance_type: DebitOrCredit::Debit,
-                status: Status::Active,
-                description: None,
-                config: AccountConfig::default(),
                 metadata: None,
             }
         }
@@ -305,7 +303,7 @@ mod tests {
             let limit = dummy_test_limit();
 
             let transaction = create_test_transaction();
-            let account = create_test_account(key.account_id);
+            let account = create_test_account_values(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut entry = create_test_entry(
@@ -346,7 +344,7 @@ mod tests {
             let limit = dummy_test_limit();
 
             let transaction = create_test_transaction();
-            let account = create_test_account(key.account_id);
+            let account = create_test_account_values(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut entry = create_test_entry(
@@ -384,7 +382,7 @@ mod tests {
             let limit = dummy_test_limit();
 
             let transaction = create_test_transaction();
-            let account = create_test_account(key.account_id);
+            let account = create_test_account_values(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let initial_debit = Decimal::from(100);
@@ -445,7 +443,7 @@ mod tests {
             let limit = dummy_test_limit();
 
             let transaction = create_test_transaction();
-            let account = create_test_account(key.account_id);
+            let account = create_test_account_values(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let mut entry = create_test_entry(
@@ -474,7 +472,7 @@ mod tests {
             let key = create_test_key();
 
             let transaction = create_test_transaction();
-            let account = create_test_account(key.account_id);
+            let account = create_test_account_values(key.account_id);
             let context = EvalContext::new(&transaction, [&account].into_iter());
 
             let limit = AccountVelocityLimit {

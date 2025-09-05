@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use cala_types::{account::AccountValues, entry::EntryValues, transaction::TransactionValues};
+use cala_types::{
+    entry::EntryValues, transaction::TransactionValues, velocity::VelocityContextAccountValues,
+};
 use cel_interpreter::{CelMap, CelValue};
 
 use crate::{
@@ -17,7 +19,7 @@ pub struct EvalContext {
 impl EvalContext {
     pub fn new<'a>(
         transaction: &TransactionValues,
-        accounts: impl Iterator<Item = &'a AccountValues>,
+        accounts: impl Iterator<Item = &'a VelocityContextAccountValues>,
     ) -> Self {
         let account_values = accounts.map(|a| (a.id, a.into())).collect();
         Self {
@@ -59,7 +61,6 @@ mod tests {
     use rust_decimal::Decimal;
     use serde_json::json;
 
-    use cala_types::account::AccountConfig;
     use cel_interpreter::CelExpression;
 
     use crate::{primitives::*, velocity::context::EvalContext};
@@ -88,24 +89,17 @@ mod tests {
         }
     }
 
-    fn account() -> AccountValues {
-        AccountValues {
-            id: AccountId::new(),
-            version: 1,
-            code: "code".to_string(),
+    fn account_values() -> VelocityContextAccountValues {
+        let id = AccountId::new();
+        VelocityContextAccountValues {
+            id,
             name: "name".to_string(),
             normal_balance_type: DebitOrCredit::Credit,
-            status: Status::Active,
             external_id: None,
-            description: None,
             metadata: Some(json!({
                 "account": "metadata",
                 "test": true,
             })),
-            config: AccountConfig {
-                is_account_set: false,
-                eventually_consistent: false,
-            },
         }
     }
 
@@ -129,7 +123,7 @@ mod tests {
 
     #[test]
     fn context_for_entry() {
-        let account = account();
+        let account = account_values();
         let tx = transaction();
         let entry = entry(account.id, &tx);
         let mut context = EvalContext::new(&tx, std::iter::once(&account));

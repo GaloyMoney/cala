@@ -1,11 +1,10 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, latest_values)\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+  "query": "UPDATE cala_accounts SET name = $2, code = $3, external_id = $4, normal_balance_type = $5, velocity_context_values = $6 WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
       "Left": [
-        "Uuid",
         "Uuid",
         "Varchar",
         "Varchar",
@@ -21,12 +20,10 @@
             }
           }
         },
-        "Bool",
-        "Timestamptz",
         "Jsonb"
       ]
     },
     "nullable": []
   },
-  "hash": "49602a3b0dbe7780cdd64d5a04883d934490afa99104ab790689a9181e28a0e2"
+  "hash": "89aa90a6d3ae9a8c06c2a086df557053f8d93bedd0cff19d54f8fc58c98506b7"
 }

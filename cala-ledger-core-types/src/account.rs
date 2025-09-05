@@ -21,22 +21,3 @@ pub struct AccountConfig {
     pub is_account_set: bool,
     pub eventually_consistent: bool,
 }
-
-mod cel {
-    use cel_interpreter::{CelMap, CelValue};
-
-    impl From<&super::AccountValues> for CelValue {
-        fn from(account: &super::AccountValues) -> Self {
-            let mut map = CelMap::new();
-            map.insert("id", account.id);
-            map.insert("code", account.code.clone());
-            map.insert("name", account.name.clone());
-            map.insert("externalId", account.code.clone());
-            map.insert("normalBalanceType", account.normal_balance_type);
-            if let Some(metadata) = &account.metadata {
-                map.insert("metadata", metadata.clone());
-            }
-            map.into()
-        }
-    }
-}

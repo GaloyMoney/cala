@@ -1,7 +1,7 @@
 use es_entity::*;
 use sqlx::PgPool;
 
-use crate::primitives::{DataSourceId, DebitOrCredit};
+use crate::primitives::{AccountId, DataSourceId, DebitOrCredit};
 
 use super::{entity::*, error::AccountError};
 
@@ -22,10 +22,10 @@ use super::{entity::*, error::AccountError};
             update(accessor = "values().normal_balance_type")
         ),
         eventually_consistent(ty = "bool", update(persist = false)),
-        latest_values(
-            ty = "serde_json::Value",
-            create(accessor = "values_json()"),
-            update(accessor = "values_json()")
+        velocity_context_values(
+            ty = "VelocityContextAccountValues",
+            create(accessor = "context_values()"),
+            update(accessor = "context_values()")
         ),
         data_source_id(
             ty = "DataSourceId",
@@ -53,7 +53,7 @@ impl AccountRepo {
     ) -> Result<(), AccountError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, latest_values)
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, velocity_context_values)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
@@ -63,11 +63,30 @@ impl AccountRepo {
             account.values().normal_balance_type as DebitOrCredit,
             account.values().config.eventually_consistent,
             recorded_at,
-            serde_json::to_value(account.values()).expect("Failed to serialize account values"),
+            account.context_values() as VelocityContextAccountValues,
         )
         .execute(op.as_executor())
         .await?;
         self.persist_events(op, account.events_mut()).await?;
+        Ok(())
+    }
+
+    pub async fn update_velocity_context_values_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        latest_values: VelocityContextAccountValues,
+    ) -> Result<(), AccountError> {
+        let account_id = latest_values.id;
+
+        sqlx::query!(
+            r#"UPDATE cala_accounts
+            SET velocity_context_values = $2
+            WHERE id = $1"#,
+            account_id as AccountId,
+            latest_values as VelocityContextAccountValues
+        )
+        .execute(op.as_executor())
+        .await?;
         Ok(())
     }
 }

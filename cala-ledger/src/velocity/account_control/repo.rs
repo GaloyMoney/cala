@@ -2,7 +2,7 @@ use sqlx::PgPool;
 
 use std::collections::HashMap;
 
-use cala_types::account::AccountValues;
+use cala_types::velocity::VelocityContextAccountValues;
 
 use crate::primitives::{AccountId, VelocityControlId};
 
@@ -41,12 +41,14 @@ impl AccountControlRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, (AccountValues, Vec<AccountVelocityControl>)>, VelocityError>
-    {
+    ) -> Result<
+        HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
+        VelocityError,
+    > {
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
-                r#"SELECT values, latest_values
+                r#"SELECT values, velocity_context_values as "velocity_context_values!: VelocityContextAccountValues"
             FROM cala_velocity_account_controls v
             JOIN cala_accounts a
             ON v.account_id = a.id
@@ -55,19 +57,13 @@ impl AccountControlRepo {
             ))
             .await?;
 
-        let mut res: HashMap<AccountId, (AccountValues, Vec<_>)> = HashMap::new();
+        let mut res: HashMap<AccountId, (VelocityContextAccountValues, Vec<_>)> = HashMap::new();
 
         for row in rows {
             let values: AccountVelocityControl =
                 serde_json::from_value(row.values).expect("Failed to deserialize control values");
             res.entry(values.account_id)
-                .or_insert_with(|| {
-                    (
-                        serde_json::from_value(row.latest_values)
-                            .expect("Failed to deserialize account values"),
-                        Vec::new(),
-                    )
-                })
+                .or_insert_with(|| (row.velocity_context_values, Vec::new()))
                 .1
                 .push(values);
         }

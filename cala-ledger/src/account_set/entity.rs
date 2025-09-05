@@ -2,7 +2,9 @@ use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
-pub use cala_types::{account_set::*, primitives::AccountSetId};
+pub use cala_types::{
+    account_set::*, primitives::AccountSetId, velocity::VelocityContextAccountValues,
+};
 
 use crate::primitives::*;
 
@@ -234,6 +236,16 @@ impl NewAccountSet {
 
     pub(super) fn data_source(&self) -> DataSource {
         DataSource::Local
+    }
+
+    pub(super) fn context_values(&self) -> VelocityContextAccountValues {
+        VelocityContextAccountValues {
+            id: self.id.into(),
+            name: self.name.clone(),
+            normal_balance_type: self.normal_balance_type,
+            external_id: self.external_id.clone(),
+            metadata: self.metadata.clone(),
+        }
     }
 }
 

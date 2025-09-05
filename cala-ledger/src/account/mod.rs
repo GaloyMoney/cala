@@ -130,9 +130,23 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
+        if account.is_account_set() {
+            return Err(AccountError::CannotUpdateAccountSetAccounts);
+        }
+
         let n_events = self.repo.update_in_op(db, account).await?;
         db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
         Ok(())
+    }
+
+    pub(crate) async fn update_velocity_context_values_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        values: impl Into<VelocityContextAccountValues>,
+    ) -> Result<(), AccountError> {
+        self.repo
+            .update_velocity_context_values_in_op(db, values.into())
+            .await
     }
 
     #[cfg(feature = "import")]

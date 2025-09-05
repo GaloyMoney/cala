@@ -20,6 +20,8 @@ pub enum AccountError {
     ExternalIdAlreadyExists,
     #[error("AccountError - code already exists")]
     CodeAlreadyExists,
+    #[error("AccountError - cannot update accounts backing an AccountSet")]
+    CannotUpdateAccountSetAccounts,
 }
 
 impl From<sqlx::Error> for AccountError {
