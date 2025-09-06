@@ -43,6 +43,7 @@
           cargo-audit
           cargo-watch
           cargo-deny
+          samply
           bacon
           postgresql
           docker-compose
