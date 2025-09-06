@@ -99,8 +99,8 @@ CREATE TABLE cala_tx_template_events (
 CREATE TABLE cala_transactions (
   id UUID PRIMARY KEY,
   data_source_id UUID NOT NULL,
-  journal_id UUID NOT NULL REFERENCES cala_journals(id),
-  tx_template_id UUID NOT NULL REFERENCES cala_tx_templates(id),
+  journal_id UUID NOT NULL,
+  tx_template_id UUID NOT NULL,
   external_id VARCHAR DEFAULT NULL UNIQUE,
   correlation_id VARCHAR NOT NULL,
   effective DATE NOT NULL,
@@ -121,7 +121,7 @@ CREATE TABLE cala_transaction_events (
 
 CREATE TABLE cala_entries (
   id UUID PRIMARY KEY,
-  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  journal_id UUID NOT NULL,
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transaction_id UUID NOT NULL,
   data_source_id UUID NOT NULL,
@@ -140,8 +140,8 @@ CREATE TABLE cala_entry_events (
 );
 
 CREATE TABLE cala_current_balances (
-  journal_id UUID NOT NULL REFERENCES cala_journals(id),
-  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -151,7 +151,7 @@ CREATE TABLE cala_current_balances (
 CREATE TABLE cala_balance_history (
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
-  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
+  latest_entry_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
@@ -160,22 +160,20 @@ CREATE TABLE cala_balance_history (
   FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
-CREATE INDEX idx_cala_balance_history_latest_entry_id ON cala_balance_history(latest_entry_id);
 
 CREATE TABLE cala_cumulative_effective_balances (
-  journal_id UUID NOT NULL REFERENCES cala_journals(id),
-  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   effective DATE NOT NULL,
   version INT NOT NULL,
   all_time_version INT NOT NULL,
-  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
+  latest_entry_id UUID NOT NULL,
   values JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(journal_id, account_id, currency, effective, version)
 );
-CREATE INDEX idx_cala_cumulative_effective_balances_latest_entry_id ON cala_cumulative_effective_balances(latest_entry_id);
 
 CREATE TABLE cala_velocity_limits (
   id UUID PRIMARY KEY,
@@ -231,11 +229,11 @@ CREATE TABLE cala_velocity_account_controls (
 );
 
 CREATE TABLE cala_velocity_current_balances (
-  journal_id UUID NOT NULL REFERENCES cala_journals(id),
-  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  journal_id UUID NOT NULL,
+  account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
-  velocity_control_id UUID NOT NULL REFERENCES cala_velocity_controls(id),
-  velocity_limit_id UUID NOT NULL REFERENCES cala_velocity_limits(id),
+  velocity_control_id UUID NOT NULL,
+  velocity_limit_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -249,14 +247,13 @@ CREATE TABLE cala_velocity_balance_history (
   velocity_control_id UUID NOT NULL,
   velocity_limit_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
-  latest_entry_id UUID NOT NULL REFERENCES cala_entries(id),
+  latest_entry_id UUID NOT NULL,
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window, version),
   FOREIGN KEY (account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window) REFERENCES cala_velocity_current_balances(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
-CREATE INDEX idx_cala_velocity_balance_history_latest_entry_id ON cala_velocity_balance_history(latest_entry_id);
 
 CREATE TABLE cala_outbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
