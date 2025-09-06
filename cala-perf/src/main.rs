@@ -6,9 +6,13 @@ use rand::Rng;
 async fn main() -> anyhow::Result<()> {
     let cala = init_cala().await?;
     simple_transfer::init(&cala).await.unwrap();
-    let journal = init_journal(&cala).await.unwrap();
+    let journal = init_journal(&cala, false).await.unwrap();
 
     println!("🚀 Starting parallel transaction performance tests\n");
+    println!(
+        "🏊 Tokio worker threads: {}",
+        tokio::runtime::Handle::current().metrics().num_workers()
+    );
 
     let mut results = Vec::new();
 

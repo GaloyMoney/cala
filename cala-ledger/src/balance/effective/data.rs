@@ -50,10 +50,11 @@ impl SnapshotOrEntry<'_> {
     }
 }
 
+#[derive(Debug)]
 pub(super) struct EffectiveBalanceData<'a> {
     account_id: AccountId,
     currency: Currency,
-    last_snapshot: Option<BalanceSnapshot>,
+    last_snapshot: Option<(NaiveDate, BalanceSnapshot)>,
     latest_all_time_version: u32,
     updates: Vec<SnapshotOrEntry<'a>>,
 }
@@ -62,7 +63,7 @@ impl<'a> EffectiveBalanceData<'a> {
     pub fn new(
         account_id: AccountId,
         currency: Currency,
-        last_snapshot: Option<BalanceSnapshot>,
+        last_snapshot: Option<(NaiveDate, BalanceSnapshot)>,
         latest_all_time_version: u32,
         updates: Vec<SnapshotOrEntry<'a>>,
     ) -> Self {
@@ -99,17 +100,11 @@ impl<'a> EffectiveBalanceData<'a> {
             .push(SnapshotOrEntry::Entry { effective, entry });
     }
 
-    pub fn re_calculate_snapshots(&mut self, created_at: DateTime<Utc>, effective: NaiveDate) {
+    pub fn re_calculate_snapshots(&mut self, created_at: DateTime<Utc>) {
         self.updates.sort();
-        let start_idx = self
-            .updates
-            .iter()
-            .position(|item| matches!(item, SnapshotOrEntry::Entry { .. }))
-            .expect("no entry found");
-        let (mut last_balance, mut last_effective) = match (start_idx, self.last_snapshot.take()) {
-            (idx, _) if idx > 0 => self.updates[idx - 1].snapshot(),
-            (_, Some(snapshot)) => (snapshot, effective - chrono::Days::new(1)),
-            (_, None) => {
+        let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
+            Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),
+            None => {
                 let (entry, effective) = self.updates[0].entry();
                 (
                     Self::first_snapshot(created_at, self.account_id, entry),
@@ -120,7 +115,7 @@ impl<'a> EffectiveBalanceData<'a> {
 
         let mut diff_snapshot = None;
 
-        for update in self.updates.iter_mut().skip(start_idx) {
+        for update in self.updates.iter_mut() {
             if &last_effective != update.effective() {
                 last_balance.version = 0;
             }
@@ -254,8 +249,8 @@ impl Ord for SnapshotOrEntry<'_> {
         }
 
         match (self, other) {
-            (Self::Snapshot { .. }, Self::Entry { .. }) => Ordering::Less,
-            (Self::Entry { .. }, Self::Snapshot { .. }) => Ordering::Greater,
+            (Self::Entry { .. }, Self::Snapshot { .. }) => unreachable!(),
+            (Self::Snapshot { .. }, Self::Entry { .. }) => unreachable!(),
             (Self::Snapshot { values: v1, .. }, Self::Snapshot { values: v2, .. }) => {
                 v1.version.cmp(&v2.version)
             }
@@ -342,7 +337,7 @@ mod tests {
         data.push(effective, &entry);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at, effective);
+        data.re_calculate_snapshots(posted_at);
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -357,10 +352,11 @@ mod tests {
     #[test]
     fn existing_previous_balance() {
         let account_id = AccountId::new();
+        let snapshot_date = NaiveDate::from_ymd_opt(2023, 9, 30).unwrap();
         let mut data = EffectiveBalanceData::new(
             account_id,
             Currency::USD,
-            Some(random_snapshot()),
+            Some((snapshot_date, random_snapshot())),
             1,
             Vec::new(),
         );
@@ -370,7 +366,7 @@ mod tests {
         data.push(effective, &entry);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at, effective);
+        data.re_calculate_snapshots(posted_at);
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -379,6 +375,35 @@ mod tests {
         assert_eq!(update_effective, effective);
         assert_eq!(snapshot.entry_id, entry.id);
         assert_eq!(snapshot.version, 1);
+        assert_eq!(snapshot.settled.cr_balance, dec!(2));
+    }
+
+    #[test]
+    fn existing_previous_balance_same_day() {
+        let account_id = AccountId::new();
+        let snapshot_date = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
+        let mut data = EffectiveBalanceData::new(
+            account_id,
+            Currency::USD,
+            Some((snapshot_date, random_snapshot())),
+            1,
+            Vec::new(),
+        );
+
+        let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
+        let entry = entry_values();
+        data.push(effective, &entry);
+
+        let posted_at = Utc::now();
+        data.re_calculate_snapshots(posted_at);
+
+        assert_eq!(data.updates.len(), 1);
+        assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
+
+        let (snapshot, update_effective) = data.updates[0].snapshot();
+        assert_eq!(update_effective, effective);
+        assert_eq!(snapshot.entry_id, entry.id);
+        assert_eq!(snapshot.version, 2);
         assert_eq!(snapshot.settled.cr_balance, dec!(2));
     }
 
@@ -395,7 +420,7 @@ mod tests {
         data.push(effective, &entry_two);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at, effective);
+        data.re_calculate_snapshots(posted_at);
 
         assert_eq!(data.updates.len(), 2);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -411,36 +436,6 @@ mod tests {
         let (snapshot, update_effective) = data.updates[1].snapshot();
         assert_eq!(update_effective, effective);
         assert_eq!(snapshot.entry_id, entry_two.id);
-        assert_eq!(snapshot.version, 2);
-        assert_eq!(snapshot.settled.cr_balance, dec!(2));
-    }
-
-    #[test]
-    fn previous_snapshot_same_day() {
-        let account_id = AccountId::new();
-        let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
-        let mut data = EffectiveBalanceData::new(
-            account_id,
-            Currency::USD,
-            None,
-            0,
-            vec![SnapshotOrEntry::Snapshot {
-                effective,
-                values: random_snapshot(),
-            }],
-        );
-        let entry = entry_values();
-        data.push(effective, &entry);
-
-        let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at, effective);
-
-        assert_eq!(data.updates.len(), 2);
-        assert!(matches!(data.updates[1], SnapshotOrEntry::Snapshot { .. }));
-
-        let (snapshot, update_effective) = data.updates[1].snapshot();
-        assert_eq!(update_effective, effective);
-        assert_eq!(snapshot.entry_id, entry.id);
         assert_eq!(snapshot.version, 2);
         assert_eq!(snapshot.settled.cr_balance, dec!(2));
     }
@@ -468,7 +463,7 @@ mod tests {
         data.push(effective, &entry_two);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at, effective);
+        data.re_calculate_snapshots(posted_at);
 
         assert_eq!(data.updates.len(), 3);
 

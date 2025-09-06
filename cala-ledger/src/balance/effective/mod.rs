@@ -118,7 +118,7 @@ impl EffectiveBalances {
             }
         }
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at, effective);
+            data.re_calculate_snapshots(created_at);
         }
 
         self.repo
