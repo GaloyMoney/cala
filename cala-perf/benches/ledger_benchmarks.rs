@@ -1,5 +1,5 @@
 use criterion::{criterion_group, criterion_main, Criterion};
-use tokio::runtime::Runtime;
+use tokio::runtime::{Builder, Runtime};
 
 use std::hint::black_box;
 
@@ -9,8 +9,16 @@ use cala_perf::{
     templates::{multi_layer_template, simple_transfer},
 };
 
+fn create_single_worker_runtime() -> Runtime {
+    Builder::new_multi_thread()
+        .worker_threads(1)
+        .enable_all()
+        .build()
+        .unwrap()
+}
+
 fn post_simple_transaction(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -35,7 +43,7 @@ fn post_simple_transaction(c: &mut Criterion) {
 }
 
 fn post_multi_layer_transaction(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -60,7 +68,7 @@ fn post_multi_layer_transaction(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_effective_balances(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -85,7 +93,7 @@ fn post_simple_transaction_with_effective_balances(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_velocity(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -113,7 +121,7 @@ fn post_simple_transaction_with_velocity(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_skipped_velocity(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -141,7 +149,7 @@ fn post_simple_transaction_with_skipped_velocity(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_hit_velocity(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -169,7 +177,7 @@ fn post_simple_transaction_with_hit_velocity(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_one_account_set(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient, _sender_set, _recipient_set) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
@@ -197,7 +205,7 @@ fn post_simple_transaction_with_one_account_set(c: &mut Criterion) {
 }
 
 fn post_simple_transaction_with_five_account_set(c: &mut Criterion) {
-    let rt = Runtime::new().unwrap();
+    let rt = create_single_worker_runtime();
 
     let (cala, journal, sender, recipient, _sender_set, _recipient_set) = rt.block_on(async {
         let cala = init_cala().await.unwrap();
