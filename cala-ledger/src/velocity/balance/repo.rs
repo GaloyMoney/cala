@@ -32,52 +32,62 @@ impl VelocityBalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
     ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
-        let (windows, currencies, journal_ids, account_ids, control_ids, limit_ids) = keys.fold(
-            (
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-                Vec::new(),
-            ),
-            |(
-                mut windows,
-                mut currencies,
-                mut journal_ids,
-                mut account_ids,
-                mut control_ids,
-                mut limit_ids,
-            ),
-             &VelocityBalanceKey {
-                 ref window,
-                 ref currency,
-                 account_id,
-                 journal_id,
-                 control_id,
-                 limit_id,
-             }| {
-                windows.push(window.inner().clone());
-                currencies.push(currency.code());
-                journal_ids.push(journal_id);
-                account_ids.push(account_id);
-                control_ids.push(control_id);
-                limit_ids.push(limit_id);
+        let mut sorted_keys: Vec<_> = keys.collect();
+        sorted_keys.sort_by(|a, b| {
+            a.account_id
+                .cmp(&b.account_id)
+                .then_with(|| a.control_id.cmp(&b.control_id))
+                .then_with(|| a.limit_id.cmp(&b.limit_id))
+                .then_with(|| a.currency.cmp(&b.currency))
+                .then_with(|| a.journal_id.cmp(&b.journal_id))
+        });
+
+        let (windows, currencies, journal_ids, account_ids, control_ids, limit_ids) =
+            sorted_keys.into_iter().fold(
                 (
-                    windows,
-                    currencies,
-                    journal_ids,
-                    account_ids,
-                    control_ids,
-                    limit_ids,
-                )
-            },
-        );
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                ),
+                |(
+                    mut windows,
+                    mut currencies,
+                    mut journal_ids,
+                    mut account_ids,
+                    mut control_ids,
+                    mut limit_ids,
+                ),
+                 &VelocityBalanceKey {
+                     ref window,
+                     ref currency,
+                     account_id,
+                     journal_id,
+                     control_id,
+                     limit_id,
+                 }| {
+                    windows.push(window.inner().clone());
+                    currencies.push(currency.code());
+                    journal_ids.push(journal_id);
+                    account_ids.push(account_id);
+                    control_ids.push(control_id);
+                    limit_ids.push(limit_id);
+                    (
+                        windows,
+                        currencies,
+                        journal_ids,
+                        account_ids,
+                        control_ids,
+                        limit_ids,
+                    )
+                },
+            );
 
         sqlx::query!(
-        r#"
+            r#"
         SELECT pg_advisory_xact_lock(hashtext(concat(
-            partition_window::text,
             currency,
             journal_id::text,
             account_id::text,
@@ -85,24 +95,22 @@ impl VelocityBalanceRepo {
             velocity_limit_id::text
         )))
         FROM UNNEST(
-            $1::jsonb[], 
-            $2::text[], 
+            $1::text[], 
+            $2::uuid[], 
             $3::uuid[], 
             $4::uuid[], 
-            $5::uuid[], 
-            $6::uuid[]
+            $5::uuid[]
         )
-        AS v(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
+        AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
         "#,
-        &windows[..],
-        &currencies as &[&str],
-        &journal_ids  as &[JournalId],
-        &account_ids as &[AccountId],
-        &control_ids  as &[VelocityControlId],
-        &limit_ids  as &[VelocityLimitId],
-    )
-    .execute(op.as_executor())
-    .await?;
+            &currencies as &[&str],
+            &journal_ids as &[JournalId],
+            &account_ids as &[AccountId],
+            &control_ids as &[VelocityControlId],
+            &limit_ids as &[VelocityLimitId],
+        )
+        .execute(op.as_executor())
+        .await?;
 
         let rows = sqlx::query!(
         r#"

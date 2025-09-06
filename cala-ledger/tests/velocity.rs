@@ -476,7 +476,6 @@ mod limit_via_account_sets {
             Ok(_) => (),
             Err(e) => {
                 dbg!(e);
-                ()
             }
         }
         assert!(account_res.is_ok());

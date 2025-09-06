@@ -146,7 +146,7 @@ CREATE TABLE cala_current_balances (
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(journal_id, account_id, currency)
+  UNIQUE(account_id, journal_id, currency)
 );
 
 CREATE TABLE cala_balance_history (
@@ -157,8 +157,8 @@ CREATE TABLE cala_balance_history (
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (journal_id, account_id, currency, version),
-  FOREIGN KEY (journal_id, account_id, currency) REFERENCES cala_current_balances(journal_id, account_id, currency)
+  UNIQUE(account_id, journal_id, currency, version),
+  FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
@@ -238,7 +238,7 @@ CREATE TABLE cala_velocity_current_balances (
   partition_window JSONB NOT NULL,
   latest_version INT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id)
+  UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
 
 CREATE TABLE cala_velocity_balance_history (
@@ -252,8 +252,8 @@ CREATE TABLE cala_velocity_balance_history (
   version INT NOT NULL,
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id, version),
-  FOREIGN KEY (partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id) REFERENCES cala_velocity_current_balances(partition_window, currency, journal_id, account_id, velocity_limit_id, velocity_control_id)
+  UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window, version),
+  FOREIGN KEY (account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window) REFERENCES cala_velocity_current_balances(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
 
 CREATE TABLE cala_outbox_events (
