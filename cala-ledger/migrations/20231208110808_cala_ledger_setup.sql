@@ -93,7 +93,7 @@ CREATE TABLE cala_tx_template_events (
   event JSONB NOT NULL,
   context JSONB DEFAULT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(id, sequence),
+  UNIQUE(id, sequence)
 );
 
 CREATE TABLE cala_transactions (

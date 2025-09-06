@@ -12,6 +12,9 @@ setup-db:
 	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
+reset-deps-perf: clean-deps start-deps setup-db
+	psql postgres://user:password@localhost:5432/pg -f ./cala-perf/pg-tools/setup.sql
+
 
 run-server:
 	cargo run --bin cala-server -- --config ./bats/cala.yml
