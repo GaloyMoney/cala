@@ -36,8 +36,9 @@ impl TxTemplateRepo {
         Self { pool: pool.clone() }
     }
 
-    pub async fn find_latest_version(
+    pub async fn find_latest_version_in_op(
         &self,
+        op: &mut impl es_entity::AtomicOperation,
         code: &str,
     ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
         let row = sqlx::query!(
@@ -49,11 +50,11 @@ impl TxTemplateRepo {
             GROUP BY t.id"#,
             code,
         )
-        .fetch_optional(&self.pool)
+        .fetch_optional(op.as_executor())
         .await?;
         if let Some(row) = row {
             if let (Some(id), Some(version)) = (row.id, row.version) {
-                return find_versioned_template_cached(&self.pool, id, version).await;
+                return find_versioned_template_cached(op, id, version).await;
             }
         }
         Err(TxTemplateError::NotFound)
@@ -89,7 +90,7 @@ impl TxTemplateRepo {
     sync_writes = "default"
 )]
 async fn find_versioned_template_cached(
-    pool: &PgPool,
+    op: &mut impl es_entity::AtomicOperation,
     id: TxTemplateId,
     version: i32,
 ) -> Result<Arc<TxTemplateValues>, TxTemplateError> {
@@ -101,7 +102,7 @@ async fn find_versioned_template_cached(
         id as TxTemplateId,
         version,
     )
-    .fetch_optional(pool)
+    .fetch_optional(op.as_executor())
     .await?;
     if let Some(row) = row {
         let event: TxTemplateEvent = serde_json::from_value(row.event)?;

@@ -3,7 +3,7 @@ mod repo;
 
 pub mod error;
 
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::NaiveDate;
 use es_entity::EsEntity;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -92,16 +92,17 @@ impl TxTemplates {
     #[instrument(
         level = "trace",
         name = "cala_ledger.tx_template.prepare_transaction",
-        skip(self)
+        skip(self, db)
     )]
-    pub(crate) async fn prepare_transaction(
+    pub(crate) async fn prepare_transaction_in_op(
         &self,
-        time: DateTime<Utc>,
+        db: &mut LedgerOperation<'_>,
         tx_id: TransactionId,
         code: &str,
         params: Params,
     ) -> Result<PreparedTransaction, TxTemplateError> {
-        let tmpl = self.repo.find_latest_version(code).await?;
+        let time = db.now();
+        let tmpl = self.repo.find_latest_version_in_op(db, code).await?;
 
         let ctx = params.into_context(tmpl.params.as_ref())?;
 
