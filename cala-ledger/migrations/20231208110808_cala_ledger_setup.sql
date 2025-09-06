@@ -144,6 +144,7 @@ CREATE TABLE cala_current_balances (
   account_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
+  latest_values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency)
 );

@@ -83,10 +83,10 @@ impl BalanceRepo {
         let rows = sqlx::query!(
             r#"
             WITH balance_ids AS (
-                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[]) 
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
                 AS v(journal_id, account_id, currency)
             )
-            SELECT 
+            SELECT
                 h.values,
                 a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
             FROM cala_balance_history h
@@ -97,7 +97,7 @@ impl BalanceRepo {
                 AND h.version = c.latest_version
             JOIN cala_accounts a
                 ON c.account_id = a.id
-            JOIN balance_ids b 
+            JOIN balance_ids b
                 ON c.journal_id = b.journal_id
                 AND c.account_id = b.account_id
                 AND c.currency = b.currency"#,
@@ -149,34 +149,16 @@ impl BalanceRepo {
         .await?;
         let rows = sqlx::query!(
             r#"
-            WITH pairs AS (
-              SELECT account_id, currency
-            FROM (
-            SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-            ) AS v
-            JOIN cala_accounts a
-            ON account_id = a.id
-            WHERE eventually_consistent = FALSE
-            ),
-          current_balances AS (
-            SELECT b.journal_id, b.account_id, b.currency, b.latest_version
-              FROM cala_current_balances b
-              JOIN pairs p ON p.account_id = b.account_id AND p.currency = b.currency
-              WHERE b.journal_id = $1
-          ),
-          values AS (
-            SELECT p.account_id, p.currency, h.values
-            FROM pairs p
-            LEFT JOIN current_balances b
-            ON p.account_id = b.account_id
-              AND p.currency = b.currency
-            LEFT JOIN cala_balance_history h
-            ON b.journal_id = h.journal_id
-              AND b.account_id = h.account_id
-              AND b.currency = h.currency
-              AND b.latest_version = h.version
-          )
-          SELECT account_id AS "account_id!: AccountId", currency AS "currency!", values FROM values
+            SELECT
+                v.account_id AS "account_id!: AccountId",
+                v.currency AS "currency!",
+                b.latest_values
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = v.account_id AND a.eventually_consistent = FALSE
+            LEFT JOIN cala_current_balances b
+                ON b.journal_id = $1
+                AND b.account_id = v.account_id
+                AND b.currency = v.currency
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -187,7 +169,7 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let snapshot = row.values.map(|v| {
+            let snapshot = row.latest_values.map(|v| {
                 serde_json::from_value::<BalanceSnapshot>(v)
                     .expect("Failed to deserialize balance snapshot")
             });
@@ -259,13 +241,13 @@ impl BalanceRepo {
             FROM new_snapshots
         ),
         initial_balances AS (
-            INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version)
-            SELECT journal_id, account_id, currency, version
+            INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version, latest_values)
+            SELECT journal_id, account_id, currency, version, values
             FROM ranked_balances
             WHERE version = rn AND rn = max
         )
         UPDATE cala_current_balances c
-        SET latest_version = n.version
+        SET latest_version = n.version, latest_values = n.values
         FROM ranked_balances n
         WHERE n.account_id = c.account_id
           AND n.currency = c.currency
