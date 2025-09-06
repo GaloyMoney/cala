@@ -21,11 +21,12 @@ pub async fn init_cala() -> anyhow::Result<CalaLedger> {
     Ok(ledger)
 }
 
-pub async fn init_journal(cala: &CalaLedger) -> anyhow::Result<Journal> {
+pub async fn init_journal(cala: &CalaLedger, effective_balances: bool) -> anyhow::Result<Journal> {
     let name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let new_journal = NewJournal::builder()
         .id(JournalId::new())
         .name(name)
+        .enable_effective_balance(effective_balances)
         .build()
         .unwrap();
     let journal = cala.journals().create(new_journal).await?;
@@ -125,35 +126,74 @@ pub async fn attach_velocity_to_account(
     Ok(())
 }
 
-pub async fn init_accounts_with_account_sets(
+pub async fn init_accounts_with_account_sets_depth(
     cala: &CalaLedger,
     journal: &Journal,
     check_velocity: bool,
+    depth: usize,
 ) -> anyhow::Result<(Account, Account, AccountSet, AccountSet)> {
     let (sender, recipient) = init_accounts(cala, check_velocity).await?;
 
-    let sender_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("Sender Account Set")
-        .journal_id(journal.id())
-        .build()
-        .unwrap();
-    let sender_set = cala.account_sets().create(sender_set).await?;
+    // Create nested account sets for sender
+    let mut sender_sets = Vec::new();
+    for i in 0..depth {
+        let sender_set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("Sender Account Set L{}", i + 1))
+            .journal_id(journal.id())
+            .build()
+            .unwrap();
+        let sender_set = cala.account_sets().create(sender_set).await?;
+        sender_sets.push(sender_set);
+    }
 
-    let recipient_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("Recipient Account Set")
-        .journal_id(journal.id())
-        .build()
-        .unwrap();
-    let recipient_set = cala.account_sets().create(recipient_set).await?;
+    // Create nested account sets for recipient
+    let mut recipient_sets = Vec::new();
+    for i in 0..depth {
+        let recipient_set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("Recipient Account Set L{}", i + 1))
+            .journal_id(journal.id())
+            .build()
+            .unwrap();
+        let recipient_set = cala.account_sets().create(recipient_set).await?;
+        recipient_sets.push(recipient_set);
+    }
 
-    cala.account_sets()
-        .add_member(sender_set.id(), sender.id())
-        .await?;
-    cala.account_sets()
-        .add_member(recipient_set.id(), recipient.id())
-        .await?;
+    // Build nested hierarchy for sender: set_0 contains set_1 contains ... contains account
+    for i in 0..depth {
+        if i == depth - 1 {
+            // Innermost set contains the account
+            cala.account_sets()
+                .add_member(sender_sets[i].id(), sender.id())
+                .await?;
+        } else {
+            // Set contains the next nested set
+            cala.account_sets()
+                .add_member(sender_sets[i].id(), sender_sets[i + 1].id())
+                .await?;
+        }
+    }
 
-    Ok((sender, recipient, sender_set, recipient_set))
+    // Build nested hierarchy for recipient: set_0 contains set_1 contains ... contains account
+    for i in 0..depth {
+        if i == depth - 1 {
+            // Innermost set contains the account
+            cala.account_sets()
+                .add_member(recipient_sets[i].id(), recipient.id())
+                .await?;
+        } else {
+            // Set contains the next nested set
+            cala.account_sets()
+                .add_member(recipient_sets[i].id(), recipient_sets[i + 1].id())
+                .await?;
+        }
+    }
+
+    Ok((
+        sender,
+        recipient,
+        sender_sets.remove(0),
+        recipient_sets.remove(0),
+    ))
 }
