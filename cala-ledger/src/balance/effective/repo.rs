@@ -280,7 +280,7 @@ impl EffectiveBalanceRepo {
             DELETE FROM cala_cumulative_effective_balances
             WHERE journal_id = $1
               AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)
-              AND effective >= $4
+              AND effective > $4
             RETURNING account_id, currency, effective, values
           ),
           values AS (
@@ -288,20 +288,22 @@ impl EffectiveBalanceRepo {
               p.account_id,
               p.currency,
               b.values,
-              b.all_time_version
+              b.all_time_version,
+              b.effective
             FROM pairs p
             LEFT JOIN LATERAL (
               SELECT DISTINCT ON (account_id, currency)
                 account_id,
                 currency,
                 values,
-                all_time_version
+                all_time_version,
+                effective
               FROM cala_cumulative_effective_balances
               WHERE journal_id = $1
-                AND effective < $4
+                AND effective <= $4
                 AND account_id = p.account_id
                 AND currency = p.currency
-              ORDER BY account_id, currency, effective DESC, version DESC
+              ORDER BY account_id, currency, all_time_version DESC
             ) b ON TRUE
           )
           SELECT
@@ -309,6 +311,7 @@ impl EffectiveBalanceRepo {
             v.currency AS "currency!",
             v.values AS "values?: serde_json::Value",
             v.all_time_version AS "all_time_version?: i32",
+            v.effective AS "effective_date?: chrono::NaiveDate",
             COALESCE(
               jsonb_agg(
                 jsonb_build_object('effective', d.effective, 'values', d.values)
@@ -318,7 +321,7 @@ impl EffectiveBalanceRepo {
           FROM values v
           LEFT JOIN delete_balances d
             ON v.account_id = d.account_id AND v.currency = d.currency
-          GROUP BY v.account_id, v.currency, v.values, v.all_time_version
+          GROUP BY v.account_id, v.currency, v.values, v.all_time_version, v.effective
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -330,10 +333,14 @@ impl EffectiveBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let last_snapshot = row.values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let last_snapshot = match (row.values, row.effective_date) {
+                (Some(values), Some(effective_date)) => {
+                    let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
+                        .expect("Failed to deserialize balance snapshot");
+                    Some((effective_date, snapshot))
+                }
+                _ => None,
+            };
 
             let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
                 .expect("Failed to deserialize deleted values array");
