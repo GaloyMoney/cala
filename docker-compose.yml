@@ -7,6 +7,7 @@ services:
     - otel-agent
   server-pg:
     image: postgres:16.4
+    command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
     ports:
     - "5432:5432"
     environment:
