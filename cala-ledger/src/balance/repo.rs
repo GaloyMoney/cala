@@ -208,64 +208,6 @@ impl BalanceRepo {
         let mut versions = Vec::with_capacity(new_balances.len());
         let mut values = Vec::with_capacity(new_balances.len());
 
-        use std::collections::HashMap;
-        let mut latest_balances: HashMap<(AccountId, Currency), &BalanceSnapshot> =
-            HashMap::with_capacity(new_balances.len());
-
-        for balance in new_balances {
-            let key = (balance.account_id, balance.currency);
-            match latest_balances.get(&key) {
-                Some(existing) if existing.version >= balance.version => continue,
-                _ => {
-                    latest_balances.insert(key, balance);
-                }
-            }
-        }
-
-        for balance in latest_balances.values() {
-            journal_ids.push(balance.journal_id);
-            account_ids.push(balance.account_id);
-            currencies.push(balance.currency.code());
-            versions.push(balance.version as i32);
-            values
-                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
-        }
-
-        sqlx::query!(r#"
-            INSERT INTO cala_current_balances (
-                journal_id, account_id, currency, latest_version, latest_values
-            )
-            SELECT * FROM UNNEST(
-                $1::uuid[],
-                $2::uuid[],
-                $3::text[],
-                $4::int4[],
-                $5::jsonb[]
-            )
-            ON CONFLICT (account_id, journal_id, currency)
-            DO UPDATE SET
-                latest_version = GREATEST(cala_current_balances.latest_version, EXCLUDED.latest_version),
-                latest_values = CASE
-                    WHEN cala_current_balances.latest_version < EXCLUDED.latest_version
-                    THEN EXCLUDED.latest_values
-                    ELSE cala_current_balances.latest_values
-                END
-            "#,
-            &journal_ids as &[JournalId],
-            &account_ids as &[AccountId],
-            &currencies as &[&str],
-            &versions as &[i32],
-            &values
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        journal_ids.clear();
-        account_ids.clear();
-        currencies.clear();
-        versions.clear();
-        values.clear();
-
         for balance in new_balances {
             journal_ids.push(balance.journal_id);
             account_ids.push(balance.account_id);
@@ -278,17 +220,39 @@ impl BalanceRepo {
 
         sqlx::query!(
             r#"
-        INSERT INTO cala_balance_history (
-            journal_id, account_id, currency, version, latest_entry_id, values
+        WITH new_snapshots AS (
+            INSERT INTO cala_balance_history (
+                journal_id, account_id, currency, version, latest_entry_id, values
+            )
+            SELECT * FROM UNNEST (
+                $1::uuid[],
+                $2::uuid[],
+                $3::text[],
+                $4::int4[],
+                $5::uuid[],
+                $6::jsonb[]
+            )
+            RETURNING *
         )
-        SELECT * FROM UNNEST (
-            $1::uuid[],
-            $2::uuid[],
-            $3::text[],
-            $4::int4[],
-            $5::uuid[],
-            $6::jsonb[]
+        INSERT INTO cala_current_balances AS c (
+            journal_id, account_id, currency, latest_version, latest_values
         )
+        SELECT
+            journal_id,
+            account_id,
+            currency,
+            MAX(version) as latest_version,
+            (array_agg(values ORDER BY version DESC))[1] as latest_values
+        FROM new_snapshots
+        GROUP BY journal_id, account_id, currency
+        ON CONFLICT (account_id, journal_id, currency)
+        DO UPDATE SET
+            latest_version = GREATEST(c.latest_version, EXCLUDED.latest_version),
+            latest_values = CASE
+                WHEN c.latest_version < EXCLUDED.latest_version
+                THEN EXCLUDED.latest_values
+                ELSE c.latest_values
+            END
         "#,
             &journal_ids as &[JournalId],
             &account_ids as &[AccountId],
