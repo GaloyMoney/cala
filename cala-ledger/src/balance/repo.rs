@@ -185,11 +185,11 @@ impl BalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
-        name = "cala_ledger.balances.insert_new_snapshots",
-        skip(self, op, new_balances)
-        fields(n_new_balances)
-    )]
+    level = "trace",
+    name = "cala_ledger.balances.insert_new_snapshots",
+    skip(self, op, new_balances)
+    fields(n_new_balances)
+)]
     pub(crate) async fn insert_new_snapshots(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -208,6 +208,64 @@ impl BalanceRepo {
         let mut versions = Vec::with_capacity(new_balances.len());
         let mut values = Vec::with_capacity(new_balances.len());
 
+        use std::collections::HashMap;
+        let mut latest_balances: HashMap<(AccountId, Currency), &BalanceSnapshot> =
+            HashMap::with_capacity(new_balances.len());
+
+        for balance in new_balances {
+            let key = (balance.account_id, balance.currency);
+            match latest_balances.get(&key) {
+                Some(existing) if existing.version >= balance.version => continue,
+                _ => {
+                    latest_balances.insert(key, balance);
+                }
+            }
+        }
+
+        for balance in latest_balances.values() {
+            journal_ids.push(balance.journal_id);
+            account_ids.push(balance.account_id);
+            currencies.push(balance.currency.code());
+            versions.push(balance.version as i32);
+            values
+                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
+        }
+
+        sqlx::query!(r#"
+            INSERT INTO cala_current_balances (
+                journal_id, account_id, currency, latest_version, latest_values
+            )
+            SELECT * FROM UNNEST(
+                $1::uuid[],
+                $2::uuid[],
+                $3::text[],
+                $4::int4[],
+                $5::jsonb[]
+            )
+            ON CONFLICT (account_id, journal_id, currency)
+            DO UPDATE SET
+                latest_version = GREATEST(cala_current_balances.latest_version, EXCLUDED.latest_version),
+                latest_values = CASE
+                    WHEN cala_current_balances.latest_version < EXCLUDED.latest_version
+                    THEN EXCLUDED.latest_values
+                    ELSE cala_current_balances.latest_values
+                END
+            "#,
+            &journal_ids as &[JournalId],
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+            &versions as &[i32],
+            &values
+        )
+        .execute(op.as_executor())
+        .await?;
+
+        journal_ids.clear();
+        account_ids.clear();
+        currencies.clear();
+        versions.clear();
+        values.clear();
+
         for balance in new_balances {
             journal_ids.push(balance.journal_id);
             account_ids.push(balance.account_id);
@@ -220,39 +278,17 @@ impl BalanceRepo {
 
         sqlx::query!(
             r#"
-        WITH new_snapshots AS (
-            INSERT INTO cala_balance_history (
-                journal_id, account_id, currency, version, latest_entry_id, values
-            )
-            SELECT * FROM UNNEST (
-                $1::uuid[],
-                $2::uuid[],
-                $3::text[],
-                $4::int4[],
-                $5::uuid[],
-                $6::jsonb[]
-            )
-            RETURNING *
-        ),
-        ranked_balances AS (
-            SELECT *,
-                   ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version) AS rn,
-                   MAX(version) OVER (PARTITION BY account_id, currency) AS max
-            FROM new_snapshots
-        ),
-        initial_balances AS (
-            INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version, latest_values)
-            SELECT journal_id, account_id, currency, version, values
-            FROM ranked_balances
-            WHERE version = rn AND rn = max
+        INSERT INTO cala_balance_history (
+            journal_id, account_id, currency, version, latest_entry_id, values
         )
-        UPDATE cala_current_balances c
-        SET latest_version = n.version, latest_values = n.values
-        FROM ranked_balances n
-        WHERE n.account_id = c.account_id
-          AND n.currency = c.currency
-          AND c.journal_id = n.journal_id
-          AND version = max AND version != rn
+        SELECT * FROM UNNEST (
+            $1::uuid[],
+            $2::uuid[],
+            $3::text[],
+            $4::int4[],
+            $5::uuid[],
+            $6::jsonb[]
+        )
         "#,
             &journal_ids as &[JournalId],
             &account_ids as &[AccountId],
@@ -263,6 +299,7 @@ impl BalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+
         Ok(())
     }
 
