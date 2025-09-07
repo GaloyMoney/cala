@@ -273,7 +273,7 @@ impl BalanceRepo {
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         let values_json =
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
+            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
             (journal_id, account_id, currency, latest_version, latest_values, created_at)
@@ -355,7 +355,7 @@ impl BalanceRepo {
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
         let values_json =
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
+            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
