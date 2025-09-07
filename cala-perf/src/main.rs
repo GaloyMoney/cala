@@ -16,7 +16,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut results = Vec::new();
 
-    for &pool_count in &[2, 5] {
+    for &pool_count in &[1, 2, 5] {
         println!("{}", "=".repeat(80));
         println!("🏊 Testing with {} parallel pools", pool_count);
         println!("{}", "=".repeat(80));
