@@ -7,7 +7,17 @@ use cala_ledger::{account::*, account_set::*, journal::*, velocity::*, *};
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
     let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
-    let pool = sqlx::PgPool::connect(&pg_con).await?;
+
+    // Configure pool for high-concurrency performance testing
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(90) // Increase max connections for concurrent testing
+        .min_connections(10) // Keep minimum connections ready
+        .acquire_timeout(std::time::Duration::from_secs(60)) // Increase timeout
+        .idle_timeout(Some(std::time::Duration::from_secs(600))) // 10 min idle timeout
+        .max_lifetime(Some(std::time::Duration::from_secs(3600))) // 1 hour max lifetime
+        .connect(&pg_con)
+        .await?;
+
     Ok(pool)
 }
 
