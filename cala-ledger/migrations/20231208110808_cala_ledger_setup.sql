@@ -237,6 +237,7 @@ CREATE TABLE cala_velocity_current_balances (
   velocity_limit_id UUID NOT NULL,
   partition_window JSONB NOT NULL,
   latest_version INT NOT NULL,
+  latest_values JSONB NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );

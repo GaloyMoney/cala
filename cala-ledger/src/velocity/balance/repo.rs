@@ -95,10 +95,10 @@ impl VelocityBalanceRepo {
             velocity_limit_id::text
         )))
         FROM UNNEST(
-            $1::text[], 
-            $2::uuid[], 
-            $3::uuid[], 
-            $4::uuid[], 
+            $1::text[],
+            $2::uuid[],
+            $3::uuid[],
+            $4::uuid[],
             $5::uuid[]
         )
         AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
@@ -114,52 +114,40 @@ impl VelocityBalanceRepo {
 
         let rows = sqlx::query!(
         r#"
-      WITH inputs AS (
-        SELECT *
+        SELECT
+            i.partition_window as "partition_window!: serde_json::Value",
+            i.currency as "currency!",
+            i.journal_id as "journal_id!: JournalId",
+            i.account_id as "account_id!: AccountId",
+            i.velocity_control_id as "velocity_control_id!: VelocityControlId",
+            i.velocity_limit_id as "velocity_limit_id!: VelocityLimitId",
+            b.latest_values as "values?: serde_json::Value"
         FROM UNNEST(
-          $1::jsonb[], 
-          $2::text[], 
-          $3::uuid[], 
-          $4::uuid[], 
-          $5::uuid[], 
+          $1::jsonb[],
+          $2::text[],
+          $3::uuid[],
+          $4::uuid[],
+          $5::uuid[],
           $6::uuid[]
         )
-        AS v(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
-      )
-      SELECT 
-          i.partition_window as "partition_window!: serde_json::Value", 
-          i.currency as "currency!", 
-          i.journal_id as "journal_id!: JournalId", 
-          i.account_id as "account_id!: AccountId", 
-          i.velocity_control_id as "velocity_control_id!: VelocityControlId", 
-          i.velocity_limit_id as "velocity_limit_id!: VelocityLimitId",
-          h.values as "values?: serde_json::Value"
-      FROM inputs i
-      LEFT JOIN cala_velocity_current_balances b
-        ON i.partition_window = b.partition_window
-        AND i.currency = b.currency
-        AND i.journal_id = b.journal_id
-        AND i.account_id = b.account_id
-        AND i.velocity_control_id = b.velocity_control_id
-        AND i.velocity_limit_id = b.velocity_limit_id
-      LEFT JOIN cala_velocity_balance_history h
-        ON b.partition_window = h.partition_window
-        AND b.currency = h.currency
-        AND b.journal_id = h.journal_id
-        AND b.account_id = h.account_id
-        AND b.velocity_control_id = h.velocity_control_id
-        AND b.velocity_limit_id = h.velocity_limit_id
-        AND b.latest_version = h.version
-      "#,
-       &windows[..],
-       &currencies as &[&str],
-       &journal_ids  as &[JournalId],
-       &account_ids as &[AccountId],
-       &control_ids  as &[VelocityControlId],
-       &limit_ids  as &[VelocityLimitId],
-    )
-    .fetch_all(op.as_executor())
-    .await?;
+        AS i(partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
+        LEFT JOIN cala_velocity_current_balances b
+          ON i.partition_window = b.partition_window
+          AND i.currency = b.currency
+          AND i.journal_id = b.journal_id
+          AND i.account_id = b.account_id
+          AND i.velocity_control_id = b.velocity_control_id
+          AND i.velocity_limit_id = b.velocity_limit_id
+         "#,
+           &windows[..],
+           &currencies as &[&str],
+           &journal_ids  as &[JournalId],
+           &account_ids as &[AccountId],
+           &control_ids  as &[VelocityControlId],
+           &limit_ids  as &[VelocityLimitId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
 
         let mut ret = HashMap::new();
         for row in rows {
@@ -227,7 +215,7 @@ impl VelocityBalanceRepo {
         r#"
             WITH new_snapshots AS (
                 INSERT INTO cala_velocity_balance_history (
-                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id, 
+                    journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
                     partition_window, latest_entry_id, version, values
                 )
                 SELECT * FROM UNNEST(
@@ -249,7 +237,7 @@ impl VelocityBalanceRepo {
             ranked_balances AS (
                 SELECT *,
                     ROW_NUMBER() OVER (
-                        PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id 
+                        PARTITION BY partition_window, currency, journal_id, account_id, velocity_control_id, velocity_limit_id
                         ORDER BY version
                     ) AS rn,
                     MAX(version) OVER (
@@ -260,18 +248,18 @@ impl VelocityBalanceRepo {
             initial_balances AS (
                 INSERT INTO cala_velocity_current_balances (
                     journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
-                    partition_window, latest_version
+                    partition_window, latest_version, latest_values
                 )
-                SELECT 
+                SELECT
                     journal_id, account_id, currency, velocity_control_id, velocity_limit_id,
-                    partition_window, version
+                    partition_window, version, values
                 FROM ranked_balances
                 WHERE version = rn AND rn = max
                 ON CONFLICT (journal_id, account_id, currency, velocity_control_id, velocity_limit_id, partition_window)
                 DO NOTHING
             )
             UPDATE cala_velocity_current_balances c
-            SET latest_version = n.version
+            SET latest_version = n.version, latest_values = n.values
             FROM ranked_balances n
             WHERE c.journal_id = n.journal_id
                 AND c.account_id = n.account_id
