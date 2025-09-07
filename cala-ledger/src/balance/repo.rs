@@ -272,14 +272,17 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
+        let values_json =
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
-            (journal_id, account_id, currency, latest_version, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            (journal_id, account_id, currency, latest_version, latest_values, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
             balance.version as i32,
+            values_json,
             balance.created_at
         )
         .execute(op.as_executor())
@@ -293,7 +296,7 @@ impl BalanceRepo {
             balance.currency.code(),
             balance.version as i32,
             balance.entry_id as EntryId,
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            values_json,
             balance.created_at
         )
         .execute(op.as_executor())
@@ -351,15 +354,18 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
+        let values_json =
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
-            SET latest_version = $1
+            SET latest_version = $1, latest_values = $5
             WHERE journal_id = $2 AND account_id = $3 AND currency = $4 AND latest_version = $1 - 1"#,
             balance.version as i32,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
+            values_json
         )
         .execute(op.as_executor())
         .await?;
@@ -371,7 +377,7 @@ impl BalanceRepo {
             balance.account_id as AccountId,
             balance.currency.code(),
             balance.version as i32,
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            values_json,
             balance.modified_at,
         )
         .execute(op.as_executor())
