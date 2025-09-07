@@ -109,12 +109,13 @@ impl EntryRepo {
     ) -> Result<(), EntryError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, transaction_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             origin as DataSourceId,
             entry.values().id as EntryId,
             entry.values().journal_id as JournalId,
             entry.values().account_id as AccountId,
+            entry.values().transaction_id as TransactionId,
             recorded_at,
         )
         .execute(op.as_executor())

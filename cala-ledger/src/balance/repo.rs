@@ -185,11 +185,11 @@ impl BalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
-        name = "cala_ledger.balances.insert_new_snapshots",
-        skip(self, op, new_balances)
-        fields(n_new_balances)
-    )]
+    level = "trace",
+    name = "cala_ledger.balances.insert_new_snapshots",
+    skip(self, op, new_balances)
+    fields(n_new_balances)
+)]
     pub(crate) async fn insert_new_snapshots(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -233,26 +233,26 @@ impl BalanceRepo {
                 $6::jsonb[]
             )
             RETURNING *
-        ),
-        ranked_balances AS (
-            SELECT *,
-                   ROW_NUMBER() OVER (PARTITION BY account_id, currency ORDER BY version) AS rn,
-                   MAX(version) OVER (PARTITION BY account_id, currency) AS max
-            FROM new_snapshots
-        ),
-        initial_balances AS (
-            INSERT INTO cala_current_balances (journal_id, account_id, currency, latest_version, latest_values)
-            SELECT journal_id, account_id, currency, version, values
-            FROM ranked_balances
-            WHERE version = rn AND rn = max
         )
-        UPDATE cala_current_balances c
-        SET latest_version = n.version, latest_values = n.values
-        FROM ranked_balances n
-        WHERE n.account_id = c.account_id
-          AND n.currency = c.currency
-          AND c.journal_id = n.journal_id
-          AND version = max AND version != rn
+        INSERT INTO cala_current_balances AS c (
+            journal_id, account_id, currency, latest_version, latest_values
+        )
+        SELECT
+            journal_id,
+            account_id,
+            currency,
+            MAX(version) as latest_version,
+            (array_agg(values ORDER BY version DESC))[1] as latest_values
+        FROM new_snapshots
+        GROUP BY journal_id, account_id, currency
+        ON CONFLICT (account_id, journal_id, currency)
+        DO UPDATE SET
+            latest_version = GREATEST(c.latest_version, EXCLUDED.latest_version),
+            latest_values = CASE
+                WHEN c.latest_version < EXCLUDED.latest_version
+                THEN EXCLUDED.latest_values
+                ELSE c.latest_values
+            END
         "#,
             &journal_ids as &[JournalId],
             &account_ids as &[AccountId],
@@ -263,6 +263,7 @@ impl BalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+
         Ok(())
     }
 
@@ -272,14 +273,17 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
+        let values_json =
+            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
-            (journal_id, account_id, currency, latest_version, created_at)
-            VALUES ($1, $2, $3, $4, $5)"#,
+            (journal_id, account_id, currency, latest_version, latest_values, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6)"#,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
             balance.version as i32,
+            values_json,
             balance.created_at
         )
         .execute(op.as_executor())
@@ -293,7 +297,7 @@ impl BalanceRepo {
             balance.currency.code(),
             balance.version as i32,
             balance.entry_id as EntryId,
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            values_json,
             balance.created_at
         )
         .execute(op.as_executor())
@@ -351,15 +355,18 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         balance: &BalanceSnapshot,
     ) -> Result<(), BalanceError> {
+        let values_json =
+            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
-            SET latest_version = $1
+            SET latest_version = $1, latest_values = $5
             WHERE journal_id = $2 AND account_id = $3 AND currency = $4 AND latest_version = $1 - 1"#,
             balance.version as i32,
             balance.journal_id as JournalId,
             balance.account_id as AccountId,
             balance.currency.code(),
+            values_json
         )
         .execute(op.as_executor())
         .await?;
@@ -371,7 +378,7 @@ impl BalanceRepo {
             balance.account_id as AccountId,
             balance.currency.code(),
             balance.version as i32,
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot"),
+            values_json,
             balance.modified_at,
         )
         .execute(op.as_executor())
