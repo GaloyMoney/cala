@@ -1,3 +1,17 @@
+# [cala release v0.10.0](https://github.com/GaloyMoney/cala/releases/tag/0.10.0)
+
+
+### Bug Fixes
+
+- Consistent order of velocity balance locks (#533)
+
+### Performance
+
+- [**breaking**] Cache latest_values and improve balance insert (#538)
+- Cache latest_values in current_balances (#536)
+- Use op in prepare_template (#535)
+- Don't re-calculate same day effective balance (#534)
+
 # [cala release v0.9.0](https://github.com/GaloyMoney/cala/releases/tag/0.9.0)
 
 
