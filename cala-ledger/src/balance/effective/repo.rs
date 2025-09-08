@@ -1,5 +1,5 @@
 use chrono::NaiveDate;
-use sqlx::{Executor, PgPool, Postgres};
+use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -28,20 +28,22 @@ impl EffectiveBalanceRepo {
         currency: Currency,
         date: NaiveDate,
     ) -> Result<AccountBalance, BalanceError> {
-        self.find_in_executor(&self.pool, journal_id, account_id, currency, date)
+        self.find_in_op(&self.pool, journal_id, account_id, currency, date)
             .await
     }
 
-    async fn find_in_executor(
+    pub async fn find_in_op(
         &self,
-        executor: impl Executor<'_, Database = Postgres>,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
         date: NaiveDate,
     ) -> Result<AccountBalance, BalanceError> {
-        let row = sqlx::query!(
-            r#"
+        let row = op
+            .into_executor()
+            .fetch_optional(sqlx::query!(
+                r#"
             SELECT values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
             FROM cala_cumulative_effective_balances
             JOIN cala_accounts a
@@ -53,13 +55,12 @@ impl EffectiveBalanceRepo {
             ORDER BY effective DESC, version DESC
             LIMIT 1
             "#,
-            journal_id as JournalId,
-            account_id as AccountId,
-            currency.code(),
-            date
-        )
-        .fetch_optional(executor)
-        .await?;
+                journal_id as JournalId,
+                account_id as AccountId,
+                currency.code(),
+                date
+            ))
+            .await?;
 
         if let Some(row) = row {
             let details: BalanceSnapshot =
