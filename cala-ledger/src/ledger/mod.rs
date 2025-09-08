@@ -63,7 +63,8 @@ impl CalaLedger {
             }
         };
         if config.exec_migrations {
-            sqlx::migrate!().run(&pool).await?;
+            use job::IncludeMigrations;
+            sqlx::migrate!().include_job_migrations().run(&pool).await?;
         }
 
         let outbox = Outbox::init(&pool).await?;

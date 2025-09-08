@@ -9,7 +9,6 @@ start-deps:
 
 setup-db:
 	cd cala-ledger && cargo sqlx migrate run
-	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 reset-deps-perf: clean-deps start-deps setup-db

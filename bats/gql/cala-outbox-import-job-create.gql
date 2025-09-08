@@ -2,7 +2,6 @@ mutation calaOutboxImportJobCreate($input: CalaOutboxImportJobCreateInput!) {
   calaOutboxImportJobCreate(input: $input) {
     job {
       jobId
-      name
     }
   }
 }
