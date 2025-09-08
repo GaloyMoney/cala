@@ -25,7 +25,8 @@ use super::{entity::*, error::TxTemplateError};
             update(persist = false),
         ),
     ),
-    tbl_prefix = "cala"
+    tbl_prefix = "cala",
+    persist_event_context = false
 )]
 pub(super) struct TxTemplateRepo {
     pool: PgPool,

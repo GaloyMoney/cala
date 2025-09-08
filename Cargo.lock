@@ -1302,9 +1302,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.7.17"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9794360f03a5afa99987bf1097e888e5f308277d44a2a1c10bc6c6fead81daaa"
+checksum = "90c8c6abf5c2413da17b5ee8b354d8608c92a8cb84d93dd32deecc354038baf2"
 dependencies = [
  "async-graphql",
  "base64 0.22.1",
@@ -1323,9 +1323,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.7.17"
+version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958f85abbcf6dc6af7e8fa8ca520897e1a631e40a432cfc3574ca6d068061887"
+checksum = "5f4631ba22ecf69722511783e1991814c745e1f26df6d31f173bee07edd9025b"
 dependencies = [
  "convert_case 0.8.0",
  "darling",
@@ -2046,9 +2046,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63585a8287efef146e77c7b27a342e1a5ab0438d45da3ceee8d36c15f8539f0b"
+checksum = "dbd2bde35d6b8a87de4dc6f3b8134d747aba0a63c352662d1cd324379c447e22"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2056,6 +2056,7 @@ dependencies = [
  "es-entity",
  "futures",
  "rand 0.9.2",
+ "schemars 1.0.4",
  "serde",
  "serde_json",
  "serde_with",
@@ -3305,8 +3306,10 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "82d20c4491bc164fa2f6c5d44565947a52ad80b9505d8e36f8d54c27c739fcd0"
 dependencies = [
+ "chrono",
  "dyn-clone",
  "ref-cast",
+ "rust_decimal",
  "schemars_derive",
  "serde",
  "serde_json",

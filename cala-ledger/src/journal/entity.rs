@@ -7,8 +7,7 @@ pub use cala_types::{journal::*, primitives::JournalId};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[es_event(id = "JournalId")]
-#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
+#[es_event(id = "JournalId", event_context = false)]
 pub enum JournalEvent {
     #[cfg(feature = "import")]
     Imported {

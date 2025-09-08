@@ -9,8 +9,7 @@ use super::TransactionError;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[es_event(id = "TransactionId")]
-#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
+#[es_event(id = "TransactionId", event_context = false)]
 pub enum TransactionEvent {
     #[cfg(feature = "import")]
     Imported {

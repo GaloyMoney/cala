@@ -9,8 +9,7 @@ pub use cala_types::{primitives::*, velocity::*};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[es_event(id = "VelocityLimitId")]
-#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
+#[es_event(id = "VelocityLimitId", event_context = false)]
 pub enum VelocityLimitEvent {
     Initialized { values: VelocityLimitValues },
 }

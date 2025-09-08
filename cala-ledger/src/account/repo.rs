@@ -33,7 +33,8 @@ use super::{entity::*, error::AccountError};
             update(persist = false)
         ),
     ),
-    tbl_prefix = "cala"
+    tbl_prefix = "cala",
+    persist_event_context = false
 )]
 pub(super) struct AccountRepo {
     pool: PgPool,

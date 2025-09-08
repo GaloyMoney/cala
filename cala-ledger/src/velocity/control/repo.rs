@@ -17,7 +17,8 @@ use super::entity::*;
             update(persist = false)
         ),
     ),
-    tbl_prefix = "cala"
+    tbl_prefix = "cala",
+    persist_event_context = false
 )]
 pub struct VelocityControlRepo {
     pool: PgPool,

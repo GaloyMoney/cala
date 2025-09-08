@@ -7,8 +7,7 @@ pub use cala_types::{entry::*, primitives::EntryId};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-#[es_event(id = "EntryId")]
-#[cfg_attr(not(feature = "event-context"), es_event(event_context = false))]
+#[es_event(id = "EntryId", event_context = false)]
 pub enum EntryEvent {
     #[cfg(feature = "import")]
     Imported {
