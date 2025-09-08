@@ -2,6 +2,8 @@
 
 set -e
 
+export SQLX_OFFLINE=true
+
 # Check for output file argument
 if [ $# -eq 0 ]; then
     echo "Usage: $0 <output-file>"
