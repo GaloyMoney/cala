@@ -53,7 +53,7 @@ sqlx-prepare:
 	cd cala-ledger && cargo sqlx prepare -- --all-features
 	cd cala-server && cargo sqlx prepare -- --all-features
 
-test-in-ci: start-deps setup-db
+test-in-ci:
 	SQLX_OFFLINE=true cargo nextest run --verbose --locked
 	SQLX_OFFLINE=true cargo test --doc
 	SQLX_OFFLINE=true cargo doc --no-deps

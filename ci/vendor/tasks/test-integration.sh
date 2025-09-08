@@ -53,7 +53,7 @@ echo "--- Podman-compose up done ---"
 make setup-db
 
 echo "--- Running Integration Tests ---"
-cargo nextest run --verbose --locked
+make test-in-ci
 echo "--- Tests done ---"
 
 echo "--- Cleaning up dependencies ---"
