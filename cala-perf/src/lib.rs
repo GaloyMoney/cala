@@ -25,7 +25,7 @@ pub async fn init_cala() -> anyhow::Result<CalaLedger> {
     let pool = init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
-        .exec_migrations(false)
+        .exec_migrations(true)
         .build()?;
     let ledger = CalaLedger::init(cala_config).await?;
     Ok(ledger)

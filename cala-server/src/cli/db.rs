@@ -1,4 +1,3 @@
-use cala_ledger::migrate::IncludeMigrations;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,11 +12,6 @@ pub async fn init_pool(config: &DbConfig) -> anyhow::Result<sqlx::PgPool> {
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(config.pool_size)
         .connect(&config.pg_con)
-        .await?;
-
-    sqlx::migrate!()
-        .include_cala_migrations()
-        .run(&pool)
         .await?;
 
     Ok(pool)

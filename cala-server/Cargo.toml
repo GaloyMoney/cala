@@ -17,6 +17,7 @@ cala-ledger-outbox-client = { workspace = true }
 cala-tracing = { workspace = true, features = ["http"] }
 cala-ledger = { workspace = true, features = ["import", "graphql"] }
 es-entity = { workspace = true, features = ["graphql"] }
+job = { workspace = true }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }

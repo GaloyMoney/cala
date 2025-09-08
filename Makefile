@@ -9,7 +9,6 @@ start-deps:
 
 setup-db:
 	cd cala-ledger && cargo sqlx migrate run
-	cd cala-server && cargo sqlx migrate run --ignore-missing
 
 reset-deps: clean-deps start-deps setup-db
 reset-deps-perf: clean-deps start-deps setup-db
@@ -55,9 +54,9 @@ sqlx-prepare:
 	cd cala-server && cargo sqlx prepare -- --all-features
 
 test-in-ci: start-deps setup-db
-	cargo nextest run --verbose --locked
-	cargo test --doc
-	cargo doc --no-deps
+	SQLX_OFFLINE=true cargo nextest run --verbose --locked
+	SQLX_OFFLINE=true cargo test --doc
+	SQLX_OFFLINE=true cargo doc --no-deps
 
 build-x86_64-unknown-linux-musl-release:
 	SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target x86_64-unknown-linux-musl

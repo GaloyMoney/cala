@@ -30,15 +30,15 @@ wait_for_new_import_job() {
     '{
       input: {
         jobId: $jobId,
-        name: "rust-example",
         endpoint: "http://localhost:2253"
       }
     }'
   )
   exec_graphql 'cala-outbox-import-job-create' "$variables"
-  name=$(graphql_output '.data.calaOutboxImportJobCreate.job.name')
+  id=$(graphql_output '.data.calaOutboxImportJobCreate.job.jobId')
   error_msg=$(graphql_output '.errors[0].message')
-  [[ "$name" == "rust-example" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
+  echo $(graphql_output)
+  [[ "$id" == "$job_id" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
   background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
 

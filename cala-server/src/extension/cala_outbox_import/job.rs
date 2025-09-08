@@ -10,36 +10,53 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::job::*;
+use job::*;
 
 pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
 
-#[derive(Default)]
-pub struct CalaOutboxImportJobInitializer;
+#[derive(Serialize, Deserialize)]
+pub(super) struct CalaOutboxImportJobConfig {
+    endpoint: String,
+}
+impl CalaOutboxImportJobConfig {
+    pub fn new(endpoint: String) -> Self {
+        Self { endpoint }
+    }
+}
+
+impl JobConfig for CalaOutboxImportJobConfig {
+    type Initializer = CalaOutboxImportJobInitializer;
+}
+
+pub(crate) struct CalaOutboxImportJobInitializer {
+    ledger: CalaLedger,
+}
+impl CalaOutboxImportJobInitializer {
+    pub fn new(ledger: CalaLedger) -> Self {
+        Self { ledger }
+    }
+}
 
 impl JobInitializer for CalaOutboxImportJobInitializer {
     fn job_type() -> JobType {
         CALA_OUTBOX_IMPORT_JOB_TYPE
     }
 
-    fn init(
-        &self,
-        _job: Job,
-        ledger: &CalaLedger,
-    ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
+    fn init(&self, job: &Job) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
         Ok(Box::new(CalaOutboxImportJob {
-            ledger: ledger.clone(),
+            ledger: self.ledger.clone(),
+            config: job.config()?,
         }))
     }
 }
 
 pub struct CalaOutboxImportJob {
     ledger: CalaLedger,
+    config: CalaOutboxImportJobConfig,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub struct CalaOutboxImportJobState {
-    pub endpoint: String,
     pub last_synced: EventSequence,
 }
 
@@ -51,20 +68,22 @@ impl JobRunner for CalaOutboxImportJob {
         mut current_job: CurrentJob,
     ) -> Result<JobCompletion, Box<dyn std::error::Error>> {
         let mut state = current_job
-            .state::<CalaOutboxImportJobState>()?
-            .expect("Job state");
+            .execution_state::<CalaOutboxImportJobState>()?
+            .unwrap_or_default();
         println!(
             "Executing CalaOutboxImportJob importing from endpoint: {}",
-            state.endpoint
+            self.config.endpoint
         );
-        let mut client = Client::connect(ClientConfig::new(state.endpoint.clone())).await?;
+        let mut client = Client::connect(ClientConfig::new(self.config.endpoint.clone())).await?;
         let mut stream = client.subscribe(Some(state.last_synced)).await?;
         loop {
             match stream.next().await {
                 Some(Ok(message)) => {
                     let mut tx = current_job.pool().begin().await?;
                     state.last_synced = message.sequence;
-                    current_job.update_state(&mut tx, &state).await?;
+                    current_job
+                        .update_execution_state_in_op(&mut tx, &state)
+                        .await?;
                     self.ledger
                         .sync_outbox_event(
                             tx,

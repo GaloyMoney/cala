@@ -138,6 +138,8 @@ pub mod transaction;
 pub mod tx_template;
 pub mod velocity;
 
+pub use es_entity;
+
 mod ledger;
 pub mod outbox;
 
@@ -147,30 +149,4 @@ pub use ledger_operation::*;
 pub mod primitives {
     pub use cala_types::primitives::*;
 }
-
-pub use es_entity;
-
-pub mod query {
-    #[derive(Debug)]
-    pub struct PaginatedQueryArgs<T: std::fmt::Debug> {
-        pub first: usize,
-        pub after: Option<T>,
-    }
-
-    impl<T: std::fmt::Debug> Default for PaginatedQueryArgs<T> {
-        fn default() -> Self {
-            Self {
-                first: 100,
-                after: None,
-            }
-        }
-    }
-
-    pub struct PaginatedQueryRet<T, C> {
-        pub entities: Vec<T>,
-        pub has_next_page: bool,
-        pub end_cursor: Option<C>,
-    }
-}
-
 pub use primitives::*;
