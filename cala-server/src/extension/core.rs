@@ -26,7 +26,3 @@ pub struct QueryExtension {
     core: CoreQueryExtension,
 }
 impl super::QueryExtensionMarker for QueryExtension {}
-
-pub fn job_registration(registry: &mut crate::job::JobRegistry) {
-    registry.add_initializer::<super::cala_outbox_import::CalaOutboxImportJobInitializer>();
-}

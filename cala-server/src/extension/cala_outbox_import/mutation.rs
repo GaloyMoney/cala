@@ -12,8 +12,6 @@ use crate::{
 #[derive(InputObject)]
 pub struct CalaOutboxImportJobCreateInput {
     pub job_id: UUID,
-    pub name: String,
-    pub description: Option<String>,
     pub endpoint: String,
 }
 
@@ -39,25 +37,14 @@ impl Mutation {
             .expect("Lock held concurrently");
         let job = app
             .jobs()
-            .create_and_spawn_in_op::<CalaOutboxImportJobInitializer, _>(
-                &mut op,
+            .create_and_spawn_in_op(
+                &mut *op,
                 input.job_id,
-                input.name.clone(),
-                input.description.clone(),
-                CalaOutboxImportJobState::from(input),
+                CalaOutboxImportJobConfig::new(input.endpoint),
             )
             .await?;
         Ok(CalaOutboxImportJobCreatePayload {
             job: Job::from(job),
         })
-    }
-}
-
-impl From<CalaOutboxImportJobCreateInput> for CalaOutboxImportJobState {
-    fn from(input: CalaOutboxImportJobCreateInput) -> Self {
-        Self {
-            endpoint: input.endpoint,
-            last_synced: Default::default(),
-        }
     }
 }

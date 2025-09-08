@@ -1,17 +1,17 @@
 mod config;
 mod error;
 
+use job::Jobs;
 use sqlx::PgPool;
 
 use cala_ledger::CalaLedger;
 
-use crate::{integration::*, job::*};
 pub use config::*;
 pub use error::*;
 
 #[derive(Clone)]
 pub struct CalaApp {
-    pool: PgPool,
+    _pool: PgPool,
     ledger: CalaLedger,
     jobs: Jobs,
 }
@@ -21,15 +21,19 @@ impl CalaApp {
         pool: PgPool,
         config: AppConfig,
         ledger: CalaLedger,
-        registry: JobRegistry,
     ) -> Result<Self, ApplicationError> {
-        let mut jobs = Jobs::new(&pool, config.job_execution, registry);
+        let mut jobs = Jobs::new(&pool, config.jobs);
+        jobs.add_initializer(
+            crate::extension::cala_outbox_import::CalaOutboxImportJobInitializer::new(
+                ledger.clone(),
+            ),
+        );
         jobs.start_poll().await?;
-        Ok(Self { pool, ledger, jobs })
-    }
-
-    pub fn integrations(&self) -> Integrations {
-        Integrations::new(&self.pool)
+        Ok(Self {
+            _pool: pool,
+            ledger,
+            jobs,
+        })
     }
 
     pub fn ledger(&self) -> &CalaLedger {

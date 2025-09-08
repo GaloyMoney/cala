@@ -9,6 +9,8 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 pub type DbOp = Arc<Mutex<cala_ledger::LedgerOperation<'static>>>;
 
+pub use es_entity::graphql::UUID;
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct JSON(serde_json::Value);
@@ -51,71 +53,6 @@ pub enum ParamDataType {
     Date,
     Timestamp,
     Json,
-}
-
-#[derive(Clone, Debug, Copy, Serialize, Deserialize)]
-#[serde(transparent)]
-pub struct UUID(uuid::Uuid);
-scalar!(UUID);
-impl<T: Into<uuid::Uuid>> From<T> for UUID {
-    fn from(id: T) -> Self {
-        let uuid = id.into();
-        Self(uuid)
-    }
-}
-
-impl From<UUID> for cala_ledger::AccountId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::AccountId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::AccountSetId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::AccountSetId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::JournalId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::JournalId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::VelocityLimitId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::VelocityLimitId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::VelocityControlId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::VelocityControlId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::TxTemplateId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::TxTemplateId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for cala_ledger::TransactionId {
-    fn from(uuid: UUID) -> Self {
-        cala_ledger::TransactionId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for crate::primitives::JobId {
-    fn from(uuid: UUID) -> Self {
-        crate::primitives::JobId::from(uuid.0)
-    }
-}
-
-impl From<UUID> for crate::integration::IntegrationId {
-    fn from(uuid: UUID) -> Self {
-        crate::integration::IntegrationId::from(uuid.0)
-    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
