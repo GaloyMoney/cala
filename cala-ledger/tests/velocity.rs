@@ -510,8 +510,8 @@ mod limit_via_account_sets {
             .description("test")
             .condition(
                 r#"
-                has(context.vars.account.metadata) &&
-                has(context.vars.account.metadata.closedAsOf) &&
+                !has(context.vars.account.metadata) ||
+                !has(context.vars.account.metadata.closedAsOf) ||
                 date(context.vars.account.metadata.closedAsOf) >= context.vars.transaction.effective
                 "#,
             )
@@ -600,8 +600,9 @@ mod limit_via_account_sets {
         tx_params.insert("recipient", open_account.id());
         tx_params.insert("amount", Decimal::ONE);
 
+        tx_params.insert("effective", effective_date(2025, 1, 1));
+
         tx_params.insert("sender", account_1.id());
-        tx_params.insert("effective", effective_date(2024, 12, 31));
         let account_1_send_res = cala
             .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
             .await;
@@ -610,14 +611,7 @@ mod limit_via_account_sets {
             Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
         ));
 
-        tx_params.insert("effective", effective_date(2025, 1, 1));
-        let account_1_send_res = cala
-            .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
-            .await;
-        assert!(account_1_send_res.is_ok());
-
         tx_params.insert("sender", account_2.id());
-        tx_params.insert("effective", effective_date(2024, 12, 31));
         let account_2_send_res = cala
             .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
             .await;
@@ -626,11 +620,44 @@ mod limit_via_account_sets {
             Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
         ));
 
-        tx_params.insert("effective", effective_date(2025, 1, 1));
+        // Add first closing date and re-check
+        let mut values = parent_account_set.values().clone();
+        values.metadata = Some(json!({ "closedAsOf": "2024-12-31" }));
+        parent_account_set.update((values, vec!["metadata".to_string()]));
+        cala.account_sets().persist(&mut parent_account_set).await?;
+
+        tx_params.insert("sender", account_1.id());
+        let account_1_send_res = cala
+            .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+            .await;
+        assert!(account_1_send_res.is_ok());
+
+        tx_params.insert("sender", account_2.id());
         let account_2_send_res = cala
             .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
             .await;
         assert!(account_2_send_res.is_ok());
+
+        // Check before closing date
+        tx_params.insert("effective", effective_date(2024, 12, 31));
+
+        tx_params.insert("sender", account_1.id());
+        let account_1_send_res = cala
+            .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+            .await;
+        assert!(matches!(
+            account_1_send_res,
+            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+        ));
+
+        tx_params.insert("sender", account_2.id());
+        let account_2_send_res = cala
+            .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+            .await;
+        assert!(matches!(
+            account_2_send_res,
+            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+        ));
 
         // Update closing date and re-check
         let mut values = parent_account_set.values().clone();
@@ -638,6 +665,18 @@ mod limit_via_account_sets {
         parent_account_set.update((values, vec!["metadata".to_string()]));
         cala.account_sets().persist(&mut parent_account_set).await?;
 
+        tx_params.insert("effective", effective_date(2025, 1, 1));
+
+        tx_params.insert("sender", account_1.id());
+        let account_1_send_res = cala
+            .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
+            .await;
+        assert!(matches!(
+            account_1_send_res,
+            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+        ));
+
+        tx_params.insert("sender", account_2.id());
         let account_2_send_res = cala
             .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
             .await;
