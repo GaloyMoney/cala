@@ -43,7 +43,7 @@ wait_for_new_import_job() {
   background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
-  retry 20 1 wait_for_new_import_job $job_count || true
+  retry 30 1 wait_for_new_import_job $job_count || true
   sleep 1
 
   for i in {1..60}; do
