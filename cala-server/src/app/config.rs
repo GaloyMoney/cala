@@ -1,9 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use job::JobsConfig;
+use job::JobPollerConfig;
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize)]
 pub struct AppConfig {
     #[serde(default)]
-    pub jobs: JobsConfig,
+    pub jobs: JobPollerConfig,
 }

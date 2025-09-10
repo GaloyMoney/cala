@@ -22,7 +22,14 @@ impl CalaApp {
         config: AppConfig,
         ledger: CalaLedger,
     ) -> Result<Self, ApplicationError> {
-        let mut jobs = Jobs::new(&pool, config.jobs);
+        let mut jobs = Jobs::init(
+            job::JobSvcConfig::builder()
+                .pool(pool.clone())
+                .poller_config(config.jobs)
+                .build()
+                .expect("JobSvcConfg"),
+        )
+        .await?;
         jobs.add_initializer(
             crate::extension::cala_outbox_import::CalaOutboxImportJobInitializer::new(
                 ledger.clone(),

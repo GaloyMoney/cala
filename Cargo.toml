@@ -24,7 +24,7 @@ cala-ledger-outbox-client = { path = "cala-ledger-outbox-client", version = "0.1
 cala-server = { path = "cala-server", version = "0.10.1-dev" }
 
 es-entity = "0.7.18"
-job = "0.1.5"
+job = "0.1.8"
 
 anyhow = "1.0.99"
 async-graphql = { version = "7.0.17", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
