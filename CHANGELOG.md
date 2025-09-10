@@ -1,3 +1,22 @@
+# [cala release v0.11.0](https://github.com/GaloyMoney/cala/releases/tag/0.11.0)
+
+
+### Bug Fixes
+
+- Do not include job migration explicitly in migrate.rs
+
+### Miscellaneous Tasks
+
+- Update velocity test to check for metadata presence (#543)
+- Bump job crate
+- Bump chrono from 0.4.41 to 0.4.42 (#542)
+- Update velocity test to check for metadata presence
+- Bump es-entity / remove event-context feature
+
+### Refactor
+
+- Use job crate (#541)
+
 # [cala release v0.10.0](https://github.com/GaloyMoney/cala/releases/tag/0.10.0)
 
 
