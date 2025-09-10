@@ -346,7 +346,7 @@ impl AccountSets {
         self.repo.find_all(account_set_ids).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op), err)]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -358,6 +358,15 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.find", skip(self), err)]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
         self.repo.find_by_id(account_set_id).await
+    }
+
+    #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op), err)]
+    pub async fn find_in_op(
+        &self,
+        op: &mut LedgerOperation<'_>,
+        account_set_id: AccountSetId,
+    ) -> Result<AccountSet, AccountSetError> {
+        self.repo.find_by_id_in_op(op, account_set_id).await
     }
 
     #[instrument(
