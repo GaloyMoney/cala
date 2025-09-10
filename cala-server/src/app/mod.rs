@@ -27,7 +27,7 @@ impl CalaApp {
                 .pool(pool.clone())
                 .poller_config(config.jobs)
                 .build()
-                .expect("JobSvcConfg"),
+                .expect("JobSvcConfig"),
         )
         .await?;
         jobs.add_initializer(
