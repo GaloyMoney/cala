@@ -185,6 +185,18 @@ fn evaluate_expression_inner<'a>(
                 right.try_into_value()?,
             )?))
         }
+        Unary(op, expr) => {
+            use ast::UnaryOp;
+            match op {
+                UnaryOp::Not => {
+                    let val = evaluate_expression(expr, ctx)?.try_into_bool()?;
+                    Ok(EvalType::Value(CelValue::Bool(!val)))
+                }
+                _ => Err(CelError::Unexpected(format!(
+                    "unimplemented unary op: {op:?}"
+                ))),
+            }
+        }
         e => Err(CelError::Unexpected(format!("unimplemented {e:?}"))),
     }
 }
