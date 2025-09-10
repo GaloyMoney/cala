@@ -1,3 +1,14 @@
+# [cala release v0.11.1](https://github.com/GaloyMoney/cala/releases/tag/0.11.1)
+
+
+### Bug Fixes
+
+- Do not include_job_migration (its already included)
+
+### Miscellaneous Tasks
+
+- Add account set find_in_op (#544)
+
 # [cala release v0.11.0](https://github.com/GaloyMoney/cala/releases/tag/0.11.0)
 
 
