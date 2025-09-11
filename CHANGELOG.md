@@ -1,3 +1,10 @@
+# [cala release v0.11.2](https://github.com/GaloyMoney/cala/releases/tag/0.11.2)
+
+
+### Miscellaneous Tasks
+
+- Do not report err in trace
+
 # [cala release v0.11.1](https://github.com/GaloyMoney/cala/releases/tag/0.11.1)
 
 
