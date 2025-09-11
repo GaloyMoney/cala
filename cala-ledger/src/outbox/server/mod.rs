@@ -27,7 +27,7 @@ impl OutboxService for OutboxServer {
         Box<dyn futures::Stream<Item = Result<CalaLedgerEvent, Status>> + Send + Sync + 'static>,
     >;
 
-    #[instrument(name = "cala_ledger.subscribe", skip_all, fields(error, error.level, error.message), err)]
+    #[instrument(name = "cala_ledger.subscribe", skip_all, fields(error, error.level, error.message))]
     async fn subscribe(
         &self,
         request: Request<SubscribeRequest>,

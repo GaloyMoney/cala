@@ -62,7 +62,7 @@ pub struct CalaOutboxImportJobState {
 
 #[async_trait]
 impl JobRunner for CalaOutboxImportJob {
-    #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job), err)]
+    #[instrument(name = "job.cala_outbox_import.run", skip(self, current_job))]
     async fn run(
         &self,
         mut current_job: CurrentJob,

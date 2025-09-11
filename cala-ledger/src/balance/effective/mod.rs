@@ -27,11 +27,7 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(
-        name = "cala_ledger.balance.effective.find_cumulative",
-        skip(self),
-        err
-    )]
+    #[instrument(name = "cala_ledger.balance.effective.find_cumulative", skip(self))]
     pub async fn find_cumulative(
         &self,
         journal_id: JournalId,
@@ -44,7 +40,7 @@ impl EffectiveBalances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_in_range", skip(self), err)]
+    #[instrument(name = "cala_ledger.balance.effective.find_in_range", skip(self))]
     pub async fn find_in_range(
         &self,
         journal_id: JournalId,
@@ -63,11 +59,7 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(
-        name = "cala_ledger.balance.effective.find_all_in_range",
-        skip(self),
-        err
-    )]
+    #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
     pub async fn find_all_in_range(
         &self,
         ids: &[BalanceId],

@@ -67,7 +67,7 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self))]
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],
@@ -75,7 +75,7 @@ impl TxTemplates {
         self.repo.find_all(tx_template_ids).await
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.list", skip(self), err)]
+    #[instrument(name = "cala_ledger.tx_templates.list", skip(self))]
     pub async fn list(
         &self,
         cursor: es_entity::PaginatedQueryArgs<TxTemplatesByCodeCursor>,

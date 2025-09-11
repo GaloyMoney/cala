@@ -82,7 +82,7 @@ impl Accounts {
         self.repo.find_by_id(account_id).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.accounts.find_all", skip(self))]
     pub async fn find_all<T: From<Account>>(
         &self,
         account_ids: &[AccountId],
@@ -90,7 +90,7 @@ impl Accounts {
         self.repo.find_all(account_ids).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db), err)]
+    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -99,12 +99,12 @@ impl Accounts {
         self.repo.find_all_in_op(db, account_ids).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self), err)]
+    #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self))]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
         self.repo.find_by_external_id(Some(external_id)).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_by_code", skip(self), err)]
+    #[instrument(name = "cala_ledger.accounts.find_by_code", skip(self))]
     pub async fn find_by_code(&self, code: String) -> Result<Account, AccountError> {
         self.repo.find_by_code(code).await
     }

@@ -51,7 +51,7 @@ impl Journals {
         Ok(journal)
     }
 
-    #[instrument(name = "cala_ledger.journals.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.journals.find_all", skip(self))]
     pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],
@@ -59,7 +59,7 @@ impl Journals {
         self.repo.find_all(journal_ids).await
     }
 
-    #[instrument(name = "cala_ledger.journals.find_by_id", skip(self), err)]
+    #[instrument(name = "cala_ledger.journals.find_by_id", skip(self))]
     pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
         self.repo.find_by_id(journal_id).await
     }
@@ -82,7 +82,7 @@ impl Journals {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.journal.find_by_code", skip(self), err)]
+    #[instrument(name = "cala_ledger.journal.find_by_code", skip(self))]
     pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
         self.repo.find_by_code(Some(code)).await
     }

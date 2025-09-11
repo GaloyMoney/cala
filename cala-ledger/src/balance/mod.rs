@@ -54,7 +54,7 @@ impl Balances {
         &self.effective
     }
 
-    #[instrument(name = "cala_ledger.balance.find", skip(self), err)]
+    #[instrument(name = "cala_ledger.balance.find", skip(self))]
     pub async fn find(
         &self,
         journal_id: JournalId,
@@ -66,7 +66,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op))]
     pub async fn find_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -79,7 +79,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.balance.find_all", skip(self))]
     pub async fn find_all(
         &self,
         ids: &[BalanceId],

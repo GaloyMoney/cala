@@ -338,7 +338,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self))]
     pub async fn find_all<T: From<AccountSet>>(
         &self,
         account_set_ids: &[AccountSetId],
@@ -346,7 +346,7 @@ impl AccountSets {
         self.repo.find_all(account_set_ids).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -355,12 +355,12 @@ impl AccountSets {
         self.repo.find_all_in_op(op, account_set_ids).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find", skip(self), err)]
+    #[instrument(name = "cala_ledger.account_sets.find", skip(self))]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
         self.repo.find_by_id(account_set_id).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op), err)]
+    #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
     pub async fn find_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -369,11 +369,7 @@ impl AccountSets {
         self.repo.find_by_id_in_op(op, account_set_id).await
     }
 
-    #[instrument(
-        name = "cala_ledger.accounts_sets.find_by_external_id",
-        skip(self),
-        err
-    )]
+    #[instrument(name = "cala_ledger.accounts_sets.find_by_external_id", skip(self))]
     pub async fn find_by_external_id(
         &self,
         external_id: String,
@@ -381,7 +377,7 @@ impl AccountSets {
         self.repo.find_by_external_id(Some(external_id)).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self), err)]
+    #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self))]
     pub async fn find_where_member(
         &self,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
@@ -402,7 +398,7 @@ impl AccountSets {
         }
     }
 
-    #[instrument(name = "cala_ledger.account_sets.list_for_name", skip(self), err)]
+    #[instrument(name = "cala_ledger.account_sets.list_for_name", skip(self))]
     pub async fn list_for_name(
         &self,
         name: String,
@@ -416,11 +412,7 @@ impl AccountSets {
             .await
     }
 
-    #[instrument(
-        name = "cala_ledger.account_sets.list_for_name_in_op",
-        skip(self, op),
-        err
-    )]
+    #[instrument(name = "cala_ledger.account_sets.list_for_name_in_op", skip(self, op))]
     pub async fn list_for_name_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -437,8 +429,7 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.find_where_member_in_op",
-        skip(self, op),
-        err
+        skip(self, op)
     )]
     pub async fn find_where_member_in_op(
         &self,

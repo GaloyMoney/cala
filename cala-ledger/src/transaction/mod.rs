@@ -71,7 +71,7 @@ impl Transactions {
         Ok(voided_tx)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self), err)]
+    #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self))]
     pub async fn find_by_external_id(
         &self,
         external_id: String,
@@ -79,7 +79,7 @@ impl Transactions {
         self.repo.find_by_external_id(Some(external_id)).await
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self), err)]
+    #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self))]
     pub async fn find_by_id(
         &self,
         transaction_id: TransactionId,
@@ -87,11 +87,7 @@ impl Transactions {
         self.repo.find_by_id(transaction_id).await
     }
 
-    #[instrument(
-        name = "cala_ledger.transactions.list_for_template_id",
-        skip(self),
-        err
-    )]
+    #[instrument(name = "cala_ledger.transactions.list_for_template_id", skip(self))]
     pub async fn list_for_template_id(
         &self,
         template_id: TxTemplateId,
@@ -106,7 +102,7 @@ impl Transactions {
             .await
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_all", skip(self), err)]
+    #[instrument(name = "cala_ledger.transactions.find_all", skip(self))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],

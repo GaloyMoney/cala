@@ -160,7 +160,6 @@ impl CalaLedger {
         name = "cala_ledger.transaction_post",
         skip(self, db)
         fields(transaction_id, external_id)
-        err
     )]
     pub async fn post_transaction_in_op(
         &self,
@@ -238,7 +237,6 @@ impl CalaLedger {
         name = "cala_ledger.transaction_void",
         skip(self, db)
         fields(transaction_id, external_id)
-        err
     )]
     pub async fn void_transaction_in_op(
         &self,
