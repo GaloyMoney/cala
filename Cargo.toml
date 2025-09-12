@@ -23,7 +23,7 @@ cala-ledger = { path = "cala-ledger", version = "0.11.3-dev" }
 cala-ledger-outbox-client = { path = "cala-ledger-outbox-client", version = "0.11.3-dev" }
 cala-server = { path = "cala-server", version = "0.11.3-dev" }
 
-es-entity = "0.7.18"
+es-entity = "0.7.19"
 job = "0.1.8"
 
 anyhow = "1.0.99"
