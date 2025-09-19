@@ -360,15 +360,6 @@ impl AccountSets {
         self.repo.find_by_id(account_set_id).await
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
-    pub async fn find_in_op(
-        &self,
-        op: &mut LedgerOperation<'_>,
-        account_set_id: AccountSetId,
-    ) -> Result<AccountSet, AccountSetError> {
-        self.repo.find_by_id_in_op(op, account_set_id).await
-    }
-
     #[instrument(name = "cala_ledger.accounts_sets.find_by_external_id", skip(self))]
     pub async fn find_by_external_id(
         &self,
