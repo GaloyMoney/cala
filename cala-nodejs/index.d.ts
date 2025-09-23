@@ -60,7 +60,7 @@ export interface CursorToken {
 export interface JournalValues {
   id: string
   name: string
-  code: string
+  code?: string
   description?: string
 }
 
