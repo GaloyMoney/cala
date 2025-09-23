@@ -2,7 +2,7 @@
 pub struct JournalValues {
   pub id: String,
   pub name: String,
-  pub code: String,
+  pub code: Option<String>,
   pub description: Option<String>,
 }
 
@@ -12,7 +12,7 @@ impl From<&cala_ledger::journal::Journal> for JournalValues {
     Self {
       id: values.id.to_string(),
       name: values.name.clone(),
-      code: values.code.unwrap_or(values.name),
+      code: values.code.clone().or(None),
       description: values.description,
     }
   }
@@ -24,7 +24,7 @@ impl From<cala_ledger::journal::Journal> for JournalValues {
     Self {
       id: values.id.to_string(),
       name: values.name.clone(),
-      code: values.code.unwrap_or(values.name),
+      code: values.code.clone().or(None),
       description: values.description,
     }
   }
