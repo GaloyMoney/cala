@@ -7,7 +7,7 @@ mod account;
 mod generic_error;
 mod journal;
 mod ledger;
-mod tx_template;
 mod query;
+mod tx_template;
 
 pub(crate) use generic_error::generic_napi_error;

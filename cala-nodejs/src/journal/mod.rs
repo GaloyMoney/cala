@@ -1,6 +1,6 @@
 mod values;
 
-use cala_ledger::{journal::{error::JournalError}, JournalId};
+use cala_ledger::{journal::error::JournalError, JournalId};
 use values::*;
 
 #[napi(object)]
@@ -67,8 +67,7 @@ impl CalaJournals {
 
   #[napi]
   pub async fn find(&self, journal_id: String) -> napi::Result<CalaJournal> {
-    let journal_id = uuid::Uuid::parse_str(&journal_id)
-      .map_err(crate::generic_napi_error)?;
+    let journal_id = uuid::Uuid::parse_str(&journal_id).map_err(crate::generic_napi_error)?;
 
     let journal_id = JournalId::from(journal_id);
 

@@ -86,7 +86,8 @@ impl CalaTxTemplates {
     }
 
     if let Some(transaction) = new_tx_template.transaction {
-      let mut new_transaction = cala_ledger::tx_template::NewTxTemplateTransactionBuilder::default();
+      let mut new_transaction =
+        cala_ledger::tx_template::NewTxTemplateTransactionBuilder::default();
 
       new_transaction.effective(transaction.effective);
       new_transaction.journal_id(transaction.journal_id);
@@ -113,7 +114,6 @@ impl CalaTxTemplates {
     if let Some(metadata) = new_tx_template.metadata {
       let _ = new.metadata(metadata);
     }
-
 
     let mut tx_template_entries = Vec::new();
 
