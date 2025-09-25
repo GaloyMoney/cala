@@ -10,7 +10,10 @@ const main = async () => {
   const pgHost = process.env.PG_HOST || "localhost";
   const pgCon = `postgres://user:password@${pgHost}:5433/pg`;
 
-  const cala = await CalaLedger.connect({ pgCon, outbox: { enabled: true } });
+  const cala = await CalaLedger.connect({
+    pgCon,
+    outbox: { enabled: true, listenPort: 2258 },
+  });
   console.log("CalaLedger connected");
 
   const account = await cala.accounts().create({

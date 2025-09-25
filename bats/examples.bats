@@ -14,7 +14,7 @@ teardown_file() {
 reset_pg_and_restart_server() {
   stop_server
   reset_pg
-  start_server
+  PG_CON="postgres://user:password@localhost:5433/pg" start_server
 }
 
 wait_for_new_import_job() {
@@ -76,7 +76,7 @@ wait_for_new_import_job() {
     '{
       input: {
         jobId: $jobId,
-        endpoint: "http://localhost:2253"
+        endpoint: "http://localhost:2258"
       }
     }'
   )
