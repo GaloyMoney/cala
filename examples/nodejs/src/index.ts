@@ -117,7 +117,9 @@ const main = async () => {
     txTemplate.values().code,
   );
 
-  const retrievedTxTemplate = await cala.txTemplates().findByCode("RECORD_DEPOSIT");
+  const retrievedTxTemplate = await cala
+    .txTemplates()
+    .findByCode("RECORD_DEPOSIT");
 
   console.log("Retrieved Tx Template", retrievedTxTemplate.values());
 };
