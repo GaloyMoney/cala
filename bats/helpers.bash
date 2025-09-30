@@ -6,6 +6,7 @@ GQL_ENDPOINT="http://localhost:2252/graphql"
 CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
 EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
+DOCKER_ENGINE="${DOCKER_ENGINE:-docker}"
 
 reset_pg() {
   $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
