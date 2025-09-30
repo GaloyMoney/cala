@@ -8,10 +8,10 @@ SERVER_PID_FILE="${CALA_HOME}/server-pid"
 EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
 
 reset_pg() {
-  docker exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  docker exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
-  docker exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  docker exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
 }
 
 server_cmd() {
