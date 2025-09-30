@@ -1,11 +1,13 @@
 mod values;
 
+use cala_ledger::{journal::error::JournalError, JournalId};
 use values::*;
 
 #[napi(object)]
 pub struct NewJournal {
   pub id: Option<String>,
   pub name: String,
+  pub code: String,
   pub external_id: Option<String>,
   pub description: Option<String>,
 }
@@ -60,6 +62,20 @@ impl CalaJournals {
       .create(new.build().map_err(crate::generic_napi_error)?)
       .await
       .map_err(crate::generic_napi_error)?;
+    Ok(CalaJournal { inner: journal })
+  }
+
+  #[napi]
+  pub async fn find(&self, journal_id: String) -> napi::Result<CalaJournal> {
+    let journal_id = uuid::Uuid::parse_str(&journal_id).map_err(crate::generic_napi_error)?;
+
+    let journal_id = JournalId::from(journal_id);
+
+    let journal = self
+      .inner
+      .find(journal_id)
+      .await
+      .map_err(|e: JournalError| crate::generic_napi_error(e))?;
     Ok(CalaJournal { inner: journal })
   }
 }

@@ -11,14 +11,6 @@ teardown_file() {
   stop_rust_example
 }
 
-wait_for_new_import_job() {
-  job_count=$1
-
-  new_job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
-  [[ "$new_job_count" -gt "$job_count" ]] || return 1
-}
-
-
 @test "rust: entities sync to server" {
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
