@@ -49,6 +49,11 @@ echo "--- Podman-compose up done ---"
 
 make setup-db
 
+# -- Build Node.JS Bindings ---
+echo "--- Building Node.JS Bindings ---"
+make build-nodejs-bindings
+echo "--- Node.JS Bindings built ---"
+
 # --- Build Test Artifacts ---
 echo "--- Building test artifacts---"
 # nix build . -L
