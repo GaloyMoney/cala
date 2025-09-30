@@ -12,7 +12,7 @@ cala-types = { workspace = true }
 cala-ledger = { workspace = true }
 
 base64 = { workspace = true }
-uuid = { workspace = true }
+uuid = { workspace = true, features = ["serde", "v7"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 napi = { version = "3.3.0", default-features = false, features = ["tokio_rt", "serde-json"] }
