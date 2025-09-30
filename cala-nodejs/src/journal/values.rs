@@ -2,7 +2,6 @@
 pub struct JournalValues {
   pub id: String,
   pub name: String,
-  pub code: Option<String>,
   pub description: Option<String>,
 }
 
@@ -11,8 +10,7 @@ impl From<&cala_ledger::journal::Journal> for JournalValues {
     let values = journal.values().clone();
     Self {
       id: values.id.to_string(),
-      name: values.name.clone(),
-      code: values.code.clone().or(None),
+      name: values.name,
       description: values.description,
     }
   }
@@ -23,8 +21,7 @@ impl From<cala_ledger::journal::Journal> for JournalValues {
     let values = journal.into_values();
     Self {
       id: values.id.to_string(),
-      name: values.name.clone(),
-      code: values.code.clone().or(None),
+      name: values.name,
       description: values.description,
     }
   }

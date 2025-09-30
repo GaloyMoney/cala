@@ -2,8 +2,6 @@ mod config;
 
 pub use config::*;
 
-use crate::tx_template::CalaTxTemplates;
-
 use super::{account::*, journal::*};
 
 #[napi]
@@ -45,11 +43,6 @@ impl CalaLedger {
   #[napi]
   pub fn journals(&self) -> napi::Result<CalaJournals> {
     Ok(CalaJournals::new(self.inner.journals()))
-  }
-
-  #[napi]
-  pub fn tx_templates(&self) -> napi::Result<CalaTxTemplates> {
-    Ok(CalaTxTemplates::new(self.inner.tx_templates()))
   }
 
   #[napi]
