@@ -43,11 +43,7 @@ check-code: sdl
 build:
 	SQLX_OFFLINE=true cargo build --locked
 
-build-nodejs-bindings:
-	cd cala-nodejs && yarn && SQLX_OFFLINE=true yarn build
-	cd examples/nodejs && rm -rf ./node_modules && yarn install
-
-e2e: clean-deps start-deps build build-nodejs-bindings
+e2e: clean-deps start-deps build
 	bats -t bats
 
 sdl:
