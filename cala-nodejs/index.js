@@ -562,3 +562,6 @@ module.exports.CalaAccounts = nativeBinding.CalaAccounts
 module.exports.CalaJournal = nativeBinding.CalaJournal
 module.exports.CalaJournals = nativeBinding.CalaJournals
 module.exports.CalaLedger = nativeBinding.CalaLedger
+module.exports.CalaTxTemplate = nativeBinding.CalaTxTemplate
+module.exports.CalaTxTemplates = nativeBinding.CalaTxTemplates
+module.exports.ParamDataTypeValues = nativeBinding.ParamDataTypeValues

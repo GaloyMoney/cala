@@ -17,13 +17,25 @@ export declare class CalaJournal {
 
 export declare class CalaJournals {
   create(newJournal: NewJournal): Promise<CalaJournal>
+  find(journalId: string): Promise<CalaJournal>
 }
 
 export declare class CalaLedger {
   static connect(config: CalaLedgerConfig): Promise<CalaLedger>
   accounts(): CalaAccounts
   journals(): CalaJournals
+  txTemplates(): CalaTxTemplates
   awaitOutboxServer(): Promise<void>
+}
+
+export declare class CalaTxTemplate {
+  id(): string
+  values(): TxTemplateValues
+}
+
+export declare class CalaTxTemplates {
+  findByCode(code: string): Promise<CalaTxTemplate>
+  create(newTxTemplate: NewTxTemplateValues): Promise<CalaTxTemplate>
 }
 
 export interface AccountValues {
@@ -48,6 +60,7 @@ export interface CursorToken {
 export interface JournalValues {
   id: string
   name: string
+  code?: string
   description?: string
 }
 
@@ -63,8 +76,47 @@ export interface NewAccount {
 export interface NewJournal {
   id?: string
   name: string
+  code: string
   externalId?: string
   description?: string
+}
+
+export interface NewParamDefinitionValues {
+  name: string
+  type: ParamDataTypeValues
+  default?: string
+  description?: string
+}
+
+export interface NewTxTemplateEntryValues {
+  entryType: string
+  accountId: string
+  layer: string
+  direction: string
+  units: string
+  currency: string
+  description?: string
+  metadata?: string
+}
+
+export interface NewTxTemplateTransactionValues {
+  effective: string
+  journalId: string
+  correlationId?: string
+  externalId?: string
+  description?: string
+  metadata?: string
+}
+
+export interface NewTxTemplateValues {
+  id?: string
+  code: string
+  externalId?: string
+  description?: string
+  params?: Array<NewParamDefinitionValues>
+  entries: Array<NewTxTemplateEntryValues>
+  metadata?: any
+  transaction?: NewTxTemplateTransactionValues
 }
 
 export interface OutboxServerConfig {
@@ -81,4 +133,23 @@ export interface PaginatedAccounts {
 export interface PaginatedQueryArgs {
   after?: CursorToken
   first: number
+}
+
+export declare const enum ParamDataTypeValues {
+  String = 0,
+  Integer = 1,
+  Decimal = 2,
+  Boolean = 3,
+  Uuid = 4,
+  Date = 5,
+  Timestamp = 6,
+  Json = 7
+}
+
+export interface TxTemplateValues {
+  id: string
+  code: string
+  version: number
+  metadata?: any
+  description?: string
 }
