@@ -14,7 +14,7 @@ teardown_file() {
 reset_pg_and_restart_server() {
   stop_server
   reset_pg
-  PG_CON=$PG_CON_EXAMPLE start_server
+  start_server
 }
 
 @test "nodejs: entities sync to server" {
