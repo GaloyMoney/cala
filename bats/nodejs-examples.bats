@@ -11,12 +11,6 @@ teardown_file() {
   stop_nodejs_example
 }
 
-reset_pg_and_restart_server() {
-  stop_server
-  reset_pg
-  start_server
-}
-
 @test "nodejs: entities sync to server" {
   reset_pg_and_restart_server
 

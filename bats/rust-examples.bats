@@ -3,7 +3,7 @@
 load "helpers"
 
 setup_file() {
-  start_server
+  reset_pg_and_restart_server
 }
 
 teardown_file() {
