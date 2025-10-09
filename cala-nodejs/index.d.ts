@@ -116,7 +116,7 @@ export interface NewTxTemplateValues {
   params?: Array<NewParamDefinitionValues>
   entries: Array<NewTxTemplateEntryValues>
   metadata?: any
-  transaction?: NewTxTemplateTransactionValues
+  transaction: NewTxTemplateTransactionValues
 }
 
 export interface OutboxServerConfig {
