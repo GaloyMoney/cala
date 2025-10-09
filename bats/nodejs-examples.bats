@@ -3,17 +3,16 @@
 load "helpers"
 
 setup_file() {
-  reset_pg_and_restart_server
+  start_server
 }
 
 teardown_file() {
   stop_server
+  reset_pg
   stop_nodejs_example
 }
 
 @test "nodejs: entities sync to server" {
-  reset_pg_and_restart_server
-
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
 

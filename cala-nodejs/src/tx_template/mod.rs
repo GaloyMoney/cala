@@ -85,9 +85,11 @@ impl CalaTxTemplates {
       new.description(description);
     }
 
-    if let Some(transaction) = new_tx_template.transaction {
+    {
       let mut new_transaction =
         cala_ledger::tx_template::NewTxTemplateTransactionBuilder::default();
+
+      let transaction = new_tx_template.transaction;
 
       new_transaction.effective(transaction.effective);
       new_transaction.journal_id(transaction.journal_id);
@@ -109,10 +111,6 @@ impl CalaTxTemplates {
       }
 
       new.transaction(new_transaction.build().map_err(crate::generic_napi_error)?);
-    } else {
-      return Err(napi::Error::from_reason(
-        "Transaction details are required".to_string(),
-      ));
     }
 
     if let Some(metadata) = new_tx_template.metadata {

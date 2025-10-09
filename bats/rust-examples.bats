@@ -3,11 +3,12 @@
 load "helpers"
 
 setup_file() {
-  reset_pg_and_restart_server
+  start_server
 }
 
 teardown_file() {
   stop_server
+  reset_pg
   stop_rust_example
 }
 

@@ -2,7 +2,6 @@ REPO_ROOT=$(git rev-parse --show-toplevel)
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${REPO_ROOT##*/}}"
 
 GQL_ENDPOINT="http://localhost:2252/graphql"
-PG_CON_EXAMPLE="${PG_CON_EXAMPLE:-postgres://user:password@127.0.0.1:5433/pg}"
 
 CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
@@ -150,10 +149,4 @@ wait_for_new_import_job() {
 
   new_job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   [[ "$new_job_count" -gt "$job_count" ]] || return 1
-}
-
-reset_pg_and_restart_server() {
-  stop_server
-  reset_pg
-  start_server
 }

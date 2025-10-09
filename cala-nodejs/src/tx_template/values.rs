@@ -27,7 +27,7 @@ pub struct NewTxTemplateValues {
   pub params: Option<Vec<NewParamDefinitionValues>>,
   pub entries: Vec<NewTxTemplateEntryValues>,
   pub metadata: Option<serde_json::Value>,
-  pub transaction: Option<NewTxTemplateTransactionValues>,
+  pub transaction: NewTxTemplateTransactionValues,
 }
 
 #[napi(object)]
