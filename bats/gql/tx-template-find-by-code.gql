@@ -1,8 +1,0 @@
-query txTemplateByCode($code: String!) {
-  txTemplateByCode(code: $code) {
-    id
-    txTemplateId
-    version
-    code
-  }
-}
