@@ -16,6 +16,12 @@ teardown_file() {
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
 
+  bats::on_failure() {
+    cat "${REPO_ROOT}/.nodejs-example-logs"
+    echo "###############"
+    cat .e2e-logs
+  }
+
   job_id=$(random_uuid)
   variables=$(
     jq -n \
