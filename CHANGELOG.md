@@ -1,3 +1,20 @@
+# [cala release v0.12.0](https://github.com/GaloyMoney/cala/releases/tag/0.12.0)
+
+
+### Bug Fixes
+
+- Add procps to nix pkgs (#562)
+- Use $DOCKER_ENGINE instead of docker (#561)
+
+### Features
+
+- Add bindings for tx_templates (#565)
+- Add bindings for tx_templates and journal.find_by_code (#553)
+
+### Miscellaneous Tasks
+
+- [**breaking**] Bump job crate
+
 # [cala release v0.11.5](https://github.com/GaloyMoney/cala/releases/tag/0.11.5)
 
 
