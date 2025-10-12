@@ -125,8 +125,6 @@ const main = async () => {
     .findByCode("RECORD_DEPOSIT");
 
   console.log("Retrieved Tx Template", retrievedTxTemplate.values());
-
-  await cala.awaitOutboxServer();
 };
 
 main();

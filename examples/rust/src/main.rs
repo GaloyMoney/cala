@@ -25,7 +25,7 @@ async fn main() -> anyhow::Result<()> {
     let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{random_number:03}"));
 
     store_server_pid(".cala", std::process::id())?;
-    let pg_con = "postgres://user:password@localhost:5433/pg".to_string();
+    let pg_con = "postgres://user:password@localhost:5434/pg".to_string();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&pg_con)

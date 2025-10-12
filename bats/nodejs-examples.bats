@@ -3,12 +3,12 @@
 load "helpers"
 
 setup_file() {
+  reset_server_pg
   start_server
 }
 
 teardown_file() {
   stop_server
-  reset_pg
   stop_nodejs_example
 }
 
@@ -60,4 +60,5 @@ teardown_file() {
   exec_graphql 'tx-template-find-by-code' "$variables"
   tx_template_code=$(graphql_output '.data.txTemplateFindByCode.txTemplate.code')
   [[ "$tx_template_code" != "RECORD_DEPOSIT" ]] || exit 1
+
 }

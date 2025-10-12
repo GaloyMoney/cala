@@ -3,7 +3,8 @@ services:
     image: busybox
     depends_on:
     - server-pg
-    - examples-pg
+    - rust-example-pg
+    - node-example-pg
     - otel-agent
   server-pg:
     image: postgres:16.4
@@ -19,10 +20,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  examples-pg:
+  node-example-pg:
     image: postgres:16.4
     ports:
     - "5433:5432"
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=pg
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  rust-example-pg:
+    image: postgres:16.4
+    ports:
+    - "5434:5432"
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
