@@ -12,15 +12,23 @@ teardown_file() {
   stop_nodejs_example
 }
 
+teardown() {
+  if [[ "$BATS_TEST_COMPLETED" != "1" ]] || [[ "$BATS_ERROR_STATUS" != "" ]]; then
+    echo "Test failed! Displaying logs..." >&3
+    if [[ -f "${REPO_ROOT}/.nodejs-example-logs" ]]; then
+      echo "=== Node.js Example Logs ===" >&3
+      cat "${REPO_ROOT}/.nodejs-example-logs" >&3
+    fi
+    echo "=== E2E Server Logs ===" >&3
+    if [[ -f .e2e-logs ]]; then
+      cat .e2e-logs >&3
+    fi
+  fi
+}
+
 @test "nodejs: entities sync to server" {
   exec_graphql 'list-accounts'
   accounts_before=$(graphql_output '.data.accounts.nodes | length')
-
-  bats::on_failure() {
-    cat "${REPO_ROOT}/.nodejs-example-logs"
-    echo "###############"
-    cat .e2e-logs
-  }
 
   job_id=$(random_uuid)
   variables=$(
@@ -50,7 +58,7 @@ teardown_file() {
   for i in {1..90}; do
     exec_graphql 'list-accounts'
     accounts_after=$(graphql_output '.data.accounts.nodes | length')
-    if [[ "$accounts_after" -gt "$accounts_before" ]] then
+    if [[ "$accounts_after" -gt "$accounts_before" ]]; then
       break;
     fi
     sleep 1

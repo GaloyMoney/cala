@@ -42,7 +42,7 @@ teardown_file() {
   for i in {1..90}; do
     exec_graphql 'list-accounts'
     accounts_after=$(graphql_output '.data.accounts.nodes | length')
-    if [[ "$accounts_after" -gt "$accounts_before" ]] then
+    if [[ "$accounts_after" -gt "$accounts_before" ]]; then
       break;
     fi
     sleep 1
