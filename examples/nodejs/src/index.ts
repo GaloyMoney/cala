@@ -6,9 +6,38 @@ import {
   ParamDataTypeValues,
 } from "@galoymoney/cala-ledger";
 
+// pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
+//     create_cala_dir(cala_home)?;
+//     let _ = fs::remove_file(format!("{cala_home}/rust-example-pid"));
+//     fs::write(format!("{cala_home}/rust-example-pid"), pid.to_string())
+//         .context("Writing PID file")?;
+//     Ok(())
+// }
+//
+// fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
+//     let _ = fs::create_dir(bria_home);
+//     Ok(())
+// }
+
+const storeServerPid = (calaHome: string, pid: number) => {
+  const fs = require("fs");
+  if (!fs.existsSync(calaHome)) {
+    fs.mkdirSync(calaHome);
+  }
+  try {
+    fs.unlinkSync(`${calaHome}/nodejs-example-pid`);
+  } catch (e) {
+    console.log("No existing PID file to remove");
+  }
+  fs.writeFileSync(`${calaHome}/nodejs-example-pid`, pid.toString());
+};
+
 const main = async () => {
   const pgHost = process.env.PG_HOST || "localhost";
   const pgCon = `postgres://user:password@${pgHost}:5433/pg`;
+
+  console.log("Connecting to CalaLedger...");
+  storeServerPid(".cala", process.pid);
 
   const cala = await CalaLedger.connect({
     pgCon,
@@ -125,6 +154,10 @@ const main = async () => {
     .findByCode("RECORD_DEPOSIT");
 
   console.log("Retrieved Tx Template", retrievedTxTemplate.values());
+
+  while (true) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
 };
 
 main();

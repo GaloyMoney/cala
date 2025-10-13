@@ -30,7 +30,6 @@ async fn main() -> anyhow::Result<()> {
         "postgres://user:password@{pg_host}:5434/pg",
         pg_host = pg_host
     );
-    println!("Connecting to Postgres at: {pg_con}");
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&pg_con)

@@ -47,15 +47,13 @@ teardown() {
   error_msg=$(graphql_output '.errors[0].message')
   [[ "$id" == "$job_id" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
-  background bash -c "cd ${REPO_ROOT}/examples/nodejs && npm run start > ${REPO_ROOT}/.nodejs-example-logs 2>&1" &
-  NODEJS_EXAMPLE_PID=$!
-  echo $NODEJS_EXAMPLE_PID > "${NODEJS_EXAMPLE_PID_FILE}"
+  background bash -c "cd ${REPO_ROOT}/examples/nodejs && npm run start > ${REPO_ROOT}/.nodejs-example-logs 2>&1"
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 30 1 wait_for_new_import_job $job_count || true
   sleep 1
 
-  for i in {1..90}; do
+  for i in {1..120}; do
     exec_graphql 'list-accounts'
     accounts_after=$(graphql_output '.data.accounts.nodes | length')
     if [[ "$accounts_after" -gt "$accounts_before" ]]; then
