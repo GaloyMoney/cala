@@ -3,13 +3,13 @@
 load "helpers"
 
 setup_file() {
-  reset_pg
   start_server
 }
 
 teardown_file() {
   stop_server
   stop_nodejs_example
+  reset_server_pg
 }
 
 teardown() {

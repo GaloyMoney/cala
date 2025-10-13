@@ -24,6 +24,8 @@ services:
     image: postgres:16.4
     ports:
     - "5433:5432"
+    depends_on:
+      - server-pg
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
@@ -37,6 +39,8 @@ services:
     image: postgres:16.4
     ports:
     - "5434:5432"
+    depends_on:
+      - server-pg
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
