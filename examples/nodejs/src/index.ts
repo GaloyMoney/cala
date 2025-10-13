@@ -18,7 +18,7 @@ const main = async () => {
 
   const account = await cala.accounts().create({
     name: "MY NAME",
-    code: "USERS_ONE",
+    code: "USER:" + Math.floor(Math.random() * 1000),
     metadata: {
       something: "users",
       more: true,
@@ -27,7 +27,7 @@ const main = async () => {
   console.log("Account created", account.id());
   const account2 = await cala.accounts().create({
     name: "MY NAME",
-    code: "USERS_TWO",
+    code: "USER:" + Math.floor(Math.random() * 1000),
     metadata: {
       something: "users",
       more: true,
