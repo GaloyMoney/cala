@@ -5,14 +5,26 @@ GQL_ENDPOINT="http://localhost:2252/graphql"
 
 CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
-EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
 DOCKER_ENGINE="${DOCKER_ENGINE:-docker}"
+RUST_EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
+NODEJS_EXAMPLE_PID_FILE="${CALA_HOME}/nodejs-example-pid"
 
-reset_pg() {
+reset_examples_pg() {
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-node-example-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-node-example-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
+  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
+}
+
+# Utility function for a clean server DB for federated sync tests
+reset_server_pg() {
   $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
   $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-examples-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
+}
+
+reset_pg() {
+  reset_examples_pg
+  reset_server_pg
 }
 
 server_cmd() {
@@ -59,8 +71,14 @@ stop_server() {
 }
 
 stop_rust_example() {
-  if [[ -f "$EXAMPLE_PID_FILE" ]]; then
-    kill -9 $(cat "$EXAMPLE_PID_FILE") || true
+  if [[ -f "$RUST_EXAMPLE_PID_FILE" ]]; then
+    kill -9 $(cat "$RUST_EXAMPLE_PID_FILE") || true
+  fi
+}
+
+stop_nodejs_example() {
+  if [[ -f "$NODEJS_EXAMPLE_PID_FILE" ]]; then
+    kill -9 $(cat "$NODEJS_EXAMPLE_PID_FILE") || true
   fi
 }
 
@@ -135,4 +153,11 @@ random_uuid() {
   else
     uuidgen | tr '[:upper:]' '[:lower:]'
   fi
+}
+
+wait_for_new_import_job() {
+  job_count=$1
+
+  new_job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
+  [[ "$new_job_count" -gt "$job_count" ]] || return 1
 }

@@ -9,15 +9,8 @@ setup_file() {
 teardown_file() {
   stop_server
   stop_rust_example
+  reset_server_pg
 }
-
-wait_for_new_import_job() {
-  job_count=$1
-
-  new_job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
-  [[ "$new_job_count" -gt "$job_count" ]] || return 1
-}
-
 
 @test "rust: entities sync to server" {
   exec_graphql 'list-accounts'
@@ -49,7 +42,7 @@ wait_for_new_import_job() {
   for i in {1..90}; do
     exec_graphql 'list-accounts'
     accounts_after=$(graphql_output '.data.accounts.nodes | length')
-    if [[ "$accounts_after" -gt "$accounts_before" ]] then
+    if [[ "$accounts_after" -gt "$accounts_before" ]]; then
       break;
     fi
     sleep 1
