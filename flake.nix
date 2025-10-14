@@ -53,6 +53,7 @@
           napi-rs-cli
           yarn
           nodejs
+          tsx
           typescript
           ytt
           podman
