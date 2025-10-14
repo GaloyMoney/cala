@@ -1,3 +1,14 @@
+# [cala release v0.12.1](https://github.com/GaloyMoney/cala/releases/tag/0.12.1)
+
+
+### Miscellaneous Tasks
+
+- Bump rust_decimal
+- Bump serde from 1.0.219 to 1.0.228 (#560)
+- Bump rust_decimal_macros from 1.37.1 to 1.39.0 (#568)
+- Bump clap from 4.5.47 to 4.5.49 (#571)
+- Expore balance type (#570)
+
 # [cala release v0.12.0](https://github.com/GaloyMoney/cala/releases/tag/0.12.0)
 
 
