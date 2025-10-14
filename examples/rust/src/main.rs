@@ -23,13 +23,9 @@ fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
 async fn main() -> anyhow::Result<()> {
     let random_number = rand::rng().random_range(0..1000);
     let example_suffix = std::env::var("EXAMPLE_SUFFIX").unwrap_or(format!("{random_number:03}"));
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
 
     store_server_pid(".cala", std::process::id())?;
-    let pg_con = format!(
-        "postgres://user:password@{pg_host}:5434/pg",
-        pg_host = pg_host
-    );
+    let pg_con = "postgres://user:password@localhost:5433/pg".to_string();
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(20)
         .connect(&pg_con)
