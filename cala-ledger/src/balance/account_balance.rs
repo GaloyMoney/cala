@@ -6,7 +6,7 @@ use cala_types::balance::*;
 /// Representation of account's balance tracked in 3 distinct layers.
 #[derive(Debug, Clone)]
 pub struct AccountBalance {
-    balance_type: DebitOrCredit,
+    pub balance_type: DebitOrCredit,
     pub details: BalanceSnapshot,
 }
 
