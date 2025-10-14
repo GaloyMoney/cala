@@ -52,7 +52,7 @@ make setup-db
 # --- Build Test Artifacts ---
 echo "--- Building test artifacts---"
 # nix build . -L
-make build
+make build build-nodejs-bindings
 
 # --- Run Bats Tests ---
 echo "--- Running BATS tests ---"
