@@ -78,9 +78,7 @@ stop_rust_example() {
 
 stop_nodejs_example() {
   if [[ -f "$NODEJS_EXAMPLE_PID_FILE" ]]; then
-    PID=$(cat "$NODEJS_EXAMPLE_PID_FILE")
-    kill -TERM -$PID || true
-    kill -9 $PID || true
+    kill -9 $(cat "$NODEJS_EXAMPLE_PID_FILE") || true
   fi
 }
 
