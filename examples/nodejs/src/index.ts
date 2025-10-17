@@ -6,19 +6,6 @@ import {
   ParamDataTypeValues,
 } from "@galoymoney/cala-ledger";
 
-// pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
-//     create_cala_dir(cala_home)?;
-//     let _ = fs::remove_file(format!("{cala_home}/rust-example-pid"));
-//     fs::write(format!("{cala_home}/rust-example-pid"), pid.to_string())
-//         .context("Writing PID file")?;
-//     Ok(())
-// }
-//
-// fn create_cala_dir(bria_home: &str) -> anyhow::Result<()> {
-//     let _ = fs::create_dir(bria_home);
-//     Ok(())
-// }
-
 const storeServerPid = (calaHome: string, pid: number) => {
   const fs = require("fs");
   if (!fs.existsSync(calaHome)) {
@@ -41,7 +28,7 @@ const main = async () => {
 
   const cala = await CalaLedger.connect({
     pgCon,
-    outbox: { enabled: true, listenPort: 2258 },
+    outbox: { enabled: true },
   });
   console.log("CalaLedger connected");
 

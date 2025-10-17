@@ -1,5 +1,5 @@
 query listAccounts() {
-  accounts(first: 10) {
+  accounts(first: 15) {
     nodes {
       id
       name

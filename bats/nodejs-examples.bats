@@ -9,7 +9,6 @@ setup_file() {
 teardown_file() {
   stop_server
   stop_nodejs_example
-  reset_server_pg
 }
 
 teardown() {
@@ -37,7 +36,7 @@ teardown() {
     '{
       input: {
         jobId: $jobId,
-        endpoint: "http://localhost:2258"
+        endpoint: "http://localhost:2253"
       }
     }'
   )
@@ -47,7 +46,9 @@ teardown() {
   error_msg=$(graphql_output '.errors[0].message')
   [[ "$id" == "$job_id" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
-  background bash -c "cd ${REPO_ROOT}/examples/nodejs && npm run start > ${REPO_ROOT}/.nodejs-example-logs 2>&1"
+  background tsx ${REPO_ROOT}/examples/nodejs/src/index.ts > ${REPO_ROOT}/.nodejs-example-logs 2>&1 &
+  NODEJS_EXAMPLE_PID=$!
+  echo $NODEJS_EXAMPLE_PID > "${NODEJS_EXAMPLE_PID_FILE}"
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 30 1 wait_for_new_import_job $job_count || true

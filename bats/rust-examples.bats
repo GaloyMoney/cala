@@ -9,7 +9,20 @@ setup_file() {
 teardown_file() {
   stop_server
   stop_rust_example
-  reset_server_pg
+}
+
+teardown() {
+  if [[ "$BATS_TEST_COMPLETED" != "1" ]] || [[ "$BATS_ERROR_STATUS" != "" ]]; then
+    echo "Test failed! Displaying logs..." >&3
+    if [[ -f "${REPO_ROOT}/.rust-example-logs" ]]; then
+      echo "=== Rust Example Logs ===" >&3
+      cat "${REPO_ROOT}/.rust-example-logs" >&3
+    fi
+    echo "=== E2E Server Logs ===" >&3
+    if [[ -f .e2e-logs ]]; then
+      cat .e2e-logs >&3
+    fi
+  fi
 }
 
 @test "rust: entities sync to server" {
