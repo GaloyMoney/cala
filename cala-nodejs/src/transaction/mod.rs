@@ -3,7 +3,7 @@ mod values;
 use cala_ledger::velocity::Params;
 use cala_ledger::TransactionId;
 use cala_types::param::ParamDataType;
-use cel_interpreter::{CelError, CelValue};
+use cel_interpreter::CelValue;
 use chrono::DateTime;
 use rust_decimal::{prelude::FromPrimitive, Decimal};
 use serde_json::Value as JsonValue;

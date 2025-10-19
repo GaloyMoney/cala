@@ -54,7 +54,10 @@ impl CalaLedger {
 
   #[napi]
   pub fn transactions(&self) -> napi::Result<CalaTransactions> {
-    Ok(CalaTransactions::new(self.inner.transactions(), &self.inner))
+    Ok(CalaTransactions::new(
+      self.inner.transactions(),
+      &self.inner,
+    ))
   }
 
   #[napi]

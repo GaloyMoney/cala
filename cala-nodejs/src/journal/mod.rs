@@ -56,7 +56,7 @@ impl CalaJournals {
     new.id(id).name(new_journal.name);
 
     if let Some(code) = new_journal.code {
-        new.code(code);
+      new.code(code);
     }
 
     if let Some(description) = new_journal.description {
