@@ -42,15 +42,16 @@ impl TransactionRepo {
     ) -> Result<(), TransactionError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, tx_template_id, external_id, correlation_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
+            r#"INSERT INTO cala_transactions (data_source_id, id, journal_id, tx_template_id, external_id, correlation_id, created_at, effective)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)"#,
             origin as DataSourceId,
             transaction.values().id as TransactionId,
             transaction.values().journal_id as JournalId,
             transaction.values().tx_template_id as TxTemplateId,
             transaction.values().external_id,
             transaction.values().correlation_id,
-            recorded_at
+            recorded_at,
+            transaction.values().effective as chrono::NaiveDate,
         )
         .execute(op.as_executor())
         .await?;

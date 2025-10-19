@@ -1565,11 +1565,14 @@ name = "galoymoney_cala-ledger"
 version = "0.12.2-dev"
 dependencies = [
  "base64 0.22.1",
+ "cala-cel-interpreter",
  "cala-ledger",
  "cala-ledger-core-types",
+ "chrono",
  "napi",
  "napi-build",
  "napi-derive",
+ "rust_decimal",
  "serde",
  "serde_json",
  "uuid",

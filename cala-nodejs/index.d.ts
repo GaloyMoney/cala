@@ -25,7 +25,20 @@ export declare class CalaLedger {
   accounts(): CalaAccounts
   journals(): CalaJournals
   txTemplates(): CalaTxTemplates
+  transactions(): CalaTransactions
   awaitOutboxServer(): Promise<void>
+}
+
+export declare class CalaTransaction {
+  id(): string
+  values(): TransactionValues
+}
+
+export declare class CalaTransactions {
+  findById(transactionId: string): Promise<CalaTransaction>
+  findByExternalId(externalId: string): Promise<CalaTransaction>
+  voidTransaction(existingTxId: string): Promise<CalaTransaction>
+  post(txTemplateCode: string, params: JsonValue): Promise<CalaTransaction>
 }
 
 export declare class CalaTxTemplate {
@@ -76,7 +89,7 @@ export interface NewAccount {
 export interface NewJournal {
   id?: string
   name: string
-  code: string
+  code?: string
   externalId?: string
   description?: string
 }
@@ -144,6 +157,23 @@ export declare const enum ParamDataTypeValues {
   Date = 5,
   Timestamp = 6,
   Json = 7
+}
+
+export interface TransactionValues {
+  id: string
+  version: string
+  createdAt: string
+  modifiedAt: string
+  journalId: string
+  txTemplateId: string
+  entryIds: Array<string>
+  effective: string
+  correlationId: string
+  externalId?: string
+  description?: string
+  voidOf?: string
+  voidedBy?: string
+  metadata?: any
 }
 
 export interface TxTemplateValues {
