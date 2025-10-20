@@ -114,11 +114,6 @@ impl CalaTransactions {
       for param in params {
         param_types_map.insert(param.name.clone(), param.r#type.clone());
       }
-    } else {
-      // question: is this illegal or allowable?
-      return Err(napi::Error::from_reason(
-        "Transaction template has no parameters defined".to_string(),
-      ));
     }
 
     let params_object: HashMap<String, JsonValue> = serde_json::from_value(params)
