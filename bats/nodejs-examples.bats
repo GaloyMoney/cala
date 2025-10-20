@@ -75,8 +75,6 @@ teardown() {
   tx_template_code=$(graphql_output '.data.txTemplateFindByCode.txTemplate.code')
   [[ "$tx_template_code" != "RECORD_DEPOSIT" ]] || exit 1
 
-  sleep 10
-
   # transaction by external id
   variables=$(
     jq -n \
