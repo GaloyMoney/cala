@@ -1342,9 +1342,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.9.0"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51574a2e447ca840cf2d80b610b8c3e88088dc8477c5d3ba24e20c8f6f0d05af"
+checksum = "e936315f0f604d9b34f67684f01963fd6eb816cbcfe5ee2ec770fd7d0b61ee86"
 dependencies = [
  "async-graphql",
  "base64 0.22.1",
@@ -1352,20 +1352,24 @@ dependencies = [
  "derive_builder",
  "es-entity-macros",
  "im",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "pin-project",
  "schemars 1.0.4",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.17",
+ "tracing",
+ "tracing-opentelemetry",
  "uuid",
 ]
 
 [[package]]
 name = "es-entity-macros"
-version = "0.9.0"
+version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9beed351da1b6a67b0e82a815aee153bcf2187bf5f4702e6d7e6a48d38aa6f45"
+checksum = "c7130dc1d0205b2dc2928a41336b103d8510440b9b0bb9a344c3a0cbf59765a8"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
@@ -2089,9 +2093,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95dff584dee16aca1dea3073b966b9e97f26e52f8f09a3d00fa9499b198ef8a7"
+checksum = "0e12be50af95af1b818da9de22c96183d96b4b54c672faa69c101905172f598b"
 dependencies = [
  "async-trait",
  "chrono",
