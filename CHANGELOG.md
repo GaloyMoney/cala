@@ -1,3 +1,17 @@
+# [cala release v0.12.2](https://github.com/GaloyMoney/cala/releases/tag/0.12.2)
+
+
+### Features
+
+- Bindings for transactions (#578)
+- Add bindings for tx_templates create and find_by_code m…
+
+### Miscellaneous Tasks
+
+- Otel update (#581)
+- Bump thiserror from 2.0.16 to 2.0.17 (#576)
+- Cleanup bats tests (#577)
+
 # [cala release v0.12.1](https://github.com/GaloyMoney/cala/releases/tag/0.12.1)
 
 
