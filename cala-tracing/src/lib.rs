@@ -84,7 +84,7 @@ pub mod http {
         let extractor = HeaderExtractor(headers);
         let propagator = TraceContextPropagator::new();
         let ctx = propagator.extract(&extractor);
-        tracing::Span::current().set_parent(ctx)
+        let _ = tracing::Span::current().set_parent(ctx);
     }
 }
 
@@ -97,7 +97,7 @@ pub mod grpc {
     pub fn extract_tracing<T>(request: &tonic::Request<T>) {
         let propagator = TraceContextPropagator::new();
         let parent_cx = propagator.extract(&RequestContextExtractor(request));
-        tracing::Span::current().set_parent(parent_cx)
+        let _ = tracing::Span::current().set_parent(parent_cx);
     }
 
     struct RequestContextExtractor<'a, T>(&'a tonic::Request<T>);
