@@ -42,17 +42,17 @@ thiserror = "2.0.17"
 uuid = { version = "1.18", features = ["serde", "v7"] }
 regex = "1.11.2"
 tracing = "0.1.41"
-tracing-opentelemetry = "0.31.0"
+tracing-opentelemetry = "0.32.0"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
-opentelemetry = { version = "0.30.0" }
-opentelemetry_sdk = { version = "0.30.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.30.0", default-features = false, features = [
+opentelemetry = { version = "0.31.0" }
+opentelemetry_sdk = { version = "0.31.0", features = ["rt-tokio"] }
+opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "http-proto",
   "grpc-tonic",
   "reqwest-client",
 ] }
-opentelemetry-http = "0.30.0"
-opentelemetry-semantic-conventions = { version = "0.30.0", features = ["semconv_experimental"] }
+opentelemetry-http = "0.31.0"
+opentelemetry-semantic-conventions = { version = "0.31.0", features = ["semconv_experimental"] }
 tokio = { version = "1.47", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1.17", features = ["sync"] }
 serde = { version = "1.0.228", features = ["derive"] }
