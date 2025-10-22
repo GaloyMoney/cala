@@ -4,6 +4,7 @@ import {
   NewTxTemplateEntryValues,
   NewParamDefinitionValues,
   ParamDataTypeValues,
+  CalaTransaction,
 } from "@galoymoney/cala-ledger";
 
 const storeServerPid = (calaHome: string, pid: number) => {
@@ -88,10 +89,15 @@ const main = async () => {
     journalId: "params.journal_id",
     effective: "params.effective",
     metadata: "params.meta",
+    externalId: "params.external_id",
     description: "'Record a deposit'",
   };
 
   const txParams: NewParamDefinitionValues[] = [
+    {
+      name: "external_id",
+      type: ParamDataTypeValues.String,
+    },
     {
       name: "journal_id",
       type: ParamDataTypeValues.Uuid,
@@ -125,6 +131,7 @@ const main = async () => {
   const txTemplate = await cala.txTemplates().create({
     code: "RECORD_DEPOSIT",
     description: "Record deposit transaction",
+    externalId: "RECORD_DEPOSIT_v0.1",
     entries: [recordDepositDrEntry, recordDepositCrEntry],
     transaction: txInput,
     params: txParams,
@@ -141,6 +148,38 @@ const main = async () => {
     .findByCode("RECORD_DEPOSIT");
 
   console.log("Retrieved Tx Template", retrievedTxTemplate.values());
+
+  const externalId = "transaction_external_id-123";
+
+  const transactionParams = {
+    journal_id: journal.id(),
+    external_id: externalId,
+    currency: "USD",
+    amount: 100.0,
+    deposit_omnibus_account_id: account.id(),
+    credit_account_id: account2.id(),
+    effective: new Date().toISOString(),
+    meta: { something: "useful" },
+  };
+
+  const tx: CalaTransaction = await cala
+    .transactions()
+    .post(retrievedTxTemplate.values().code, transactionParams);
+
+  console.log("Posted transaction", tx.id(), tx.values());
+
+  const retrievedTx = await cala.transactions().findById(tx.id());
+
+  console.log("Retrieved transaction by ID", retrievedTx.values());
+
+  const retrievedTxByExternalId = await cala
+    .transactions()
+    .findByExternalId(externalId);
+
+  console.log(
+    "Retrieved transaction by External ID",
+    retrievedTxByExternalId.values(),
+  );
 
   while (true) {
     await new Promise((resolve) => setTimeout(resolve, 5000));

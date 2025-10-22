@@ -1,0 +1,16 @@
+query transactionByExternalId($externalId: String!) {
+  transactionByExternalId(externalId: $externalId) {
+    id
+    transactionId
+    version
+    txTemplateId
+    journalId
+    effective
+    correlationId
+    externalId
+    description
+    metadata
+    createdAt
+    modifiedAt
+  }
+}

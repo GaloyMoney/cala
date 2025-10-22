@@ -46,7 +46,7 @@ teardown() {
   error_msg=$(graphql_output '.errors[0].message')
   [[ "$id" == "$job_id" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
-  background tsx ${REPO_ROOT}/examples/nodejs/src/index.ts > ${REPO_ROOT}/.nodejs-example-logs 2>&1 &
+  background tsx ${REPO_ROOT}/examples/nodejs/src/index.ts > ${REPO_ROOT}/.nodejs-example-logs 2>&1
   NODEJS_EXAMPLE_PID=$!
   echo $NODEJS_EXAMPLE_PID > "${NODEJS_EXAMPLE_PID_FILE}"
 
@@ -65,6 +65,7 @@ teardown() {
 
   [[ "$accounts_after" -gt "$accounts_before" ]] || exit 1
 
+  # tx template
   variables=$(
     jq -n \
       --arg code "RECORD_DEPOSIT" \
@@ -74,4 +75,13 @@ teardown() {
   tx_template_code=$(graphql_output '.data.txTemplateFindByCode.txTemplate.code')
   [[ "$tx_template_code" != "RECORD_DEPOSIT" ]] || exit 1
 
+  # transaction by external id
+  variables=$(
+    jq -n \
+      --arg externalId "transaction_external_id-123" \
+    '{"externalId": $externalId}'
+  )
+  exec_graphql 'transaction-by-external-id' "$variables"
+  tx_external_id=$(graphql_output '.data.transactionByExternalId.externalId')
+  [[ "$tx_external_id" == "transaction_external_id-123" ]] || exit 1
 }

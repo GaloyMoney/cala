@@ -7,7 +7,7 @@ use values::*;
 pub struct NewJournal {
   pub id: Option<String>,
   pub name: String,
-  pub code: String,
+  pub code: Option<String>,
   pub external_id: Option<String>,
   pub description: Option<String>,
 }
@@ -51,8 +51,14 @@ impl CalaJournals {
     } else {
       cala_ledger::JournalId::new()
     };
+
     let mut new = cala_ledger::journal::NewJournal::builder();
     new.id(id).name(new_journal.name);
+
+    if let Some(code) = new_journal.code {
+      new.code(code);
+    }
+
     if let Some(description) = new_journal.description {
       new.description(description);
     }
