@@ -31,6 +31,11 @@ impl EntryRepo {
         Self { pool: pool.clone() }
     }
 
+    #[tracing::instrument(
+        name = "entry.list_for_account_set_id_by_created_at",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn list_for_account_set_id_by_created_at(
         &self,
         account_set_id: AccountSetId,

@@ -34,6 +34,7 @@ impl TransactionRepo {
     }
 
     #[cfg(feature = "import")]
+    #[tracing::instrument(name = "transaction.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
