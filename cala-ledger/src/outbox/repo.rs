@@ -13,6 +13,7 @@ impl OutboxRepo {
         Self { pool: pool.clone() }
     }
 
+    #[tracing::instrument(name = "outbox.highest_known_sequence", skip_all, err(level = "warn"))]
     pub async fn highest_known_sequence(&self) -> Result<EventSequence, sqlx::Error> {
         let row =
             sqlx::query!(r#"SELECT COALESCE(MAX(sequence), 0) AS "max!" FROM cala_outbox_events"#)
@@ -21,6 +22,7 @@ impl OutboxRepo {
         Ok(EventSequence::from(row.max as u64))
     }
 
+    #[tracing::instrument(name = "outbox.persist_events", skip_all, err(level = "warn"))]
     pub async fn persist_events(
         &self,
         db: &mut Transaction<'_, Postgres>,
@@ -59,6 +61,7 @@ impl OutboxRepo {
         Ok(events)
     }
 
+    #[tracing::instrument(name = "outbox.load_next_page", skip_all, err(level = "warn"))]
     pub async fn load_next_page(
         &self,
         from_sequence: EventSequence,

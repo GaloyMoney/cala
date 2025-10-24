@@ -28,6 +28,7 @@ impl BalanceRepo {
             .await
     }
 
+    #[instrument(name = "balance.find_in_op", skip_all, err(level = "warn"))]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -67,6 +68,7 @@ impl BalanceRepo {
         }
     }
 
+    #[instrument(name = "balance.find_all", skip_all, err(level = "warn"))]
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -268,6 +270,7 @@ impl BalanceRepo {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "balance.import_balance", skip_all, err(level = "warn"))]
     pub async fn import_balance(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -305,6 +308,7 @@ impl BalanceRepo {
         Ok(())
     }
 
+    #[instrument(name = "balance.load_all_for_update", skip_all, err(level = "warn"))]
     pub(crate) async fn load_all_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -350,6 +354,7 @@ impl BalanceRepo {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "balance.import_balance_update", skip_all, err(level = "warn"))]
     pub async fn import_balance_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,

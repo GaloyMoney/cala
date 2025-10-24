@@ -37,6 +37,11 @@ impl TxTemplateRepo {
         Self { pool: pool.clone() }
     }
 
+    #[tracing::instrument(
+        name = "tx_template.find_latest_version_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn find_latest_version_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -62,6 +67,7 @@ impl TxTemplateRepo {
     }
 
     #[cfg(feature = "import")]
+    #[tracing::instrument(name = "tx_template.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

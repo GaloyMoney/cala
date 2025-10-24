@@ -46,6 +46,7 @@ impl AccountRepo {
     }
 
     #[cfg(feature = "import")]
+    #[tracing::instrument(name = "account.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -72,6 +73,11 @@ impl AccountRepo {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "account.update_velocity_context_values_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn update_velocity_context_values_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

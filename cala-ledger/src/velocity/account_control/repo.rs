@@ -20,6 +20,7 @@ impl AccountControlRepo {
         }
     }
 
+    #[tracing::instrument(name = "account_control.create_in_op", skip_all, err(level = "warn"))]
     pub async fn create_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -37,6 +38,11 @@ impl AccountControlRepo {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "account_control.find_for_enforcement",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn find_for_enforcement(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,

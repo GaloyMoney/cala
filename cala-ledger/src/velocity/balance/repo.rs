@@ -27,6 +27,11 @@ impl VelocityBalanceRepo {
             _pool: pool.clone(),
         }
     }
+    #[tracing::instrument(
+        name = "velocity_balance.find_for_update",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -170,6 +175,11 @@ impl VelocityBalanceRepo {
         Ok(ret)
     }
 
+    #[tracing::instrument(
+        name = "velocity_balance.insert_new_snapshots",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(crate) async fn insert_new_snapshots(
         &self,
         op: &mut impl es_entity::AtomicOperation,
