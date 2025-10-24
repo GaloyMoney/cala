@@ -6,6 +6,7 @@ set -e
 trap 'echo "[ERROR] Command failed at line $LINENO: $BASH_COMMAND" >&2' ERR
 
 export SQLX_OFFLINE=true
+export RUST_BACKTRACE=1
 
 # Check for output file argument
 if [ $# -eq 0 ]; then
@@ -110,6 +111,8 @@ if [[ "$bench_failed" == true ]]; then
 fi
 if [[ "$load_failed" == true ]]; then
   echo "[WARN] Load tests encountered an error; see details above." >&2
+  echo "[INFO] Printing last 200 lines of load test output for diagnostics:" >&2
+  echo "$load_output" | tail -n 200 >&2
 fi
 
 echo "Performance report generated: $OUTPUT_FILE"
