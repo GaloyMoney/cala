@@ -32,6 +32,7 @@ impl EffectiveBalanceRepo {
             .await
     }
 
+    #[instrument(name = "effective_balance.find_in_op", skip_all, err(level = "warn"))]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -71,6 +72,7 @@ impl EffectiveBalanceRepo {
         }
     }
 
+    #[instrument(name = "effective_balance.find_range", skip_all, err(level = "warn"))]
     pub(super) async fn find_range(
         &self,
         journal_id: JournalId,

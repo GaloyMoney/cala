@@ -32,6 +32,11 @@ impl VelocityLimitRepo {
         Self { pool: pool.clone() }
     }
 
+    #[tracing::instrument(
+        name = "velocity_limit.add_limit_to_control",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn add_limit_to_control(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -49,6 +54,11 @@ impl VelocityLimitRepo {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "velocity_limit.list_for_control",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn list_for_control(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,

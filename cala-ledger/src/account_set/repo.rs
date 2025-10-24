@@ -132,6 +132,11 @@ impl AccountSetRepo {
             .await
     }
 
+    #[tracing::instrument(
+        name = "account_set.list_children_by_created_at_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn list_children_by_created_at_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -383,6 +388,11 @@ impl AccountSetRepo {
         })
     }
 
+    #[tracing::instrument(
+        name = "account_set.add_member_account_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn add_member_account_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -725,6 +735,7 @@ impl AccountSetRepo {
     }
 
     #[cfg(feature = "import")]
+    #[tracing::instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -748,6 +759,11 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    #[tracing::instrument(
+        name = "account_set.fetch_mappings_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn fetch_mappings_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
