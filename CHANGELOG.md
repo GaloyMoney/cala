@@ -1,3 +1,10 @@
+# [cala release v0.12.3](https://github.com/GaloyMoney/cala/releases/tag/0.12.3)
+
+
+### Miscellaneous Tasks
+
+- Update es-entity (#587)
+
 # [cala release v0.12.2](https://github.com/GaloyMoney/cala/releases/tag/0.12.2)
 
 
