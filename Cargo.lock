@@ -1301,14 +1301,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "es-entity"
-version = "0.9.5"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a9b69f9008c88168f4200e4b53a5a24030ca263cc26e1b035e0002b5002e971"
+checksum = "5d010a1f22fd063f2e6ce457127d451deefba4e77be7ab4d2d5bf7643dc41024"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1331,9 +1331,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.9.5"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e360d04783bba4161e1d11040bdad40f4cfd4c3caf7129b50a2b5b5faa0afbf"
+checksum = "fadadcbaa9706ddeb66bdc6059538017d0b89cd6386fbffe6e7de733500eba71"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
@@ -2070,9 +2070,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e12be50af95af1b818da9de22c96183d96b4b54c672faa69c101905172f598b"
+checksum = "df3f22fd28416bd3c1630638a5b348a72602f60667bd7bfd3b7dfb03d36d21df"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3248,7 +3248,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3946,7 +3946,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4797,7 +4797,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
