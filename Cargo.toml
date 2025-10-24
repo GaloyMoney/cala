@@ -31,7 +31,7 @@ async-graphql = { version = "7.0.17", default-features = false, features = ["dat
 async-graphql-axum = "7.0.17"
 async-trait = "0.1.89"
 axum = { version = "0.8.4", features = ["macros"] }
-axum-extra = { version = "0.9.4", default-features = false, features = ["tracing", "typed-header"] }
+axum-extra = { version = "0.10.3", default-features = false, features = ["tracing", "typed-header"] }
 base64 = { version = "0.22.1" }
 cached = { version = "0.55", features = ["async"] }
 chrono = { version = "0.4.42", features = ["clock", "serde"], default-features = false }
