@@ -634,7 +634,7 @@ dependencies = [
  "cala-tracing",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.1",
  "futures",
  "job",
  "opentelemetry",
@@ -668,7 +668,7 @@ dependencies = [
  "cala-cel-interpreter",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.1",
  "rust_decimal",
  "rusty-money",
  "schemars 1.0.4",
@@ -749,7 +749,7 @@ dependencies = [
  "chrono",
  "clap",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.1",
  "futures",
  "job",
  "rust_decimal",
@@ -1301,7 +1301,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1310,11 +1310,9 @@ version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9b69f9008c88168f4200e4b53a5a24030ca263cc26e1b035e0002b5002e971"
 dependencies = [
- "async-graphql",
- "base64",
  "chrono",
  "derive_builder",
- "es-entity-macros",
+ "es-entity-macros 0.9.5",
  "im",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -1330,10 +1328,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "es-entity"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5d010a1f22fd063f2e6ce457127d451deefba4e77be7ab4d2d5bf7643dc41024"
+dependencies = [
+ "async-graphql",
+ "base64",
+ "chrono",
+ "derive_builder",
+ "es-entity-macros 0.10.1",
+ "im",
+ "pin-project",
+ "schemars 1.0.4",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "uuid",
+]
+
+[[package]]
 name = "es-entity-macros"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e360d04783bba4161e1d11040bdad40f4cfd4c3caf7129b50a2b5b5faa0afbf"
+dependencies = [
+ "convert_case",
+ "darling 0.21.3",
+ "pluralizer",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.107",
+]
+
+[[package]]
+name = "es-entity-macros"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fadadcbaa9706ddeb66bdc6059538017d0b89cd6386fbffe6e7de733500eba71"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
@@ -1823,7 +1857,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "tokio",
  "tower-service",
  "tracing",
@@ -2077,7 +2111,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.9.5",
  "futures",
  "rand 0.9.2",
  "schemars 1.0.4",
@@ -3248,7 +3282,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3946,7 +3980,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4797,7 +4831,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
