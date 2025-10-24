@@ -1,3 +1,10 @@
+# [cala release v0.12.4](https://github.com/GaloyMoney/cala/releases/tag/0.12.4)
+
+
+### Miscellaneous Tasks
+
+- More traces for sqlx queries (#588)
+
 # [cala release v0.12.3](https://github.com/GaloyMoney/cala/releases/tag/0.12.3)
 
 
