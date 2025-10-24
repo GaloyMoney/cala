@@ -2,6 +2,9 @@
 
 set -e
 
+# Print failing command and line number for easier CI debugging
+trap 'echo "[ERROR] Command failed at line $LINENO: $BASH_COMMAND" >&2' ERR
+
 export SQLX_OFFLINE=true
 
 # Check for output file argument
@@ -16,11 +19,24 @@ OUTPUT_FILE="$1"
 # Change to the project root directory
 cd "$(dirname "$0")/.."
 
+echo "[INFO] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Starting dependency reset" >&2
 make reset-deps
+echo "[INFO] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Dependencies ready" >&2
 
-cargo bench -p cala-perf
+bench_failed=false
+echo "[INFO] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Running criterion benchmarks" >&2
+if ! cargo bench -p cala-perf; then
+  bench_failed=true
+  echo "[WARN] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Benchmarks exited non-zero; continuing to produce report" >&2
+fi
+
 # Run load tests and extract just the summary table
-load_output=$(cargo run -p cala-perf 2>&1)
+load_failed=false
+echo "[INFO] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Running load tests" >&2
+load_output=$(cargo run -p cala-perf 2>&1) || {
+  load_failed=true
+  echo "[WARN] $(date -u +'%Y-%m-%dT%H:%M:%SZ') Load tests exited non-zero; continuing to produce report" >&2
+}
 
 {
 echo "## 🚀 Cala Performance Benchmark Results (non-representative)"
@@ -75,7 +91,11 @@ echo "### 🏋️ Load Testing Results (parallel-execution)"
 echo ""
 
 # Extract the summary table section, skip the header and separator lines
-echo "$load_output" | sed -n '/📋 PERFORMANCE SUMMARY TABLE/,/✅ All performance tests completed!/p' | sed '$d' | sed '1,2d'
+if [[ -n "$load_output" ]]; then
+  echo "$load_output" | sed -n '/📋 PERFORMANCE SUMMARY TABLE/,/✅ All performance tests completed!/p' | sed '$d' | sed '1,2d'
+else
+  echo "(no load test output captured)"
+fi
 
 echo "---"
 echo ""
@@ -83,5 +103,13 @@ echo "💡 **Note**: Performance results may vary based on system resources and 
 echo "These benchmarks help identify performance trends and potential bottlenecks."
 
 } > "$OUTPUT_FILE"
+
+# Emit failure diagnostics to CI log (stderr) after the report is written
+if [[ "$bench_failed" == true ]]; then
+  echo "[WARN] Benchmarks encountered an error; see details above." >&2
+fi
+if [[ "$load_failed" == true ]]; then
+  echo "[WARN] Load tests encountered an error; see details above." >&2
+fi
 
 echo "Performance report generated: $OUTPUT_FILE"
