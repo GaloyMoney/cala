@@ -71,8 +71,8 @@ protobuf-src = { version = "2.1" }
 futures = "0.3"
 http = "1.3.1"
 lazy_static = "1.5"
-lalrpop-util = { version = "0.20", features = ["lexer"] }
-lalrpop = { version = "0.20", features = ["lexer"] }
+lalrpop-util = { version = "0.22", features = ["lexer"] }
+lalrpop = { version = "0.22", features = ["lexer"] }
 rust_decimal_macros = "1.39"
 rust_decimal = "1.39"
 rusty-money = { version = "0.4", features = ["iso", "crypto"] }
