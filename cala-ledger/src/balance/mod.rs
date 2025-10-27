@@ -87,6 +87,7 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
+    #[instrument(name = "cala_ledger.balance.update_balances_in_op", skip(self, op, entries, account_set_mappings), fields(journal_id = %journal_id, entries_count = entries.len()))]
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -178,6 +179,7 @@ impl Balances {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.balance.find_balances_for_update", skip(self, db), fields(journal_id = %journal_id, account_id = %account_id))]
     pub(crate) async fn find_balances_for_update(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -231,6 +233,7 @@ impl Balances {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.balance.sync_balance_creation", skip(self, db, balance), fields(origin = %origin))]
     pub async fn sync_balance_creation(
         &self,
         mut db: sqlx::Transaction<'_, sqlx::Postgres>,
@@ -253,6 +256,7 @@ impl Balances {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.balance.sync_balance_update", skip(self, db, balance), fields(origin = %origin))]
     pub async fn sync_balance_update(
         &self,
         mut db: sqlx::Transaction<'_, sqlx::Postgres>,

@@ -65,7 +65,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create", skip(self, db))]
+    #[instrument(name = "cala_ledger.account_sets.create_in_op", skip(self, db))]
     pub async fn create_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -88,6 +88,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    #[instrument(name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
     pub async fn create_all(
         &self,
         new_account_sets: Vec<NewAccountSet>,
@@ -156,6 +157,7 @@ impl AccountSets {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.account_sets.add_member", skip(self, member), fields(account_set_id = %account_set_id))]
     pub async fn add_member(
         &self,
         account_set_id: AccountSetId,
@@ -169,6 +171,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    #[instrument(name = "cala_ledger.account_sets.add_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id))]
     pub async fn add_member_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -247,6 +250,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    #[instrument(name = "cala_ledger.account_sets.remove_member", skip(self, member), fields(account_set_id = %account_set_id))]
     pub async fn remove_member(
         &self,
         account_set_id: AccountSetId,
@@ -260,6 +264,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
+    #[instrument(name = "cala_ledger.account_sets.remove_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id))]
     pub async fn remove_member_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
