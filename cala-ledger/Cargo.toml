@@ -37,7 +37,6 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
 tonic = { workspace = true }
-tonic-prost = { workspace = true }
 tonic-health = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
@@ -57,4 +56,3 @@ rust_decimal_macros = { workspace = true }
 [build-dependencies]
 protobuf-src = { workspace = true }
 tonic-build = { workspace = true }
-tonic-prost-build = { workspace = true }
