@@ -308,7 +308,7 @@ impl BalanceRepo {
         Ok(())
     }
 
-    #[instrument(name = "balance.load_all_for_update", skip_all, err(level = "warn"))]
+    #[instrument(name = "balance.load_all_for_update", skip(op), err(level = "warn"))]
     pub(crate) async fn load_all_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
