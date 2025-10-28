@@ -18,7 +18,7 @@ uuid = { workspace = true, features = ["serde", "v7"] }
 rust_decimal = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-napi = { version = "3.3.0", default-features = false, features = ["tokio_rt", "serde-json"] }
+napi = { version = "3.4.0", default-features = false, features = ["tokio_rt", "serde-json"] }
 napi-derive = "3.2.5"
 
 [build-dependencies]
