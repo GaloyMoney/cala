@@ -1,5 +1,6 @@
 use es_entity::*;
 use sqlx::PgPool;
+use tracing::instrument;
 
 use crate::primitives::DataSourceId;
 
