@@ -1,6 +1,9 @@
 use es_entity::*;
 use sqlx::PgPool;
 
+#[cfg(feature = "import")]
+use tracing::instrument;
+
 use crate::primitives::DataSourceId;
 
 use super::{entity::*, error::JournalError};
@@ -31,7 +34,7 @@ impl JournalRepo {
     }
 
     #[cfg(feature = "import")]
-    #[tracing::instrument(name = "journal.import_in_op", skip_all, err(level = "warn"))]
+    #[instrument(name = "journal.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

@@ -4,6 +4,7 @@ mod repo;
 
 use sqlx::PgPool;
 use std::collections::HashMap;
+use tracing::instrument;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
@@ -36,6 +37,7 @@ impl Entries {
         }
     }
 
+    #[instrument(name = "cala_ledger.entries.find_all", skip_all)]
     pub async fn find_all(
         &self,
         entry_ids: &[EntryId],
@@ -43,6 +45,7 @@ impl Entries {
         self.repo.find_all(entry_ids).await
     }
 
+    #[instrument(name = "cala_ledger.entries.list_for_account_id", skip_all)]
     pub async fn list_for_account_id(
         &self,
         account_id: AccountId,
@@ -54,6 +57,7 @@ impl Entries {
             .await
     }
 
+    #[instrument(name = "cala_ledger.entries.list_for_account_set_id", skip_all)]
     pub async fn list_for_account_set_id(
         &self,
         account_id: AccountSetId,
@@ -65,6 +69,7 @@ impl Entries {
             .await
     }
 
+    #[instrument(name = "cala_ledger.entries.list_for_journal_id", skip_all)]
     pub async fn list_for_journal_id(
         &self,
         journal_id: JournalId,
@@ -76,6 +81,7 @@ impl Entries {
             .await
     }
 
+    #[instrument(name = "cala_ledger.entries.list_for_transaction_id", skip_all)]
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
@@ -97,6 +103,7 @@ impl Entries {
         Ok(entries)
     }
 
+    #[instrument(name = "cala_ledger.entries.new_entries_for_voided_tx", skip_all)]
     pub async fn new_entries_for_voided_tx(
         &self,
         voiding_tx_id: TransactionId,
@@ -136,6 +143,7 @@ impl Entries {
         Ok(new_entries)
     }
 
+    #[instrument(name = "cala_ledger.entries.create_all_in_op", skip_all)]
     pub(crate) async fn create_all_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -157,6 +165,7 @@ impl Entries {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.entries.sync_entry_creation", skip_all)]
     pub(crate) async fn sync_entry_creation(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,

@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use tracing::instrument;
 
 use es_entity::{DbOp, DbOpWithTime};
 
@@ -11,6 +12,7 @@ pub struct LedgerOperation<'t> {
 }
 
 impl<'t> LedgerOperation<'t> {
+    #[instrument(name = "ledger_operation.init", skip_all, err)]
     pub(crate) async fn init(
         pool: &PgPool,
         outbox: &Outbox,
@@ -47,6 +49,7 @@ impl<'t> LedgerOperation<'t> {
             .extend(events.into_iter().map(|e| e.into()))
     }
 
+    #[instrument(name = "ledger_operation.commit", skip(self), fields(events_count = self.accumulated_events.len()), err)]
     pub async fn commit(self) -> Result<(), sqlx::Error> {
         let tx = sqlx::Transaction::from(self.db_op);
         if self.accumulated_events.is_empty() {

@@ -11,6 +11,9 @@ use cala_types::{
 
 use super::data::*;
 
+type BalanceRangeResult =
+    HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
+
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
@@ -146,15 +149,13 @@ impl EffectiveBalanceRepo {
         Ok((first, last, last_version - first_version))
     }
 
+    #[instrument(name = "cala_ledger.balances.effective.find_range_all", skip_all)]
     pub(super) async fn find_range_all(
         &self,
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<
-        HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
-        BalanceError,
-    > {
+    ) -> Result<BalanceRangeResult, BalanceError> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -257,7 +258,6 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
         name = "cala_ledger.balances.effective.find_for_update",
         skip(self, op)
     )]
@@ -364,7 +364,6 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
         name = "cala_ledger.balances.effective.insert_new_snapshots",
         skip(self, op, data)
     )]

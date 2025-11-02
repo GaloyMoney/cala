@@ -99,13 +99,12 @@ pub enum Literal {
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::ExpressionParser;
-    use crate::{ArithmeticOp::*, Expression, Expression::*, Literal::*, Member::*};
+    use crate::{
+        parse_expression, ArithmeticOp::*, Expression, Expression::*, Literal::*, Member::*,
+    };
 
     fn parse(input: &str) -> Expression {
-        ExpressionParser::new()
-            .parse(input)
-            .unwrap_or_else(|e| panic!("{}", e))
+        parse_expression(input).unwrap_or_else(|e| panic!("{}", e))
     }
 
     fn assert_parse_eq(input: &str, expected: Expression) {

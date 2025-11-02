@@ -57,6 +57,7 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
+    #[instrument(name = "cala_ledger.tx_template.create_in_op", skip(self, db), err)]
     pub async fn create_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -85,13 +86,13 @@ impl TxTemplates {
         self.repo.list_by_code(cursor, direction).await
     }
 
+    #[instrument(name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err)]
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
         self.repo.find_by_code(code.as_ref().to_string()).await
     }
 
     #[instrument(
-        level = "trace",
-        name = "cala_ledger.tx_template.prepare_transaction",
+        name = "cala_ledger.tx_template.prepare_transaction_in_op",
         skip(self, db)
     )]
     pub(crate) async fn prepare_transaction_in_op(
@@ -150,6 +151,18 @@ impl TxTemplates {
         })
     }
 
+    #[instrument(
+        name = "tx_template.prep_entries",
+        skip(self, tmpl, ctx),
+        fields(
+            template_id = %tmpl.id,
+            template_code = %tmpl.code,
+            transaction_id = %transaction_id,
+            journal_id = %journal_id,
+            entries_count = tmpl.entries.len()
+        ),
+        err
+    )]
     fn prep_entries(
         &self,
         tmpl: &TxTemplateValues,
@@ -211,6 +224,16 @@ impl TxTemplates {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(
+        name = "tx_template.sync_creation",
+        skip(self, db, values),
+        fields(
+            template_id = %values.id,
+            template_code = %values.code,
+            origin = ?origin
+        ),
+        err
+    )]
     pub async fn sync_tx_template_creation(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,

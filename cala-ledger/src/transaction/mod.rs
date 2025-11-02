@@ -37,6 +37,7 @@ impl Transactions {
         }
     }
 
+    #[instrument(name = "cala_ledger.transactions.create_in_op", skip_all)]
     pub(crate) async fn create_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -47,6 +48,7 @@ impl Transactions {
         Ok(transaction)
     }
 
+    #[instrument(name = "cala_ledger.transactions.create_voided_tx_in_op", skip_all)]
     pub async fn create_voided_tx_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -111,6 +113,7 @@ impl Transactions {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.transactions.sync_transaction_creation", skip_all)]
     pub async fn sync_transaction_creation(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,
@@ -133,6 +136,7 @@ impl Transactions {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.transactions.sync_transaction_update", skip_all)]
     pub async fn sync_transaction_update(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,

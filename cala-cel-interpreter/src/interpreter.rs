@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use cel_parser::{
     ast::{self, ArithmeticOp, Expression, RelationOp},
-    parser::ExpressionParser,
+    parse_expression,
 };
 
 use crate::{cel_type::*, context::*, error::*, value::*};
@@ -27,14 +28,26 @@ impl CelExpression {
         })?)
     }
 
+    #[instrument(name = "cel.evaluate", skip_all, fields(expression = %self.source, context = tracing::field::Empty, result = tracing::field::Empty), err)]
     pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelError> {
-        match evaluate_expression(&self.expr, ctx)? {
+        // Record context with actual values for debugging
+        let context_debug = ctx.debug_context();
+        if !context_debug.is_empty() {
+            tracing::Span::current().record("context", &context_debug);
+        }
+
+        let result = match evaluate_expression(&self.expr, ctx)? {
             EvalType::Value(val) => Ok(val),
             EvalType::ContextItem(ContextItem::Value(val)) => Ok(val.clone()),
             _ => Err(CelError::Unexpected(
                 "evaluate didn't return a value".to_string(),
             )),
-        }
+        }?;
+
+        // Record the result value for debugging
+        tracing::Span::current().record("result", format!("{:?}", result));
+
+        Ok(result)
     }
 }
 
@@ -88,6 +101,7 @@ impl EvalType<'_> {
     }
 }
 
+#[instrument(name = "cel.evaluate_expression", skip_all, level = "debug", err)]
 fn evaluate_expression<'a>(
     expr: &Expression,
     ctx: &'a CelContext,
@@ -98,6 +112,7 @@ fn evaluate_expression<'a>(
     }
 }
 
+#[instrument(name = "cel.evaluate_expr", skip_all, level = "debug", err)]
 fn evaluate_expression_inner<'a>(
     expr: &Expression,
     ctx: &'a CelContext,
@@ -201,6 +216,7 @@ fn evaluate_expression_inner<'a>(
     }
 }
 
+#[instrument(name = "cel.evaluate_member", skip_all, level = "debug", err)]
 fn evaluate_member<'a>(
     target: EvalType<'a>,
     member: &ast::Member,
@@ -247,6 +263,7 @@ fn evaluate_member<'a>(
     }
 }
 
+#[instrument(name = "cel.evaluate_arithmetic", skip_all, level = "debug", err)]
 fn evaluate_arithmetic(
     op: ArithmeticOp,
     left: CelValue,
@@ -291,6 +308,7 @@ fn evaluate_arithmetic(
     }
 }
 
+#[instrument(name = "cel.evaluate_relation", skip_all, level = "debug", err)]
 fn evaluate_relation(
     op: RelationOp,
     left: CelValue,
@@ -390,9 +408,7 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
-        let expr = ExpressionParser::new()
-            .parse(&source)
-            .map_err(|e| CelError::CelParseError(e.to_string()))?;
+        let expr = parse_expression(&source).map_err(CelError::CelParseError)?;
         Ok(Self { source, expr })
     }
 }

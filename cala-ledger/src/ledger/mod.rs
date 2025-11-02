@@ -4,6 +4,7 @@ pub mod error;
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 pub use tracing::instrument;
+use tracing::Instrument;
 
 pub use config::*;
 use error::*;
@@ -46,6 +47,7 @@ pub struct CalaLedger {
 }
 
 impl CalaLedger {
+    #[instrument(name = "cala_ledger.init", skip_all)]
     pub async fn init(config: CalaLedgerConfig) -> Result<Self, LedgerError> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
@@ -63,7 +65,10 @@ impl CalaLedger {
             }
         };
         if config.exec_migrations {
-            sqlx::migrate!().run(&pool).await?;
+            sqlx::migrate!()
+                .run(&pool)
+                .instrument(tracing::info_span!("cala_ledger.migrations"))
+                .await?;
         }
 
         let outbox = Outbox::init(&pool).await?;
@@ -142,6 +147,11 @@ impl CalaLedger {
         &self.transactions
     }
 
+    #[instrument(
+        name = "cala_ledger.post_transaction",
+        skip(self, params),
+        fields(tx_template_code)
+    )]
     pub async fn post_transaction(
         &self,
         tx_id: TransactionId,
@@ -220,6 +230,7 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    #[instrument(name = "cala_ledger.void_transaction", skip(self))]
     pub async fn void_transaction(
         &self,
         voiding_tx_id: TransactionId,
@@ -432,6 +443,7 @@ impl CalaLedger {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.start_outbox_server", skip(outbox))]
     fn start_outbox_server(
         config: server::OutboxServerConfig,
         outbox: Outbox,

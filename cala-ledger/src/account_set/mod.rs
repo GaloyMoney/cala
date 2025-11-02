@@ -99,7 +99,7 @@ impl AccountSets {
         Ok(account_sets)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create_all", skip(self, db))]
+    #[instrument(name = "cala_ledger.account_sets.create_all_in_op", skip(self, db))]
     pub async fn create_all_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -171,7 +171,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.add_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id))]
+    #[instrument(name = "cala_ledger.account_sets.add_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id, is_account = tracing::field::Empty, is_account_set = tracing::field::Empty, member_id = tracing::field::Empty))]
     pub async fn add_member_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -181,6 +181,9 @@ impl AccountSets {
         let member = member.into();
         let (time, parents, account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
+                tracing::Span::current().record("is_account", true);
+                tracing::Span::current().record("is_account_set", false);
+                tracing::Span::current().record("member_id", tracing::field::display(&id));
                 let set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
                 let (time, parents) = self
                     .repo
@@ -189,6 +192,9 @@ impl AccountSets {
                 (time, parents, set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
+                tracing::Span::current().record("is_account", false);
+                tracing::Span::current().record("is_account_set", true);
+                tracing::Span::current().record("member_id", tracing::field::display(&id));
                 let mut accounts = self
                     .repo
                     .find_all_in_op::<AccountSet>(&mut *op, &[account_set_id, id])

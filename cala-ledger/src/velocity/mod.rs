@@ -8,6 +8,7 @@ mod limit;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
+use tracing::instrument;
 
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
@@ -42,6 +43,7 @@ impl Velocities {
         }
     }
 
+    #[instrument(name = "velocity.create_limit", skip_all)]
     pub async fn create_limit(
         &self,
         new_limit: NewVelocityLimit,
@@ -52,6 +54,7 @@ impl Velocities {
         Ok(limit)
     }
 
+    #[instrument(name = "velocity.create_limit_in_op", skip_all)]
     pub async fn create_limit_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -61,6 +64,7 @@ impl Velocities {
         Ok(res)
     }
 
+    #[instrument(name = "velocity.create_control", skip_all)]
     pub async fn create_control(
         &self,
         new_control: NewVelocityControl,
@@ -71,6 +75,7 @@ impl Velocities {
         Ok(control)
     }
 
+    #[instrument(name = "velocity.create_control_in_op", skip_all)]
     pub async fn create_control_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -80,6 +85,7 @@ impl Velocities {
         Ok(res)
     }
 
+    #[instrument(name = "velocity.add_limit_to_control", skip(self), fields(control_id = %control, limit_id = %limit))]
     pub async fn add_limit_to_control(
         &self,
         control: VelocityControlId,
@@ -93,6 +99,7 @@ impl Velocities {
         Ok(control)
     }
 
+    #[instrument(name = "velocity.add_limit_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
     pub async fn add_limit_to_control_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -103,6 +110,7 @@ impl Velocities {
         self.controls.find_by_id_in_op(db, control).await
     }
 
+    #[instrument(name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
     pub async fn attach_control_to_account(
         &self,
         control: VelocityControlId,
@@ -117,6 +125,7 @@ impl Velocities {
         Ok(control)
     }
 
+    #[instrument(name = "velocity.attach_control_to_account_set", skip(self), fields(control_id = %control, account_set_id = %account_set_id))]
     pub async fn attach_control_to_account_set(
         &self,
         control: VelocityControlId,
@@ -136,6 +145,7 @@ impl Velocities {
         Ok(control)
     }
 
+    #[instrument(name = "velocity.attach_control_to_account_in_op", skip(self, db), fields(control_id = %control_id, account_id = %account_id))]
     pub async fn attach_control_to_account_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -147,6 +157,7 @@ impl Velocities {
             .await
     }
 
+    #[instrument(name = "velocity.attach_control_to_account_set_in_op", skip(self, db), fields(control_id = %control_id, account_set_id = %account_set_id))]
     pub async fn attach_control_to_account_set_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -158,6 +169,7 @@ impl Velocities {
             .await
     }
 
+    #[instrument(name = "velocity.attach_control_internal", skip(self, db, account_id), fields(control_id = %control_id, account_id = tracing::field::Empty))]
     async fn attach_control_to_account_or_account_set_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -166,6 +178,7 @@ impl Velocities {
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
         let account_id = account_id.into();
+        tracing::Span::current().record("account_id", account_id.to_string());
 
         let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
         let limits = self
@@ -189,6 +202,7 @@ impl Velocities {
         Ok(control)
     }
 
+    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err)]
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -223,6 +237,7 @@ impl Velocities {
             .await
     }
 
+    #[instrument(name = "velocity.list_limits_for_control", skip(self), fields(control_id = %control_id))]
     pub async fn list_limits_for_control(
         &self,
         control_id: VelocityControlId,
@@ -235,6 +250,7 @@ impl Velocities {
         Ok(limits)
     }
 
+    #[instrument(name = "velocity.list_limits_for_control_in_op", skip(self, op), fields(control_id = %control_id), err)]
     pub async fn list_limits_for_control_in_op(
         &self,
         op: &mut LedgerOperation<'_>,
@@ -243,6 +259,7 @@ impl Velocities {
         self.limits.list_for_control(op, control_id).await
     }
 
+    #[instrument(name = "velocity.find_all_limits", skip(self), fields(count = limit_ids.len()), err)]
     pub async fn find_all_limits<T: From<VelocityLimit>>(
         &self,
         limit_ids: &[VelocityLimitId],
@@ -250,6 +267,7 @@ impl Velocities {
         self.limits.find_all(limit_ids).await
     }
 
+    #[instrument(name = "velocity.find_all_controls", skip(self), fields(count = control_ids.len()))]
     pub async fn find_all_controls<T: From<VelocityControl>>(
         &self,
         control_ids: &[VelocityControlId],

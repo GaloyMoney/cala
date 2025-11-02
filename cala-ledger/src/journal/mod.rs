@@ -72,6 +72,7 @@ impl Journals {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.journals.persist_in_op", skip_all)]
     pub async fn persist_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -88,6 +89,7 @@ impl Journals {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.journals.sync_journal_creation", skip(self, db))]
     pub async fn sync_journal_creation(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,
@@ -110,6 +112,7 @@ impl Journals {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.journals.sync_journal_update", skip(self, db))]
     pub async fn sync_journal_update(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,

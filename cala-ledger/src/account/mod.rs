@@ -35,6 +35,7 @@ impl Accounts {
         }
     }
 
+    #[instrument(name = "cala_ledger.accounts.create", skip_all)]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
@@ -42,7 +43,7 @@ impl Accounts {
         Ok(account)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create", skip(self, db))]
+    #[instrument(name = "cala_ledger.accounts.create_in_op", skip(self, db))]
     pub async fn create_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -53,6 +54,7 @@ impl Accounts {
         Ok(account)
     }
 
+    #[instrument(name = "cala_ledger.accounts.create_all", skip_all)]
     pub async fn create_all(
         &self,
         new_accounts: Vec<NewAccount>,
@@ -63,7 +65,7 @@ impl Accounts {
         Ok(accounts)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create_all", skip(self, db))]
+    #[instrument(name = "cala_ledger.accounts.create_all_in_op", skip(self, db))]
     pub async fn create_all_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -78,6 +80,7 @@ impl Accounts {
         Ok(accounts)
     }
 
+    #[instrument(name = "cala_ledger.accounts.find", skip_all)]
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
         self.repo.find_by_id(account_id).await
     }
@@ -125,6 +128,7 @@ impl Accounts {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.accounts.persist_in_op", skip_all)]
     pub async fn persist_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -139,6 +143,10 @@ impl Accounts {
         Ok(())
     }
 
+    #[instrument(
+        name = "cala_ledger.accounts.update_velocity_context_values_in_op",
+        skip_all
+    )]
     pub(crate) async fn update_velocity_context_values_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
@@ -150,6 +158,7 @@ impl Accounts {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.accounts.sync_account_creation", skip_all)]
     pub async fn sync_account_creation(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,
@@ -172,6 +181,7 @@ impl Accounts {
     }
 
     #[cfg(feature = "import")]
+    #[instrument(name = "cala_ledger.accounts.sync_account_update", skip_all)]
     pub async fn sync_account_update(
         &self,
         mut db: es_entity::DbOpWithTime<'_>,

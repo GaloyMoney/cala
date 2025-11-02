@@ -1,9 +1,11 @@
 use rust_decimal::Decimal;
+use tracing::instrument;
 
 use crate::{cel_type::*, error::*, value::*};
 
 use super::assert_arg;
 
+#[instrument(name = "cel.builtin.decimal.cast", skip_all, err, level = "debug")]
 pub fn cast(args: Vec<CelValue>) -> Result<CelValue, CelError> {
     match args.first() {
         Some(CelValue::Decimal(d)) => Ok(CelValue::Decimal(*d)),
@@ -16,6 +18,7 @@ pub fn cast(args: Vec<CelValue>) -> Result<CelValue, CelError> {
     }
 }
 
+#[instrument(name = "cel.builtin.decimal.add", skip_all, err, level = "debug")]
 pub fn add(args: Vec<CelValue>) -> Result<CelValue, CelError> {
     let a: &Decimal = assert_arg(args.first())?;
     let b: &Decimal = assert_arg(args.get(1))?;

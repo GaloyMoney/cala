@@ -1,5 +1,7 @@
 pub use cel_interpreter::CelContext;
+use tracing::instrument;
 
+#[instrument(name = "cel_context.initialize")]
 pub(crate) fn initialize() -> CelContext {
     let mut ctx = CelContext::new();
     ctx.add_variable("SETTLED", "SETTLED");

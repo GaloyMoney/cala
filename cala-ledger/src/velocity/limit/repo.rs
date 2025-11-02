@@ -1,5 +1,6 @@
 use es_entity::{EntityEvents, GenericEvent, *};
 use sqlx::PgPool;
+use tracing::instrument;
 
 use crate::{
     primitives::{DataSourceId, VelocityLimitId},
@@ -32,11 +33,7 @@ impl VelocityLimitRepo {
         Self { pool: pool.clone() }
     }
 
-    #[tracing::instrument(
-        name = "velocity_limit.add_limit_to_control",
-        skip_all,
-        err(level = "warn")
-    )]
+    #[instrument(name = "velocity_limit.add_limit_to_control", skip_all)]
     pub async fn add_limit_to_control(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -54,7 +51,7 @@ impl VelocityLimitRepo {
         Ok(())
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "velocity_limit.list_for_control",
         skip_all,
         err(level = "warn")
