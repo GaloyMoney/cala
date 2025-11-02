@@ -1,5 +1,7 @@
 use es_entity::*;
 use sqlx::PgPool;
+
+#[cfg(feature = "import")]
 use tracing::instrument;
 
 use crate::primitives::DataSourceId;
