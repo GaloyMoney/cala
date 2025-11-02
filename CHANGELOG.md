@@ -1,3 +1,10 @@
+# [cala release v0.12.8](https://github.com/GaloyMoney/cala/releases/tag/0.12.8)
+
+
+### Miscellaneous Tasks
+
+- More otel (#596)
+
 # [cala release v0.12.7](https://github.com/GaloyMoney/cala/releases/tag/0.12.7)
 
 
