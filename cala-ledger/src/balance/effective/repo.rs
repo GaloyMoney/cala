@@ -146,6 +146,7 @@ impl EffectiveBalanceRepo {
         Ok((first, last, last_version - first_version))
     }
 
+    #[instrument(name = "cala_ledger.balances.effective.find_range_all", skip_all)]
     pub(super) async fn find_range_all(
         &self,
         ids: &[BalanceId],
@@ -257,7 +258,6 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
         name = "cala_ledger.balances.effective.find_for_update",
         skip(self, op)
     )]
@@ -364,7 +364,6 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
-        level = "trace",
         name = "cala_ledger.balances.effective.insert_new_snapshots",
         skip(self, op, data)
     )]

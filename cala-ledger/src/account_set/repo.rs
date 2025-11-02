@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use es_entity::*;
 use sqlx::PgPool;
+use tracing::instrument;
 
 use std::collections::HashMap;
 
@@ -132,7 +133,7 @@ impl AccountSetRepo {
             .await
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "account_set.list_children_by_created_at_in_op",
         skip_all,
         err(level = "warn")
@@ -388,7 +389,7 @@ impl AccountSetRepo {
         })
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "account_set.add_member_account_and_return_parents",
         skip_all,
         err(level = "warn")
@@ -735,7 +736,7 @@ impl AccountSetRepo {
     }
 
     #[cfg(feature = "import")]
-    #[tracing::instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
+    #[instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -759,7 +760,7 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "account_set.fetch_mappings_in_op",
         skip_all,
         err(level = "warn")

@@ -191,6 +191,7 @@ impl Balances {
             .await
     }
 
+    #[instrument(name = "cala_ledger.balances.new_snapshots", skip_all)]
     fn new_snapshots(
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,

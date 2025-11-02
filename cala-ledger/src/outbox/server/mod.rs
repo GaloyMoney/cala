@@ -49,6 +49,7 @@ impl OutboxService for OutboxServer {
     }
 }
 
+#[instrument(name = "cala_ledger.outbox_server.start", skip(outbox))]
 pub(crate) async fn start(
     server_config: OutboxServerConfig,
     outbox: Outbox,
@@ -60,5 +61,9 @@ pub(crate) async fn start(
         ))
         .serve(([0, 0, 0, 0], server_config.listen_port).into())
         .await?;
+    tracing::info!(
+        "Outbox server started on port {}",
+        server_config.listen_port
+    );
     Ok(())
 }

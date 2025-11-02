@@ -2,6 +2,7 @@ use cel_interpreter::{CelContext, CelExpression};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use tracing::instrument;
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -44,6 +45,7 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
+    #[instrument(name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id), err)]
     pub fn window_for_enforcement(
         &self,
         ctx: &CelContext,
@@ -71,6 +73,7 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
+    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency), err)]
     pub fn enforce(
         &self,
         ctx: &CelContext,

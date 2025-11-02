@@ -2,6 +2,7 @@ use cached::proc_macro::cached;
 
 use es_entity::*;
 use sqlx::PgPool;
+use tracing::instrument;
 
 use std::sync::Arc;
 
@@ -37,7 +38,7 @@ impl TxTemplateRepo {
         Self { pool: pool.clone() }
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "tx_template.find_latest_version_in_op",
         skip_all,
         err(level = "warn")
@@ -67,7 +68,7 @@ impl TxTemplateRepo {
     }
 
     #[cfg(feature = "import")]
-    #[tracing::instrument(name = "tx_template.import_in_op", skip_all, err(level = "warn"))]
+    #[instrument(name = "tx_template.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -95,6 +96,12 @@ impl TxTemplateRepo {
     convert = "{ (id, version) }",
     result = true,
     sync_writes = "default"
+)]
+#[instrument(
+    name = "tx_template.find_versioned_cached",
+    skip(op),
+    fields(template_id = %id, version = version),
+    err(level = "warn")
 )]
 async fn find_versioned_template_cached(
     op: &mut impl es_entity::AtomicOperation,

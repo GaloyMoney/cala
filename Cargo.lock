@@ -562,6 +562,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.17",
+ "tracing",
  "uuid",
 ]
 
@@ -571,6 +572,7 @@ version = "0.12.8-dev"
 dependencies = [
  "lalrpop",
  "lalrpop-util",
+ "tracing",
 ]
 
 [[package]]
@@ -1237,9 +1239,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fa276b5458d25d4717030b274fba6157ab57d15d18c41cddec027579549c925"
+checksum = "39dbe0680ad641abdaeddb1c2e87576696118b4329139571e05d7de3dad1ac6a"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1262,9 +1264,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.3"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dba48d4d26c4254664853af1a1e353c9065b37ce08a18ffd11e7a09dafaa3d5d"
+checksum = "4690ea6523399069694973c889b2cfb36793238453c09c2298cc9422d89f8e2d"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
@@ -1986,9 +1988,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.4"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0772af6e237490d52436a01afe7e06e87c570c321ef1ba2d4826fc97e18bb5d7"
+checksum = "1dde8bdcb73030095662181226806254466d8ae49507c4a47e141e073d924b33"
 dependencies = [
  "async-trait",
  "chrono",

@@ -25,6 +25,25 @@ impl CelContext {
             .insert(name.into(), ContextItem::Value(value.into()));
     }
 
+    /// Returns a debug representation of all context variables with their values
+    /// Useful for tracing/debugging - excludes built-in functions and packages
+    pub fn debug_context(&self) -> String {
+        let vars: Vec<_> = self
+            .idents
+            .iter()
+            .filter_map(|(name, item)| match item {
+                ContextItem::Value(val) => Some(format!("{}={:?}", name, val)),
+                _ => None,
+            })
+            .collect();
+
+        if vars.is_empty() {
+            String::new()
+        } else {
+            vars.join(", ")
+        }
+    }
+
     pub fn new() -> Self {
         let mut idents = HashMap::new();
         idents.insert(

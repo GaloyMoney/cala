@@ -1,6 +1,7 @@
 use crate::primitives::{AccountId, AccountSetId, DataSourceId, EntryId, JournalId, TransactionId};
 use es_entity::*;
 use sqlx::PgPool;
+use tracing::instrument;
 
 use super::{entity::*, error::*};
 
@@ -31,7 +32,7 @@ impl EntryRepo {
         Self { pool: pool.clone() }
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "entry.list_for_account_set_id_by_created_at",
         skip_all,
         err(level = "warn")

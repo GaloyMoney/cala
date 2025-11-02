@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use tracing::instrument;
 
 use cala_types::{
     entry::EntryValues, transaction::TransactionValues, velocity::VelocityContextAccountValues,
@@ -29,6 +30,7 @@ impl EvalContext {
         }
     }
 
+    #[instrument(name = "velocity.context_for_entry", skip(self, entry), fields(account_id = %account_id, entry_id = %entry.id), level = "debug")]
     pub fn context_for_entry(&mut self, account_id: AccountId, entry: &EntryValues) -> CelContext {
         let cel_entry = self
             .entry_values

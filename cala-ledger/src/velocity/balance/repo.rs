@@ -1,4 +1,5 @@
 use sqlx::PgPool;
+use tracing::instrument;
 
 use std::collections::HashMap;
 
@@ -27,7 +28,7 @@ impl VelocityBalanceRepo {
             _pool: pool.clone(),
         }
     }
-    #[tracing::instrument(
+    #[instrument(
         name = "velocity_balance.find_for_update",
         skip_all,
         err(level = "warn")
@@ -175,7 +176,7 @@ impl VelocityBalanceRepo {
         Ok(ret)
     }
 
-    #[tracing::instrument(
+    #[instrument(
         name = "velocity_balance.insert_new_snapshots",
         skip_all,
         err(level = "warn")

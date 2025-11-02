@@ -3,6 +3,7 @@ pub mod error;
 
 use cel_interpreter::{CelContext, CelMap, CelValue};
 use std::collections::HashMap;
+use tracing::instrument;
 
 pub use cala_types::param::*;
 
@@ -24,6 +25,7 @@ impl Params {
         self.values.insert(k.into(), v.into());
     }
 
+    #[instrument(name = "params.into_context", skip(self, defs), fields(params_count = self.values.len()), err)]
     pub(crate) fn into_context(
         mut self,
         defs: Option<&Vec<ParamDefinition>>,

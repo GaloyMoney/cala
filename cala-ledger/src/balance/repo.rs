@@ -122,11 +122,7 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(
-        level = "trace",
-        name = "cala_ledger.balances.find_for_update",
-        skip(self, op)
-    )]
+    #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op))]
     pub(super) async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -187,7 +183,6 @@ impl BalanceRepo {
     }
 
     #[instrument(
-    level = "trace",
     name = "cala_ledger.balances.insert_new_snapshots",
     skip(self, op, new_balances)
     fields(n_new_balances)
