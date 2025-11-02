@@ -55,6 +55,10 @@ pub(crate) async fn start(
     outbox: Outbox,
 ) -> Result<(), OutboxServerError> {
     let outbox_service = OutboxServer { outbox };
+    tracing::info!(
+        "Outbox server started on port {}",
+        server_config.listen_port
+    );
     Server::builder()
         .add_service(outbox_service_server::OutboxServiceServer::new(
             outbox_service,
@@ -62,7 +66,7 @@ pub(crate) async fn start(
         .serve(([0, 0, 0, 0], server_config.listen_port).into())
         .await?;
     tracing::info!(
-        "Outbox server started on port {}",
+        "Outbox server stopped on port {}",
         server_config.listen_port
     );
     Ok(())
