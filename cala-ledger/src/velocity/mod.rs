@@ -178,7 +178,7 @@ impl Velocities {
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
         let account_id = account_id.into();
-        tracing::Span::current().record("account_id", &account_id.to_string());
+        tracing::Span::current().record("account_id", account_id.to_string());
 
         let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
         let limits = self

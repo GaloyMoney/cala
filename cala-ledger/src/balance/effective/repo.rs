@@ -11,6 +11,8 @@ use cala_types::{
 
 use super::data::*;
 
+type BalanceRangeResult = HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
+
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
@@ -152,10 +154,7 @@ impl EffectiveBalanceRepo {
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<
-        HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
-        BalanceError,
-    > {
+    ) -> Result<BalanceRangeResult, BalanceError> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
