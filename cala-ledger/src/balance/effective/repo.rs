@@ -11,7 +11,8 @@ use cala_types::{
 
 use super::data::*;
 
-type BalanceRangeResult = HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
+type BalanceRangeResult =
+    HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
 
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
