@@ -15,6 +15,7 @@ fail-on-warnings = []
 [dependencies]
 lalrpop-util = { workspace = true }
 tracing = { workspace = true }
+cached = { workspace = true }
 
 [build-dependencies]
 lalrpop = { workspace = true }

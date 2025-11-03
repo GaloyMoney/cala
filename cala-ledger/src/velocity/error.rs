@@ -51,7 +51,7 @@ impl From<sqlx::Error> for VelocityError {
 }
 
 #[derive(Error, Debug)]
-#[error("Velocity limit {limit_id} exceeded for account {account_id} - Limit: {currency} {limit}, Requested: {requested}")]
+#[error("Velocity limit exceeded")]
 pub struct LimitExceededError {
     pub account_id: AccountId,
     pub currency: Currency,

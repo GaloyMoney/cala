@@ -2,7 +2,7 @@ use cel_interpreter::{CelContext, CelExpression};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{field, instrument, Span};
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -73,7 +73,7 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
-    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency), err)]
+    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err)]
     pub fn enforce(
         &self,
         ctx: &CelContext,
@@ -104,7 +104,7 @@ impl AccountVelocityLimit {
             let requested = balance.available(limit.layer);
 
             if requested > limit.amount {
-                return Err(LimitExceededError {
+                let err = LimitExceededError {
                     account_id: snapshot.account_id,
                     currency: snapshot.currency,
                     direction: limit.enforcement_direction,
@@ -112,8 +112,12 @@ impl AccountVelocityLimit {
                     layer: limit.layer,
                     limit: limit.amount,
                     requested,
-                }
-                .into());
+                };
+                Span::current().record("velocity.limit", field::display(&err.limit));
+                Span::current().record("velocity.requested", field::display(&err.requested));
+                Span::current().record("velocity.layer", field::debug(&err.layer));
+                Span::current().record("velocity.direction", field::debug(&err.direction));
+                return Err(err.into());
             }
         }
 

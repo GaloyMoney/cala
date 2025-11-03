@@ -167,7 +167,7 @@ impl CalaLedger {
     }
 
     #[instrument(
-        name = "cala_ledger.transaction_post",
+        name = "cala_ledger.post_transaction_in_op",
         skip(self, db)
         fields(transaction_id, external_id)
     )]

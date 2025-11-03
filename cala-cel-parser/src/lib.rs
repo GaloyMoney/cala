@@ -1,6 +1,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
+use cached::proc_macro::cached;
 use lalrpop_util::lalrpop_mod;
 use tracing::instrument;
 
@@ -27,13 +28,15 @@ impl std::fmt::Display for ParseErrors {
 
 impl std::error::Error for ParseErrors {}
 
-/// Instrumented wrapper for parsing CEL expressions
+/// Instrumented wrapper for parsing CEL expressions with caching
 ///
 /// This provides visibility into parsing operations while using the
-/// LALRPOP-generated parser internally.
+/// LALRPOP-generated parser internally. Parsing results are cached
+/// to avoid re-parsing the same expression multiple times.
+#[cached(size = 10000)]
 #[instrument(name = "cel.parse", skip(source), fields(expression = %source), err)]
-pub fn parse_expression(source: &str) -> Result<Expression, String> {
+pub fn parse_expression(source: String) -> Result<Expression, String> {
     parser::ExpressionParser::new()
-        .parse(source)
+        .parse(&source)
         .map_err(|e| e.to_string())
 }
