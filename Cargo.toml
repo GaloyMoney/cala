@@ -33,7 +33,7 @@ async-trait = "0.1"
 axum = { version = "0.8.6", features = ["macros"] }
 axum-extra = { version = "0.10.3", default-features = false, features = ["tracing", "typed-header"] }
 base64 = { version = "0.22.1" }
-cached = { version = "0.55", features = ["async"] }
+cached = { version = "0.56", features = ["async"] }
 chrono = { version = "0.4.42", features = ["clock", "serde"], default-features = false }
 clap = { version = "4.5", features = ["derive", "env", "cargo"] }
 derive_builder = "0.20.1"
