@@ -570,6 +570,7 @@ dependencies = [
 name = "cala-cel-parser"
 version = "0.12.9-dev"
 dependencies = [
+ "cached",
  "lalrpop",
  "lalrpop-util",
  "tracing",

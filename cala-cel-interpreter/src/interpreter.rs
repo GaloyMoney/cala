@@ -408,7 +408,7 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
-        let expr = parse_expression(&source).map_err(CelError::CelParseError)?;
+        let expr = parse_expression(source.clone()).map_err(CelError::CelParseError)?;
         Ok(Self { source, expr })
     }
 }

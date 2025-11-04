@@ -104,7 +104,7 @@ mod tests {
     };
 
     fn parse(input: &str) -> Expression {
-        parse_expression(input).unwrap_or_else(|e| panic!("{}", e))
+        parse_expression(input.to_string()).unwrap_or_else(|e| panic!("{}", e))
     }
 
     fn assert_parse_eq(input: &str, expected: Expression) {
