@@ -1,3 +1,10 @@
+# [cala release v0.12.9](https://github.com/GaloyMoney/cala/releases/tag/0.12.9)
+
+
+### Performance
+
+- Add cache for faster AST parsing (#597)
+
 # [cala release v0.12.8](https://github.com/GaloyMoney/cala/releases/tag/0.12.8)
 
 

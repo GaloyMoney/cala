@@ -2,7 +2,7 @@
 name = "cala-cel-parser"
 description = "A parser for the Common Expression Language (CEL)"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.12.9-dev"
+version = "0.12.9"
 authors = ["Justin Carter <justin@galoy.io>"]
 edition = "2021"
 license = "Apache-2.0"
