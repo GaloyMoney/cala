@@ -22,4 +22,4 @@ napi = { version = "3.4.0", default-features = false, features = ["tokio_rt", "s
 napi-derive = "3.2.5"
 
 [build-dependencies]
-napi-build = "2.2.3"
+napi-build = "2.2.4"
