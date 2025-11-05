@@ -1989,9 +1989,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.6"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1dde8bdcb73030095662181226806254466d8ae49507c4a47e141e073d924b33"
+checksum = "7bb6e8fb54751afd9b5c6103c53c2888f09ed370216ea94cdc2873c18f1f58b2"
 dependencies = [
  "async-trait",
  "chrono",
