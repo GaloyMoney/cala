@@ -28,7 +28,7 @@ impl BalanceRepo {
             .await
     }
 
-    #[instrument(name = "balance.find_in_op", skip_all, err(level = "warn"))]
+    #[instrument(name = "balance.find_in_op", skip_all)]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
