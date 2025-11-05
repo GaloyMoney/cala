@@ -34,6 +34,14 @@ CREATE INDEX idx_job_executions_poller_instance
   ON job_executions(poller_instance_id)
   WHERE state = 'running';
 
+CREATE INDEX idx_job_executions_running_alive_at
+  ON job_executions(alive_at)
+  WHERE state = 'running';
+
+CREATE INDEX idx_job_executions_pending_execute_at
+  ON job_executions(execute_at)
+  WHERE state = 'pending';
+
 CREATE OR REPLACE FUNCTION notify_job_execution_insert() RETURNS TRIGGER AS $$
 BEGIN
   PERFORM pg_notify('job_execution', '');
