@@ -16,6 +16,7 @@ pub use cala_types::{
 use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
+    account::{Account, Accounts},
     journal::Journals,
     ledger_operation::*,
     outbox::*,
@@ -35,17 +36,24 @@ pub struct Balances {
     #[allow(dead_code)]
     outbox: Outbox,
     journals: Journals,
+    accounts: Accounts,
     effective: EffectiveBalances,
     _pool: PgPool,
 }
 
 impl Balances {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox, journals: &Journals) -> Self {
+    pub(crate) fn new(
+        pool: &PgPool,
+        outbox: Outbox,
+        journals: &Journals,
+        accounts: &Accounts,
+    ) -> Self {
         Self {
             repo: BalanceRepo::new(pool),
             effective: EffectiveBalances::new(pool),
             outbox,
             journals: journals.clone(),
+            accounts: accounts.clone(),
             _pool: pool.clone(),
         }
     }
@@ -97,9 +105,19 @@ impl Balances {
         created_at: DateTime<Utc>,
         account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), BalanceError> {
-        let journal = self.journals.find(journal_id).await?;
+        let journal = self.journals.find_in_op(op, journal_id).await?;
         if journal.is_locked() {
             return Err(BalanceError::JournalLocked(journal.id));
+        }
+        let account_ids: Vec<AccountId> = entries.iter().map(|entry| entry.account_id).collect();
+
+        let accounts = self
+            .accounts
+            .find_all_in_op::<Account>(op, &account_ids)
+            .await?;
+
+        if let Some(account) = accounts.values().find(|account| account.is_locked()) {
+            return Err(BalanceError::AccountLocked(account.id));
         }
 
         // Using BTreeSet ensures consistent ordering of account/currency pairs

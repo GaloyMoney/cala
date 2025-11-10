@@ -64,6 +64,15 @@ impl Journals {
         self.repo.find_by_id(journal_id).await
     }
 
+    #[instrument(name = "cala_ledger.journals.find_by_id_in_op", skip(self, op))]
+    pub async fn find_in_op(
+        &self,
+        op: &mut LedgerOperation<'_>,
+        journal_id: JournalId,
+    ) -> Result<Journal, JournalError> {
+        self.repo.find_by_id_in_op(op, journal_id).await
+    }
+
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;

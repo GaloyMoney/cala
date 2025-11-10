@@ -53,6 +53,10 @@ impl Account {
         self.values.config.is_account_set
     }
 
+    pub fn is_locked(&self) -> bool {
+        matches!(self.values.status, Status::Locked)
+    }
+
     pub fn values(&self) -> &AccountValues {
         &self.values
     }
