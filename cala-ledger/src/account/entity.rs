@@ -65,16 +65,6 @@ impl Account {
         VelocityContextAccountValues::from(self.values())
     }
 
-    pub(super) fn lock(&mut self) {
-        if self.values.status != Status::Locked {
-            self.values.status = Status::Locked;
-            self.events.push(AccountEvent::Updated {
-                values: self.values.clone(),
-                fields: vec!["status".to_string()],
-            });
-        }
-    }
-
     pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
         let AccountUpdateValues {
             external_id,

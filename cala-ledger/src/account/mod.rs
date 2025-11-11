@@ -11,7 +11,11 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
+use crate::{
+    ledger_operation::*,
+    outbox::*,
+    primitives::{DataSource, Status},
+};
 
 pub use entity::*;
 use error::*;
@@ -126,7 +130,9 @@ impl Accounts {
         db: &mut LedgerOperation<'_>,
         account: &mut Account,
     ) -> Result<(), AccountError> {
-        account.lock();
+        let mut values = account.values().clone();
+        values.status = Status::Locked;
+        account.update((values, vec!["status".to_string()]));
         self.persist_in_op(db, account).await?;
         Ok(())
     }
