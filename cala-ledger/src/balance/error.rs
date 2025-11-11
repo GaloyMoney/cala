@@ -8,8 +8,10 @@ pub enum BalanceError {
     Sqlx(#[from] sqlx::Error),
     #[error("BalanceError - NotFound: there is no balance recorded for journal {0}, account {1}, currency {2}")]
     NotFound(JournalId, AccountId, Currency),
-    #[error("LedgerError - JournalError: {0}")]
+    #[error("BalanceError - JournalError: {0}")]
     JournalError(#[from] crate::journal::error::JournalError),
-    #[error("BalanceError - JournalLocked: - Cannot update balances. The journal {0} is locked")]
+    #[error("BalanceError - JournalLocked: Cannot update balances. The journal {0} is locked")]
     JournalLocked(JournalId),
+    #[error("BalanceError - AccountLocked: Cannot update balances. The account {0} is locked")]
+    AccountLocked(AccountId),
 }

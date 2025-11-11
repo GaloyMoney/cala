@@ -4,7 +4,7 @@ use tracing::instrument;
 use super::{account_balance::AccountBalance, error::BalanceError};
 use cala_types::{
     balance::BalanceSnapshot,
-    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
+    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status},
 };
 use std::collections::HashMap;
 
@@ -150,7 +150,8 @@ impl BalanceRepo {
             SELECT
                 v.account_id AS "account_id!: AccountId",
                 v.currency AS "currency!",
-                b.latest_values
+                b.latest_values,
+                a.status AS "status!: Status"
             FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             JOIN cala_accounts a ON a.id = v.account_id AND a.eventually_consistent = FALSE
             LEFT JOIN cala_current_balances b
@@ -167,6 +168,9 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
+            if row.status == Status::Locked {
+                return Err(BalanceError::AccountLocked(row.account_id));
+            }
             let snapshot = row.latest_values.map(|v| {
                 serde_json::from_value::<BalanceSnapshot>(v)
                     .expect("Failed to deserialize balance snapshot")

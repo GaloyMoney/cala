@@ -120,6 +120,17 @@ impl Accounts {
         self.repo.list_by_name(query, Default::default()).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.lock_in_op", skip_all)]
+    pub async fn lock_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        account: &mut Account,
+    ) -> Result<(), AccountError> {
+        account.lock();
+        self.persist_in_op(db, account).await?;
+        Ok(())
+    }
+
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
