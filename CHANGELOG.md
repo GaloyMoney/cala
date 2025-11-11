@@ -1,3 +1,15 @@
+# [cala release v0.12.10](https://github.com/GaloyMoney/cala/releases/tag/0.12.10)
+
+
+### Miscellaneous Tasks
+
+- Implement lock check and mutation for accounts (#604)
+- Bump napi-build from 2.2.3 to 2.2.4 (#595)
+- Bump napi from 3.3.0 to 3.4.0 (#593)
+- Bump cached from 0.55.1 to 0.56.0 (#594)
+- Update the job crate dependency to 0.2.7 (#598)
+- Remove err trace from find_in_op (#599)
+
 # [cala release v0.12.9](https://github.com/GaloyMoney/cala/releases/tag/0.12.9)
 
 

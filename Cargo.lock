@@ -552,7 +552,7 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -568,7 +568,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "cached",
  "lalrpop",
@@ -578,7 +578,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -617,7 +617,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "async-graphql",
  "cala-cel-interpreter",
@@ -637,7 +637,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-outbox-client"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "cala-cel-interpreter",
  "cala-ledger-core-types",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "cala-perf"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -687,7 +687,7 @@ dependencies = [
 
 [[package]]
 name = "cala-server"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -721,7 +721,7 @@ dependencies = [
 
 [[package]]
 name = "cala-tracing"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "anyhow",
  "axum-extra",
@@ -1480,7 +1480,7 @@ dependencies = [
 
 [[package]]
 name = "galoymoney_cala-ledger"
-version = "0.12.10-dev"
+version = "0.12.10"
 dependencies = [
  "base64",
  "cala-cel-interpreter",
