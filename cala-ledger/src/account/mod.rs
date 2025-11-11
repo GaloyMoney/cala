@@ -128,12 +128,12 @@ impl Accounts {
     pub async fn lock_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
-        account: &mut Account,
+        id: AccountId,
     ) -> Result<(), AccountError> {
-        let mut values = account.values().clone();
-        values.status = Status::Locked;
-        account.update((values, vec!["status".to_string()]));
-        self.persist_in_op(db, account).await?;
+        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+        if account.update_status(Status::Locked).did_execute() {
+            self.persist_in_op(db, &mut account).await?;
+        }
         Ok(())
     }
 
@@ -206,7 +206,7 @@ impl Accounts {
         fields: Vec<String>,
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id(values.id).await?;
-        account.update((values, fields));
+        let _ = account.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
         let outbox_events: Vec<_> = account
             .last_persisted(n_events)

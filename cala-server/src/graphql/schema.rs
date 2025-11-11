@@ -283,11 +283,12 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
 
         let mut account = app.ledger().accounts().find(AccountId::from(id)).await?;
-        account.update(builder);
-        app.ledger()
-            .accounts()
-            .persist_in_op(&mut op, &mut account)
-            .await?;
+        if account.update(builder).did_execute() {
+            app.ledger()
+                .accounts()
+                .persist_in_op(&mut op, &mut account)
+                .await?;
+        }
 
         Ok(account.into())
     }

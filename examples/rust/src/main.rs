@@ -60,8 +60,10 @@ async fn main() -> anyhow::Result<()> {
         .name(format!("ACCOUNT #{random_number:04}"))
         .description("new description")
         .build()?;
-    account.update(builder);
-    cala.accounts().persist(&mut account).await?;
+
+    if account.update(builder).did_execute() {
+        cala.accounts().persist(&mut account).await?;
+    }
 
     let result = cala
         .accounts()

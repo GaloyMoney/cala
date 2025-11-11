@@ -22,6 +22,7 @@ use super::{entity::*, error::AccountError};
             ty = "DebitOrCredit",
             update(accessor = "values().normal_balance_type")
         ),
+        status(ty = "Status", update(accessor = "values().status")),
         eventually_consistent(ty = "bool", update(persist = false)),
         velocity_context_values(
             ty = "VelocityContextAccountValues",
@@ -33,7 +34,6 @@ use super::{entity::*, error::AccountError};
             create(accessor = "data_source().into()"),
             update(persist = false)
         ),
-        status(ty = "Status", update(accessor = "values().status")),
     ),
     tbl_prefix = "cala",
     persist_event_context = false
