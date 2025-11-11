@@ -11,6 +11,7 @@ CREATE TABLE cala_accounts (
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
   velocity_context_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
+  status Status NOT NULL, -- For checking account status
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
