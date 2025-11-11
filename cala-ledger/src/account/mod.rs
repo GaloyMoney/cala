@@ -11,7 +11,11 @@ use std::collections::HashMap;
 
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
-use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
+use crate::{
+    ledger_operation::*,
+    outbox::*,
+    primitives::{DataSource, Status},
+};
 
 pub use entity::*;
 use error::*;
@@ -120,6 +124,19 @@ impl Accounts {
         self.repo.list_by_name(query, Default::default()).await
     }
 
+    #[instrument(name = "cala_ledger.accounts.lock_in_op", skip_all)]
+    pub async fn lock_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        id: AccountId,
+    ) -> Result<(), AccountError> {
+        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+        if account.update_status(Status::Locked).did_execute() {
+            self.persist_in_op(db, &mut account).await?;
+        }
+        Ok(())
+    }
+
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
@@ -189,7 +206,7 @@ impl Accounts {
         fields: Vec<String>,
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id(values.id).await?;
-        account.update((values, fields));
+        let _ = account.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
         let outbox_events: Vec<_> = account
             .last_persisted(n_events)

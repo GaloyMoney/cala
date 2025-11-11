@@ -2,7 +2,7 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::primitives::{AccountId, DataSourceId, DebitOrCredit};
+use crate::primitives::{AccountId, DataSourceId, DebitOrCredit, Status};
 
 use super::{entity::*, error::AccountError};
 
@@ -22,6 +22,7 @@ use super::{entity::*, error::AccountError};
             ty = "DebitOrCredit",
             update(accessor = "values().normal_balance_type")
         ),
+        status(ty = "Status", update(accessor = "values().status")),
         eventually_consistent(ty = "bool", update(persist = false)),
         velocity_context_values(
             ty = "VelocityContextAccountValues",
@@ -56,14 +57,16 @@ impl AccountRepo {
     ) -> Result<(), AccountError> {
         let recorded_at = op.now();
         sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, eventually_consistent, created_at, velocity_context_values)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"#,
+            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, status, eventually_consistent, created_at, 
+        velocity_context_values)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
             origin as DataSourceId,
             account.values().id as AccountId,
             account.values().code,
             account.values().name,
             account.values().external_id,
             account.values().normal_balance_type as DebitOrCredit,
+            account.values().status as Status,
             account.values().config.eventually_consistent,
             recorded_at,
             account.context_values() as VelocityContextAccountValues,

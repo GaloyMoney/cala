@@ -65,7 +65,13 @@ impl Account {
         VelocityContextAccountValues::from(self.values())
     }
 
-    pub fn update(&mut self, builder: impl Into<AccountUpdate>) {
+    pub fn update_status(&mut self, status: Status) -> es_entity::Idempotent<()> {
+        let mut update = AccountUpdate::default();
+        update.status(status);
+        self.update(update)
+    }
+
+    pub fn update(&mut self, builder: impl Into<AccountUpdate>) -> es_entity::Idempotent<()> {
         let AccountUpdateValues {
             external_id,
             code,
@@ -124,12 +130,16 @@ impl Account {
             }
         }
 
-        if !updated_fields.is_empty() {
-            self.events.push(AccountEvent::Updated {
-                values: self.values.clone(),
-                fields: updated_fields,
-            });
+        if updated_fields.is_empty() {
+            return es_entity::Idempotent::Ignored;
         }
+
+        self.events.push(AccountEvent::Updated {
+            values: self.values.clone(),
+            fields: updated_fields,
+        });
+
+        es_entity::Idempotent::Executed(())
     }
 
     pub fn created_at(&self) -> chrono::DateTime<chrono::Utc> {
@@ -202,6 +212,7 @@ impl AccountUpdate {
     }
 }
 
+#[cfg(feature = "import")]
 impl From<(AccountValues, Vec<String>)> for AccountUpdate {
     fn from((values, fields): (AccountValues, Vec<String>)) -> Self {
         let mut builder = AccountUpdate::default();
