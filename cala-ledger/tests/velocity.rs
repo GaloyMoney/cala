@@ -180,24 +180,14 @@ async fn create_control_on_account_set() -> anyhow::Result<()> {
     let (sender, receiver) = helpers::test_accounts();
     let sender_account = cala.accounts().create(sender).await.unwrap();
     let recipient_account = cala.accounts().create(receiver).await.unwrap();
-    let (new_sender_account_set, new_recipient_account_set) =
-        helpers::test_account_sets(journal_id.into());
+    let (new_sender_account_set, _) = helpers::test_account_sets(journal_id.into());
     let sender_account_set = cala
         .account_sets()
         .create(new_sender_account_set)
         .await
         .unwrap();
-    let recipient_account_set = cala
-        .account_sets()
-        .create(new_recipient_account_set)
-        .await
-        .unwrap();
     cala.account_sets()
         .add_member(sender_account_set.id, sender_account.id)
-        .await
-        .unwrap();
-    cala.account_sets()
-        .add_member(recipient_account_set.id, recipient_account.id)
         .await
         .unwrap();
     velocity
@@ -503,7 +493,6 @@ mod limit_via_account_sets {
         let velocity = cala.velocities();
 
         let debit_limit = account_closing_limit(velocity, "DEBIT").await?;
-        let credit_limit = account_closing_limit(velocity, "CREDIT").await?;
 
         let control = NewVelocityControl::builder()
             .id(VelocityControlId::new())
@@ -522,9 +511,6 @@ mod limit_via_account_sets {
         let control = velocity.create_control(control).await?;
         velocity
             .add_limit_to_control(control.id(), debit_limit.id())
-            .await?;
-        velocity
-            .add_limit_to_control(control.id(), credit_limit.id())
             .await?;
 
         // Setup account sets and accounts in dag
