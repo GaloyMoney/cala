@@ -120,7 +120,7 @@ impl Journals {
         fields: Vec<String>,
     ) -> Result<(), JournalError> {
         let mut journal = self.repo.find_by_id(values.id).await?;
-        journal.update((values, fields));
+        let _ = journal.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut journal).await?;
         let outbox_events: Vec<_> = journal
             .last_persisted(n_events)
