@@ -88,8 +88,9 @@ async fn main() -> anyhow::Result<()> {
         .name("UPDATED_JOURNAL_NAME")
         .description("new description")
         .build()?;
-    journal.update(builder);
-    cala.journals().persist(&mut journal).await?;
+    if journal.update(builder).did_execute() {
+        cala.journals().persist(&mut journal).await?;
+    };
 
     let transaction = NewTxTemplateTransaction::builder()
         .journal_id(format!("uuid('{journal_id}')"))

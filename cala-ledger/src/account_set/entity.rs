@@ -55,7 +55,7 @@ impl AccountSet {
         &self.values
     }
 
-    pub fn update(&mut self, builder: impl Into<AccountSetUpdate>) {
+    pub fn update(&mut self, builder: impl Into<AccountSetUpdate>) -> es_entity::Idempotent<()> {
         let AccountSetUpdateValues {
             external_id,
             name,
@@ -99,12 +99,15 @@ impl AccountSet {
             }
         }
 
-        if !updated_fields.is_empty() {
+        if updated_fields.is_empty() {
+            return es_entity::Idempotent::Ignored;
+        } else {
             self.events.push(AccountSetEvent::Updated {
                 values: self.values.clone(),
                 fields: updated_fields,
             });
         }
+        es_entity::Idempotent::Executed(())
     }
 
     pub fn into_values(self) -> AccountSetValues {

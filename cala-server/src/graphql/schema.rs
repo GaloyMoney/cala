@@ -356,12 +356,12 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .account_sets()
             .find(AccountSetId::from(id))
             .await?;
-        account_set.update(builder);
-
-        app.ledger()
-            .account_sets()
-            .persist_in_op(&mut op, &mut account_set)
-            .await?;
+        if account_set.update(builder).did_execute() {
+            app.ledger()
+                .account_sets()
+                .persist_in_op(&mut op, &mut account_set)
+                .await?;
+        }
 
         Ok(account_set.into())
     }
@@ -457,12 +457,12 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         }
 
         let mut journal = app.ledger().journals().find(JournalId::from(id)).await?;
-        journal.update(builder);
-
-        app.ledger()
-            .journals()
-            .persist_in_op(&mut op, &mut journal)
-            .await?;
+        if journal.update(builder).did_execute() {
+            app.ledger()
+                .journals()
+                .persist_in_op(&mut op, &mut journal)
+                .await?;
+        }
 
         Ok(journal.into())
     }

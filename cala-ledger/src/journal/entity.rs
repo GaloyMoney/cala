@@ -60,7 +60,7 @@ impl Journal {
         self.values.config.enable_effective_balances
     }
 
-    pub fn update(&mut self, builder: impl Into<JournalUpdate>) {
+    pub fn update(&mut self, builder: impl Into<JournalUpdate>) -> es_entity::Idempotent<()> {
         let JournalUpdateValues {
             name,
             status,
@@ -88,12 +88,16 @@ impl Journal {
             updated_fields.push("description".to_string());
         }
 
-        if !updated_fields.is_empty() {
+        if updated_fields.is_empty() {
+            return es_entity::Idempotent::Ignored;
+        } else {
             self.events.push(JournalEvent::Updated {
                 values: self.values.clone(),
                 fields: updated_fields,
             });
         }
+
+        es_entity::Idempotent::Executed(())
     }
 
     pub fn into_values(self) -> JournalValues {

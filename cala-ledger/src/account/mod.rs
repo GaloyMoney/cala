@@ -124,7 +124,7 @@ impl Accounts {
         self.repo.list_by_name(query, Default::default()).await
     }
 
-    #[instrument(name = "cala_ledger.accounts.lock_in_op", skip_all)]
+    #[instrument(name = "cala_ledger.accounts.lock_in_op", skip(self, db))]
     pub async fn lock_in_op(
         &self,
         db: &mut LedgerOperation<'_>,

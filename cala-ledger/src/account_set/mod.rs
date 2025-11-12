@@ -560,7 +560,7 @@ impl AccountSets {
         fields: Vec<String>,
     ) -> Result<(), AccountSetError> {
         let mut account_set = self.repo.find_by_id(values.id).await?;
-        account_set.update((values, fields));
+        let _ = account_set.update((values, fields));
         let n_events = self.repo.update_in_op(&mut db, &mut account_set).await?;
         let outbox_events: Vec<_> = account_set
             .last_persisted(n_events)
