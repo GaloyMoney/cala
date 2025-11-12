@@ -270,9 +270,9 @@ async fn account_set_update() -> anyhow::Result<()> {
     let updated_name = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let mut builder = AccountSetUpdate::default();
     builder.name(updated_name.clone()).build()?;
-    let _ = account_set.update(builder);
-    cala.account_sets().persist(&mut account_set).await?;
-
+    if account_set.update(builder).did_execute() {
+        cala.account_sets().persist(&mut account_set).await?;
+    }
     assert_eq!(updated_name, account_set.values().name);
     Ok(())
 }

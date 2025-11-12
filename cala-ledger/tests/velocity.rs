@@ -482,8 +482,12 @@ mod limit_via_account_sets {
 
         let mut values = account_set.values().clone();
         values.metadata = Some(json!({ "closed": true }));
-        account_set.update((values, vec!["metadata".to_string()]));
-        cala.account_sets().persist(&mut account_set).await?;
+        if account_set
+            .update((values, vec!["metadata".to_string()]))
+            .did_execute()
+        {
+            cala.account_sets().persist(&mut account_set).await?;
+        }
 
         let account_res = cala
             .post_transaction(TransactionId::new(), &tx_code, tx_params.clone())
@@ -621,8 +625,12 @@ mod limit_via_account_sets {
         // Add first closing date and re-check
         let mut values = parent_account_set.values().clone();
         values.metadata = Some(json!({ "closedAsOf": "2024-12-31" }));
-        parent_account_set.update((values, vec!["metadata".to_string()]));
-        cala.account_sets().persist(&mut parent_account_set).await?;
+        if parent_account_set
+            .update((values, vec!["metadata".to_string()]))
+            .did_execute()
+        {
+            cala.account_sets().persist(&mut parent_account_set).await?;
+        }
 
         tx_params.insert("sender", account_1.id());
         let account_1_send_res = cala
@@ -660,8 +668,12 @@ mod limit_via_account_sets {
         // Update closing date and re-check
         let mut values = parent_account_set.values().clone();
         values.metadata = Some(json!({ "closedAsOf": "2025-01-31" }));
-        parent_account_set.update((values, vec!["metadata".to_string()]));
-        cala.account_sets().persist(&mut parent_account_set).await?;
+        if parent_account_set
+            .update((values, vec!["metadata".to_string()]))
+            .did_execute()
+        {
+            cala.account_sets().persist(&mut parent_account_set).await?;
+        }
 
         tx_params.insert("effective", effective_date(2025, 1, 1));
 
