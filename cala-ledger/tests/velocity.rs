@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 
 use cala_ledger::{
     account::NewAccount,
-    account_set::NewAccountSet,
+    account_set::{AccountSetUpdate, NewAccountSet},
     error::LedgerError,
     velocity::{error::VelocityError, *},
     *,
@@ -480,12 +480,9 @@ mod limit_via_account_sets {
         }
         assert!(account_res.is_ok());
 
-        let mut values = account_set.values().clone();
-        values.metadata = Some(json!({ "closed": true }));
-        if account_set
-            .update((values, vec!["metadata".to_string()]))
-            .did_execute()
-        {
+        let mut update = AccountSetUpdate::default();
+        update.metadata(Some(json!({ "closed": true })))?;
+        if account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut account_set).await?;
         }
 
@@ -623,12 +620,9 @@ mod limit_via_account_sets {
         ));
 
         // Add first closing date and re-check
-        let mut values = parent_account_set.values().clone();
-        values.metadata = Some(json!({ "closedAsOf": "2024-12-31" }));
-        if parent_account_set
-            .update((values, vec!["metadata".to_string()]))
-            .did_execute()
-        {
+        let mut update = AccountSetUpdate::default();
+        update.metadata(Some(json!({ "closedAsOf": "2024-12-31" })))?;
+        if parent_account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut parent_account_set).await?;
         }
 
@@ -666,12 +660,9 @@ mod limit_via_account_sets {
         ));
 
         // Update closing date and re-check
-        let mut values = parent_account_set.values().clone();
-        values.metadata = Some(json!({ "closedAsOf": "2025-01-31" }));
-        if parent_account_set
-            .update((values, vec!["metadata".to_string()]))
-            .did_execute()
-        {
+        let mut update = AccountSetUpdate::default();
+        update.metadata(Some(json!({ "closedAsOf": "2025-01-31" })))?;
+        if parent_account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut parent_account_set).await?;
         }
 
