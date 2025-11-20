@@ -48,13 +48,10 @@ async fn blocks_transactions() -> anyhow::Result<()> {
     let res = cala
         .post_transaction(TransactionId::new(), &tx_code, params.clone())
         .await;
-    match res {
-        Ok(_) => (),
-        Err(LedgerError::BalanceError(BalanceError::AccountLocked(locked_id))) => {
-            assert_eq!(locked_id, sender_account.id())
-        }
-        Err(e) => panic!("{}", &format!("{:?}", e)),
-    }
+    assert!(matches!(
+        res,
+        Err(LedgerError::BalanceError(BalanceError::AccountLocked(account_id))) if account_id==sender_account.id()
+    ));
 
     Ok(())
 }
