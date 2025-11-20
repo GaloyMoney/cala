@@ -1757,7 +1757,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -1995,9 +1995,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bb6e8fb54751afd9b5c6103c53c2888f09ed370216ea94cdc2873c18f1f58b2"
+checksum = "18a60456f014f8e7a17455ef88b4390d014cdf53bf203c78e1a409d63461d89e"
 dependencies = [
  "async-trait",
  "chrono",
