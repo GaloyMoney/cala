@@ -50,11 +50,8 @@ async fn blocks_transactions() -> anyhow::Result<()> {
         .await;
     assert!(matches!(
         res,
-        Err(LedgerError::BalanceError(BalanceError::AccountLocked(_)))
+        Err(LedgerError::BalanceError(BalanceError::AccountLocked(account_id))) if account_id==sender_account.id()
     ));
-    if let Err(LedgerError::BalanceError(BalanceError::AccountLocked(locked_id))) = res {
-        assert_eq!(locked_id, sender_account.id());
-    }
 
     Ok(())
 }
