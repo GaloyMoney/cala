@@ -137,6 +137,19 @@ impl Accounts {
         Ok(())
     }
 
+    #[instrument(name = "cala_ledger.accounts.unlock_in_op", skip(self, db))]
+    pub async fn unlock_in_op(
+        &self,
+        db: &mut LedgerOperation<'_>,
+        id: AccountId,
+    ) -> Result<(), AccountError> {
+        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+        if account.update_status(Status::Active).did_execute() {
+            self.persist_in_op(db, &mut account).await?;
+        }
+        Ok(())
+    }
+
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
