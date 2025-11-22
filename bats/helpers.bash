@@ -7,11 +7,8 @@ CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
 DOCKER_ENGINE="${DOCKER_ENGINE:-docker}"
 RUST_EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
-NODEJS_EXAMPLE_PID_FILE="${CALA_HOME}/nodejs-example-pid"
 
 reset_examples_pg() {
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-node-example-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-node-example-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
   $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
   $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
 }
@@ -73,12 +70,6 @@ stop_server() {
 stop_rust_example() {
   if [[ -f "$RUST_EXAMPLE_PID_FILE" ]]; then
     kill -9 $(cat "$RUST_EXAMPLE_PID_FILE") || true
-  fi
-}
-
-stop_nodejs_example() {
-  if [[ -f "$NODEJS_EXAMPLE_PID_FILE" ]]; then
-    kill -9 $(cat "$NODEJS_EXAMPLE_PID_FILE") || true
   fi
 }
 

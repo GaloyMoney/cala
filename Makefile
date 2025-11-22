@@ -21,14 +21,6 @@ run-server:
 rust-example:
 	cargo run --bin cala-ledger-example-rust
 
-update-lib-in-nodejs-example:
-	cd cala-nodejs && yarn && SQLX_OFFLINE=true yarn build
-	cd examples/nodejs && rm -rf ./node_modules && yarn install
-
-re-run-nodejs-example: clean-deps start-deps
-	sleep 2
-	cd examples/nodejs && yarn run start
-
 check-code: sdl
 	git diff --exit-code cala-server/schema.graphql
 	SQLX_OFFLINE=true cargo fmt --check --all
@@ -43,11 +35,7 @@ check-code: sdl
 build:
 	SQLX_OFFLINE=true cargo build --locked
 
-build-nodejs-bindings:
-	cd cala-nodejs && yarn && SQLX_OFFLINE=true yarn build
-	cd examples/nodejs && yarn install
-
-e2e: clean-deps start-deps build build-nodejs-bindings
+e2e: clean-deps start-deps build
 	bats -t bats
 
 sdl:

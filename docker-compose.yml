@@ -4,28 +4,12 @@ services:
     depends_on:
     - server-pg
     - rust-example-pg
-    - node-example-pg
     - otel-agent
   server-pg:
     image: postgres:16.4
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
     ports:
     - "5432:5432"
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=pg
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  node-example-pg:
-    image: postgres:16.4
-    ports:
-    - "5433:5432"
-    depends_on:
-      - server-pg
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
