@@ -49,11 +49,6 @@ echo "--- Podman-compose up done ---"
 
 make setup-db
 
-# --- Build Test Artifacts ---
-echo "--- Building test artifacts---"
-# nix build . -L
-make build build-nodejs-bindings
-
 # --- Run Bats Tests ---
 echo "--- Running BATS tests ---"
 export DOCKER_ENGINE=podman
