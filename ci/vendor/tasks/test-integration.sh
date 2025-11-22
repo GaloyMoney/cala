@@ -51,7 +51,7 @@ podman compose up -d integration-deps
 echo "--- Podman-compose up done ---"
 
 echo "Waiting for PostgreSQL to be ready..."
-wait4x postgresql "postgres://user:password@localhost:5432/pg" --timeout 120s
+wait4x postgresql "${PG_CON}" --timeout 120s
 
 make setup-db
 
