@@ -8,7 +8,6 @@ members = [
   "cala-ledger-core-types",
   "cala-server",
   "cala-tracing",
-  "cala-nodejs",
   "cala-cel-parser",
   "cala-cel-interpreter",
   "cala-perf",
