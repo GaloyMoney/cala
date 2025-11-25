@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "examples/rust",
+  "cala-ledger/fuzz",
 
   "cala-ledger",
   "cala-ledger-outbox-client",

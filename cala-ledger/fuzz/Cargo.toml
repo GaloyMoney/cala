@@ -1,0 +1,43 @@
+[package]
+name = "cala-ledger-rust-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+once_cell = "1.21.3"
+
+cala-ledger = { workspace = true }
+anyhow = { workspace = true }
+rand = { workspace = true }
+sqlx = { workspace = true }
+uuid = { workspace = true }
+job = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+rust_decimal = { workspace = true }
+rust_decimal_macros = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[[bin]]
+name = "tx_example"
+path = "fuzz_targets/tx_example.rs"
+test = false
+doc = false
+bench = false
+
+
+[[bin]]
+name = "tx_post"
+path = "fuzz_targets/tx_post.rs"
+test = false
+doc = false
+bench = false
+
