@@ -73,6 +73,15 @@ impl BalanceRepo {
         &self,
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.find_all_in_op(&self.pool, ids).await
+    }
+
+    #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
+    pub(super) async fn find_all_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -82,33 +91,34 @@ impl BalanceRepo {
             currencies.push(currency.code().to_string());
         }
 
-        let rows = sqlx::query!(
-            r#"
-            WITH balance_ids AS (
-                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
-                AS v(journal_id, account_id, currency)
-            )
-            SELECT
-                h.values,
-                a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
-            FROM cala_balance_history h
-            JOIN cala_current_balances c
-                ON h.journal_id = c.journal_id
-                AND h.account_id = c.account_id
-                AND h.currency = c.currency
-                AND h.version = c.latest_version
-            JOIN cala_accounts a
-                ON c.account_id = a.id
-            JOIN balance_ids b
-                ON c.journal_id = b.journal_id
-                AND c.account_id = b.account_id
-                AND c.currency = b.currency"#,
-            &journal_ids[..],
-            &account_ids[..],
-            &currencies[..],
-        )
-        .fetch_all(&self.pool)
-        .await?;
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                WITH balance_ids AS (
+                    SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
+                    AS v(journal_id, account_id, currency)
+                )
+                SELECT
+                    h.values,
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM cala_balance_history h
+                JOIN cala_current_balances c
+                    ON h.journal_id = c.journal_id
+                    AND h.account_id = c.account_id
+                    AND h.currency = c.currency
+                    AND h.version = c.latest_version
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                JOIN balance_ids b
+                    ON c.journal_id = b.journal_id
+                    AND c.account_id = b.account_id
+                    AND c.currency = b.currency"#,
+                &journal_ids[..],
+                &account_ids[..],
+                &currencies[..]
+            ))
+            .await?;
 
         let mut ret = HashMap::new();
         for row in rows {

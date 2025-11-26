@@ -87,6 +87,15 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
+    pub async fn find_all_in_op(
+        &self,
+        op: &mut LedgerOperation<'_>,
+        ids: &[BalanceId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all_in_op(op, ids).await
+    }
+
     #[instrument(name = "cala_ledger.balance.update_balances_in_op", skip(self, op, entries, account_set_mappings), fields(journal_id = %journal_id, entries_count = entries.len()))]
     pub(crate) async fn update_balances_in_op(
         &self,
