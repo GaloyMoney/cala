@@ -2,7 +2,7 @@
 name = "cala-ledger-outbox-client"
 description = "Outbox client for cala-ledger"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.12.12"
+version = "0.12.13-dev"
 edition = "2021"
 license = "Apache-2.0"
 
