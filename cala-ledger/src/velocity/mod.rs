@@ -202,7 +202,7 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err)]
+    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = "warn"))]
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut LedgerOperation<'_>,
