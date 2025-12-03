@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AccountEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/AccountValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "const": "updated"
+        },
+        "values": {
+          "$ref": "#/$defs/AccountValues"
+        }
+      },
+      "required": [
+        "type",
+        "values",
+        "fields"
+      ]
+    }
+  ],
+  "$defs": {
+    "AccountConfig": {
+      "type": "object",
+      "properties": {
+        "eventually_consistent": {
+          "type": "boolean"
+        },
+        "is_account_set": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "is_account_set",
+        "eventually_consistent"
+      ]
+    },
+    "AccountValues": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "config": {
+          "$ref": "#/$defs/AccountConfig"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "metadata": true,
+        "name": {
+          "type": "string"
+        },
+        "normal_balance_type": {
+          "$ref": "#/$defs/DebitOrCredit"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "code",
+        "name",
+        "normal_balance_type",
+        "status",
+        "config"
+      ]
+    },
+    "DebitOrCredit": {
+      "type": "string",
+      "enum": [
+        "debit",
+        "credit"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "locked"
+      ]
+    }
+  }
+}
