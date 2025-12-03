@@ -11,6 +11,7 @@ use crate::{cel_type::*, context::*, error::*, value::*};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(try_from = "String")]
 #[serde(into = "String")]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct CelExpression {
     source: String,
     expr: Expression,

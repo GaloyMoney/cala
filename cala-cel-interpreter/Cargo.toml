@@ -10,6 +10,7 @@ categories = ["parsing", "compilers"]
 [features]
 
 fail-on-warnings = []
+json-schema = ["dep:schemars"]
 
 [dependencies]
 cel-parser = { workspace = true }
@@ -22,6 +23,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 lazy_static = { workspace = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }

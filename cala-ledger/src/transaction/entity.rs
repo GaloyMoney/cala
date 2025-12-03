@@ -8,6 +8,7 @@ use es_entity::*;
 use super::TransactionError;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TransactionId", event_context = false)]
 pub enum TransactionEvent {

@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct JournalValues {
     pub id: JournalId,
     pub version: u32,
@@ -14,6 +15,7 @@ pub struct JournalValues {
 }
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct JournalConfig {
     pub enable_effective_balances: bool,
 }

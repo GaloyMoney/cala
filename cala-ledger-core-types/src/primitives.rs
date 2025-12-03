@@ -177,6 +177,7 @@ impl From<Layer> for CelValue {
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 #[serde(into = "&str")]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum Currency {
     Iso(&'static iso::Currency),
     Crypto(&'static crypto::Currency),

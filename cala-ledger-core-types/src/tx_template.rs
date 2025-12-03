@@ -5,6 +5,7 @@ pub use crate::param::*;
 use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct TxTemplateValues {
     pub id: TxTemplateId,
     pub version: u32,
@@ -17,6 +18,7 @@ pub struct TxTemplateValues {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct TxTemplateEntry {
     pub entry_type: CelExpression,
     pub account_id: CelExpression,
@@ -29,6 +31,7 @@ pub struct TxTemplateEntry {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct TxTemplateTransaction {
     pub effective: CelExpression,
     pub journal_id: CelExpression,

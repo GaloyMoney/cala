@@ -1,0 +1,226 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TxTemplateEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/TxTemplateValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    }
+  ],
+  "$defs": {
+    "CelExpression": {
+      "type": "string"
+    },
+    "ParamDataType": {
+      "type": "string",
+      "enum": [
+        "String",
+        "Integer",
+        "Decimal",
+        "Boolean",
+        "Uuid",
+        "Date",
+        "Timestamp",
+        "Json"
+      ]
+    },
+    "ParamDefinition": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ParamDataType"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "TxTemplateEntry": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "currency": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "direction": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "entry_type": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "layer": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "units": {
+          "$ref": "#/$defs/CelExpression"
+        }
+      },
+      "required": [
+        "entry_type",
+        "account_id",
+        "layer",
+        "direction",
+        "units",
+        "currency"
+      ]
+    },
+    "TxTemplateTransaction": {
+      "type": "object",
+      "properties": {
+        "correlation_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "effective": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "external_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "journal_id": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "effective",
+        "journal_id"
+      ]
+    },
+    "TxTemplateValues": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/TxTemplateEntry"
+          }
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "metadata": true,
+        "params": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ParamDefinition"
+          }
+        },
+        "transaction": {
+          "$ref": "#/$defs/TxTemplateTransaction"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "code",
+        "transaction",
+        "entries"
+      ]
+    }
+  }
+}

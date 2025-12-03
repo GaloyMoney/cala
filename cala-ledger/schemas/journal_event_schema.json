@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JournalEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/JournalValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "const": "updated"
+        },
+        "values": {
+          "$ref": "#/$defs/JournalValues"
+        }
+      },
+      "required": [
+        "type",
+        "values",
+        "fields"
+      ]
+    }
+  ],
+  "$defs": {
+    "JournalConfig": {
+      "type": "object",
+      "properties": {
+        "enable_effective_balances": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enable_effective_balances"
+      ]
+    },
+    "JournalValues": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "config": {
+          "$ref": "#/$defs/JournalConfig"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/Status"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "name",
+        "status",
+        "config"
+      ]
+    },
+    "Status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "locked"
+      ]
+    }
+  }
+}

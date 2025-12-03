@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct AccountSetValues {
     pub id: AccountSetId,
     pub version: u32,
