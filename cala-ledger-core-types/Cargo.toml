@@ -10,7 +10,7 @@ license = "Apache-2.0"
 
 fail-on-warnings = []
 graphql = ["es-entity/graphql", "dep:async-graphql"]
-json-schema = ["es-entity/json-schema", "dep:schemars"]
+json-schema = ["es-entity/json-schema", "dep:schemars", "cel-interpreter/json-schema"]
 
 [dependencies]
 cel-interpreter = { workspace = true }

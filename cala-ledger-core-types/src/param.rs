@@ -2,6 +2,7 @@ use cel_interpreter::{CelExpression, CelType, CelValue};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct ParamDefinition {
     pub name: String,
     pub r#type: ParamDataType,
@@ -10,6 +11,7 @@ pub struct ParamDefinition {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum ParamDataType {
     String,
     Integer,

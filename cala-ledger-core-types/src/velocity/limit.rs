@@ -5,6 +5,7 @@ pub use crate::param::*;
 use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct VelocityLimitValues {
     pub id: VelocityLimitId,
     pub name: String,
@@ -17,18 +18,21 @@ pub struct VelocityLimitValues {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct PartitionKey {
     pub alias: String,
     pub value: CelExpression,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct Limit {
     pub timestamp_source: Option<CelExpression>,
     pub balance: Vec<BalanceLimit>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct BalanceLimit {
     pub limit_type: BalanceLimitType,
     pub layer: CelExpression,
@@ -39,6 +43,7 @@ pub struct BalanceLimit {
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BalanceLimitType {
     #[default]

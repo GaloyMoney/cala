@@ -113,6 +113,7 @@ impl From<DebitOrCredit> for CelValue {
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum Status {
     Active,
     Locked,
@@ -176,6 +177,7 @@ impl From<Layer> for CelValue {
 #[derive(Debug, Clone, Copy, Eq, Serialize, Deserialize)]
 #[serde(try_from = "String")]
 #[serde(into = "&str")]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum Currency {
     Iso(&'static iso::Currency),
     Crypto(&'static crypto::Currency),
@@ -289,6 +291,7 @@ const LOCAL_UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
 
 #[derive(Debug, Copy, Serialize, Deserialize, Clone)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum DataSource {
     Local,
     Remote { id: DataSourceId },

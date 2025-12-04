@@ -21,7 +21,7 @@ run-server:
 rust-example:
 	cargo run --bin cala-ledger-example-rust
 
-check-code: sdl
+check-code: sdl check-event-schemas
 	git diff --exit-code cala-server/schema.graphql
 	SQLX_OFFLINE=true cargo fmt --check --all
 	SQLX_OFFLINE=true cargo check
@@ -55,3 +55,11 @@ build-x86_64-unknown-linux-musl-release:
 
 build-x86_64-apple-darwin-release:
 	bin/osxcross-compile.sh
+
+event-schemas:
+	SQLX_OFFLINE=true cargo run -p cala-ledger --bin event-schemas --features json-schema
+
+check-event-schemas: event-schemas
+	git diff --exit-code cala-ledger/schemas
+	@# Fail if generator produced untracked files (e.g., when a schema file was missing)
+	@test -z "$$(git ls-files --others --exclude-standard -- cala-ledger/schemas)"

@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VelocityControlEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/VelocityControlValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    }
+  ],
+  "$defs": {
+    "CelExpression": {
+      "type": "string"
+    },
+    "VelocityControlValues": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "enforcement": {
+          "$ref": "#/$defs/VelocityEnforcement"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "enforcement"
+      ]
+    },
+    "VelocityEnforcement": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/VelocityEnforcementAction"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "VelocityEnforcementAction": {
+      "type": "string",
+      "enum": [
+        "reject"
+      ]
+    }
+  }
+}

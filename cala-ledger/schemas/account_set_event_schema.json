@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AccountSetEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/AccountSetValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "const": "updated"
+        },
+        "values": {
+          "$ref": "#/$defs/AccountSetValues"
+        }
+      },
+      "required": [
+        "type",
+        "values",
+        "fields"
+      ]
+    }
+  ],
+  "$defs": {
+    "AccountSetValues": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "journal_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "metadata": true,
+        "name": {
+          "type": "string"
+        },
+        "normal_balance_type": {
+          "$ref": "#/$defs/DebitOrCredit"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "journal_id",
+        "name",
+        "normal_balance_type"
+      ]
+    },
+    "DebitOrCredit": {
+      "type": "string",
+      "enum": [
+        "debit",
+        "credit"
+      ]
+    }
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EntryEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/EntryValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    }
+  ],
+  "$defs": {
+    "Currency": {
+      "type": "string"
+    },
+    "DebitOrCredit": {
+      "type": "string",
+      "enum": [
+        "debit",
+        "credit"
+      ]
+    },
+    "EntryValues": {
+      "type": "object",
+      "properties": {
+        "account_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "currency": {
+          "$ref": "#/$defs/Currency"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "direction": {
+          "$ref": "#/$defs/DebitOrCredit"
+        },
+        "entry_type": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "journal_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "layer": {
+          "$ref": "#/$defs/Layer"
+        },
+        "metadata": true,
+        "sequence": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "transaction_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "units": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "pattern": "^-?\\d+(\\.\\d+)?([eE]\\d+)?$"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "transaction_id",
+        "journal_id",
+        "account_id",
+        "entry_type",
+        "sequence",
+        "layer",
+        "units",
+        "currency",
+        "direction"
+      ]
+    },
+    "Layer": {
+      "type": "string",
+      "enum": [
+        "Settled",
+        "Pending",
+        "Encumbrance"
+      ]
+    }
+  }
+}

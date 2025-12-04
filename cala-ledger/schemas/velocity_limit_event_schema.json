@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "VelocityLimitEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/VelocityLimitValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    }
+  ],
+  "$defs": {
+    "BalanceLimit": {
+      "type": "object",
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enforcement_direction": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "layer": {
+          "$ref": "#/$defs/CelExpression"
+        },
+        "limit_type": {
+          "$ref": "#/$defs/BalanceLimitType"
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "limit_type",
+        "layer",
+        "amount",
+        "enforcement_direction"
+      ]
+    },
+    "BalanceLimitType": {
+      "type": "string",
+      "enum": [
+        "available"
+      ]
+    },
+    "CelExpression": {
+      "type": "string"
+    },
+    "Currency": {
+      "type": "string"
+    },
+    "Limit": {
+      "type": "object",
+      "properties": {
+        "balance": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BalanceLimit"
+          }
+        },
+        "timestamp_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "balance"
+      ]
+    },
+    "ParamDataType": {
+      "type": "string",
+      "enum": [
+        "String",
+        "Integer",
+        "Decimal",
+        "Boolean",
+        "Uuid",
+        "Date",
+        "Timestamp",
+        "Json"
+      ]
+    },
+    "ParamDefinition": {
+      "type": "object",
+      "properties": {
+        "default": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/ParamDataType"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "PartitionKey": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/CelExpression"
+        }
+      },
+      "required": [
+        "alias",
+        "value"
+      ]
+    },
+    "VelocityLimitValues": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Currency"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "limit": {
+          "$ref": "#/$defs/Limit"
+        },
+        "name": {
+          "type": "string"
+        },
+        "params": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ParamDefinition"
+          }
+        },
+        "window": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PartitionKey"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "window",
+        "limit"
+      ]
+    }
+  }
+}

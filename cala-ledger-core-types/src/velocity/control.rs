@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct VelocityControlValues {
     pub id: VelocityControlId,
     pub name: String,
@@ -13,11 +14,13 @@ pub struct VelocityControlValues {
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct VelocityEnforcement {
     pub action: VelocityEnforcementAction,
 }
 
 #[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum VelocityEnforcementAction {
     #[default]

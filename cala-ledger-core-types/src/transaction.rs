@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use super::primitives::*;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct TransactionValues {
     pub id: TransactionId,
     pub version: u32,

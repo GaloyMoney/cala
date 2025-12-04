@@ -9,6 +9,7 @@ use cel_interpreter::CelExpression;
 use es_entity::*;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TxTemplateId", event_context = false)]
 pub enum TxTemplateEvent {

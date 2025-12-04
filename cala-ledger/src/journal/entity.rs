@@ -6,6 +6,7 @@ use crate::primitives::*;
 pub use cala_types::{journal::*, primitives::JournalId};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "JournalId", event_context = false)]
 pub enum JournalEvent {

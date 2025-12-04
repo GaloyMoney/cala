@@ -6,6 +6,7 @@ use crate::primitives::*;
 pub use cala_types::{entry::*, primitives::EntryId};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "EntryId", event_context = false)]
 pub enum EntryEvent {

@@ -7,6 +7,7 @@ pub use cala_types::{account::*, primitives::AccountId, velocity::VelocityContex
 use crate::primitives::*;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "AccountId", event_context = false)]
 pub enum AccountEvent {

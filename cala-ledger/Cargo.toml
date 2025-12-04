@@ -14,7 +14,12 @@ categories = ["finance"]
 fail-on-warnings = []
 import = []
 graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
-json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema"]
+json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
+
+[[bin]]
+name = "event-schemas"
+path = "src/bin/event_schemas.rs"
+required-features = ["json-schema"]
 
 [dependencies]
 cala-types = { workspace = true }
@@ -46,6 +51,7 @@ opentelemetry = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 futures = { workspace = true }
 rust_decimal = { workspace = true }
+schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
