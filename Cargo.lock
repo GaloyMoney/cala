@@ -593,6 +593,7 @@ dependencies = [
  "es-entity",
  "futures",
  "job",
+ "obix",
  "opentelemetry",
  "prost 0.13.5",
  "prost-wkt-types",
@@ -871,9 +872,9 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "convert_case"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+checksum = "db05ffb6856bf0ecdf6367558a76a0e8a77b1713044eb92845c692100ed50190"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1211,9 +1212,7 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39dbe0680ad641abdaeddb1c2e87576696118b4329139571e05d7de3dad1ac6a"
+version = "0.10.6-dev"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1236,9 +1235,7 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4690ea6523399069694973c889b2cfb36793238453c09c2298cc9422d89f8e2d"
+version = "0.10.6-dev"
 dependencies = [
  "convert_case",
  "darling 0.21.3",
@@ -1932,9 +1929,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "172626266188b45b2f87551151f0f5e35723a32b95f32e659ee10601c0281361"
+version = "0.2.15-dev"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2219,6 +2214,32 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "obix"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "es-entity",
+ "futures",
+ "im",
+ "obix-macros",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
+name = "obix-macros"
+version = "0.1.0-dev"
+dependencies = [
+ "darling 0.21.3",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
 ]
 
 [[package]]

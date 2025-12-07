@@ -3,7 +3,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -26,22 +25,18 @@ use repo::*;
 #[derive(Clone)]
 pub struct Accounts {
     repo: AccountRepo,
-    outbox: Outbox,
-    pool: PgPool,
 }
 
 impl Accounts {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: AccountRepo::new(pool),
-            outbox,
-            pool: pool.clone(),
+            repo: AccountRepo::new(pool, publisher),
         }
     }
 
     #[instrument(name = "cala_ledger.accounts.create", skip_all)]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
         Ok(account)
@@ -50,11 +45,10 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.create_in_op", skip(self, db))]
     pub async fn create_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let account = self.repo.create_in_op(db, new_account).await?;
-        db.accumulate(account.last_persisted(1).map(|p| &p.event));
         Ok(account)
     }
 
@@ -63,7 +57,7 @@ impl Accounts {
         &self,
         new_accounts: Vec<NewAccount>,
     ) -> Result<Vec<Account>, AccountError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let accounts = self.create_all_in_op(&mut op, new_accounts).await?;
         op.commit().await?;
         Ok(accounts)
@@ -72,15 +66,10 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.create_all_in_op", skip(self, db))]
     pub async fn create_all_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_accounts: Vec<NewAccount>,
     ) -> Result<Vec<Account>, AccountError> {
         let accounts = self.repo.create_all_in_op(db, new_accounts).await?;
-        db.accumulate(
-            accounts
-                .iter()
-                .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
-        );
         Ok(accounts)
     }
 
@@ -152,7 +141,7 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())
@@ -161,15 +150,13 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.persist_in_op", skip_all)]
     pub async fn persist_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         account: &mut Account,
     ) -> Result<(), AccountError> {
         if account.is_account_set() {
             return Err(AccountError::CannotUpdateAccountSetAccounts);
         }
-
-        let n_events = self.repo.update_in_op(db, account).await?;
-        db.accumulate(account.last_persisted(n_events).map(|p| &p.event));
+        self.repo.update_in_op(db, account).await?;
         Ok(())
     }
 
@@ -199,14 +186,6 @@ impl Accounts {
         self.repo
             .import_in_op(&mut db, origin, &mut account)
             .await?;
-        let outbox_events: Vec<_> = account
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let now = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, now)
-            .await?;
         Ok(())
     }
 
@@ -220,15 +199,7 @@ impl Accounts {
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id(values.id).await?;
         let _ = account.update((values, fields));
-        let n_events = self.repo.update_in_op(&mut db, &mut account).await?;
-        let outbox_events: Vec<_> = account
-            .last_persisted(n_events)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut account).await?;
         Ok(())
     }
 }

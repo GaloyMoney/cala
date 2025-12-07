@@ -232,7 +232,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account = app
             .ledger()
             .accounts()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         if let Some(account_set_ids) = input.account_set_ids {
@@ -286,7 +286,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if account.update(builder).did_execute() {
             app.ledger()
                 .accounts()
-                .persist_in_op(&mut op, &mut account)
+                .persist_in_op(&mut *op, &mut account)
                 .await?;
         }
 

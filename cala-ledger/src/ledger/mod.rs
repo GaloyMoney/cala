@@ -77,7 +77,8 @@ impl CalaLedger {
             outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
         }
 
-        let accounts = Accounts::new(&pool, outbox.clone());
+        let publisher = crate::outbox::OutboxPublisher::init(&pool).await?;
+        let accounts = Accounts::new(&pool, &publisher);
         let journals = Journals::new(&pool, outbox.clone());
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());

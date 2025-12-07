@@ -1,4 +1,5 @@
 mod listener;
+mod publisher;
 mod repo;
 pub mod server;
 
@@ -17,6 +18,7 @@ use tokio::sync::broadcast;
 
 pub use event::*;
 pub use listener::*;
+pub use publisher::OutboxPublisher;
 use repo::*;
 
 const DEFAULT_BUFFER_SIZE: usize = 100;

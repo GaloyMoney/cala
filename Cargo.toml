@@ -22,8 +22,9 @@ cala-ledger = { path = "cala-ledger", version = "0.12.13-dev" }
 cala-ledger-outbox-client = { path = "cala-ledger-outbox-client", version = "0.12.13-dev" }
 cala-server = { path = "cala-server", version = "0.12.13-dev" }
 
-es-entity = "0.10"
-job = "0.2"
+es-entity = { path = "../es-entity" }
+job = { path = "../job" }
+obix = { path = "../obix", features = ["custom-tables"] }
 
 anyhow = "1.0.99"
 async-graphql = { version = "7.0.17", default-features = false, features = ["dataloader", "tracing", "chrono", "playground"] }
