@@ -82,7 +82,7 @@ impl CalaLedger {
         let journals = Journals::new(&pool, &publisher);
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
-        let entries = Entries::new(&pool, outbox.clone());
+        let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, outbox.clone(), &journals);
         let velocities = Velocities::new(&pool, outbox.clone());
         let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts, &entries, &balances);

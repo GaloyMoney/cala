@@ -1,4 +1,7 @@
-use crate::primitives::{AccountId, AccountSetId, DataSourceId, EntryId, JournalId, TransactionId};
+use crate::{
+    outbox::OutboxPublisher,
+    primitives::{AccountId, AccountSetId, DataSourceId, EntryId, JournalId, TransactionId},
+};
 use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -20,16 +23,31 @@ use super::{entity::*, error::*};
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(crate) struct EntryRepo {
     #[allow(dead_code)]
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl EntryRepo {
-    pub(crate) fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &Entry,
+        new_events: es_entity::LastPersisted<'_, EntryEvent>,
+    ) -> Result<(), EntryError> {
+        self.publisher.publish_all(op, entity, new_events).await?;
+        Ok(())
     }
 
     #[instrument(
