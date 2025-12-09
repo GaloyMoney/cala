@@ -565,7 +565,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let tx_template = app
             .ledger()
             .tx_templates()
-            .create_in_op(&mut op, new_tx_template)
+            .create_in_op(&mut *op, new_tx_template)
             .await?;
 
         Ok(tx_template.into())

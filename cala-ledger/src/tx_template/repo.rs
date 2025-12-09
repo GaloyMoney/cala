@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use std::sync::Arc;
 
-use crate::primitives::DataSourceId;
+use crate::{outbox::OutboxPublisher, primitives::DataSourceId};
 
 use super::{entity::*, error::TxTemplateError};
 
@@ -27,15 +27,30 @@ use super::{entity::*, error::TxTemplateError};
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct TxTemplateRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl TxTemplateRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &TxTemplate,
+        new_events: es_entity::LastPersisted<'_, TxTemplateEvent>,
+    ) -> Result<(), TxTemplateError> {
+        self.publisher.publish_all(op, entity, new_events).await?;
+        Ok(())
     }
 
     #[instrument(

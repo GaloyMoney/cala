@@ -80,7 +80,7 @@ impl CalaLedger {
         let publisher = crate::outbox::OutboxPublisher::init(&pool).await?;
         let accounts = Accounts::new(&pool, &publisher);
         let journals = Journals::new(&pool, &publisher);
-        let tx_templates = TxTemplates::new(&pool, outbox.clone());
+        let tx_templates = TxTemplates::new(&pool, &publisher);
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, outbox.clone(), &journals);
@@ -179,9 +179,10 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
+        let time = db.now();
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction_in_op(db, tx_id, tx_template_code, params.into())
+            .prepare_transaction_in_op(db, time, tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self
