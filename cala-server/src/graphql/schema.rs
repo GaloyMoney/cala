@@ -427,7 +427,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let journal = app
             .ledger()
             .journals()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         Ok(journal.into())
@@ -460,7 +460,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if journal.update(builder).did_execute() {
             app.ledger()
                 .journals()
-                .persist_in_op(&mut op, &mut journal)
+                .persist_in_op(&mut *op, &mut journal)
                 .await?;
         }
 

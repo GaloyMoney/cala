@@ -79,7 +79,7 @@ impl CalaLedger {
 
         let publisher = crate::outbox::OutboxPublisher::init(&pool).await?;
         let accounts = Accounts::new(&pool, &publisher);
-        let journals = Journals::new(&pool, outbox.clone());
+        let journals = Journals::new(&pool, &publisher);
         let tx_templates = TxTemplates::new(&pool, outbox.clone());
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, outbox.clone());

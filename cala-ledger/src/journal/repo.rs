@@ -4,7 +4,7 @@ use sqlx::PgPool;
 #[cfg(feature = "import")]
 use tracing::instrument;
 
-use crate::primitives::DataSourceId;
+use crate::{outbox::OutboxPublisher, primitives::DataSourceId};
 
 use super::{entity::*, error::JournalError};
 
@@ -22,15 +22,20 @@ use super::{entity::*, error::JournalError};
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct JournalRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl JournalRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     #[cfg(feature = "import")]
@@ -52,7 +57,20 @@ impl JournalRepo {
         )
         .execute(op.as_executor())
         .await?;
-        self.persist_events(op, journal.events_mut()).await?;
+        let n_events = self.persist_events(op, journal.events_mut()).await?;
+        self.publish(op, journal, journal.events().last_persisted(n_events))
+            .await?;
+
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &Journal,
+        new_events: es_entity::LastPersisted<'_, JournalEvent>,
+    ) -> Result<(), JournalError> {
+        self.publisher.publish_all(op, entity, new_events).await?;
         Ok(())
     }
 }
