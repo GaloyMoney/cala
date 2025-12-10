@@ -809,6 +809,13 @@ fn entries_for_remove_balance(
 
 impl From<&AccountSetEvent> for OutboxEventPayload {
     fn from(event: &AccountSetEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             AccountSetEvent::Imported {
@@ -821,11 +828,11 @@ impl From<&AccountSetEvent> for OutboxEventPayload {
             AccountSetEvent::Initialized {
                 values: account_set,
             } => OutboxEventPayload::AccountSetCreated {
-                source: DataSource::Local,
+                source,
                 account_set: account_set.clone(),
             },
             AccountSetEvent::Updated { values, fields } => OutboxEventPayload::AccountSetUpdated {
-                source: DataSource::Local,
+                source,
                 account_set: values.clone(),
                 fields: fields.clone(),
             },

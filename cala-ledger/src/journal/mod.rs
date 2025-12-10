@@ -113,6 +113,13 @@ impl Journals {
 
 impl From<&JournalEvent> for OutboxEventPayload {
     fn from(event: &JournalEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             JournalEvent::Imported { source, values } => OutboxEventPayload::JournalCreated {
@@ -120,11 +127,11 @@ impl From<&JournalEvent> for OutboxEventPayload {
                 journal: values.clone(),
             },
             JournalEvent::Initialized { values } => OutboxEventPayload::JournalCreated {
-                source: DataSource::Local,
+                source,
                 journal: values.clone(),
             },
             JournalEvent::Updated { values, fields } => OutboxEventPayload::JournalUpdated {
-                source: DataSource::Local,
+                source,
                 journal: values.clone(),
                 fields: fields.clone(),
             },

@@ -206,6 +206,13 @@ impl Accounts {
 
 impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             AccountEvent::Imported {
@@ -216,14 +223,14 @@ impl From<&AccountEvent> for OutboxEventPayload {
                 account: account.clone(),
             },
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
-                source: DataSource::Local,
+                source,
                 account: account.clone(),
             },
             AccountEvent::Updated {
                 values: account,
                 fields,
             } => OutboxEventPayload::AccountUpdated {
-                source: DataSource::Local,
+                source,
                 account: account.clone(),
                 fields: fields.clone(),
             },

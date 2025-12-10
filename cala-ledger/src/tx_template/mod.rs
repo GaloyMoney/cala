@@ -243,6 +243,13 @@ impl TxTemplates {
 
 impl From<&TxTemplateEvent> for OutboxEventPayload {
     fn from(event: &TxTemplateEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             TxTemplateEvent::Imported { source, values } => OutboxEventPayload::TxTemplateCreated {
@@ -252,7 +259,7 @@ impl From<&TxTemplateEvent> for OutboxEventPayload {
             TxTemplateEvent::Initialized {
                 values: tx_template,
             } => OutboxEventPayload::TxTemplateCreated {
-                source: DataSource::Local,
+                source,
                 tx_template: tx_template.clone(),
             },
         }

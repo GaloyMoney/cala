@@ -160,6 +160,13 @@ impl Transactions {
 
 impl From<&TransactionEvent> for OutboxEventPayload {
     fn from(event: &TransactionEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             TransactionEvent::Imported {
@@ -172,12 +179,12 @@ impl From<&TransactionEvent> for OutboxEventPayload {
             TransactionEvent::Initialized {
                 values: transaction,
             } => OutboxEventPayload::TransactionCreated {
-                source: DataSource::Local,
+                source,
                 transaction: transaction.clone(),
             },
             TransactionEvent::Updated { values, fields } => {
                 OutboxEventPayload::TransactionUpdated {
-                    source: DataSource::Local,
+                    source,
                     transaction: values.clone(),
                     fields: fields.clone(),
                 }
