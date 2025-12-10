@@ -31,20 +31,16 @@ pub(crate) use snapshot::*;
 #[derive(Clone)]
 pub struct Balances {
     repo: BalanceRepo,
-    // Used only for "import" feature
-    #[allow(dead_code)]
-    outbox: Outbox,
     journals: Journals,
     effective: EffectiveBalances,
     _pool: PgPool,
 }
 
 impl Balances {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox, journals: &Journals) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, journals: &Journals) -> Self {
         Self {
-            repo: BalanceRepo::new(pool),
+            repo: BalanceRepo::new(pool, publisher),
             effective: EffectiveBalances::new(pool),
-            outbox,
             journals: journals.clone(),
             _pool: pool.clone(),
         }
@@ -99,7 +95,7 @@ impl Balances {
     #[instrument(name = "cala_ledger.balance.update_balances_in_op", skip(self, op, entries, account_set_mappings), fields(journal_id = %journal_id, entries_count = entries.len()))]
     pub(crate) async fn update_balances_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         entries: Vec<EntryValues>,
         effective: NaiveDate,
@@ -136,62 +132,41 @@ impl Balances {
             .map(|(a, c)| (a, c.code()))
             .unzip();
 
-        let new_balances = {
-            let mut db = op.begin().await?;
+        let current_balances = self
+            .repo
+            .find_for_update(op, journal.id, &all_involved_balances)
+            .await?;
+        let new_balances = Self::new_snapshots(
+            created_at,
+            current_balances,
+            &entries,
+            &account_set_mappings,
+        );
+        self.repo
+            .insert_new_snapshots(op, journal.id, new_balances)
+            .await?;
 
-            let current_balances = self
-                .repo
-                .find_for_update(&mut db, journal.id, &all_involved_balances)
+        if journal.insert_effective_balances() {
+            self.effective
+                .update_cumulative_balances_in_op(
+                    op,
+                    journal_id,
+                    entries,
+                    effective,
+                    created_at,
+                    account_set_mappings,
+                    all_involved_balances,
+                )
                 .await?;
-            let new_balances = Self::new_snapshots(
-                created_at,
-                current_balances,
-                &entries,
-                &account_set_mappings,
-            );
-            self.repo
-                .insert_new_snapshots(&mut db, journal.id, &new_balances)
-                .await?;
+        }
 
-            if journal.insert_effective_balances() {
-                self.effective
-                    .update_cumulative_balances_in_op(
-                        &mut db,
-                        journal_id,
-                        entries,
-                        effective,
-                        created_at,
-                        account_set_mappings,
-                        all_involved_balances,
-                    )
-                    .await?;
-            }
-
-            db.commit().await?;
-
-            new_balances
-        };
-
-        op.accumulate(new_balances.into_iter().map(|balance| {
-            if balance.version == 1 {
-                OutboxEventPayload::BalanceCreated {
-                    source: DataSource::Local,
-                    balance,
-                }
-            } else {
-                OutboxEventPayload::BalanceUpdated {
-                    source: DataSource::Local,
-                    balance,
-                }
-            }
-        }));
         Ok(())
     }
 
     #[instrument(name = "cala_ledger.balance.find_balances_for_update", skip(self, db), fields(journal_id = %journal_id, account_id = %account_id))]
     pub(crate) async fn find_balances_for_update(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
     ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
@@ -250,17 +225,8 @@ impl Balances {
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
-        self.repo.import_balance(&mut db, &balance).await?;
-        let recorded_at = balance.created_at;
-        self.outbox
-            .persist_events_at(
-                db,
-                std::iter::once(OutboxEventPayload::BalanceCreated {
-                    source: DataSource::Remote { id: origin },
-                    balance,
-                }),
-                recorded_at,
-            )
+        self.repo
+            .import_balance(&mut db, balance, DataSource::Remote { id: origin })
             .await?;
         Ok(())
     }
@@ -273,17 +239,8 @@ impl Balances {
         origin: DataSourceId,
         balance: BalanceSnapshot,
     ) -> Result<(), BalanceError> {
-        self.repo.import_balance_update(&mut db, &balance).await?;
-        let recorded_at = balance.modified_at;
-        self.outbox
-            .persist_events_at(
-                db,
-                std::iter::once(OutboxEventPayload::BalanceUpdated {
-                    source: DataSource::Remote { id: origin },
-                    balance,
-                }),
-                recorded_at,
-            )
+        self.repo
+            .import_balance_update(&mut db, balance, DataSource::Remote { id: origin })
             .await?;
         Ok(())
     }

@@ -40,11 +40,10 @@ impl Transactions {
     #[instrument(name = "cala_ledger.transactions.create_in_op", skip_all)]
     pub(crate) async fn create_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db, new_transaction).await?;
-        db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
 

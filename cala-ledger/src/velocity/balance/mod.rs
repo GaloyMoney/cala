@@ -10,10 +10,7 @@ use cala_types::{
     velocity::VelocityContextAccountValues,
 };
 
-use crate::{
-    ledger_operation::*,
-    primitives::{AccountId, AccountSetId},
-};
+use crate::primitives::{AccountId, AccountSetId};
 
 use super::{account_control::*, error::*};
 
@@ -33,7 +30,7 @@ impl VelocityBalances {
 
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],

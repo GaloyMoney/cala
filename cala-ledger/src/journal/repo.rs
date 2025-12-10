@@ -42,7 +42,7 @@ impl JournalRepo {
     #[instrument(name = "journal.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
@@ -70,7 +70,9 @@ impl JournalRepo {
         entity: &Journal,
         new_events: es_entity::LastPersisted<'_, JournalEvent>,
     ) -> Result<(), JournalError> {
-        self.publisher.publish_all(op, entity, new_events).await?;
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }

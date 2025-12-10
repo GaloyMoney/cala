@@ -91,7 +91,7 @@ impl AccountSet {
                         let account_sets = app.ledger().account_sets();
                         let accounts = app.ledger().accounts();
                         let members = account_sets
-                            .list_members_by_created_at_in_op(&mut op, account_set_id, query_args)
+                            .list_members_by_created_at_in_op(&mut *op, account_set_id, query_args)
                             .await?;
                         let mut account_ids = Vec::new();
                         let mut set_ids = Vec::new();
@@ -104,7 +104,7 @@ impl AccountSet {
                         (
                             members,
                             accounts.find_all_in_op(&mut op, &account_ids).await?,
-                            account_sets.find_all_in_op(&mut op, &set_ids).await?,
+                            account_sets.find_all_in_op(&mut *op, &set_ids).await?,
                         )
                     }
                     None => {
@@ -173,7 +173,7 @@ impl AccountSet {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()
                             .account_sets()
-                            .find_where_member_in_op(&mut op, account_set_id, query_args)
+                            .find_where_member_in_op(&mut *op, account_set_id, query_args)
                             .await?
                     }
                     None => {

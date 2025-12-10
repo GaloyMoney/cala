@@ -64,7 +64,7 @@ impl<'t> LedgerOperation<'t> {
 }
 
 impl<'t> es_entity::AtomicOperation for LedgerOperation<'t> {
-    fn now(&self) -> Option<chrono::DateTime<chrono::Utc>> {
+    fn maybe_now(&self) -> Option<chrono::DateTime<chrono::Utc>> {
         Some(self.now())
     }
 

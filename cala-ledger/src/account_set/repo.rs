@@ -5,7 +5,7 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-use crate::primitives::{AccountId, DataSourceId, JournalId};
+use crate::{outbox::OutboxPublisher, primitives::{AccountId, DataSourceId, JournalId}};
 
 use super::{entity::*, error::*};
 
@@ -110,15 +110,30 @@ use members_cursor::*;
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
+    pub(super) publisher: OutboxPublisher,
 }
 
 impl AccountSetRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        _entity: &AccountSet,
+        new_events: es_entity::LastPersisted<'_, AccountSetEvent>,
+    ) -> Result<(), AccountSetError> {
+        self.publisher.publish_all(op, new_events.map(|p| crate::outbox::OutboxEventPayload::from(&p.event))).await?;
+        Ok(())
     }
 
     pub async fn list_children_by_created_at(
@@ -739,7 +754,7 @@ impl AccountSetRepo {
     #[instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
@@ -796,7 +811,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_member_account_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
@@ -834,7 +849,7 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_member_set_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {

@@ -17,7 +17,7 @@ impl OutboxPublisher {
         Ok(Self { outbox })
     }
 
-    pub async fn publish_all<Entity, Event>(
+    pub async fn publish_entity_events<Entity, Event>(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         _: Entity,
@@ -30,5 +30,13 @@ impl OutboxPublisher {
         self.outbox
             .publish_all_persisted(op, new_events.map(|e| &e.event))
             .await
+    }
+
+    pub async fn publish_all(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        events: impl Iterator<Item = OutboxEventPayload>,
+    ) -> Result<(), sqlx::Error> {
+        self.outbox.publish_all_persisted(op, events).await
     }
 }

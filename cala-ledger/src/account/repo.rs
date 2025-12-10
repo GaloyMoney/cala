@@ -59,7 +59,7 @@ impl AccountRepo {
     #[instrument(name = "account.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         account: &mut Account,
     ) -> Result<(), AccountError> {
@@ -118,7 +118,9 @@ impl AccountRepo {
         entity: &Account,
         new_events: es_entity::LastPersisted<'_, AccountEvent>,
     ) -> Result<(), AccountError> {
-        self.publisher.publish_all(op, entity, new_events).await?;
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }

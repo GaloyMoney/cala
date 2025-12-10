@@ -1,21 +1,29 @@
 use sqlx::PgPool;
 use tracing::instrument;
 
-use super::{account_balance::AccountBalance, error::BalanceError};
+use std::collections::HashMap;
+
 use cala_types::{
     balance::BalanceSnapshot,
+    outbox::OutboxEventPayload,
     primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status},
 };
-use std::collections::HashMap;
+
+use super::{account_balance::AccountBalance, error::BalanceError};
+use crate::{outbox::OutboxPublisher, primitives::DataSource};
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl BalanceRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     pub async fn find(
@@ -205,7 +213,7 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        new_balances: &[BalanceSnapshot],
+        new_balances: Vec<BalanceSnapshot>,
     ) -> Result<(), BalanceError> {
         tracing::Span::current().record(
             "n_new_balances",
@@ -219,7 +227,7 @@ impl BalanceRepo {
         let mut versions = Vec::with_capacity(new_balances.len());
         let mut values = Vec::with_capacity(new_balances.len());
 
-        for balance in new_balances {
+        for balance in new_balances.iter() {
             journal_ids.push(balance.journal_id);
             account_ids.push(balance.account_id);
             entry_ids.push(balance.entry_id);
@@ -275,6 +283,25 @@ impl BalanceRepo {
         .execute(op.as_executor())
         .await?;
 
+        self.publisher
+            .publish_all(
+                op,
+                new_balances.into_iter().map(|balance| {
+                    if balance.version == 1 {
+                        OutboxEventPayload::BalanceCreated {
+                            source: DataSource::Local,
+                            balance,
+                        }
+                    } else {
+                        OutboxEventPayload::BalanceUpdated {
+                            source: DataSource::Local,
+                            balance,
+                        }
+                    }
+                }),
+            )
+            .await?;
+
         Ok(())
     }
 
@@ -283,10 +310,11 @@ impl BalanceRepo {
     pub async fn import_balance(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        balance: &BalanceSnapshot,
+        balance: BalanceSnapshot,
+        source: DataSource,
     ) -> Result<(), BalanceError> {
         let values_json =
-            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"INSERT INTO cala_current_balances
             (journal_id, account_id, currency, latest_version, latest_values, created_at)
@@ -314,6 +342,13 @@ impl BalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(OutboxEventPayload::BalanceCreated { source, balance }),
+            )
+            .await?;
         Ok(())
     }
 
@@ -371,10 +406,11 @@ impl BalanceRepo {
     pub async fn import_balance_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        balance: &BalanceSnapshot,
+        balance: BalanceSnapshot,
+        source: DataSource,
     ) -> Result<(), BalanceError> {
         let values_json =
-            serde_json::to_value(balance).expect("Failed to serialize balance snapshot");
+            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
         sqlx::query!(
             r#"
             UPDATE cala_current_balances
@@ -401,6 +437,12 @@ impl BalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(OutboxEventPayload::BalanceUpdated { source, balance }),
+            )
+            .await?;
         Ok(())
     }
 }

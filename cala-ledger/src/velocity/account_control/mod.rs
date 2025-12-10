@@ -102,7 +102,7 @@ impl AccountControls {
 
     pub async fn find_for_enforcement(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
     ) -> Result<
         HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,

@@ -46,7 +46,9 @@ impl EntryRepo {
         entity: &Entry,
         new_events: es_entity::LastPersisted<'_, EntryEvent>,
     ) -> Result<(), EntryError> {
-        self.publisher.publish_all(op, entity, new_events).await?;
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 
@@ -128,7 +130,7 @@ impl EntryRepo {
     #[cfg(feature = "import")]
     pub(super) async fn import(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         entry: &mut Entry,
     ) -> Result<(), EntryError> {

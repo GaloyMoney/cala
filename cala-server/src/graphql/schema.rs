@@ -239,7 +239,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             for id in account_set_ids {
                 app.ledger()
                     .account_sets()
-                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
+                    .add_member_in_op(&mut *op, AccountSetId::from(id), account.id())
                     .await?;
             }
         }
@@ -319,7 +319,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         Ok(account_set.into())
@@ -359,7 +359,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if account_set.update(builder).did_execute() {
             app.ledger()
                 .account_sets()
-                .persist_in_op(&mut op, &mut account_set)
+                .persist_in_op(&mut *op, &mut account_set)
                 .await?;
         }
 
@@ -380,7 +380,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .add_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .add_member_in_op(&mut *op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())
@@ -400,7 +400,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .remove_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .remove_member_in_op(&mut *op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())
@@ -585,7 +585,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let transaction = app
             .ledger()
             .post_transaction_in_op(
-                &mut op,
+                &mut *op,
                 input.transaction_id.into(),
                 &input.tx_template_code,
                 params.unwrap_or_default(),

@@ -83,9 +83,9 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, &publisher);
         let transactions = Transactions::new(&pool, outbox.clone());
         let entries = Entries::new(&pool, &publisher);
-        let balances = Balances::new(&pool, outbox.clone(), &journals);
+        let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, outbox.clone());
-        let account_sets = AccountSets::new(&pool, outbox.clone(), &accounts, &entries, &balances);
+        let account_sets = AccountSets::new(&pool, &publisher, &accounts, &entries, &balances);
         Ok(Self {
             accounts,
             account_sets,
@@ -174,20 +174,21 @@ impl CalaLedger {
     )]
     pub async fn post_transaction_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
+        let mut db = es_entity::OpWithTime::cached_or_db_time(db).await?;
         let time = db.now();
         let prepared_tx = self
             .tx_templates
-            .prepare_transaction_in_op(db, time, tx_id, tx_template_code, params.into())
+            .prepare_transaction_in_op(&mut db, time, tx_id, tx_template_code, params.into())
             .await?;
 
         let transaction = self
             .transactions
-            .create_in_op(db, prepared_tx.transaction)
+            .create_in_op(&mut db, prepared_tx.transaction)
             .await?;
 
         let span = tracing::Span::current();
@@ -196,7 +197,7 @@ impl CalaLedger {
 
         let entries = self
             .entries
-            .create_all_in_op(db, prepared_tx.entries)
+            .create_all_in_op(&mut db, prepared_tx.entries)
             .await?;
 
         let account_ids = entries
@@ -205,12 +206,12 @@ impl CalaLedger {
             .collect::<Vec<_>>();
         let mappings = self
             .account_sets
-            .fetch_mappings_in_op(db, transaction.values().journal_id, &account_ids)
+            .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &account_ids)
             .await?;
 
         self.velocities
             .update_balances_with_limit_enforcement_in_op(
-                db,
+                &mut db,
                 transaction.created_at(),
                 transaction.values(),
                 &entries,
@@ -221,7 +222,7 @@ impl CalaLedger {
 
         self.balances
             .update_balances_in_op(
-                db,
+                &mut db,
                 transaction.journal_id(),
                 entries,
                 transaction.effective(),

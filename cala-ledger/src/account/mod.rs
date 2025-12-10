@@ -166,7 +166,7 @@ impl Accounts {
     )]
     pub(crate) async fn update_velocity_context_values_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         values: impl Into<VelocityContextAccountValues>,
     ) -> Result<(), AccountError> {
         self.repo
