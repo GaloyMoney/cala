@@ -17,7 +17,6 @@ use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{
     journal::Journals,
-    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, JournalId},
 };
@@ -65,7 +64,7 @@ impl Balances {
     #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op))]
     pub async fn find_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
@@ -86,7 +85,7 @@ impl Balances {
     #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
     pub async fn find_all_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all_in_op(op, ids).await

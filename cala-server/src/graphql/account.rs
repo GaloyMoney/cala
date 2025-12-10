@@ -51,7 +51,7 @@ impl Account {
                 Some(
                     app.ledger()
                         .balances()
-                        .find_in_op(&mut op, journal_id, account_id, currency)
+                        .find_in_op(&mut *op, journal_id, account_id, currency)
                         .await?,
                 )
             }

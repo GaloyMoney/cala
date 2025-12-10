@@ -7,7 +7,7 @@ pub use cala_ledger::primitives::{DebitOrCredit, Layer, Status};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
-pub type DbOp = Arc<Mutex<cala_ledger::LedgerOperation<'static>>>;
+pub type DbOp = Arc<Mutex<es_entity::DbOpWithTime<'static>>>;
 
 pub use es_entity::graphql::UUID;
 

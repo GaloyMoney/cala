@@ -53,7 +53,7 @@ impl AccountSet {
                 Some(
                     app.ledger()
                         .balances()
-                        .find_in_op(&mut op, journal_id, account_id, currency)
+                        .find_in_op(&mut *op, journal_id, account_id, currency)
                         .await?,
                 )
             }
@@ -103,7 +103,7 @@ impl AccountSet {
                         }
                         (
                             members,
-                            accounts.find_all_in_op(&mut op, &account_ids).await?,
+                            accounts.find_all_in_op(&mut *op, &account_ids).await?,
                             account_sets.find_all_in_op(&mut *op, &set_ids).await?,
                         )
                     }

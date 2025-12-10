@@ -51,14 +51,6 @@ impl Outbox {
         })
     }
 
-    pub(crate) async fn persist_events(
-        &self,
-        db: Transaction<'_, Postgres>,
-        events: impl IntoIterator<Item = impl Into<OutboxEventPayload>>,
-    ) -> Result<(), sqlx::Error> {
-        self.persist_events_at(db, events, None).await
-    }
-
     pub(crate) async fn persist_events_at(
         &self,
         db: impl Into<Transaction<'_, Postgres>>,

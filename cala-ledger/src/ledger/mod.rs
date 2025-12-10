@@ -15,7 +15,6 @@ use crate::{
     balance::Balances,
     entry::Entries,
     journal::Journals,
-    ledger_operation::*,
     outbox::{server, EventSequence, Outbox, OutboxListener},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
@@ -81,10 +80,10 @@ impl CalaLedger {
         let accounts = Accounts::new(&pool, &publisher);
         let journals = Journals::new(&pool, &publisher);
         let tx_templates = TxTemplates::new(&pool, &publisher);
-        let transactions = Transactions::new(&pool, outbox.clone());
+        let transactions = Transactions::new(&pool, &publisher, outbox.clone());
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, &publisher, &journals);
-        let velocities = Velocities::new(&pool, outbox.clone());
+        let velocities = Velocities::new(&pool);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &entries, &balances);
         Ok(Self {
             accounts,
@@ -105,15 +104,9 @@ impl CalaLedger {
         &self.pool
     }
 
-    pub async fn begin_operation(&self) -> Result<LedgerOperation<'static>, LedgerError> {
-        Ok(LedgerOperation::init(&self.pool, &self.outbox).await?)
-    }
-
-    pub fn ledger_operation_from_db_op<'a>(
-        &self,
-        db_op: es_entity::DbOpWithTime<'a>,
-    ) -> LedgerOperation<'a> {
-        LedgerOperation::new(db_op, &self.outbox)
+    pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
+        let db_op = es_entity::DbOp::init(&self.pool).await?.with_db_time().await?;
+        Ok(db_op)
     }
 
     pub fn accounts(&self) -> &Accounts {
@@ -159,7 +152,7 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = es_entity::DbOp::init(&self.pool).await?;
         let transaction = self
             .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
             .await?;
@@ -239,11 +232,12 @@ impl CalaLedger {
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = es_entity::DbOp::init(&self.pool).await?.with_db_time().await?;
         let transaction = self
             .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id)
             .await?;
-        db.commit().await?;
+        let tx = sqlx::Transaction::from(db);
+        tx.commit().await?;
         Ok(transaction)
     }
 
@@ -254,7 +248,7 @@ impl CalaLedger {
     )]
     pub async fn void_transaction_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperationWithTime,
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {

@@ -132,7 +132,6 @@ pub mod account_set;
 pub mod balance;
 pub mod entry;
 pub mod journal;
-pub mod ledger_operation;
 pub mod migrate;
 pub mod transaction;
 pub mod tx_template;
@@ -144,7 +143,6 @@ mod ledger;
 pub mod outbox;
 
 pub use ledger::*;
-pub use ledger_operation::*;
 
 pub mod primitives {
     pub use cala_types::primitives::*;

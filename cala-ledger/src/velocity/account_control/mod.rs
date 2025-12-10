@@ -12,7 +12,6 @@ use cala_types::velocity::{
 };
 
 use crate::{
-    ledger_operation::*,
     param::Params,
     primitives::{AccountId, DebitOrCredit, Layer},
 };
@@ -38,7 +37,7 @@ impl AccountControls {
 
     pub async fn attach_control_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
         control: &VelocityControlValues,
         account_id: AccountId,

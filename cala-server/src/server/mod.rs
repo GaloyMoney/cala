@@ -4,7 +4,7 @@ use async_graphql::*;
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::{routing::get, Extension, Router};
 use axum_extra::headers::HeaderMap;
-use cala_ledger::{CalaLedger, LedgerOperation};
+use cala_ledger::CalaLedger;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::instrument;
@@ -84,7 +84,7 @@ async fn playground() -> impl axum::response::IntoResponse {
 async fn maybe_init_atomic_operation(
     req: &mut async_graphql::Request,
     ledger: &CalaLedger,
-) -> Result<Option<Arc<Mutex<LedgerOperation<'static>>>>, cala_ledger::error::LedgerError> {
+) -> Result<Option<Arc<Mutex<es_entity::DbOpWithTime<'static>>>>, cala_ledger::error::LedgerError> {
     use async_graphql::parser::types::*;
 
     let operation_name = req

@@ -11,7 +11,6 @@ use std::collections::HashMap;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::{
-    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, Status},
 };
@@ -89,7 +88,7 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
         self.repo.find_all_in_op(db, account_ids).await
@@ -116,7 +115,7 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.lock_in_op", skip(self, db))]
     pub async fn lock_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
@@ -129,7 +128,7 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.unlock_in_op", skip(self, db))]
     pub async fn unlock_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
     ) -> Result<(), AccountError> {
         let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;

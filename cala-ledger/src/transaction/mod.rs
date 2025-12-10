@@ -12,7 +12,7 @@ use std::collections::HashMap;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::primitives::{EntryId, TxTemplateId};
-use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
+use crate::{outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -22,18 +22,18 @@ use repo::*;
 #[derive(Clone)]
 pub struct Transactions {
     repo: TransactionRepo,
-    // Used only for "import" feature
-    #[allow(dead_code)]
+    publisher: OutboxPublisher,
+    #[cfg(feature = "import")]
     outbox: Outbox,
-    _pool: PgPool,
 }
 
 impl Transactions {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, outbox: Outbox) -> Self {
         Self {
             repo: TransactionRepo::new(pool),
+            publisher: publisher.clone(),
+            #[cfg(feature = "import")]
             outbox,
-            _pool: pool.clone(),
         }
     }
 
@@ -50,7 +50,7 @@ impl Transactions {
     #[instrument(name = "cala_ledger.transactions.create_voided_tx_in_op", skip_all)]
     pub async fn create_voided_tx_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperationWithTime,
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
@@ -62,12 +62,13 @@ impl Transactions {
         self.repo.update_in_op(db, &mut existing_tx).await?;
         let voided_tx = self.repo.create_in_op(db, new_tx).await?;
 
-        db.accumulate(
+        self.publisher.publish_all(
+            db,
             existing_tx
                 .last_persisted(1)
-                .map(|p| &p.event)
-                .chain(voided_tx.last_persisted(1).map(|p| &p.event)),
-        );
+                .map(|p| OutboxEventPayload::from(&p.event))
+                .chain(voided_tx.last_persisted(1).map(|p| OutboxEventPayload::from(&p.event))),
+        ).await?;
 
         Ok(voided_tx)
     }

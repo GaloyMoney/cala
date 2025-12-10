@@ -684,7 +684,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let velocity_limit = app
             .ledger()
             .velocities()
-            .create_limit_in_op(&mut op, new_velocity_limit)
+            .create_limit_in_op(&mut *op, new_velocity_limit)
             .await?;
 
         Ok(velocity_limit.into())
@@ -722,7 +722,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let velocity_control = app
             .ledger()
             .velocities()
-            .create_control_in_op(&mut op, new_velocity_control)
+            .create_control_in_op(&mut *op, new_velocity_control)
             .await?;
 
         Ok(velocity_control.into())
@@ -743,7 +743,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .velocities()
             .add_limit_to_control_in_op(
-                &mut op,
+                &mut *op,
                 input.velocity_control_id.into(),
                 input.velocity_limit_id.into(),
             )
@@ -768,7 +768,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .velocities()
             .attach_control_to_account_in_op(
-                &mut op,
+                &mut *op,
                 input.velocity_control_id.into(),
                 input.account_id.into(),
                 params,
