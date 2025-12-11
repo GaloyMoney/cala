@@ -205,12 +205,6 @@ impl AccountSets {
             }
         };
 
-        self.repo.publisher.publish_all(op, std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
-            source: DataSource::Local,
-            account_set_id,
-            member_id: member,
-        })).await?;
-
         let balances = self
             .balances
             .find_balances_for_update(op, account_set.values().journal_id, member_id)
@@ -295,12 +289,6 @@ impl AccountSets {
                 (time, parents, target, AccountId::from(id))
             }
         };
-
-        self.repo.publisher.publish_all(op, std::iter::once(OutboxEventPayload::AccountSetMemberRemoved {
-            source: DataSource::Local,
-            account_set_id,
-            member_id: member,
-        })).await?;
 
         let balances = self
             .balances
@@ -551,20 +539,15 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_member_account_in_op(&mut db, account_set_id, account_id)
+                    .import_member_account_in_op(&mut db, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMemberId::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(member_account_set_id) => {
                 self.repo
-                    .import_member_set_in_op(&mut db, account_set_id, account_set_id)
+                    .import_member_set_in_op(&mut db, origin, account_set_id, member_account_set_id)
                     .await?;
             }
         }
-        self.repo.publisher.publish_all(&mut db, std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
-            source: DataSource::Remote { id: origin },
-            account_set_id,
-            member_id,
-        })).await?;
         Ok(())
     }
 
@@ -579,20 +562,20 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_remove_member_account(&mut db, account_set_id, account_id)
+                    .import_remove_member_account(&mut db, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMemberId::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(member_account_set_id) => {
                 self.repo
-                    .import_remove_member_set(&mut db, account_set_id, account_set_id)
+                    .import_remove_member_set(
+                        &mut db,
+                        origin,
+                        account_set_id,
+                        member_account_set_id,
+                    )
                     .await?;
             }
         }
-        self.repo.publisher.publish_all(&mut db, std::iter::once(OutboxEventPayload::AccountSetMemberRemoved {
-            source: DataSource::Remote { id: origin },
-            account_set_id,
-            member_id,
-        })).await?;
         Ok(())
     }
 }
