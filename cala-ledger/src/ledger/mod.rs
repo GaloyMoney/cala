@@ -75,7 +75,7 @@ impl CalaLedger {
         if let Some(outbox_config) = config.outbox {
             outbox_handle = Some(Self::start_outbox_server(
                 outbox_config,
-                publisher.outbox().clone(),
+                publisher.inner().clone(),
             ));
         }
         let accounts = Accounts::new(&pool, &publisher);
@@ -314,7 +314,7 @@ impl CalaLedger {
     }
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
-        self.publisher.outbox()
+        self.publisher.inner()
     }
 
     #[cfg(feature = "import")]

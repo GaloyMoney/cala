@@ -1,10 +1,11 @@
 use es_entity::*;
 use sqlx::PgPool;
-
-#[cfg(feature = "import")]
 use tracing::instrument;
 
-use crate::primitives::*;
+use crate::{
+    outbox::OutboxPublisher,
+    primitives::*,
+};
 
 use super::{entity::*, error::TransactionError};
 
@@ -25,15 +26,20 @@ use super::{entity::*, error::TransactionError};
         effective(ty = "chrono::NaiveDate", update(persist = false)),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct TransactionRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl TransactionRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     #[cfg(feature = "import")]
@@ -59,7 +65,22 @@ impl TransactionRepo {
         )
         .execute(op.as_executor())
         .await?;
-        self.persist_events(op, transaction.events_mut()).await?;
+        let n_events = self.persist_events(op, transaction.events_mut()).await?;
+        self.publish(op, transaction, transaction.events().last_persisted(n_events))
+            .await?;
+
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &Transaction,
+        new_events: es_entity::LastPersisted<'_, TransactionEvent>,
+    ) -> Result<(), TransactionError> {
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }

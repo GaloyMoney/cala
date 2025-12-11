@@ -3,7 +3,6 @@ pub mod error;
 mod entity;
 mod repo;
 
-use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -22,14 +21,12 @@ use repo::*;
 #[derive(Clone)]
 pub struct Transactions {
     repo: TransactionRepo,
-    publisher: OutboxPublisher,
 }
 
 impl Transactions {
     pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: TransactionRepo::new(pool),
-            publisher: publisher.clone(),
+            repo: TransactionRepo::new(pool, publisher),
         }
     }
 
@@ -57,14 +54,6 @@ impl Transactions {
 
         self.repo.update_in_op(db, &mut existing_tx).await?;
         let voided_tx = self.repo.create_in_op(db, new_tx).await?;
-
-        self.publisher.publish_all(
-            db,
-            existing_tx
-                .last_persisted(1)
-                .map(|p| OutboxEventPayload::from(&p.event))
-                .chain(voided_tx.last_persisted(1).map(|p| OutboxEventPayload::from(&p.event))),
-        ).await?;
 
         Ok(voided_tx)
     }
@@ -120,14 +109,6 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
-        let outbox_events: Vec<_> = transaction
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.publisher
-            .persist_events_at(db, outbox_events, time)
-            .await?;
         Ok(())
     }
 
@@ -142,14 +123,6 @@ impl Transactions {
         let mut transaction = Transaction::import(origin, values);
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
-            .await?;
-        let outbox_events: Vec<_> = transaction
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.publisher
-            .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
     }
