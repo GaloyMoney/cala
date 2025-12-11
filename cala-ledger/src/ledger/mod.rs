@@ -15,7 +15,7 @@ use crate::{
     balance::Balances,
     entry::Entries,
     journal::Journals,
-    outbox::{server, EventSequence, Outbox, OutboxListener},
+    outbox::{server, OutboxPublisher},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
@@ -40,7 +40,7 @@ pub struct CalaLedger {
     entries: Entries,
     velocities: Velocities,
     balances: Balances,
-    outbox: Outbox,
+    publisher: OutboxPublisher,
     #[allow(clippy::type_complexity)]
     outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
@@ -70,17 +70,18 @@ impl CalaLedger {
                 .await?;
         }
 
-        let outbox = Outbox::init(&pool).await?;
+        let publisher = crate::outbox::OutboxPublisher::init(&pool).await?;
         let mut outbox_handle = None;
         if let Some(outbox_config) = config.outbox {
-            outbox_handle = Some(Self::start_outbox_server(outbox_config, outbox.clone()));
+            outbox_handle = Some(Self::start_outbox_server(
+                outbox_config,
+                publisher.outbox().clone(),
+            ));
         }
-
-        let publisher = crate::outbox::OutboxPublisher::init(&pool).await?;
         let accounts = Accounts::new(&pool, &publisher);
         let journals = Journals::new(&pool, &publisher);
         let tx_templates = TxTemplates::new(&pool, &publisher);
-        let transactions = Transactions::new(&pool, &publisher, outbox.clone());
+        let transactions = Transactions::new(&pool, &publisher);
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool);
@@ -90,7 +91,7 @@ impl CalaLedger {
             account_sets,
             journals,
             tx_templates,
-            outbox,
+            publisher,
             transactions,
             entries,
             balances,
@@ -105,7 +106,10 @@ impl CalaLedger {
     }
 
     pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
-        let db_op = es_entity::DbOp::init(&self.pool).await?.with_db_time().await?;
+        let db_op = es_entity::DbOp::init(&self.pool)
+            .await?
+            .with_db_time()
+            .await?;
         Ok(db_op)
     }
 
@@ -232,7 +236,10 @@ impl CalaLedger {
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = es_entity::DbOp::init(&self.pool).await?.with_db_time().await?;
+        let mut db = es_entity::DbOp::init(&self.pool)
+            .await?
+            .with_db_time()
+            .await?;
         let transaction = self
             .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id)
             .await?;
@@ -306,11 +313,8 @@ impl CalaLedger {
         Ok(transaction)
     }
 
-    pub async fn register_outbox_listener(
-        &self,
-        start_after: Option<EventSequence>,
-    ) -> Result<OutboxListener, LedgerError> {
-        Ok(self.outbox.register_listener(start_after).await?)
+    pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
+        self.publisher.outbox()
     }
 
     #[cfg(feature = "import")]
@@ -350,7 +354,10 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            AccountSetCreated { account_set, source } => {
+            AccountSetCreated {
+                account_set,
+                source,
+            } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.account_sets
@@ -404,7 +411,9 @@ impl CalaLedger {
                     .await?
             }
             JournalUpdated {
-                journal, fields, source
+                journal,
+                fields,
+                source,
             } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let data = {
@@ -418,14 +427,21 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            TransactionCreated { transaction, source } => {
+            TransactionCreated {
+                transaction,
+                source,
+            } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.transactions
                     .sync_transaction_creation(op, origin, transaction)
                     .await?
             }
-            TransactionUpdated { transaction, source, fields: _ } => {
+            TransactionUpdated {
+                transaction,
+                source,
+                fields: _,
+            } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let data = {
                     let mut ctx = es_entity::context::EventContext::current();
@@ -438,7 +454,10 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            TxTemplateCreated { tx_template, source } => {
+            TxTemplateCreated {
+                tx_template,
+                source,
+            } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.tx_templates
@@ -484,7 +503,7 @@ impl CalaLedger {
     #[instrument(name = "cala_ledger.start_outbox_server", skip(outbox))]
     fn start_outbox_server(
         config: server::OutboxServerConfig,
-        outbox: Outbox,
+        outbox: crate::outbox::ObixOutbox,
     ) -> tokio::task::JoinHandle<Result<(), LedgerError>> {
         tokio::spawn(async move {
             server::start(config, outbox).await?;

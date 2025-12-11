@@ -23,17 +23,13 @@ use repo::*;
 pub struct Transactions {
     repo: TransactionRepo,
     publisher: OutboxPublisher,
-    #[cfg(feature = "import")]
-    outbox: Outbox,
 }
 
 impl Transactions {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
             repo: TransactionRepo::new(pool),
             publisher: publisher.clone(),
-            #[cfg(feature = "import")]
-            outbox,
         }
     }
 
@@ -129,7 +125,7 @@ impl Transactions {
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
         let time = db.now();
-        self.outbox
+        self.publisher
             .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())
@@ -152,7 +148,7 @@ impl Transactions {
             .map(|p| OutboxEventPayload::from(&p.event))
             .collect();
         let time = db.now();
-        self.outbox
+        self.publisher
             .persist_events_at(db, outbox_events, time)
             .await?;
         Ok(())

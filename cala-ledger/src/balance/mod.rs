@@ -15,11 +15,7 @@ pub use cala_types::{
 };
 use cala_types::{entry::EntryValues, primitives::*};
 
-use crate::{
-    journal::Journals,
-    outbox::*,
-    primitives::{DataSource, JournalId},
-};
+use crate::{journal::Journals, outbox::*, primitives::JournalId};
 
 pub use account_balance::*;
 use effective::*;

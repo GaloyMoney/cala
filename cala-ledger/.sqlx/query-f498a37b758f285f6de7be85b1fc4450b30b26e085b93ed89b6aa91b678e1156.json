@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                INSERT INTO cala_outbox_events (sequence)\n                SELECT unnest($1::bigint[]) AS sequence\n                ON CONFLICT (sequence) DO UPDATE\n                SET sequence = EXCLUDED.sequence\n                RETURNING id, sequence AS \"sequence!: EventSequence\", payload, recorded_at\n            ",
+  "query": "\n            INSERT INTO cala_persistent_outbox_events (sequence)\n            SELECT unnest($1::bigint[]) AS sequence\n            ON CONFLICT (sequence) DO UPDATE\n            SET sequence = EXCLUDED.sequence\n            RETURNING id, sequence AS \"sequence!: i64\", payload, tracing_context, recorded_at",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "sequence!: EventSequence",
+        "name": "sequence!: i64",
         "type_info": "Int8"
       },
       {
@@ -20,6 +20,11 @@
       },
       {
         "ordinal": 3,
+        "name": "tracing_context",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
         "name": "recorded_at",
         "type_info": "Timestamptz"
       }
@@ -33,8 +38,9 @@
       false,
       false,
       true,
+      true,
       false
     ]
   },
-  "hash": "e983a467a77dbf5c21aa33f0ff7e70ff74e62037c3a84f74f8836756f610d333"
+  "hash": "f498a37b758f285f6de7be85b1fc4450b30b26e085b93ed89b6aa91b678e1156"
 }
