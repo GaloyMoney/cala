@@ -236,15 +236,11 @@ impl CalaLedger {
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = es_entity::DbOp::init(&self.pool)
-            .await?
-            .with_db_time()
-            .await?;
+        let mut db = self.begin_operation().await?;
         let transaction = self
             .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id)
             .await?;
-        let tx = sqlx::Transaction::from(db);
-        tx.commit().await?;
+        db.commit().await?;
         Ok(transaction)
     }
 
@@ -316,6 +312,13 @@ impl CalaLedger {
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
         self.publisher.inner()
     }
+
+    // pub async fn register_outbox_listener(
+    //     &self,
+    //     start_after: Option<obix::EventSequence>,
+    // ) -> obix::out::PersistentOutboxListener<cala_types::OutboxEventPayload> {
+    //     self.publisher.inner().listen_persisted(start_after)
+    // }
 
     #[cfg(feature = "import")]
     #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, db))]

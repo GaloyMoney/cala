@@ -40,18 +40,6 @@ impl EntryRepo {
         }
     }
 
-    async fn publish(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        entity: &Entry,
-        new_events: es_entity::LastPersisted<'_, EntryEvent>,
-    ) -> Result<(), EntryError> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
-        Ok(())
-    }
-
     #[instrument(
         name = "entry.list_for_account_set_id_by_created_at",
         skip_all,
@@ -148,6 +136,18 @@ impl EntryRepo {
         .execute(op.as_executor())
         .await?;
         self.persist_events(op, entry.events_mut()).await?;
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &Entry,
+        new_events: es_entity::LastPersisted<'_, EntryEvent>,
+    ) -> Result<(), EntryError> {
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }
