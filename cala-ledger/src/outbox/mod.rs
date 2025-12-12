@@ -3,7 +3,6 @@ pub mod server;
 
 mod event {
     pub use cala_types::outbox::*;
-    pub use cala_types::primitives::OutboxEventId;
 }
 
 pub use event::*;

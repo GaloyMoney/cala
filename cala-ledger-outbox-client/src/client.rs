@@ -30,9 +30,9 @@ impl CalaLedgerOutboxClient {
     #[instrument(name = "cala_ledger_outbox_client.subscribe", skip(self))]
     pub async fn subscribe(
         &mut self,
-        after_sequence: Option<EventSequence>,
+        after_sequence: Option<obix::EventSequence>,
     ) -> Result<
-        impl futures::Stream<Item = Result<OutboxEvent, CalaLedgerOutboxClientError>>,
+        impl futures::Stream<Item = Result<obix::out::PersistentOutboxEvent<OutboxEventPayload>, CalaLedgerOutboxClientError>>,
         CalaLedgerOutboxClientError,
     > {
         let request = tonic::Request::new(proto::SubscribeRequest {
@@ -41,7 +41,7 @@ impl CalaLedgerOutboxClient {
         let stream = self.proto_client.subscribe(request).await?.into_inner();
         Ok(stream.map(|e| {
             e.map_err(CalaLedgerOutboxClientError::from)
-                .and_then(OutboxEvent::try_from)
+                .and_then(obix::out::PersistentOutboxEvent::try_from)
         }))
     }
 }

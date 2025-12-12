@@ -24,7 +24,6 @@ use crate::{
 #[cfg(feature = "import")]
 mod import_deps {
     pub use crate::primitives::DataSourceId;
-    pub use cala_types::outbox::OutboxEvent;
 }
 #[cfg(feature = "import")]
 use import_deps::*;
@@ -313,12 +312,12 @@ impl CalaLedger {
         self.publisher.inner()
     }
 
-    // pub async fn register_outbox_listener(
-    //     &self,
-    //     start_after: Option<obix::EventSequence>,
-    // ) -> obix::out::PersistentOutboxListener<cala_types::OutboxEventPayload> {
-    //     self.publisher.inner().listen_persisted(start_after)
-    // }
+    pub fn register_outbox_listener(
+        &self,
+        start_after: Option<obix::EventSequence>,
+    ) -> obix::out::PersistentOutboxListener<crate::outbox::OutboxEventPayload> {
+        self.publisher.inner().listen_persisted(start_after)
+    }
 
     #[cfg(feature = "import")]
     #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, db))]
@@ -326,12 +325,16 @@ impl CalaLedger {
         &self,
         db: sqlx::Transaction<'_, sqlx::Postgres>,
         origin: DataSourceId,
-        event: OutboxEvent,
+        event: obix::out::PersistentOutboxEvent<crate::outbox::OutboxEventPayload>,
     ) -> Result<(), LedgerError> {
         use crate::outbox::OutboxEventPayload::*;
         use es_entity::WithEventContext;
 
-        match event.payload {
+        let Some(payload) = event.payload else {
+            return Ok(());
+        };
+
+        match payload {
             Empty => (),
             AccountCreated { account, source } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);

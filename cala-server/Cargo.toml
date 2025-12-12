@@ -18,6 +18,7 @@ cala-tracing = { workspace = true, features = ["http"] }
 cala-ledger = { workspace = true, features = ["import", "graphql"] }
 es-entity = { workspace = true, features = ["graphql"] }
 job = { workspace = true }
+obix = { workspace = true }
 
 anyhow = { workspace = true }
 async-graphql = { workspace = true }

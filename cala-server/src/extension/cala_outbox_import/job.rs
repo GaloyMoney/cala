@@ -5,7 +5,7 @@ use cala_ledger::{primitives::DataSourceId, CalaLedger};
 use cala_ledger_outbox_client::{
     CalaLedgerOutboxClient as Client, CalaLedgerOutboxClientConfig as ClientConfig,
 };
-use cala_types::outbox::EventSequence;
+use obix::EventSequence;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;

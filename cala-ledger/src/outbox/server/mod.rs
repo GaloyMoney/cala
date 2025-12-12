@@ -13,7 +13,7 @@ use proto::{outbox_service_server::OutboxService, *};
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::instrument;
 
-use super::{EventSequence, ObixOutbox, OutboxEvent, OutboxEventId, OutboxEventPayload};
+use super::ObixOutbox;
 pub use config::*;
 use error::*;
 
@@ -43,13 +43,7 @@ impl OutboxService for OutboxServer {
         Ok(Response::new(Box::pin(
             listener
                 .map(|event| {
-                    let cala_event = OutboxEvent {
-                        id: OutboxEventId::from(uuid::Uuid::from(event.id)),
-                        sequence: EventSequence::from(u64::from(event.sequence)),
-                        recorded_at: event.recorded_at,
-                        payload: event.payload.as_ref().cloned().unwrap_or(OutboxEventPayload::Empty),
-                    };
-                    Ok(proto::CalaLedgerEvent::from(cala_event))
+                    Ok(proto::CalaLedgerEvent::from((*event).clone()))
                 })
                 .fuse(),
         )))

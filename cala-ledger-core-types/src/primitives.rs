@@ -4,7 +4,6 @@ use uuid::Uuid;
 
 use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
 
-es_entity::entity_id! { OutboxEventId }
 es_entity::entity_id! { AccountId }
 impl From<AccountId> for cel_interpreter::CelValue {
     fn from(id: AccountId) -> Self {
