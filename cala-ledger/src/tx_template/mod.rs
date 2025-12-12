@@ -237,6 +237,7 @@ impl TxTemplates {
         self.repo
             .import_in_op(&mut db, origin, &mut tx_template)
             .await?;
+        db.commit().await?;
         Ok(())
     }
 }

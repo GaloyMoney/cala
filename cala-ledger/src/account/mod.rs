@@ -185,6 +185,7 @@ impl Accounts {
         self.repo
             .import_in_op(&mut db, origin, &mut account)
             .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -196,9 +197,10 @@ impl Accounts {
         values: AccountValues,
         fields: Vec<String>,
     ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id(values.id).await?;
+        let mut account = self.repo.find_by_id_in_op(&mut db, values.id).await?;
         let _ = account.update((values, fields));
         self.repo.update_in_op(&mut db, &mut account).await?;
+        db.commit().await?;
         Ok(())
     }
 }

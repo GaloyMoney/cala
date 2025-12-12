@@ -109,6 +109,7 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -124,6 +125,7 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
+        db.commit().await?;
         Ok(())
     }
 }

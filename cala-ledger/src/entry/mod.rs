@@ -159,6 +159,7 @@ impl Entries {
     ) -> Result<(), EntryError> {
         let mut entry = Entry::import(origin, values);
         self.repo.import(&mut db, origin, &mut entry).await?;
+        db.commit().await?;
         Ok(())
     }
 }

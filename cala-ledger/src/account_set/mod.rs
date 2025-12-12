@@ -512,6 +512,7 @@ impl AccountSets {
         self.repo
             .import_in_op(&mut db, origin, &mut account_set)
             .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -522,9 +523,10 @@ impl AccountSets {
         values: AccountSetValues,
         fields: Vec<String>,
     ) -> Result<(), AccountSetError> {
-        let mut account_set = self.repo.find_by_id(values.id).await?;
+        let mut account_set = self.repo.find_by_id_in_op(&mut db, values.id).await?;
         let _ = account_set.update((values, fields));
         self.repo.update_in_op(&mut db, &mut account_set).await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -548,6 +550,7 @@ impl AccountSets {
                     .await?;
             }
         }
+        db.commit().await?;
         Ok(())
     }
 
@@ -576,6 +579,7 @@ impl AccountSets {
                     .await?;
             }
         }
+        db.commit().await?;
         Ok(())
     }
 }

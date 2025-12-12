@@ -36,9 +36,9 @@ impl OutboxService for OutboxServer {
 
         let SubscribeRequest { after_sequence } = request.into_inner();
 
-        let listener = self.outbox.listen_persisted(
-            after_sequence.map(obix::EventSequence::from)
-        );
+        let listener = self
+            .outbox
+            .listen_persisted(after_sequence.map(obix::EventSequence::from));
 
         Ok(Response::new(Box::pin(
             listener

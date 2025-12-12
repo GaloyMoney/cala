@@ -32,7 +32,12 @@ impl CalaLedgerOutboxClient {
         &mut self,
         after_sequence: Option<obix::EventSequence>,
     ) -> Result<
-        impl futures::Stream<Item = Result<obix::out::PersistentOutboxEvent<OutboxEventPayload>, CalaLedgerOutboxClientError>>,
+        impl futures::Stream<
+            Item = Result<
+                obix::out::PersistentOutboxEvent<OutboxEventPayload>,
+                CalaLedgerOutboxClientError,
+            >,
+        >,
         CalaLedgerOutboxClientError,
     > {
         let request = tonic::Request::new(proto::SubscribeRequest {

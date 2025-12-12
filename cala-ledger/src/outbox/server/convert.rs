@@ -5,13 +5,8 @@ use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use crate::primitives::*;
 
 use crate::{
-    account::*,
-    account_set::*,
-    entry::*,
-    journal::*,
-    outbox::event::OutboxEventPayload,
-    transaction::TransactionValues,
-    tx_template::*,
+    account::*, account_set::*, entry::*, journal::*, outbox::event::OutboxEventPayload,
+    transaction::TransactionValues, tx_template::*,
 };
 
 use super::proto;

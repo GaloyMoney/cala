@@ -477,14 +477,16 @@ impl CalaLedger {
             }
             BalanceCreated { balance, source } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.balances
-                    .sync_balance_creation(db, origin, balance)
+                    .sync_balance_creation(op, origin, balance)
                     .await?
             }
             BalanceUpdated { balance, source } => {
                 let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.balances
-                    .sync_balance_update(db, origin, balance)
+                    .sync_balance_update(op, origin, balance)
                     .await?
             }
         }
