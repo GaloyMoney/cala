@@ -101,7 +101,7 @@ impl AccountSet {
         }
 
         if updated_fields.is_empty() {
-            return es_entity::Idempotent::Ignored;
+            return es_entity::Idempotent::AlreadyApplied;
         } else {
             self.events.push(AccountSetEvent::Updated {
                 values: self.values.clone(),
