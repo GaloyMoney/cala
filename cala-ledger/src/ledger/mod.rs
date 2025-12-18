@@ -336,19 +336,15 @@ impl CalaLedger {
 
         match payload {
             Empty => (),
-            AccountCreated { account, source } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            AccountCreated { account, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.accounts
                     .sync_account_creation(op, origin, account)
                     .await?
             }
             AccountUpdated {
-                account,
-                fields,
-                source,
+                account, fields, ..
             } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let data = {
                     let mut ctx = es_entity::context::EventContext::current();
                     let _ = ctx.insert("data_source", &origin);
@@ -360,11 +356,7 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            AccountSetCreated {
-                account_set,
-                source,
-            } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            AccountSetCreated { account_set, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_creation(op, origin, account_set)
@@ -373,9 +365,8 @@ impl CalaLedger {
             AccountSetUpdated {
                 account_set,
                 fields,
-                source,
+                ..
             } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let data = {
                     let mut ctx = es_entity::context::EventContext::current();
                     let _ = ctx.insert("data_source", &origin);
@@ -390,9 +381,8 @@ impl CalaLedger {
             AccountSetMemberCreated {
                 account_set_id,
                 member_id,
-                source,
+                ..
             } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_member_creation(op, origin, account_set_id, member_id)
@@ -401,27 +391,22 @@ impl CalaLedger {
             AccountSetMemberRemoved {
                 account_set_id,
                 member_id,
-                source,
+                ..
             } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_member_removal(op, origin, account_set_id, member_id)
                     .await?
             }
-            JournalCreated { journal, source } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            JournalCreated { journal, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.journals
                     .sync_journal_creation(op, origin, journal)
                     .await?
             }
             JournalUpdated {
-                journal,
-                fields,
-                source,
+                journal, fields, ..
             } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
                 let data = {
                     let mut ctx = es_entity::context::EventContext::current();
                     let _ = ctx.insert("data_source", &origin);
@@ -433,22 +418,13 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            TransactionCreated {
-                transaction,
-                source,
-            } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            TransactionCreated { transaction, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.transactions
                     .sync_transaction_creation(op, origin, transaction)
                     .await?
             }
-            TransactionUpdated {
-                transaction,
-                source,
-                fields: _,
-            } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            TransactionUpdated { transaction, .. } => {
                 let data = {
                     let mut ctx = es_entity::context::EventContext::current();
                     let _ = ctx.insert("data_source", &origin);
@@ -460,30 +436,23 @@ impl CalaLedger {
                     .with_event_context(data)
                     .await?
             }
-            TxTemplateCreated {
-                tx_template,
-                source,
-            } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            TxTemplateCreated { tx_template, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.tx_templates
                     .sync_tx_template_creation(op, origin, tx_template)
                     .await?
             }
-            EntryCreated { entry, source } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            EntryCreated { entry, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.entries.sync_entry_creation(op, origin, entry).await?
             }
-            BalanceCreated { balance, source } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            BalanceCreated { balance, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.balances
                     .sync_balance_creation(op, origin, balance)
                     .await?
             }
-            BalanceUpdated { balance, source } => {
-                let origin = Into::<Option<DataSourceId>>::into(source).unwrap_or(origin);
+            BalanceUpdated { balance, .. } => {
                 let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
                 self.balances
                     .sync_balance_update(op, origin, balance)
