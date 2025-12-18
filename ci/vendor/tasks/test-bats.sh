@@ -50,7 +50,7 @@ echo "--- Podman-compose up done ---"
 echo "Waiting for PostgreSQL to be ready..."
 wait4x postgresql "${PG_CON}" --timeout 120s
 
-make setup-db
+make setup-db build
 
 # --- Run Bats Tests ---
 echo "--- Running BATS tests ---"
