@@ -42,9 +42,7 @@ impl OutboxService for OutboxServer {
 
         Ok(Response::new(Box::pin(
             listener
-                .map(|event| {
-                    Ok(proto::CalaLedgerEvent::from((*event).clone()))
-                })
+                .map(|event| Ok(proto::CalaLedgerEvent::from((*event).clone())))
                 .fuse(),
         )))
     }

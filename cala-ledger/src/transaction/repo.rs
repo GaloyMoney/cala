@@ -2,10 +2,7 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{
-    outbox::OutboxPublisher,
-    primitives::*,
-};
+use crate::{outbox::OutboxPublisher, primitives::*};
 
 use super::{entity::*, error::TransactionError};
 
@@ -66,8 +63,12 @@ impl TransactionRepo {
         .execute(op.as_executor())
         .await?;
         let n_events = self.persist_events(op, transaction.events_mut()).await?;
-        self.publish(op, transaction, transaction.events().last_persisted(n_events))
-            .await?;
+        self.publish(
+            op,
+            transaction,
+            transaction.events().last_persisted(n_events),
+        )
+        .await?;
 
         Ok(())
     }
