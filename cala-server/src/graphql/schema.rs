@@ -232,14 +232,14 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account = app
             .ledger()
             .accounts()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         if let Some(account_set_ids) = input.account_set_ids {
             for id in account_set_ids {
                 app.ledger()
                     .account_sets()
-                    .add_member_in_op(&mut op, AccountSetId::from(id), account.id())
+                    .add_member_in_op(&mut *op, AccountSetId::from(id), account.id())
                     .await?;
             }
         }
@@ -286,7 +286,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if account.update(builder).did_execute() {
             app.ledger()
                 .accounts()
-                .persist_in_op(&mut op, &mut account)
+                .persist_in_op(&mut *op, &mut account)
                 .await?;
         }
 
@@ -319,7 +319,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         Ok(account_set.into())
@@ -359,7 +359,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if account_set.update(builder).did_execute() {
             app.ledger()
                 .account_sets()
-                .persist_in_op(&mut op, &mut account_set)
+                .persist_in_op(&mut *op, &mut account_set)
                 .await?;
         }
 
@@ -380,7 +380,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .add_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .add_member_in_op(&mut *op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())
@@ -400,7 +400,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let account_set = app
             .ledger()
             .account_sets()
-            .remove_member_in_op(&mut op, AccountSetId::from(input.account_set_id), input)
+            .remove_member_in_op(&mut *op, AccountSetId::from(input.account_set_id), input)
             .await?;
 
         Ok(account_set.into())
@@ -427,7 +427,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let journal = app
             .ledger()
             .journals()
-            .create_in_op(&mut op, builder.build()?)
+            .create_in_op(&mut *op, builder.build()?)
             .await?;
 
         Ok(journal.into())
@@ -460,7 +460,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         if journal.update(builder).did_execute() {
             app.ledger()
                 .journals()
-                .persist_in_op(&mut op, &mut journal)
+                .persist_in_op(&mut *op, &mut journal)
                 .await?;
         }
 
@@ -565,7 +565,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let tx_template = app
             .ledger()
             .tx_templates()
-            .create_in_op(&mut op, new_tx_template)
+            .create_in_op(&mut *op, new_tx_template)
             .await?;
 
         Ok(tx_template.into())
@@ -585,7 +585,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let transaction = app
             .ledger()
             .post_transaction_in_op(
-                &mut op,
+                &mut *op,
                 input.transaction_id.into(),
                 &input.tx_template_code,
                 params.unwrap_or_default(),
@@ -684,7 +684,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let velocity_limit = app
             .ledger()
             .velocities()
-            .create_limit_in_op(&mut op, new_velocity_limit)
+            .create_limit_in_op(&mut *op, new_velocity_limit)
             .await?;
 
         Ok(velocity_limit.into())
@@ -722,7 +722,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
         let velocity_control = app
             .ledger()
             .velocities()
-            .create_control_in_op(&mut op, new_velocity_control)
+            .create_control_in_op(&mut *op, new_velocity_control)
             .await?;
 
         Ok(velocity_control.into())
@@ -743,7 +743,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .velocities()
             .add_limit_to_control_in_op(
-                &mut op,
+                &mut *op,
                 input.velocity_control_id.into(),
                 input.velocity_limit_id.into(),
             )
@@ -768,7 +768,7 @@ impl<E: MutationExtensionMarker> CoreMutation<E> {
             .ledger()
             .velocities()
             .attach_control_to_account_in_op(
-                &mut op,
+                &mut *op,
                 input.velocity_control_id.into(),
                 input.account_id.into(),
                 params,

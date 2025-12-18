@@ -5,7 +5,10 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-use crate::primitives::{AccountId, DataSourceId, JournalId};
+use crate::{
+    outbox::OutboxPublisher,
+    primitives::{AccountId, DataSourceId, JournalId},
+};
 
 use super::{entity::*, error::*};
 
@@ -110,15 +113,20 @@ use members_cursor::*;
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct AccountSetRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl AccountSetRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     pub async fn list_children_by_created_at(
@@ -400,6 +408,8 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        use crate::primitives::DataSource;
+
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -450,6 +460,18 @@ impl AccountSetRepo {
                 }
             })
             .collect();
+
+        self.publisher
+            .publish_all(
+                db,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                    source: DataSource::Local,
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
+                }),
+            )
+            .await?;
+
         Ok((time.expect("time not set"), ret))
     }
 
@@ -459,6 +481,8 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        use crate::primitives::DataSource;
+
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -506,6 +530,18 @@ impl AccountSetRepo {
                 }
             })
             .collect();
+
+        self.publisher
+            .publish_all(
+                db,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                    source: DataSource::Local,
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
+                }),
+            )
+            .await?;
+
         Ok((time.expect("time not set"), ret))
     }
 
@@ -515,6 +551,8 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        use crate::primitives::DataSource;
+
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -573,6 +611,20 @@ impl AccountSetRepo {
                 }
             })
             .collect();
+
+        self.publisher
+            .publish_all(
+                db,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                    source: DataSource::Local,
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                        member_account_set_id,
+                    ),
+                }),
+            )
+            .await?;
+
         Ok((time.expect("time not set"), ret))
     }
 
@@ -582,6 +634,8 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        use crate::primitives::DataSource;
+
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -635,6 +689,20 @@ impl AccountSetRepo {
                 }
             })
             .collect();
+
+        self.publisher
+            .publish_all(
+                db,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                    source: DataSource::Local,
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                        member_account_set_id,
+                    ),
+                }),
+            )
+            .await?;
+
         Ok((time.expect("time not set"), ret))
     }
 
@@ -739,7 +807,7 @@ impl AccountSetRepo {
     #[instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
@@ -796,7 +864,8 @@ impl AccountSetRepo {
     #[cfg(feature = "import")]
     pub async fn import_member_account_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
+        origin: DataSourceId,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
@@ -810,6 +879,17 @@ impl AccountSetRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                    source: crate::primitives::DataSource::Remote { id: origin },
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
+                }),
+            )
+            .await?;
         Ok(())
     }
 
@@ -817,6 +897,7 @@ impl AccountSetRepo {
     pub async fn import_remove_member_account(
         &self,
         op: &mut impl es_entity::AtomicOperation,
+        origin: DataSourceId,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
@@ -828,13 +909,25 @@ impl AccountSetRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                    source: crate::primitives::DataSource::Remote { id: origin },
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
+                }),
+            )
+            .await?;
         Ok(())
     }
 
     #[cfg(feature = "import")]
     pub async fn import_member_set_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
+        origin: DataSourceId,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
@@ -848,6 +941,19 @@ impl AccountSetRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                    source: crate::primitives::DataSource::Remote { id: origin },
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                        member_account_set_id,
+                    ),
+                }),
+            )
+            .await?;
         Ok(())
     }
 
@@ -855,6 +961,7 @@ impl AccountSetRepo {
     pub async fn import_remove_member_set(
         &self,
         op: &mut impl es_entity::AtomicOperation,
+        origin: DataSourceId,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
@@ -866,6 +973,31 @@ impl AccountSetRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                    source: crate::primitives::DataSource::Remote { id: origin },
+                    account_set_id,
+                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                        member_account_set_id,
+                    ),
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &AccountSet,
+        new_events: es_entity::LastPersisted<'_, AccountSetEvent>,
+    ) -> Result<(), AccountSetError> {
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }

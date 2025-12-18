@@ -593,6 +593,7 @@ dependencies = [
  "es-entity",
  "futures",
  "job",
+ "obix",
  "opentelemetry",
  "prost 0.13.5",
  "prost-wkt-types",
@@ -656,6 +657,7 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "futures",
+ "obix",
  "prost 0.13.5",
  "prost-wkt-types",
  "protobuf-src",
@@ -709,6 +711,7 @@ dependencies = [
  "es-entity",
  "futures",
  "job",
+ "obix",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -871,9 +874,9 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "convert_case"
-version = "0.8.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baaaa0ecca5b51987b9423ccdc971514dd8b0bb7b4060b983d3664dad3f1f89f"
+checksum = "633458d4ef8c78b72454de2d54fd6ab2e60f9e02be22f3c6104cdc8a4e0fceb9"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -1013,6 +1016,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d"
+dependencies = [
+ "darling_core 0.23.0",
+ "darling_macro 0.23.0",
+]
+
+[[package]]
 name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1041,6 +1054,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "darling_core"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0"
+dependencies = [
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 2.0.107",
+]
+
+[[package]]
 name = "darling_macro"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1058,6 +1084,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
  "darling_core 0.21.3",
+ "quote",
+ "syn 2.0.107",
+]
+
+[[package]]
+name = "darling_macro"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d"
+dependencies = [
+ "darling_core 0.23.0",
  "quote",
  "syn 2.0.107",
 ]
@@ -1211,9 +1248,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.10.4"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39dbe0680ad641abdaeddb1c2e87576696118b4329139571e05d7de3dad1ac6a"
+checksum = "fc9443d7b82815dfa963bec3e002aabf0d94b56d1889e07ee5c9d1a86a582011"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1236,12 +1273,12 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.4"
+version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4690ea6523399069694973c889b2cfb36793238453c09c2298cc9422d89f8e2d"
+checksum = "808070a692f8e26cf4e6e8af4a8347349f6aeec1c201b8dc9b9a0fd6310ba259"
 dependencies = [
  "convert_case",
- "darling 0.21.3",
+ "darling 0.23.0",
  "pluralizer",
  "proc-macro2",
  "quote",
@@ -1932,9 +1969,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "job"
-version = "0.2.10"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "172626266188b45b2f87551151f0f5e35723a32b95f32e659ee10601c0281361"
+checksum = "d4ca6e40fd252b81c2d5f31b216b0163d58c6b92459b495e2f148a8ff1d9c14e"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2219,6 +2256,36 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "obix"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75d8ada29c77055f969301688633745792072bd08fe5c9b3cd2032863652c584"
+dependencies = [
+ "chrono",
+ "es-entity",
+ "futures",
+ "im",
+ "obix-macros",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tokio",
+ "tokio-stream",
+]
+
+[[package]]
+name = "obix-macros"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "019254fa5130407fd9defd1e63984daec2d63ad6dcd0617bc93172c10faba9aa"
+dependencies = [
+ "darling 0.23.0",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.107",
 ]
 
 [[package]]

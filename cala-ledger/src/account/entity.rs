@@ -132,7 +132,7 @@ impl Account {
         }
 
         if updated_fields.is_empty() {
-            return es_entity::Idempotent::Ignored;
+            return es_entity::Idempotent::AlreadyApplied;
         }
 
         self.events.push(AccountEvent::Updated {

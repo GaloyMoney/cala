@@ -13,12 +13,12 @@ use proto::{outbox_service_server::OutboxService, *};
 use tonic::{transport::Server, Request, Response, Status};
 use tracing::instrument;
 
-use super::{EventSequence, Outbox};
+use super::ObixOutbox;
 pub use config::*;
 use error::*;
 
 pub struct OutboxServer {
-    outbox: Outbox,
+    outbox: ObixOutbox,
 }
 
 #[tonic::async_trait]
@@ -36,14 +36,13 @@ impl OutboxService for OutboxServer {
 
         let SubscribeRequest { after_sequence } = request.into_inner();
 
-        let outbox_listener = self
+        let listener = self
             .outbox
-            .register_listener(after_sequence.map(EventSequence::from))
-            .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+            .listen_persisted(after_sequence.map(obix::EventSequence::from));
+
         Ok(Response::new(Box::pin(
-            outbox_listener
-                .map(|event| Ok(proto::CalaLedgerEvent::from(event)))
+            listener
+                .map(|event| Ok(proto::CalaLedgerEvent::from((*event).clone())))
                 .fuse(),
         )))
     }
@@ -52,7 +51,7 @@ impl OutboxService for OutboxServer {
 #[instrument(name = "cala_ledger.outbox_server.start", skip(outbox))]
 pub(crate) async fn start(
     server_config: OutboxServerConfig,
-    outbox: Outbox,
+    outbox: ObixOutbox,
 ) -> Result<(), OutboxServerError> {
     let outbox_service = OutboxServer { outbox };
     tracing::info!(

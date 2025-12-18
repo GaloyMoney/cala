@@ -113,7 +113,7 @@ impl VelocityControl {
                 let mut op = op.try_lock().expect("Lock held concurrently");
                 app.ledger()
                     .velocities()
-                    .list_limits_for_control_in_op(&mut op, control_id)
+                    .list_limits_for_control_in_op(&mut *op, control_id)
                     .await?
             }
             None => {

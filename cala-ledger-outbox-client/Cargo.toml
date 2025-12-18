@@ -13,6 +13,7 @@ fail-on-warnings = []
 [dependencies]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
+obix = { workspace = true }
 
 futures = { workspace = true }
 uuid = { workspace = true }

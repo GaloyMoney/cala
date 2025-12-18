@@ -13,7 +13,6 @@ use tracing::instrument;
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
-use crate::{ledger_operation::*, outbox::*};
 
 use account_control::*;
 use balance::*;
@@ -23,8 +22,6 @@ pub use limit::*;
 
 #[derive(Clone)]
 pub struct Velocities {
-    outbox: Outbox,
-    pool: PgPool,
     limits: VelocityLimitRepo,
     controls: VelocityControlRepo,
     account_controls: AccountControls,
@@ -32,14 +29,12 @@ pub struct Velocities {
 }
 
 impl Velocities {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
             account_controls: AccountControls::new(pool),
             balances: VelocityBalances::new(pool),
-            pool: pool.clone(),
-            outbox,
         }
     }
 
@@ -48,7 +43,7 @@ impl Velocities {
         &self,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = self.limits.begin_op().await?;
         let limit = self.create_limit_in_op(&mut db, new_limit).await?;
         db.commit().await?;
         Ok(limit)
@@ -57,7 +52,7 @@ impl Velocities {
     #[instrument(name = "velocity.create_limit_in_op", skip_all)]
     pub async fn create_limit_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
         let res = self.limits.create_in_op(db, new_limit).await?;
@@ -69,7 +64,7 @@ impl Velocities {
         &self,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = self.controls.begin_op().await?;
         let control = self.create_control_in_op(&mut db, new_control).await?;
         db.commit().await?;
         Ok(control)
@@ -78,7 +73,7 @@ impl Velocities {
     #[instrument(name = "velocity.create_control_in_op", skip_all)]
     pub async fn create_control_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
         let res = self.controls.create_in_op(db, new_control).await?;
@@ -91,7 +86,7 @@ impl Velocities {
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut db = self.controls.begin_op().await?;
         let control = self
             .add_limit_to_control_in_op(&mut db, control, limit)
             .await?;
@@ -102,7 +97,7 @@ impl Velocities {
     #[instrument(name = "velocity.add_limit_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
     pub async fn add_limit_to_control_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
@@ -117,7 +112,7 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.controls.begin_op().await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(&mut op, control, account_id, params)
             .await?;
@@ -132,7 +127,7 @@ impl Velocities {
         account_set_id: AccountSetId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.controls.begin_op().await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(
                 &mut op,
@@ -148,7 +143,7 @@ impl Velocities {
     #[instrument(name = "velocity.attach_control_to_account_in_op", skip(self, db), fields(control_id = %control_id, account_id = %account_id))]
     pub async fn attach_control_to_account_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
@@ -160,7 +155,7 @@ impl Velocities {
     #[instrument(name = "velocity.attach_control_to_account_set_in_op", skip(self, db), fields(control_id = %control_id, account_set_id = %account_set_id))]
     pub async fn attach_control_to_account_set_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         control_id: VelocityControlId,
         account_set_id: AccountSetId,
         params: impl Into<Params> + std::fmt::Debug,
@@ -172,7 +167,7 @@ impl Velocities {
     #[instrument(name = "velocity.attach_control_internal", skip(self, db, account_id), fields(control_id = %control_id, account_id = tracing::field::Empty))]
     async fn attach_control_to_account_or_account_set_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         control_id: VelocityControlId,
         account_id: impl Into<AccountId>,
         params: impl Into<Params> + std::fmt::Debug,
@@ -205,7 +200,7 @@ impl Velocities {
     #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err)]
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
@@ -242,7 +237,7 @@ impl Velocities {
         &self,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.limits.begin_op().await?;
         let limits = self
             .list_limits_for_control_in_op(&mut op, control_id)
             .await?;
@@ -253,7 +248,7 @@ impl Velocities {
     #[instrument(name = "velocity.list_limits_for_control_in_op", skip(self, op), fields(control_id = %control_id), err)]
     pub async fn list_limits_for_control_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
         self.limits.list_for_control(op, control_id).await

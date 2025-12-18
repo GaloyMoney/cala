@@ -5,27 +5,16 @@ use cala_types::balance::{BalanceAmount, BalanceSnapshot};
 use crate::primitives::*;
 
 use crate::{
-    account::*,
-    account_set::*,
-    entry::*,
-    journal::*,
-    outbox::event::{OutboxEvent, OutboxEventPayload},
-    transaction::TransactionValues,
-    tx_template::*,
+    account::*, account_set::*, entry::*, journal::*, outbox::event::OutboxEventPayload,
+    transaction::TransactionValues, tx_template::*,
 };
 
 use super::proto;
 
-impl From<OutboxEvent> for proto::CalaLedgerEvent {
-    fn from(
-        OutboxEvent {
-            id,
-            sequence,
-            payload,
-            recorded_at,
-        }: OutboxEvent,
-    ) -> Self {
-        let payload = match payload {
+impl From<obix::out::PersistentOutboxEvent<OutboxEventPayload>> for proto::CalaLedgerEvent {
+    fn from(event: obix::out::PersistentOutboxEvent<OutboxEventPayload>) -> Self {
+        let payload_enum = event.payload.unwrap_or(OutboxEventPayload::Empty);
+        let payload = match payload_enum {
             OutboxEventPayload::AccountCreated { source, account } => {
                 proto::cala_ledger_event::Payload::AccountCreated(proto::AccountCreated {
                     data_source_id: source.to_string(),
@@ -164,9 +153,9 @@ impl From<OutboxEvent> for proto::CalaLedgerEvent {
             OutboxEventPayload::Empty => proto::cala_ledger_event::Payload::Empty(true),
         };
         proto::CalaLedgerEvent {
-            id: id.to_string(),
-            sequence: u64::from(sequence),
-            recorded_at: Some(recorded_at.into()),
+            id: event.id.to_string(),
+            sequence: u64::from(event.sequence),
+            recorded_at: Some(event.recorded_at.into()),
             payload: Some(payload),
         }
     }

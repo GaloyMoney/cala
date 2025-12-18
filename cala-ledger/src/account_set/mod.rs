@@ -3,7 +3,6 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::EsEntity;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -14,7 +13,6 @@ use crate::{
     account::*,
     balance::*,
     entry::*,
-    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, DebitOrCredit, JournalId, Layer},
 };
@@ -33,25 +31,21 @@ pub struct AccountSets {
     accounts: Accounts,
     entries: Entries,
     balances: Balances,
-    outbox: Outbox,
-    pool: PgPool,
 }
 
 impl AccountSets {
     pub(crate) fn new(
         pool: &PgPool,
-        outbox: Outbox,
+        publisher: &OutboxPublisher,
         accounts: &Accounts,
         entries: &Entries,
         balances: &Balances,
     ) -> Self {
         Self {
-            repo: AccountSetRepo::new(pool),
-            outbox,
+            repo: AccountSetRepo::new(pool, publisher),
             accounts: accounts.clone(),
             entries: entries.clone(),
             balances: balances.clone(),
-            pool: pool.clone(),
         }
     }
     #[instrument(name = "cala_ledger.account_sets.create", skip(self))]
@@ -59,7 +53,7 @@ impl AccountSets {
         &self,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let account_set = self.create_in_op(&mut op, new_account_set).await?;
         op.commit().await?;
         Ok(account_set)
@@ -68,7 +62,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.create_in_op", skip(self, db))]
     pub async fn create_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
         let new_account = NewAccount::builder()
@@ -83,7 +77,6 @@ impl AccountSets {
         self.accounts.create_in_op(db, new_account).await?;
 
         let account_set = self.repo.create_in_op(db, new_account_set).await?;
-        db.accumulate(account_set.last_persisted(1).map(|p| &p.event));
 
         Ok(account_set)
     }
@@ -93,7 +86,7 @@ impl AccountSets {
         &self,
         new_account_sets: Vec<NewAccountSet>,
     ) -> Result<Vec<AccountSet>, AccountSetError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let account_sets = self.create_all_in_op(&mut op, new_account_sets).await?;
         op.commit().await?;
         Ok(account_sets)
@@ -102,7 +95,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.create_all_in_op", skip(self, db))]
     pub async fn create_all_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_account_sets: Vec<NewAccountSet>,
     ) -> Result<Vec<AccountSet>, AccountSetError> {
         let mut new_accounts = Vec::new();
@@ -121,18 +114,13 @@ impl AccountSets {
         self.accounts.create_all_in_op(db, new_accounts).await?;
 
         let account_sets = self.repo.create_all_in_op(db, new_account_sets).await?;
-        db.accumulate(
-            account_sets
-                .iter()
-                .flat_map(|account| account.last_persisted(1).map(|p| &p.event)),
-        );
 
         Ok(account_sets)
     }
 
     #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
     pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         self.persist_in_op(&mut op, account_set).await?;
         op.commit().await?;
         Ok(())
@@ -144,11 +132,10 @@ impl AccountSets {
     )]
     pub async fn persist_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
-        let n_events = self.repo.update_in_op(db, account_set).await?;
-        db.accumulate(account_set.last_persisted(n_events).map(|p| &p.event));
+        self.repo.update_in_op(db, account_set).await?;
 
         self.accounts
             .update_velocity_context_values_in_op(db, account_set.values())
@@ -163,7 +150,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let account_set = self
             .add_member_in_op(&mut op, account_set_id, member)
             .await?;
@@ -174,7 +161,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.add_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id, is_account = tracing::field::Empty, is_account_set = tracing::field::Empty, member_id = tracing::field::Empty))]
     pub async fn add_member_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
@@ -218,14 +205,6 @@ impl AccountSets {
             }
         };
 
-        op.accumulate(std::iter::once(
-            OutboxEventPayload::AccountSetMemberCreated {
-                source: DataSource::Local,
-                account_set_id,
-                member_id: member,
-            },
-        ));
-
         let balances = self
             .balances
             .find_balances_for_update(op, account_set.values().journal_id, member_id)
@@ -262,7 +241,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let account_set = self
             .remove_member_in_op(&mut op, account_set_id, member)
             .await?;
@@ -273,7 +252,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.remove_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id))]
     pub async fn remove_member_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
@@ -310,14 +289,6 @@ impl AccountSets {
                 (time, parents, target, AccountId::from(id))
             }
         };
-
-        op.accumulate(std::iter::once(
-            OutboxEventPayload::AccountSetMemberRemoved {
-                source: DataSource::Local,
-                account_set_id,
-                member_id: member,
-            },
-        ));
 
         let balances = self
             .balances
@@ -360,7 +331,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         self.repo.find_all_in_op(op, account_set_ids).await
@@ -374,7 +345,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
     pub async fn find_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
     ) -> Result<AccountSet, AccountSetError> {
         self.repo.find_by_id_in_op(op, account_set_id).await
@@ -426,7 +397,7 @@ impl AccountSets {
     #[instrument(name = "cala_ledger.account_sets.list_for_name_in_op", skip(self, op))]
     pub async fn list_for_name_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         name: String,
         args: es_entity::PaginatedQueryArgs<AccountSetsByCreatedAtCursor>,
     ) -> Result<
@@ -444,7 +415,7 @@ impl AccountSets {
     )]
     pub async fn find_where_member_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
@@ -476,7 +447,7 @@ impl AccountSets {
 
     pub async fn list_members_by_created_at_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
     ) -> Result<
@@ -504,7 +475,7 @@ impl AccountSets {
 
     pub async fn list_members_by_external_id_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
     ) -> Result<
@@ -521,7 +492,7 @@ impl AccountSets {
 
     pub(crate) async fn fetch_mappings_in_op(
         &self,
-        op: &mut LedgerOperation<'_>,
+        op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
@@ -541,14 +512,7 @@ impl AccountSets {
         self.repo
             .import_in_op(&mut db, origin, &mut account_set)
             .await?;
-        let outbox_events: Vec<_> = account_set
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -559,17 +523,10 @@ impl AccountSets {
         values: AccountSetValues,
         fields: Vec<String>,
     ) -> Result<(), AccountSetError> {
-        let mut account_set = self.repo.find_by_id(values.id).await?;
+        let mut account_set = self.repo.find_by_id_in_op(&mut db, values.id).await?;
         let _ = account_set.update((values, fields));
-        let n_events = self.repo.update_in_op(&mut db, &mut account_set).await?;
-        let outbox_events: Vec<_> = account_set
-            .last_persisted(n_events)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        self.repo.update_in_op(&mut db, &mut account_set).await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -584,27 +541,16 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_member_account_in_op(&mut db, account_set_id, account_id)
+                    .import_member_account_in_op(&mut db, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMemberId::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(member_account_set_id) => {
                 self.repo
-                    .import_member_set_in_op(&mut db, account_set_id, account_set_id)
+                    .import_member_set_in_op(&mut db, origin, account_set_id, member_account_set_id)
                     .await?;
             }
         }
-        let time = db.now();
-        self.outbox
-            .persist_events_at(
-                db,
-                std::iter::once(OutboxEventPayload::AccountSetMemberCreated {
-                    source: DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id,
-                }),
-                time,
-            )
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -619,27 +565,21 @@ impl AccountSets {
         match member_id {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
-                    .import_remove_member_account(&mut db, account_set_id, account_id)
+                    .import_remove_member_account(&mut db, origin, account_set_id, account_id)
                     .await?;
             }
-            AccountSetMemberId::AccountSet(account_set_id) => {
+            AccountSetMemberId::AccountSet(member_account_set_id) => {
                 self.repo
-                    .import_remove_member_set(&mut db, account_set_id, account_set_id)
+                    .import_remove_member_set(
+                        &mut db,
+                        origin,
+                        account_set_id,
+                        member_account_set_id,
+                    )
                     .await?;
             }
         }
-        let time = db.now();
-        self.outbox
-            .persist_events_at(
-                db,
-                std::iter::once(OutboxEventPayload::AccountSetMemberRemoved {
-                    source: DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id,
-                }),
-                time,
-            )
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 }
@@ -856,6 +796,13 @@ fn entries_for_remove_balance(
 
 impl From<&AccountSetEvent> for OutboxEventPayload {
     fn from(event: &AccountSetEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             AccountSetEvent::Imported {
@@ -868,11 +815,11 @@ impl From<&AccountSetEvent> for OutboxEventPayload {
             AccountSetEvent::Initialized {
                 values: account_set,
             } => OutboxEventPayload::AccountSetCreated {
-                source: DataSource::Local,
+                source,
                 account_set: account_set.clone(),
             },
             AccountSetEvent::Updated { values, fields } => OutboxEventPayload::AccountSetUpdated {
-                source: DataSource::Local,
+                source,
                 account_set: values.clone(),
                 fields: fields.clone(),
             },

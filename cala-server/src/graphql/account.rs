@@ -51,7 +51,7 @@ impl Account {
                 Some(
                     app.ledger()
                         .balances()
-                        .find_in_op(&mut op, journal_id, account_id, currency)
+                        .find_in_op(&mut *op, journal_id, account_id, currency)
                         .await?,
                 )
             }
@@ -85,7 +85,7 @@ impl Account {
                         let mut op = op.try_lock().expect("Lock held concurrently");
                         app.ledger()
                             .account_sets()
-                            .find_where_member_in_op(&mut op, account_id, query_args)
+                            .find_where_member_in_op(&mut *op, account_id, query_args)
                             .await?
                     }
                     None => {

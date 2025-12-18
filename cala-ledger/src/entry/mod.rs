@@ -9,7 +9,6 @@ use tracing::instrument;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::{
-    ledger_operation::*,
     outbox::*,
     primitives::{AccountId, AccountSetId, DataSource, JournalId, TransactionId},
 };
@@ -22,18 +21,12 @@ use repo::*;
 #[derive(Clone)]
 pub struct Entries {
     repo: EntryRepo,
-    // Used only for "import" feature
-    #[allow(dead_code)]
-    outbox: Outbox,
-    _pool: PgPool,
 }
 
 impl Entries {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: EntryRepo::new(pool),
-            outbox,
-            _pool: pool.clone(),
+            repo: EntryRepo::new(pool, publisher),
         }
     }
 
@@ -146,18 +139,10 @@ impl Entries {
     #[instrument(name = "cala_ledger.entries.create_all_in_op", skip_all)]
     pub(crate) async fn create_all_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         entries: Vec<NewEntry>,
     ) -> Result<Vec<EntryValues>, EntryError> {
         let entries = self.repo.create_all_in_op(db, entries).await?;
-        db.accumulate(
-            entries
-                .iter()
-                .map(|entry| OutboxEventPayload::EntryCreated {
-                    source: DataSource::Local,
-                    entry: entry.values().clone(),
-                }),
-        );
         Ok(entries
             .into_iter()
             .map(|entry| entry.into_values())
@@ -172,24 +157,22 @@ impl Entries {
         origin: DataSourceId,
         values: EntryValues,
     ) -> Result<(), EntryError> {
-        use es_entity::EsEntity;
-
         let mut entry = Entry::import(origin, values);
         self.repo.import(&mut db, origin, &mut entry).await?;
-        let outbox_events: Vec<_> = entry
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 }
 
 impl From<&EntryEvent> for OutboxEventPayload {
     fn from(event: &EntryEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             EntryEvent::Imported {
@@ -200,7 +183,7 @@ impl From<&EntryEvent> for OutboxEventPayload {
                 entry: entry.clone(),
             },
             EntryEvent::Initialized { values: entry } => OutboxEventPayload::EntryCreated {
-                source: DataSource::Local,
+                source,
                 entry: entry.clone(),
             },
         }

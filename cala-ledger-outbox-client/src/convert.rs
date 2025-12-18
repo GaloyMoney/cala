@@ -6,7 +6,7 @@ use cel_interpreter::CelExpression;
 
 use crate::{client::proto, error::*};
 
-impl TryFrom<proto::CalaLedgerEvent> for OutboxEvent {
+impl TryFrom<proto::CalaLedgerEvent> for obix::out::PersistentOutboxEvent<OutboxEventPayload> {
     type Error = CalaLedgerOutboxClientError;
 
     fn try_from(event: proto::CalaLedgerEvent) -> Result<Self, Self::Error> {
@@ -15,10 +15,10 @@ impl TryFrom<proto::CalaLedgerEvent> for OutboxEvent {
                 .payload
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?,
         )?;
-        Ok(OutboxEvent {
-            id: event.id.parse()?,
-            sequence: EventSequence::from(event.sequence),
-            payload,
+        Ok(obix::out::PersistentOutboxEvent {
+            id: event.id.parse::<obix::out::OutboxEventId>()?,
+            sequence: obix::EventSequence::from(event.sequence),
+            payload: Some(payload),
             recorded_at: event
                 .recorded_at
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?

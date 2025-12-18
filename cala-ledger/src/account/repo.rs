@@ -2,7 +2,10 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::primitives::{AccountId, DataSourceId, DebitOrCredit, Status};
+use crate::{
+    outbox::OutboxPublisher,
+    primitives::{AccountId, DataSourceId, DebitOrCredit, Status},
+};
 
 use super::{entity::*, error::AccountError};
 
@@ -36,22 +39,27 @@ use super::{entity::*, error::AccountError};
         ),
     ),
     tbl_prefix = "cala",
+    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct AccountRepo {
     pool: PgPool,
+    publisher: OutboxPublisher,
 }
 
 impl AccountRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     #[cfg(feature = "import")]
     #[instrument(name = "account.import_in_op", skip_all, err(level = "warn"))]
     pub async fn import_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: &mut impl es_entity::AtomicOperationWithTime,
         origin: DataSourceId,
         account: &mut Account,
     ) -> Result<(), AccountError> {
@@ -73,7 +81,10 @@ impl AccountRepo {
         )
         .execute(op.as_executor())
         .await?;
-        self.persist_events(op, account.events_mut()).await?;
+        let n_events = self.persist_events(op, account.events_mut()).await?;
+        self.publish(op, account, account.events().last_persisted(n_events))
+            .await?;
+
         Ok(())
     }
 
@@ -98,6 +109,18 @@ impl AccountRepo {
         )
         .execute(op.as_executor())
         .await?;
+        Ok(())
+    }
+
+    async fn publish(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entity: &Account,
+        new_events: es_entity::LastPersisted<'_, AccountEvent>,
+    ) -> Result<(), AccountError> {
+        self.publisher
+            .publish_entity_events(op, entity, new_events)
+            .await?;
         Ok(())
     }
 }

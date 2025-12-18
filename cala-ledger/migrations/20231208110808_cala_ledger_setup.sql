@@ -257,36 +257,3 @@ CREATE TABLE cala_velocity_balance_history (
   UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window, version),
   FOREIGN KEY (account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window) REFERENCES cala_velocity_current_balances(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
-
-CREATE TABLE cala_outbox_events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  sequence BIGSERIAL UNIQUE,
-  payload JSONB,
-  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE OR REPLACE FUNCTION notify_cala_outbox_events() RETURNS TRIGGER AS $$
-DECLARE
-  payload TEXT;
-  payload_size INTEGER;
-BEGIN
-  payload := row_to_json(NEW);
-
-  -- Get the byte length of the payload
-  payload_size := octet_length(payload);
-
-  -- Only send notification if payload fits within 8000 bytes
-  IF payload_size <= 8000 THEN
-    PERFORM pg_notify('cala_outbox_events', payload);
-  ELSE
-    -- Optionally log that the payload was too large
-    RAISE NOTICE 'Payload too large for notification: % bytes', payload_size;
-  END IF;
-
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER cala_outbox_events AFTER INSERT ON cala_outbox_events
-  FOR EACH ROW EXECUTE FUNCTION notify_cala_outbox_events();

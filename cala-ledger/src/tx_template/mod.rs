@@ -4,7 +4,6 @@ mod repo;
 pub mod error;
 
 use chrono::NaiveDate;
-use es_entity::EsEntity;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -14,7 +13,6 @@ use uuid::Uuid;
 pub use crate::param::*;
 use crate::{
     entry::NewEntry,
-    ledger_operation::*,
     outbox::*,
     primitives::{DataSource, *},
     transaction::NewTransaction,
@@ -33,16 +31,12 @@ pub(crate) struct PreparedTransaction {
 #[derive(Clone)]
 pub struct TxTemplates {
     repo: TxTemplateRepo,
-    outbox: Outbox,
-    pool: PgPool,
 }
 
 impl TxTemplates {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: TxTemplateRepo::new(pool),
-            outbox,
-            pool: pool.clone(),
+            repo: TxTemplateRepo::new(pool, publisher),
         }
     }
 
@@ -51,7 +45,7 @@ impl TxTemplates {
         &self,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let mut op = LedgerOperation::init(&self.pool, &self.outbox).await?;
+        let mut op = self.repo.begin_op().await?;
         let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
         op.commit().await?;
         Ok(tx_template)
@@ -60,11 +54,10 @@ impl TxTemplates {
     #[instrument(name = "cala_ledger.tx_template.create_in_op", skip(self, db), err)]
     pub async fn create_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
         let tx_template = self.repo.create_in_op(db, new_tx_template).await?;
-        db.accumulate(tx_template.last_persisted(1).map(|p| &p.event));
         Ok(tx_template)
     }
 
@@ -97,12 +90,12 @@ impl TxTemplates {
     )]
     pub(crate) async fn prepare_transaction_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
+        time: chrono::DateTime<chrono::Utc>,
         tx_id: TransactionId,
         code: &str,
         params: Params,
     ) -> Result<PreparedTransaction, TxTemplateError> {
-        let time = db.now();
         let tmpl = self.repo.find_latest_version_in_op(db, code).await?;
 
         let ctx = params.into_context(tmpl.params.as_ref())?;
@@ -244,20 +237,20 @@ impl TxTemplates {
         self.repo
             .import_in_op(&mut db, origin, &mut tx_template)
             .await?;
-        let outbox_events: Vec<_> = tx_template
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 }
 
 impl From<&TxTemplateEvent> for OutboxEventPayload {
     fn from(event: &TxTemplateEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             TxTemplateEvent::Imported { source, values } => OutboxEventPayload::TxTemplateCreated {
@@ -267,7 +260,7 @@ impl From<&TxTemplateEvent> for OutboxEventPayload {
             TxTemplateEvent::Initialized {
                 values: tx_template,
             } => OutboxEventPayload::TxTemplateCreated {
-                source: DataSource::Local,
+                source,
                 tx_template: tx_template.clone(),
             },
         }

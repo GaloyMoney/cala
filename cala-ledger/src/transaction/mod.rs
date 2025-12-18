@@ -3,7 +3,6 @@ pub mod error;
 mod entity;
 mod repo;
 
-use es_entity::EsEntity;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -12,7 +11,7 @@ use std::collections::HashMap;
 #[cfg(feature = "import")]
 use crate::primitives::DataSourceId;
 use crate::primitives::{EntryId, TxTemplateId};
-use crate::{ledger_operation::*, outbox::*, primitives::DataSource};
+use crate::{outbox::*, primitives::DataSource};
 
 pub use entity::*;
 use error::*;
@@ -22,36 +21,29 @@ use repo::*;
 #[derive(Clone)]
 pub struct Transactions {
     repo: TransactionRepo,
-    // Used only for "import" feature
-    #[allow(dead_code)]
-    outbox: Outbox,
-    _pool: PgPool,
 }
 
 impl Transactions {
-    pub(crate) fn new(pool: &PgPool, outbox: Outbox) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: TransactionRepo::new(pool),
-            outbox,
-            _pool: pool.clone(),
+            repo: TransactionRepo::new(pool, publisher),
         }
     }
 
     #[instrument(name = "cala_ledger.transactions.create_in_op", skip_all)]
     pub(crate) async fn create_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperation,
         new_transaction: NewTransaction,
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db, new_transaction).await?;
-        db.accumulate(transaction.last_persisted(1).map(|p| &p.event));
         Ok(transaction)
     }
 
     #[instrument(name = "cala_ledger.transactions.create_voided_tx_in_op", skip_all)]
     pub async fn create_voided_tx_in_op(
         &self,
-        db: &mut LedgerOperation<'_>,
+        db: &mut impl es_entity::AtomicOperationWithTime,
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
@@ -62,13 +54,6 @@ impl Transactions {
 
         self.repo.update_in_op(db, &mut existing_tx).await?;
         let voided_tx = self.repo.create_in_op(db, new_tx).await?;
-
-        db.accumulate(
-            existing_tx
-                .last_persisted(1)
-                .map(|p| &p.event)
-                .chain(voided_tx.last_persisted(1).map(|p| &p.event)),
-        );
 
         Ok(voided_tx)
     }
@@ -124,14 +109,7 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
-        let outbox_events: Vec<_> = transaction
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 
@@ -147,20 +125,20 @@ impl Transactions {
         self.repo
             .import_in_op(&mut db, origin, &mut transaction)
             .await?;
-        let outbox_events: Vec<_> = transaction
-            .last_persisted(1)
-            .map(|p| OutboxEventPayload::from(&p.event))
-            .collect();
-        let time = db.now();
-        self.outbox
-            .persist_events_at(db, outbox_events, time)
-            .await?;
+        db.commit().await?;
         Ok(())
     }
 }
 
 impl From<&TransactionEvent> for OutboxEventPayload {
     fn from(event: &TransactionEvent) -> Self {
+        let source = es_entity::context::EventContext::current()
+            .data()
+            .lookup("data_source")
+            .ok()
+            .flatten()
+            .unwrap_or(DataSource::Local);
+
         match event {
             #[cfg(feature = "import")]
             TransactionEvent::Imported {
@@ -173,12 +151,12 @@ impl From<&TransactionEvent> for OutboxEventPayload {
             TransactionEvent::Initialized {
                 values: transaction,
             } => OutboxEventPayload::TransactionCreated {
-                source: DataSource::Local,
+                source,
                 transaction: transaction.clone(),
             },
             TransactionEvent::Updated { values, fields } => {
                 OutboxEventPayload::TransactionUpdated {
-                    source: DataSource::Local,
+                    source,
                     transaction: values.clone(),
                     fields: fields.clone(),
                 }
