@@ -19,6 +19,7 @@ impl TryFrom<proto::CalaLedgerEvent> for obix::out::PersistentOutboxEvent<Outbox
             id: event.id.parse::<obix::out::OutboxEventId>()?,
             sequence: obix::EventSequence::from(event.sequence),
             payload: Some(payload),
+            tracing_context: None,
             recorded_at: event
                 .recorded_at
                 .ok_or(CalaLedgerOutboxClientError::MissingField)?
