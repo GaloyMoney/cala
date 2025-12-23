@@ -113,27 +113,6 @@ jobs:
           OUT: x86_64-apple-darwin
         run:
           path: pipeline-tasks/ci/tasks/build-release.sh
-    - task: build-static-release
-      privileged: true
-      config:
-        platform: linux
-        image_resource:
-          type: registry-image
-          source: { repository: clux/muslrust, tag: 1.78.0-stable }
-        inputs:
-        - name: version
-        - name: pipeline-tasks
-        - name: repo
-        outputs:
-        - name: x86_64-unknown-linux-musl
-        caches:
-        - path: cargo-home
-        - path: cargo-target-dir
-        params:
-          TARGET: x86_64-unknown-linux-musl
-          OUT: x86_64-unknown-linux-musl
-        run:
-          path: pipeline-tasks/ci/tasks/build-release.sh
   - put: repo
     params:
       tag: artifacts/gh-release-tag
@@ -144,8 +123,6 @@ jobs:
       image_resource: #@ rust_task_image_config()
       platform: linux
       inputs:
-      - name: x86_64-apple-darwin
-      - name: x86_64-unknown-linux-musl
       - name: version
       - name: pipeline-tasks
       - name: artifacts
@@ -160,7 +137,6 @@ jobs:
       name: artifacts/gh-release-name
       tag: artifacts/gh-release-tag
       body: artifacts/gh-release-notes.md
-      globs: [artifacts/binaries/*]
   - put: version
     params:
       file: version/version
