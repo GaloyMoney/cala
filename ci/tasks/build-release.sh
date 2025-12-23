@@ -14,6 +14,7 @@ WORKSPACE="$(pwd)"
 
 export CARGO_HOME="$(pwd)/cargo-home"
 export CARGO_TARGET_DIR="$(pwd)/cargo-target-dir"
+export RUSTUP_HOME="$(pwd)/rustup"
 
 [ -f /workspace/.cargo/config ] && cp /workspace/.cargo/config ${CARGO_HOME}/config
 
