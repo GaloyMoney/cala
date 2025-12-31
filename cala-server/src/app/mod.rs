@@ -7,7 +7,7 @@ use sqlx::PgPool;
 use cala_ledger::CalaLedger;
 
 use super::extension::cala_outbox_import::{
-    CalaOutboxImportJobConfig, CalaOutboxImportJobInitializer,
+    CalaOutboxImportJobInitializer, CalaOutboxImportJobSpawner,
 };
 
 pub use config::*;
@@ -16,7 +16,8 @@ pub use error::*;
 pub struct CalaApp {
     _pool: PgPool,
     ledger: CalaLedger,
-    spawner: job::JobSpawner<CalaOutboxImportJobConfig>,
+    _jobs: job::Jobs,
+    spawner: CalaOutboxImportJobSpawner,
 }
 
 impl CalaApp {
@@ -35,9 +36,11 @@ impl CalaApp {
         .await?;
         let spawner = jobs.add_initializer(CalaOutboxImportJobInitializer::new(ledger.clone()));
         jobs.start_poll().await?;
+
         Ok(Self {
             _pool: pool,
             ledger,
+            _jobs: jobs,
             spawner,
         })
     }
@@ -46,7 +49,7 @@ impl CalaApp {
         &self.ledger
     }
 
-    pub fn spawner(&self) -> &job::JobSpawner<CalaOutboxImportJobConfig> {
+    pub fn spawner(&self) -> &CalaOutboxImportJobSpawner {
         &self.spawner
     }
 }

@@ -14,6 +14,8 @@ use job::*;
 
 pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
 
+pub type CalaOutboxImportJobSpawner = JobSpawner<CalaOutboxImportJobConfig>;
+
 #[derive(Serialize, Deserialize)]
 pub struct CalaOutboxImportJobConfig {
     endpoint: String,
