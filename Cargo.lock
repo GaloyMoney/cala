@@ -592,7 +592,7 @@ dependencies = [
  "derive_builder",
  "es-entity",
  "futures",
- "job",
+ "job 0.5.0",
  "obix",
  "opentelemetry",
  "prost 0.13.5",
@@ -710,7 +710,7 @@ dependencies = [
  "derive_builder",
  "es-entity",
  "futures",
- "job",
+ "job 0.5.0",
  "obix",
  "rust_decimal",
  "serde",
@@ -1979,6 +1979,28 @@ dependencies = [
  "es-entity",
  "futures",
  "rand 0.9.2",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "job"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3cb37e3afd09039a213c90ad316f75b617c8b269b63246e80482e428267d0255"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "derive_builder",
+ "es-entity",
+ "futures",
+ "rand 0.9.2",
  "schemars 1.0.4",
  "serde",
  "serde_json",
@@ -2269,7 +2291,7 @@ dependencies = [
  "es-entity",
  "futures",
  "im",
- "job",
+ "job 0.4.0",
  "obix-macros",
  "serde",
  "serde_json",

@@ -36,8 +36,8 @@ impl Mutation {
             .try_lock()
             .expect("Lock held concurrently");
         let job = app
-            .jobs()
-            .create_and_spawn_in_op(
+            .spawner()
+            .spawn_in_op(
                 &mut *op,
                 input.job_id,
                 CalaOutboxImportJobConfig::new(input.endpoint),
