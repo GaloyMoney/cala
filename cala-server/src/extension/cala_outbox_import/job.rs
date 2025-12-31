@@ -14,18 +14,16 @@ use job::*;
 
 pub const CALA_OUTBOX_IMPORT_JOB_TYPE: JobType = JobType::new("cala-outbox-import-job");
 
+pub type CalaOutboxImportJobSpawner = JobSpawner<CalaOutboxImportJobConfig>;
+
 #[derive(Serialize, Deserialize)]
-pub(super) struct CalaOutboxImportJobConfig {
+pub struct CalaOutboxImportJobConfig {
     endpoint: String,
 }
 impl CalaOutboxImportJobConfig {
     pub fn new(endpoint: String) -> Self {
         Self { endpoint }
     }
-}
-
-impl JobConfig for CalaOutboxImportJobConfig {
-    type Initializer = CalaOutboxImportJobInitializer;
 }
 
 pub(crate) struct CalaOutboxImportJobInitializer {
@@ -38,7 +36,8 @@ impl CalaOutboxImportJobInitializer {
 }
 
 impl JobInitializer for CalaOutboxImportJobInitializer {
-    fn job_type() -> JobType {
+    type Config = CalaOutboxImportJobConfig;
+    fn job_type(&self) -> JobType {
         CALA_OUTBOX_IMPORT_JOB_TYPE
     }
 
