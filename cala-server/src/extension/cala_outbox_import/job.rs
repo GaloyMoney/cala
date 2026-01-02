@@ -41,7 +41,11 @@ impl JobInitializer for CalaOutboxImportJobInitializer {
         CALA_OUTBOX_IMPORT_JOB_TYPE
     }
 
-    fn init(&self, job: &Job) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
+    fn init(
+        &self,
+        job: &Job,
+        _: JobSpawner<Self::Config>,
+    ) -> Result<Box<dyn JobRunner>, Box<dyn std::error::Error>> {
         Ok(Box::new(CalaOutboxImportJob {
             ledger: self.ledger.clone(),
             config: job.config()?,
