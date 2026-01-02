@@ -1,3 +1,11 @@
+# [cala release v0.13.4](https://github.com/GaloyMoney/cala/releases/tag/0.13.4)
+
+
+### Miscellaneous Tasks
+
+- Bump job / obix
+- Bump job (#630)
+
 # [cala release v0.13.3](https://github.com/GaloyMoney/cala/releases/tag/0.13.3)
 
 
