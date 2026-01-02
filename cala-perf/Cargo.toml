@@ -1,6 +1,6 @@
 [package]
 name = "cala-perf"
-version = "0.13.4"
+version = "0.13.5-dev"
 edition = "2021"
 license = "Apache-2.0"
 
