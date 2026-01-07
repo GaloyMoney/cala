@@ -1,7 +1,8 @@
 pub(crate) mod decimal;
 pub(crate) mod timestamp;
 
-use chrono::{NaiveDate, Utc};
+use chrono::NaiveDate;
+use es_entity::clock::Clock;
 use tracing::instrument;
 
 use std::sync::Arc;
@@ -12,7 +13,7 @@ use crate::error::*;
 #[instrument(name = "cel.builtin.date", skip_all, level = "debug", err)]
 pub(crate) fn date(args: Vec<CelValue>) -> Result<CelValue, CelError> {
     if args.is_empty() {
-        return Ok(CelValue::Date(Utc::now().date_naive()));
+        return Ok(CelValue::Date(Clock::handle().now().date_naive()));
     }
 
     let s: Arc<String> = assert_arg(args.first())?;

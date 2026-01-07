@@ -541,6 +541,7 @@ dependencies = [
  "anyhow",
  "cala-cel-parser",
  "chrono",
+ "es-entity",
  "lazy_static",
  "rust_decimal",
  "schemars 1.2.0",

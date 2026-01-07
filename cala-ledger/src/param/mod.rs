@@ -2,6 +2,7 @@ pub mod definition;
 pub mod error;
 
 use cel_interpreter::{CelContext, CelMap, CelValue};
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use tracing::instrument;
 
@@ -28,9 +29,11 @@ impl Params {
     #[instrument(name = "params.into_context", skip(self, defs), fields(params_count = self.values.len()), err)]
     pub(crate) fn into_context(
         mut self,
+        now: DateTime<Utc>,
         defs: Option<&Vec<ParamDefinition>>,
     ) -> Result<CelContext, ParamError> {
         let mut ctx = crate::cel_context::initialize();
+        ctx.set_now(now.date_naive());
         if let Some(defs) = defs {
             let mut cel_map = CelMap::new();
             for d in defs {
