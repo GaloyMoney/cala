@@ -68,8 +68,13 @@ pub async fn graphql_handler<Q: QueryExtensionMarker, M: MutationExtensionMarker
                 .await
             {
                 res.errors
-                    .push(async_graphql::ServerError::new(e.to_string(), None))
+                    .push(async_graphql::ServerError::new(e.to_string(), None));
+                res.data = async_graphql::Value::Null;
             }
+        } else {
+            // For atomic operations, if any mutation fails, clear the data
+            // since nothing was actually committed to the database
+            res.data = async_graphql::Value::Null;
         }
     }
     res.into()
