@@ -323,7 +323,7 @@ impl CalaLedger {
     #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, db))]
     pub async fn sync_outbox_event(
         &self,
-        db: sqlx::Transaction<'_, sqlx::Postgres>,
+        db: es_entity::DbOp<'_>,
         origin: DataSourceId,
         event: obix::out::PersistentOutboxEvent<crate::outbox::OutboxEventPayload>,
     ) -> Result<(), LedgerError> {
@@ -337,7 +337,7 @@ impl CalaLedger {
         match payload {
             Empty => (),
             AccountCreated { account, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.accounts
                     .sync_account_creation(op, origin, account)
                     .await?
@@ -350,14 +350,14 @@ impl CalaLedger {
                     let _ = ctx.insert("data_source", &origin);
                     ctx.data()
                 };
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.accounts
                     .sync_account_update(op, account, fields)
                     .with_event_context(data)
                     .await?
             }
             AccountSetCreated { account_set, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_creation(op, origin, account_set)
                     .await?
@@ -372,7 +372,7 @@ impl CalaLedger {
                     let _ = ctx.insert("data_source", &origin);
                     ctx.data()
                 };
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_update(op, account_set, fields)
                     .with_event_context(data)
@@ -383,7 +383,7 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_member_creation(op, origin, account_set_id, member_id)
                     .await?
@@ -393,13 +393,13 @@ impl CalaLedger {
                 member_id,
                 ..
             } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.account_sets
                     .sync_account_set_member_removal(op, origin, account_set_id, member_id)
                     .await?
             }
             JournalCreated { journal, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.journals
                     .sync_journal_creation(op, origin, journal)
                     .await?
@@ -412,14 +412,14 @@ impl CalaLedger {
                     let _ = ctx.insert("data_source", &origin);
                     ctx.data()
                 };
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.journals
                     .sync_journal_update(op, journal, fields)
                     .with_event_context(data)
                     .await?
             }
             TransactionCreated { transaction, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.transactions
                     .sync_transaction_creation(op, origin, transaction)
                     .await?
@@ -430,30 +430,30 @@ impl CalaLedger {
                     let _ = ctx.insert("data_source", &origin);
                     ctx.data()
                 };
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.transactions
                     .sync_transaction_update(op, origin, transaction)
                     .with_event_context(data)
                     .await?
             }
             TxTemplateCreated { tx_template, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.tx_templates
                     .sync_tx_template_creation(op, origin, tx_template)
                     .await?
             }
             EntryCreated { entry, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.entries.sync_entry_creation(op, origin, entry).await?
             }
             BalanceCreated { balance, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.balances
                     .sync_balance_creation(op, origin, balance)
                     .await?
             }
             BalanceUpdated { balance, .. } => {
-                let op = es_entity::DbOp::from(db).with_time(event.recorded_at);
+                let op = db.with_time(event.recorded_at);
                 self.balances
                     .sync_balance_update(op, origin, balance)
                     .await?
