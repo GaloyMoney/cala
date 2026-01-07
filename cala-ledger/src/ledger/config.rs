@@ -1,8 +1,9 @@
 use derive_builder::Builder;
+use es_entity::clock::{Clock, ClockHandle};
 
 pub use crate::outbox::server::OutboxServerConfig;
 
-#[derive(Builder, Debug)]
+#[derive(Builder, Clone, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct CalaLedgerConfig {
     #[builder(setter(into, strip_option), default)]
@@ -15,6 +16,8 @@ pub struct CalaLedgerConfig {
     pub(super) pool: Option<sqlx::PgPool>,
     #[builder(setter(strip_option), default)]
     pub(super) outbox: Option<OutboxServerConfig>,
+    #[builder(setter(into), default = "Clock::handle().clone()")]
+    pub(super) clock: ClockHandle,
 }
 
 impl CalaLedgerConfig {

@@ -1,6 +1,7 @@
 pub mod config;
 pub mod error;
 
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::sync::{Arc, Mutex};
 pub use tracing::instrument;
@@ -31,6 +32,7 @@ use import_deps::*;
 #[derive(Clone)]
 pub struct CalaLedger {
     pool: PgPool,
+    clock: ClockHandle,
     accounts: Accounts,
     account_sets: AccountSets,
     journals: Journals,
@@ -69,6 +71,7 @@ impl CalaLedger {
                 .await?;
         }
 
+        let clock = config.clock;
         let publisher = OutboxPublisher::init(&pool).await?;
         let mut outbox_handle = None;
         if let Some(outbox_config) = config.outbox {
@@ -97,6 +100,7 @@ impl CalaLedger {
             velocities,
             outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             pool,
+            clock,
         })
     }
 
@@ -104,11 +108,14 @@ impl CalaLedger {
         &self.pool
     }
 
+    pub fn clock(&self) -> &ClockHandle {
+        &self.clock
+    }
+
     pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
         let db_op = es_entity::DbOp::init(&self.pool)
             .await?
-            .with_db_time()
-            .await?;
+            .with_time(self.clock.now());
         Ok(db_op)
     }
 

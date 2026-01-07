@@ -30,6 +30,7 @@ impl CalaApp {
             job::JobSvcConfig::builder()
                 .pool(pool.clone())
                 .poller_config(config.jobs)
+                .clock(ledger.clock().clone())
                 .build()
                 .expect("JobSvcConfig"),
         )
