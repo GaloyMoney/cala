@@ -162,7 +162,7 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = es_entity::DbOp::init(&self.pool).await?;
+        let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
         let transaction = self
             .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
             .await?;

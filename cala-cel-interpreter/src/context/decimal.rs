@@ -11,11 +11,11 @@ lazy_static! {
         let mut idents = HashMap::new();
         idents.insert(
             SELF_PACKAGE_NAME,
-            ContextItem::Function(Box::new(builtins::decimal::cast)),
+            ContextItem::Function(Box::new(|_ctx, args| builtins::decimal::cast(args))),
         );
         idents.insert(
             Cow::Borrowed("Add"),
-            ContextItem::Function(Box::new(builtins::decimal::add)),
+            ContextItem::Function(Box::new(|_ctx, args| builtins::decimal::add(args))),
         );
 
         CelPackage::new(CelContext { idents }, HashMap::new())

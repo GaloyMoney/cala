@@ -11,7 +11,7 @@ lazy_static! {
         let mut idents = HashMap::new();
         idents.insert(
             SELF_PACKAGE_NAME,
-            ContextItem::Function(Box::new(builtins::timestamp::cast)),
+            ContextItem::Function(Box::new(|_ctx, args| builtins::timestamp::cast(args))),
         );
 
         let mut member_fns: HashMap<_, CelMemberFunction> = HashMap::new();

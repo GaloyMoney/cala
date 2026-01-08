@@ -168,6 +168,65 @@ pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
         .unwrap()
 }
 
+pub fn simple_template_with_date_default(code: &str) -> NewTxTemplate {
+    let params = vec![
+        NewParamDefinition::builder()
+            .name("recipient")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("sender")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("journal_id")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("amount")
+            .r#type(ParamDataType::Decimal)
+            .build()
+            .unwrap(),
+    ];
+    let entries = vec![
+        NewTxTemplateEntry::builder()
+            .entry_type("'CLOCK_TEST_DR'")
+            .account_id("params.sender")
+            .layer("SETTLED")
+            .direction("DEBIT")
+            .units("params.amount")
+            .currency("'USD'")
+            .build()
+            .unwrap(),
+        NewTxTemplateEntry::builder()
+            .entry_type("'CLOCK_TEST_CR'")
+            .account_id("params.recipient")
+            .layer("SETTLED")
+            .direction("CREDIT")
+            .units("params.amount")
+            .currency("'USD'")
+            .build()
+            .unwrap(),
+    ];
+    NewTxTemplate::builder()
+        .id(uuid::Uuid::now_v7())
+        .code(code)
+        .params(params)
+        .transaction(
+            NewTxTemplateTransaction::builder()
+                .effective("date()")
+                .journal_id("params.journal_id")
+                .build()
+                .unwrap(),
+        )
+        .entries(entries)
+        .build()
+        .unwrap()
+}
+
 pub fn velocity_template(code: &str) -> NewTxTemplate {
     let params = vec![
         NewParamDefinition::builder()

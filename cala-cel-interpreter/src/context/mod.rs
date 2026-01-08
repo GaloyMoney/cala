@@ -12,7 +12,7 @@ use package::CelPackage;
 
 const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
 
-type CelFunction = Box<dyn Fn(Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+type CelFunction = Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 pub(crate) type CelMemberFunction =
     Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 
@@ -56,11 +56,11 @@ impl CelContext {
         let mut idents = HashMap::new();
         idents.insert(
             Cow::Borrowed("date"),
-            ContextItem::Function(Box::new(builtins::date)),
+            ContextItem::Function(Box::new(|ctx, args| builtins::date(ctx, args))),
         );
         idents.insert(
             Cow::Borrowed("uuid"),
-            ContextItem::Function(Box::new(builtins::uuid)),
+            ContextItem::Function(Box::new(|_ctx, args| builtins::uuid(args))),
         );
         idents.insert(
             Cow::Borrowed("decimal"),
