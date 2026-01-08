@@ -83,11 +83,9 @@ impl JobRunner for CalaOutboxImportJob {
             match stream.next().await {
                 Some(Ok(message)) => {
                     state.last_synced = message.sequence;
-                    let mut db = es_entity::DbOp::init_with_clock(
-                        current_job.pool(),
-                        current_job.clock(),
-                    )
-                    .await?;
+                    let mut db =
+                        es_entity::DbOp::init_with_clock(current_job.pool(), current_job.clock())
+                            .await?;
                     current_job
                         .update_execution_state_in_op(&mut db, &state)
                         .await?;

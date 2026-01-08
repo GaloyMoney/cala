@@ -1,8 +1,8 @@
 {
-  "depositTemplateId": "8ae7d071-fee3-4028-8f87-d887766ad694",
-  "depositTemplateCode": "DEPOSIT-8ae7d071-fee3-4028-8f87-d887766ad694",
-  "withdrawalTemplateId": "f9b1f463-2e54-4de9-8ed7-f6c935c52099",
-  "withdrawalTemplateCode": "WITHDRAWAL-f9b1f463-2e54-4de9-8ed7-f6c935c52099",
-  "assetAccountId": "uuid('0742868a-c0df-4a02-855f-462e6f55335d')",
-  "journalId": "uuid('4d9de403-62dd-4d91-8100-969c5cd78cc0')"
+  "depositTemplateId": "19b40a4d-d9a2-43a5-a237-2bc9c6a1103f",
+  "depositTemplateCode": "DEPOSIT-19b40a4d-d9a2-43a5-a237-2bc9c6a1103f",
+  "withdrawalTemplateId": "dc5513f5-444b-4242-af57-647343cc809b",
+  "withdrawalTemplateCode": "WITHDRAWAL-dc5513f5-444b-4242-af57-647343cc809b",
+  "assetAccountId": "uuid('dbda799b-aebf-4b56-818b-6fa86cb4942e')",
+  "journalId": "uuid('a96f7f90-ad5c-4b52-92bc-999682c36da6')"
 }
