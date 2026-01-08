@@ -6,6 +6,7 @@ pub mod error;
 mod limit;
 
 use chrono::{DateTime, Utc};
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -26,15 +27,17 @@ pub struct Velocities {
     controls: VelocityControlRepo,
     account_controls: AccountControls,
     balances: VelocityBalances,
+    clock: ClockHandle,
 }
 
 impl Velocities {
-    pub(crate) fn new(pool: &PgPool) -> Self {
+    pub(crate) fn new(pool: &PgPool, clock: &ClockHandle) -> Self {
         Self {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
             account_controls: AccountControls::new(pool),
             balances: VelocityBalances::new(pool),
+            clock: clock.clone(),
         }
     }
 
@@ -43,7 +46,7 @@ impl Velocities {
         &self,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let mut db = self.limits.begin_op().await?;
+        let mut db = self.limits.begin_op_with_clock(&self.clock).await?;
         let limit = self.create_limit_in_op(&mut db, new_limit).await?;
         db.commit().await?;
         Ok(limit)
@@ -64,7 +67,7 @@ impl Velocities {
         &self,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = self.controls.begin_op().await?;
+        let mut db = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self.create_control_in_op(&mut db, new_control).await?;
         db.commit().await?;
         Ok(control)
@@ -86,7 +89,7 @@ impl Velocities {
         control: VelocityControlId,
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut db = self.controls.begin_op().await?;
+        let mut db = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .add_limit_to_control_in_op(&mut db, control, limit)
             .await?;
@@ -112,7 +115,7 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut op = self.controls.begin_op().await?;
+        let mut op = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(&mut op, control, account_id, params)
             .await?;
@@ -127,7 +130,7 @@ impl Velocities {
         account_set_id: AccountSetId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let mut op = self.controls.begin_op().await?;
+        let mut op = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(
                 &mut op,
@@ -237,7 +240,7 @@ impl Velocities {
         &self,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
-        let mut op = self.limits.begin_op().await?;
+        let mut op = self.limits.begin_op_with_clock(&self.clock).await?;
         let limits = self
             .list_limits_for_control_in_op(&mut op, control_id)
             .await?;

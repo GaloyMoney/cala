@@ -1,4 +1,5 @@
 use cala_types::outbox::OutboxEventPayload;
+use es_entity::clock::ClockHandle;
 
 use super::ObixOutbox;
 
@@ -8,8 +9,9 @@ pub struct OutboxPublisher {
 }
 
 impl OutboxPublisher {
-    pub async fn init(pool: &sqlx::PgPool) -> Result<Self, sqlx::Error> {
+    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, sqlx::Error> {
         let config = obix::MailboxConfig::builder()
+            .clock(clock.clone())
             .build()
             .expect("MailboxConfig");
         let outbox = ObixOutbox::init(pool, config).await?;

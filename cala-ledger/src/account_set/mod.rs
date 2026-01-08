@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -31,6 +32,7 @@ pub struct AccountSets {
     accounts: Accounts,
     entries: Entries,
     balances: Balances,
+    clock: ClockHandle,
 }
 
 impl AccountSets {
@@ -40,12 +42,14 @@ impl AccountSets {
         accounts: &Accounts,
         entries: &Entries,
         balances: &Balances,
+        clock: &ClockHandle,
     ) -> Self {
         Self {
             repo: AccountSetRepo::new(pool, publisher),
             accounts: accounts.clone(),
             entries: entries.clone(),
             balances: balances.clone(),
+            clock: clock.clone(),
         }
     }
     #[instrument(name = "cala_ledger.account_sets.create", skip(self))]
@@ -53,7 +57,7 @@ impl AccountSets {
         &self,
         new_account_set: NewAccountSet,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self.create_in_op(&mut op, new_account_set).await?;
         op.commit().await?;
         Ok(account_set)
@@ -86,7 +90,7 @@ impl AccountSets {
         &self,
         new_account_sets: Vec<NewAccountSet>,
     ) -> Result<Vec<AccountSet>, AccountSetError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_sets = self.create_all_in_op(&mut op, new_account_sets).await?;
         op.commit().await?;
         Ok(account_sets)
@@ -120,7 +124,7 @@ impl AccountSets {
 
     #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
     pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account_set).await?;
         op.commit().await?;
         Ok(())
@@ -150,7 +154,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self
             .add_member_in_op(&mut op, account_set_id, member)
             .await?;
@@ -241,7 +245,7 @@ impl AccountSets {
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self
             .remove_member_in_op(&mut op, account_set_id, member)
             .await?;

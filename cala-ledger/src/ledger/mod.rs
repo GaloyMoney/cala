@@ -72,7 +72,7 @@ impl CalaLedger {
         }
 
         let clock = config.clock;
-        let publisher = OutboxPublisher::init(&pool).await?;
+        let publisher = OutboxPublisher::init(&pool, &clock).await?;
         let mut outbox_handle = None;
         if let Some(outbox_config) = config.outbox {
             outbox_handle = Some(Self::start_outbox_server(
@@ -80,14 +80,15 @@ impl CalaLedger {
                 publisher.inner().clone(),
             ));
         }
-        let accounts = Accounts::new(&pool, &publisher);
-        let journals = Journals::new(&pool, &publisher);
-        let tx_templates = TxTemplates::new(&pool, &publisher);
+        let accounts = Accounts::new(&pool, &publisher, &clock);
+        let journals = Journals::new(&pool, &publisher, &clock);
+        let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
         let transactions = Transactions::new(&pool, &publisher);
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, &publisher, &journals);
-        let velocities = Velocities::new(&pool);
-        let account_sets = AccountSets::new(&pool, &publisher, &accounts, &entries, &balances);
+        let velocities = Velocities::new(&pool, &clock);
+        let account_sets =
+            AccountSets::new(&pool, &publisher, &accounts, &entries, &balances, &clock);
         Ok(Self {
             accounts,
             account_sets,
@@ -115,7 +116,7 @@ impl CalaLedger {
     pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
         let db_op = es_entity::DbOp::init_with_clock(&self.pool, &self.clock)
             .await?
-            .with_time(self.clock.now());
+            .with_clock_time();
         Ok(db_op)
     }
 
