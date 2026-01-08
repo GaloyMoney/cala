@@ -113,7 +113,7 @@ impl CalaLedger {
     }
 
     pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
-        let db_op = es_entity::DbOp::init(&self.pool)
+        let db_op = es_entity::DbOp::init_with_clock(&self.pool, &self.clock)
             .await?
             .with_time(self.clock.now());
         Ok(db_op)
