@@ -9,7 +9,10 @@ pub struct OutboxPublisher {
 
 impl OutboxPublisher {
     pub async fn init(pool: &sqlx::PgPool) -> Result<Self, sqlx::Error> {
-        let outbox = ObixOutbox::init(pool, Default::default()).await?;
+        let config = obix::MailboxConfig::builder()
+            .build()
+            .expect("MailboxConfig");
+        let outbox = ObixOutbox::init(pool, config).await?;
         Ok(Self { inner: outbox })
     }
 
