@@ -23,7 +23,7 @@ cala-ledger-outbox-client = { path = "cala-ledger-outbox-client", version = "0.1
 cala-server = { path = "cala-server", version = "0.13.5-dev" }
 
 es-entity = "0.10"
-job = "0.6"
+job = { version = "0.6", features = ["es-entity"] }
 obix = { version = "0.2", default-features = false }
 
 anyhow = "1.0.99"
