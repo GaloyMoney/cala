@@ -246,7 +246,7 @@ fn evaluate_member<'a>(
                 for e in exprs {
                     args.push(evaluate_expression(e, ctx)?.try_into_value()?)
                 }
-                Ok(EvalType::Value(f(args)?))
+                Ok(EvalType::Value(f(ctx, args)?))
             }
             EvalType::ContextItem(ContextItem::Package(p)) => {
                 evaluate_member(EvalType::ContextItem(p.package_self()?), member, ctx)

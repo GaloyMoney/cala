@@ -117,7 +117,7 @@ impl Transaction {
             .tx_template_id(values.tx_template_id)
             .void_of(values.id)
             .entry_ids(entry_ids.into_iter().collect())
-            .effective(chrono::Utc::now().date_naive())
+            .effective(created_at.date_naive())
             .journal_id(values.journal_id)
             .correlation_id(values.correlation_id.clone())
             .created_at(created_at);

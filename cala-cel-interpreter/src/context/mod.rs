@@ -4,13 +4,15 @@ mod timestamp;
 
 use std::{borrow::Cow, collections::HashMap};
 
+use chrono::NaiveDate;
+
 use crate::{builtins, cel_type::CelType, error::*, value::*};
 
 use package::CelPackage;
 
 const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
 
-type CelFunction = Box<dyn Fn(Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+type CelFunction = Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 pub(crate) type CelMemberFunction =
     Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 
@@ -23,6 +25,12 @@ impl CelContext {
     pub fn add_variable(&mut self, name: impl Into<Cow<'static, str>>, value: impl Into<CelValue>) {
         self.idents
             .insert(name.into(), ContextItem::Value(value.into()));
+    }
+
+    /// Sets the current date for `date()` function when called without arguments.
+    /// This should be called with the clock's current time before evaluating expressions.
+    pub fn set_now(&mut self, now: NaiveDate) {
+        self.add_variable("now", now);
     }
 
     /// Returns a debug representation of all context variables with their values
@@ -48,11 +56,11 @@ impl CelContext {
         let mut idents = HashMap::new();
         idents.insert(
             Cow::Borrowed("date"),
-            ContextItem::Function(Box::new(builtins::date)),
+            ContextItem::Function(Box::new(|ctx, args| builtins::date(ctx, args))),
         );
         idents.insert(
             Cow::Borrowed("uuid"),
-            ContextItem::Function(Box::new(builtins::uuid)),
+            ContextItem::Function(Box::new(|_ctx, args| builtins::uuid(args))),
         );
         idents.insert(
             Cow::Borrowed("decimal"),

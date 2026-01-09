@@ -4,6 +4,7 @@ mod repo;
 pub mod error;
 
 use chrono::NaiveDate;
+use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -31,12 +32,14 @@ pub(crate) struct PreparedTransaction {
 #[derive(Clone)]
 pub struct TxTemplates {
     repo: TxTemplateRepo,
+    clock: ClockHandle,
 }
 
 impl TxTemplates {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, clock: &ClockHandle) -> Self {
         Self {
             repo: TxTemplateRepo::new(pool, publisher),
+            clock: clock.clone(),
         }
     }
 
@@ -45,7 +48,7 @@ impl TxTemplates {
         &self,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
         op.commit().await?;
         Ok(tx_template)
@@ -98,7 +101,7 @@ impl TxTemplates {
     ) -> Result<PreparedTransaction, TxTemplateError> {
         let tmpl = self.repo.find_latest_version_in_op(db, code).await?;
 
-        let ctx = params.into_context(tmpl.params.as_ref())?;
+        let ctx = params.into_context(time, tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
 

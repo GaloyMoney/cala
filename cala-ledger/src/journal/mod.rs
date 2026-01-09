@@ -2,6 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -19,18 +20,20 @@ use repo::*;
 #[derive(Clone)]
 pub struct Journals {
     repo: JournalRepo,
+    clock: ClockHandle,
 }
 
 impl Journals {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, clock: &ClockHandle) -> Self {
         Self {
             repo: JournalRepo::new(pool, publisher),
+            clock: clock.clone(),
         }
     }
 
     #[instrument(name = "cala_ledger.journals.create", skip(self))]
     pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let journal = self.create_in_op(&mut op, new_journal).await?;
         op.commit().await?;
         Ok(journal)
@@ -60,7 +63,7 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, journal).await?;
         op.commit().await?;
         Ok(())

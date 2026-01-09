@@ -82,14 +82,14 @@ impl JobRunner for CalaOutboxImportJob {
         loop {
             match stream.next().await {
                 Some(Ok(message)) => {
-                    let mut tx = current_job.pool().begin().await?;
                     state.last_synced = message.sequence;
+                    let mut db = current_job.begin_op().await?;
                     current_job
-                        .update_execution_state_in_op(&mut tx, &state)
+                        .update_execution_state_in_op(&mut db, &state)
                         .await?;
                     self.ledger
                         .sync_outbox_event(
-                            tx,
+                            db,
                             DataSourceId::from(uuid::Uuid::from(current_job.id())),
                             message,
                         )

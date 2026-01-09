@@ -3,6 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use tracing::instrument;
 
@@ -24,18 +25,20 @@ use repo::*;
 #[derive(Clone)]
 pub struct Accounts {
     repo: AccountRepo,
+    clock: ClockHandle,
 }
 
 impl Accounts {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, clock: &ClockHandle) -> Self {
         Self {
             repo: AccountRepo::new(pool, publisher),
+            clock: clock.clone(),
         }
     }
 
     #[instrument(name = "cala_ledger.accounts.create", skip_all)]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
         Ok(account)
@@ -56,7 +59,7 @@ impl Accounts {
         &self,
         new_accounts: Vec<NewAccount>,
     ) -> Result<Vec<Account>, AccountError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let accounts = self.create_all_in_op(&mut op, new_accounts).await?;
         op.commit().await?;
         Ok(accounts)
@@ -140,7 +143,7 @@ impl Accounts {
 
     #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
-        let mut op = self.repo.begin_op().await?;
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())

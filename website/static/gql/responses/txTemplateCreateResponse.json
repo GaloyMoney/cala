@@ -2,12 +2,12 @@
   "data": {
     "depositTemplate": {
       "txTemplate": {
-        "txTemplateId": "461d68fe-7f79-4a34-aaa8-5978c38aafce"
+        "txTemplateId": "5710ddd8-0672-4054-9c61-28ca699c8939"
       }
     },
     "withdrawalTemplate": {
       "txTemplate": {
-        "txTemplateId": "5044ada5-2eb6-41db-9aa5-b1b439dcac50"
+        "txTemplateId": "85b885ff-ee1e-42be-acf8-3ae297a18a8f"
       }
     }
   }
