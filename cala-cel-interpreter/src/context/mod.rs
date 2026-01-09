@@ -4,7 +4,7 @@ mod timestamp;
 
 use std::{borrow::Cow, collections::HashMap};
 
-use chrono::NaiveDate;
+use es_entity::clock::{Clock, ClockHandle};
 
 use crate::{builtins, cel_type::CelType, error::*, value::*};
 
@@ -16,9 +16,9 @@ type CelFunction = Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, Ce
 pub(crate) type CelMemberFunction =
     Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
 
-#[derive(Debug)]
 pub struct CelContext {
     idents: HashMap<Cow<'static, str>, ContextItem>,
+    clock: ClockHandle,
 }
 
 impl CelContext {
@@ -27,10 +27,9 @@ impl CelContext {
             .insert(name.into(), ContextItem::Value(value.into()));
     }
 
-    /// Sets the current date for `date()` function when called without arguments.
-    /// This should be called with the clock's current time before evaluating expressions.
-    pub fn set_now(&mut self, now: NaiveDate) {
-        self.add_variable("now", now);
+    /// Returns a reference to the clock used by this context.
+    pub(crate) fn clock(&self) -> &ClockHandle {
+        &self.clock
     }
 
     /// Returns a debug representation of all context variables with their values
@@ -52,7 +51,13 @@ impl CelContext {
         }
     }
 
+    /// Creates a new context using the global clock.
     pub fn new() -> Self {
+        Self::new_with_clock(Clock::handle().clone())
+    }
+
+    /// Creates a new context with the specified clock.
+    pub fn new_with_clock(clock: ClockHandle) -> Self {
         let mut idents = HashMap::new();
         idents.insert(
             Cow::Borrowed("date"),
@@ -72,7 +77,7 @@ impl CelContext {
             ContextItem::Package(&timestamp::CEL_PACKAGE),
         );
 
-        Self { idents }
+        Self { idents, clock }
     }
 
     pub(crate) fn lookup_ident(&self, name: &str) -> Result<&ContextItem, CelError> {
@@ -99,6 +104,15 @@ impl CelContext {
 impl Default for CelContext {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl std::fmt::Debug for CelContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CelContext")
+            .field("idents", &self.idents)
+            .field("clock", &self.clock)
+            .finish()
     }
 }
 

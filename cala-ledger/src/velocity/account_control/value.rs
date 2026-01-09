@@ -155,7 +155,7 @@ mod tests {
             condition: None,
             velocity_limits: vec![],
         };
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         assert!(control.needs_enforcement(&ctx).unwrap());
     }
 
@@ -168,7 +168,7 @@ mod tests {
             condition: Some("true".parse().unwrap()),
             velocity_limits: vec![],
         };
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         assert!(control.needs_enforcement(&ctx).unwrap());
         control.condition = Some("1 == 2".parse().unwrap());
         assert!(!control.needs_enforcement(&ctx).unwrap());
@@ -204,7 +204,7 @@ mod tests {
                 balance: vec![],
             },
         };
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let entry = entry();
         assert!(limit
             .window_for_enforcement(&ctx, &entry)
@@ -224,7 +224,7 @@ mod tests {
                 balance: vec![],
             },
         };
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let mut entry = entry();
         assert!(limit
             .window_for_enforcement(&ctx, &entry)
@@ -250,7 +250,7 @@ mod tests {
                 balance: vec![],
             },
         };
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let entry = entry();
         assert!(limit
             .window_for_enforcement(&ctx, &entry)
@@ -285,7 +285,7 @@ mod tests {
             },
         };
         let entry = entry();
-        let mut ctx = crate::cel_context::initialize();
+        let mut ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         ctx.add_variable("entry", &entry);
         let window = limit.window_for_enforcement(&ctx, &entry).unwrap();
         assert_eq!(
@@ -299,7 +299,7 @@ mod tests {
 
     #[test]
     fn enforce_restricts_debit() {
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),
@@ -333,7 +333,7 @@ mod tests {
 
     #[test]
     fn enforce_ignores_when_currency_does_not_match() {
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn enforce_acts_on_available_balance_per_layer() {
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),
@@ -397,7 +397,7 @@ mod tests {
 
     #[test]
     fn enforce_is_time_aware() {
-        let mut ctx = crate::cel_context::initialize();
+        let mut ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),
@@ -431,7 +431,7 @@ mod tests {
 
     #[test]
     fn enforce_restricts_credit() {
-        let ctx = crate::cel_context::initialize();
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),

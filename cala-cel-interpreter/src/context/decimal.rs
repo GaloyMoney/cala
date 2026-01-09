@@ -18,6 +18,12 @@ lazy_static! {
             ContextItem::Function(Box::new(|_ctx, args| builtins::decimal::add(args))),
         );
 
-        CelPackage::new(CelContext { idents }, HashMap::new())
+        CelPackage::new(
+            CelContext {
+                idents,
+                clock: Clock::handle().clone(),
+            },
+            HashMap::new(),
+        )
     };
 }

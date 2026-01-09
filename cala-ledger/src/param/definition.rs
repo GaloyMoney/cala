@@ -30,11 +30,12 @@ impl NewParamDefinition {
 
 impl NewParamDefinitionBuilder {
     fn validate(&self) -> Result<(), String> {
+        use es_entity::clock::Clock;
         if let Some(Some(expr)) = self.default.as_ref() {
             let expr = CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
             let param_type = ParamDataType::try_from(
                 &expr
-                    .evaluate(&crate::cel_context::initialize())
+                    .evaluate(&crate::cel_context::initialize(Clock::handle().clone()))
                     .map_err(|e| format!("{e}"))?,
             )?;
             let specified_type = self.r#type.as_ref().unwrap();

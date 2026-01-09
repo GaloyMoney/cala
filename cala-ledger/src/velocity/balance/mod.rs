@@ -1,6 +1,7 @@
 mod repo;
 
 use chrono::{DateTime, Utc};
+use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -19,12 +20,14 @@ use repo::*;
 #[derive(Clone)]
 pub(super) struct VelocityBalances {
     repo: VelocityBalanceRepo,
+    clock: ClockHandle,
 }
 
 impl VelocityBalances {
-    pub fn new(pool: &PgPool) -> Self {
+    pub fn new(pool: &PgPool, clock: &ClockHandle) -> Self {
         Self {
             repo: VelocityBalanceRepo::new(pool),
+            clock: clock.clone(),
         }
     }
 
@@ -37,8 +40,11 @@ impl VelocityBalances {
         controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
-        let mut context =
-            super::context::EvalContext::new(transaction, controls.values().map(|v| &v.0));
+        let mut context = super::context::EvalContext::new(
+            self.clock.clone(),
+            transaction,
+            controls.values().map(|v| &v.0),
+        );
 
         let entries_to_enforce =
             Self::balances_to_check(&mut context, entries, &controls, account_set_mappings)?;
@@ -165,6 +171,7 @@ mod tests {
         use super::*;
 
         use chrono::Utc;
+        use es_entity::clock::Clock;
         use rust_decimal::Decimal;
         use std::collections::HashMap;
 
@@ -301,7 +308,11 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(&transaction, [&account].into_iter());
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
 
             let mut entry = create_test_entry(
                 Decimal::from(50),
@@ -342,7 +353,11 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(&transaction, [&account].into_iter());
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
 
             let mut entry = create_test_entry(
                 Decimal::from(100),
@@ -380,7 +395,11 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(&transaction, [&account].into_iter());
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
 
             let initial_debit = Decimal::from(100);
             let initial_credit = Decimal::from(25);
@@ -441,7 +460,11 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(&transaction, [&account].into_iter());
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
 
             let mut entry = create_test_entry(
                 Decimal::from(100),
@@ -470,7 +493,11 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(&transaction, [&account].into_iter());
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
 
             let limit = AccountVelocityLimit {
                 limit_id: key.limit_id,

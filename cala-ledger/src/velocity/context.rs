@@ -5,6 +5,7 @@ use cala_types::{
     entry::EntryValues, transaction::TransactionValues, velocity::VelocityContextAccountValues,
 };
 use cel_interpreter::{CelMap, CelValue};
+use es_entity::clock::ClockHandle;
 
 use crate::{
     cel_context::*,
@@ -12,6 +13,7 @@ use crate::{
 };
 
 pub struct EvalContext {
+    clock: ClockHandle,
     transaction: CelValue,
     entry_values: HashMap<EntryId, CelValue>,
     account_values: HashMap<AccountId, CelValue>,
@@ -19,11 +21,13 @@ pub struct EvalContext {
 
 impl EvalContext {
     pub fn new<'a>(
+        clock: ClockHandle,
         transaction: &TransactionValues,
         accounts: impl Iterator<Item = &'a VelocityContextAccountValues>,
     ) -> Self {
         let account_values = accounts.map(|a| (a.id, a.into())).collect();
         Self {
+            clock,
             transaction: transaction.into(),
             entry_values: HashMap::new(),
             account_values,
@@ -51,7 +55,7 @@ impl EvalContext {
         let mut context = CelMap::new();
         context.insert("vars", vars);
 
-        let mut ctx = initialize();
+        let mut ctx = initialize(self.clock.clone());
         ctx.add_variable("context", context);
 
         ctx
@@ -60,6 +64,7 @@ impl EvalContext {
 
 #[cfg(test)]
 mod tests {
+    use es_entity::clock::Clock;
     use rust_decimal::Decimal;
     use serde_json::json;
 
@@ -128,7 +133,7 @@ mod tests {
         let account = account_values();
         let tx = transaction();
         let entry = entry(account.id, &tx);
-        let mut context = EvalContext::new(&tx, std::iter::once(&account));
+        let mut context = EvalContext::new(Clock::handle().clone(), &tx, std::iter::once(&account));
         let ctx = context.context_for_entry(entry.account_id, &entry);
 
         let expr: CelExpression = "context.vars.transaction.id".parse().unwrap();

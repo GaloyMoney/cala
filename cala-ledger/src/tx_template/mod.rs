@@ -101,7 +101,7 @@ impl TxTemplates {
     ) -> Result<PreparedTransaction, TxTemplateError> {
         let tmpl = self.repo.find_latest_version_in_op(db, code).await?;
 
-        let ctx = params.into_context(time, tmpl.params.as_ref())?;
+        let ctx = params.into_context(&self.clock, tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
 
