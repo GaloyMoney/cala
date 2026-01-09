@@ -2,6 +2,7 @@ mod repo;
 mod value;
 
 use chrono::{DateTime, Utc};
+use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
@@ -25,13 +26,15 @@ pub(super) use value::*;
 pub struct AccountControls {
     _pool: PgPool,
     repo: AccountControlRepo,
+    clock: ClockHandle,
 }
 
 impl AccountControls {
-    pub fn new(pool: &PgPool) -> Self {
+    pub fn new(pool: &PgPool, clock: &ClockHandle) -> Self {
         Self {
             repo: AccountControlRepo::new(pool),
             _pool: pool.clone(),
+            clock: clock.clone(),
         }
     }
 
@@ -49,7 +52,7 @@ impl AccountControls {
         let mut velocity_limits = Vec::new();
         for velocity in limits {
             let defs = velocity.params;
-            let ctx = params.clone().into_context(created_at, defs.as_ref())?;
+            let ctx = params.clone().into_context(&self.clock, defs.as_ref())?;
             let mut limits = Vec::new();
             for limit in velocity.limit.balance {
                 let layer: Layer = limit.layer.try_evaluate(&ctx)?;

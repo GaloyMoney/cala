@@ -35,8 +35,8 @@ impl Velocities {
         Self {
             limits: VelocityLimitRepo::new(pool),
             controls: VelocityControlRepo::new(pool),
-            account_controls: AccountControls::new(pool),
-            balances: VelocityBalances::new(pool),
+            account_controls: AccountControls::new(pool, clock),
+            balances: VelocityBalances::new(pool, clock),
             clock: clock.clone(),
         }
     }

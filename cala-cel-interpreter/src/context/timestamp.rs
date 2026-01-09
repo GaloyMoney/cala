@@ -17,6 +17,12 @@ lazy_static! {
         let mut member_fns: HashMap<_, CelMemberFunction> = HashMap::new();
         member_fns.insert("format", Box::new(builtins::timestamp::format));
 
-        CelPackage::new(CelContext { idents }, member_fns)
+        CelPackage::new(
+            CelContext {
+                idents,
+                clock: Clock::handle().clone(),
+            },
+            member_fns,
+        )
     };
 }
