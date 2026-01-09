@@ -1,3 +1,14 @@
+# [cala release v0.13.6](https://github.com/GaloyMoney/cala/releases/tag/0.13.6)
+
+
+### Miscellaneous Tasks
+
+- Use es-entity clock implementation (#633)
+
+### Refactor
+
+- Inject clock into CelContext (#634)
+
 # [cala release v0.13.5](https://github.com/GaloyMoney/cala/releases/tag/0.13.5)
 
 
