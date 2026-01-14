@@ -73,7 +73,7 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
-    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err)]
+    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err(level = "warn"))]
     pub fn enforce(
         &self,
         ctx: &CelContext,
