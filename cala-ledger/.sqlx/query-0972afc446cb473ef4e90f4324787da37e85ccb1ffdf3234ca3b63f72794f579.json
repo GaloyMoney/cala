@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE cala_inbox_events\n            SET status = $2,\n                error = $3,\n                processed_at = CASE WHEN $2 = 'completed'::InboxEventStatus THEN NOW() ELSE processed_at END\n            WHERE id = $1",
+  "query": "UPDATE cala_inbox_events\n            SET status = $2,\n                error = $3,\n                processed_at = CASE WHEN $2 = 'completed'::InboxEventStatus THEN COALESCE($4::timestamptz, NOW()) ELSE processed_at END\n            WHERE id = $1",
   "describe": {
     "columns": [],
     "parameters": {
@@ -19,10 +19,11 @@
             }
           }
         },
-        "Varchar"
+        "Varchar",
+        "Timestamptz"
       ]
     },
     "nullable": []
   },
-  "hash": "db79a2f06b6ae31dfae8b1f72bea959452ff4bfa44bc0b8c569cb309031a5236"
+  "hash": "0972afc446cb473ef4e90f4324787da37e85ccb1ffdf3234ca3b63f72794f579"
 }

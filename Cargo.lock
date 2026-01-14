@@ -1233,9 +1233,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.10.9"
+version = "0.10.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60a430474830e52bdab1452d711a55274511db336b75e6fad39f81585e16c54f"
+checksum = "0cf97f02dd6299e6e28a8ed4722b8a9638baa832a103c77de50e13cf0d79f756"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1260,9 +1260,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.9"
+version = "0.10.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b5388220f85d280047c75b744f26d61e2d17bdebff1919dcd7907bfcae18495"
+checksum = "45f141d09697717e0b146cd069f6f3bf34c88ccf1388939baaf0dd29e54253b0"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1728,7 +1728,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -1961,9 +1961,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14f42211f035f75ec1054982119f8aa3d0e0d0335046457f22e2ed7bcf2b6b29"
+checksum = "a96ccb908dbf74bc27e077d5278d596491ade3b8a1d5e8ab7d550ccd6fd76ac5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2251,9 +2251,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.7"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "060a379edb4caa67b3c0824fa0d2f1f51fa76f6c56299e9ae943ec74f7c35805"
+checksum = "0e42bad6e0be34bdf1f9717b500b8df1cef3124c33177fc2f4a77b989487d892"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2273,9 +2273,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.7"
+version = "0.2.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d20b02a1df14b9bd7b3213681d87641a08f1dc710d2c9925d07ccccc29069440"
+checksum = "3f1e94e651a04367313fad1ce3abeefae7f5a27531a4e4de554d6e65c33a1e0c"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
