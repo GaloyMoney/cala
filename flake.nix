@@ -50,6 +50,7 @@
           bats
           bc
           jq
+          yarn
           ytt
           podman
           podman-compose
