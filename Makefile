@@ -37,6 +37,7 @@ build:
 	SQLX_OFFLINE=true cargo build --locked
 
 e2e: clean-deps start-deps build
+	cargo build --bin cala-ledger-example-rust
 	bats -t bats
 
 sdl:
