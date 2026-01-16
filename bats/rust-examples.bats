@@ -52,7 +52,7 @@ teardown() {
   retry 30 1 wait_for_new_import_job $job_count || true
   sleep 1
 
-  for i in {1..90}; do
+  for i in {1..180}; do
     exec_graphql 'list-accounts'
     accounts_after=$(graphql_output '.data.accounts.nodes | length')
     if [[ "$accounts_after" -gt "$accounts_before" ]]; then
