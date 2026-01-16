@@ -50,19 +50,11 @@
           bats
           bc
           jq
-          napi-rs-cli
-          yarn
-          nodejs
-          tsx
-          typescript
           ytt
           podman
           podman-compose
           curl
           procps
-        ]
-        ++ lib.optionals pkgs.stdenv.isDarwin [
-          darwin.apple_sdk.frameworks.SystemConfiguration
         ];
       devEnvVars = rec {
         OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
