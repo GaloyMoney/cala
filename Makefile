@@ -29,9 +29,8 @@ check-code: sdl check-event-schemas
 	SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="import,graphql"
 	SQLX_OFFLINE=true cargo clippy --package cala-ledger-core-types --features="graphql"
 	SQLX_OFFLINE=true cargo clippy --workspace --exclude cala-server --exclude cala-ledger --exclude cala-ledger-core-types
-	# temporarily disabled due to toml version issue
-	# SQLX_OFFLINE=true cargo audit
-	# SQLX_OFFLINE=true cargo deny check
+	SQLX_OFFLINE=true cargo audit
+	SQLX_OFFLINE=true cargo deny check
 
 build:
 	SQLX_OFFLINE=true cargo build --locked
