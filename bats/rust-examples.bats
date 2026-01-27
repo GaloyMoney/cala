@@ -46,7 +46,11 @@ teardown() {
   echo $(graphql_output)
   [[ "$id" == "$job_id" || "$error_msg" =~ duplicate.*jobs_name_key ]] || exit 1;
 
-  background cargo run --bin cala-ledger-example-rust > .rust-example-logs 2>&1
+  rust_example="${REPO_ROOT}/target/debug/cala-ledger-example-rust"
+  if [[ ! -z ${CARGO_TARGET_DIR} ]]; then
+    rust_example="${CARGO_TARGET_DIR}/debug/cala-ledger-example-rust"
+  fi
+  background ${rust_example} > .rust-example-logs 2>&1
 
   job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
   retry 30 1 wait_for_new_import_job $job_count || true
