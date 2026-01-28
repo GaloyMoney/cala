@@ -12,7 +12,7 @@ anyhow = { workspace = true }
 sqlx = { workspace = true }
 rand = { workspace = true }
 tokio = { workspace = true }
-criterion = { version = "0.7", features = ["html_reports", "async_tokio"] }
+criterion = { version = "0.8", features = ["html_reports", "async_tokio"] }
 serde_json = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
