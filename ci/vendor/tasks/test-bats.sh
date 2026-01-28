@@ -47,10 +47,12 @@ echo "--- Starting Dependencies with Podman Compose ---"
 podman compose up -d integration-deps
 echo "--- Podman-compose up done ---"
 
-echo "Waiting for PostgreSQL to be ready..."
-wait4x postgresql "${PG_CON}" --timeout 120s
+make setup-db
 
-make setup-db build
+# --- Build Test Artifacts ---
+echo "--- Building test artifacts---"
+# nix build . -L
+make build
 
 # --- Run Bats Tests ---
 echo "--- Running BATS tests ---"

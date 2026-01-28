@@ -50,13 +50,10 @@ echo "--- Starting Dependencies with Podman Compose ---"
 podman compose up -d integration-deps
 echo "--- Podman-compose up done ---"
 
-echo "Waiting for PostgreSQL to be ready..."
-wait4x postgresql "${PG_CON}" --timeout 120s
-
 make setup-db
 
 echo "--- Running Integration Tests ---"
-make test-in-ci
+cargo nextest run --verbose --locked
 echo "--- Tests done ---"
 
 echo "--- Cleaning up dependencies ---"
