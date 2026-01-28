@@ -1728,7 +1728,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.1",
+ "socket2 0.5.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2251,9 +2251,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.10"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e42bad6e0be34bdf1f9717b500b8df1cef3124c33177fc2f4a77b989487d892"
+checksum = "7e11be58481e2cc402e08fe8fe595955e2c9570443aa32ad8e769be70d2f3ed3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2273,9 +2273,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.10"
+version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f1e94e651a04367313fad1ce3abeefae7f5a27531a4e4de554d6e65c33a1e0c"
+checksum = "93f80b7c748d6b23b02cf06ef9fe19edf1704f1f5635fc2c7f54e692bf0204e1"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
