@@ -9,12 +9,3 @@ updates:
   directory: "/"
   schedule:
     interval: "daily"
-
-- package-ecosystem: "npm"
-  directory: "/website"
-  schedule:
-    interval: "daily"
-  groups:
-    all-dependencies:
-      patterns:
-        - "*"
