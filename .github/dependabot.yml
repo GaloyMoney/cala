@@ -8,4 +8,14 @@ updates:
 - package-ecosystem: "cargo"
   directory: "/"
   schedule:
-    interval: "daily"
+    interval: "weekly"
+  cooldown:
+    default-days: 7
+  groups:
+    all-dependencies:
+      patterns:
+        - "*"
+  ignore:
+    - dependency-name: "job"
+    - dependency-name: "obix*"
+    - dependency-name: "es-entity*"
