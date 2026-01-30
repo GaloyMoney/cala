@@ -62,7 +62,7 @@ serde_with = "3.14"
 strum = { version = "0.27", features = ["derive"] }
 tonic = "0.13.1"
 tonic-build = { version = "0.13.1", features = ["prost"] }
-tonic-health = "0.13.1"
+tonic-health = "0.14.3"
 prost = "0.13"
 prost-wkt-types = { version = "0.6", features = ["vendored-protoc"]}
 protobuf-src = { version = "1.1.0" }
