@@ -45,6 +45,7 @@
           cargo-deny
           samply
           bacon
+          cmake
           postgresql
           docker-compose
           bats
