@@ -1,12 +1,10 @@
 #@ load("@ytt:data", "data")
 
 #@ load("vendor/pipeline-fragments.lib.yml",
-#@   "build_edge_image",
 #@   "public_docker_registry",
 #@   "nodejs_task_image_config",
 #@   "check_code",
 #@   "repo_resource",
-#@   "edge_image_resource",
 #@   "version_resource",
 #@   "gh_release_resource",
 #@   "pipeline_tasks_resource",
@@ -24,7 +22,6 @@ groups:
   - check-code
   - integration-test
   - bats-test
-  - build-edge-image
   - release
   - set-dev-version
 
@@ -32,8 +29,6 @@ jobs:
 - #@ check_code()
 - #@ integration_test()
 - #@ bats_test()
-- #@ build_edge_image()
-
 - name: release
   serial: true
   plan:
@@ -170,6 +165,5 @@ jobs:
 resources:
 - #@ repo_resource(True)
 - #@ pipeline_tasks_resource()
-- #@ edge_image_resource()
 - #@ version_resource()
 - #@ gh_release_resource()
