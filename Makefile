@@ -8,6 +8,13 @@ start-deps:
 	./dev/bin/docker-compose-up.sh integration-deps
 
 setup-db:
+	@echo "Waiting for PostgreSQL and running migrations..."
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
+		cd cala-ledger && cargo sqlx migrate run 2>/dev/null && echo "Migrations complete" && exit 0; \
+		echo "Attempt $$i: Database not ready, waiting..."; \
+		sleep 1; \
+	done; \
+	echo "Database failed to become ready after 30 attempts"; \
 	cd cala-ledger && cargo sqlx migrate run
 
 reset-deps: clean-deps start-deps setup-db
