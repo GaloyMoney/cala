@@ -1,3 +1,7 @@
+# [cala release v0.13.11](https://github.com/GaloyMoney/cala/releases/tag/0.13.11)
+
+
+
 # [cala release v0.13.10](https://github.com/GaloyMoney/cala/releases/tag/0.13.10)
 
 
