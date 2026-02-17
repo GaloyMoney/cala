@@ -21,6 +21,7 @@ CREATE TYPE JobExecutionState AS ENUM ('pending', 'running');
 CREATE TABLE job_executions (
   id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
   job_type VARCHAR NOT NULL,
+  queue_id VARCHAR,
   poller_instance_id UUID,
   attempt_index INT NOT NULL DEFAULT 1,
   state JobExecutionState NOT NULL DEFAULT 'pending',
@@ -45,6 +46,10 @@ CREATE INDEX idx_job_executions_pending_execute_at
 CREATE INDEX idx_job_executions_pending_job_type_execute_at
   ON job_executions(job_type, execute_at)
   WHERE state = 'pending';
+
+CREATE INDEX idx_job_executions_running_queue_id
+  ON job_executions(queue_id)
+  WHERE state = 'running' AND queue_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION notify_job_execution_insert() RETURNS TRIGGER AS $$
 BEGIN
@@ -71,3 +76,17 @@ CREATE TRIGGER job_executions_notify_update_trigger
 AFTER UPDATE ON job_executions
 FOR EACH ROW
 EXECUTE FUNCTION notify_job_execution_update();
+
+CREATE OR REPLACE FUNCTION notify_job_execution_delete() RETURNS TRIGGER AS $$
+BEGIN
+  IF OLD.queue_id IS NOT NULL THEN
+    PERFORM pg_notify('job_execution', OLD.job_type);
+  END IF;
+  RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER job_executions_notify_delete_trigger
+AFTER DELETE ON job_executions
+FOR EACH ROW
+EXECUTE FUNCTION notify_job_execution_delete();
