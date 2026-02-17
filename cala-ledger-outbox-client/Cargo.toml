@@ -18,7 +18,6 @@ obix = { workspace = true }
 futures = { workspace = true }
 uuid = { workspace = true }
 tonic = { workspace = true }
-tonic-prost = { workspace = true }
 prost = { workspace = true }
 tracing = { workspace = true }
 prost-wkt-types = { workspace = true }
@@ -30,4 +29,4 @@ rust_decimal = { workspace = true }
 
 [build-dependencies]
 protobuf-src = { workspace = true }
-tonic-prost-build = { workspace = true }
+tonic-build = { workspace = true }
