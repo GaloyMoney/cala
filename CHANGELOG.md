@@ -1,3 +1,33 @@
+# [cala release v0.13.10](https://github.com/GaloyMoney/cala/releases/tag/0.13.10)
+
+
+
+### Miscellaneous Tasks
+
+- Sqlx-prepare
+- Bump es-entity / job / obix
+- Bump time from 0.3.46 to 0.3.47 (#658)
+- Remove unused Dockerfile and build-edge-image CI job (#657)
+- Bump the all-dependencies group with 4 updates (#654)
+- Bump bytes from 1.11.0 to 1.11.1 (#655)
+- Add weekly interval and ignore internal deps for dependabot (#653)
+- Bump tonic-health from 0.13.1 to 0.14.3 (#652)
+- Remove /website and its references (#650)
+- Bump clap from 4.5.54 to 4.5.55 (#647)
+- Bump axum-extra from 0.10.3 to 0.12.5 (#646)
+- Bump webpack-dev-server, @docusaurus/core, @docusaurus/plugin-google-gtag, @docusaurus/preset-classic, @docusaurus/theme-live-codeblock and @docusaurus/theme-mermaid (#645)
+- Bump brace-expansion from 1.1.11 to 1.1.12 in /website (#504)
+- Bump thiserror from 2.0.17 to 2.0.18 (#642)
+- Bump criterion from 0.7.0 to 0.8.1 (#643)
+- Bump uuid from 1.19.0 to 1.20.0 (#641)
+- Bump node-forge from 1.3.1 to 1.3.2 in /website (#621)
+- Bump js-yaml from 3.14.1 to 3.14.2 in /website (#611)
+- Bump glob from 10.4.5 to 10.5.0 in /website (#612)
+- Bump mdast-util-to-hast from 13.1.0 to 13.2.1 in /website (#622)
+- Bump rusty-money from 0.4.1 to 0.4.2 (#635)
+- Bump http from 1.3.1 to 1.4.0 (#624)
+- Bump deps (#638)
+
 # [cala release v0.13.9](https://github.com/GaloyMoney/cala/releases/tag/0.13.9)
 
 
