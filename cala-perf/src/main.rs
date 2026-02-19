@@ -1,6 +1,6 @@
 use cala_ledger::{account::AccountId, account_set::*, journal::JournalId, CalaLedger};
 use cala_perf::{init_accounts, init_cala, init_journal, templates::simple_transfer};
-use rand::Rng;
+use rand::RngExt;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

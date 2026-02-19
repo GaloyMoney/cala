@@ -117,12 +117,12 @@ Literal: Literal = {
     r"[-+]?[0-9]+[eE][-+]?[0-9]+" => Literal::Double(<>.to_string().into()),
 
     // Double quoted string
-    r#""(\\.|[^"\n])*""# => Literal::String(<>[1..(<>.len()-1)].to_string().into()),
-    r#""""(\\.|[^"{3}])*""""# => Literal::String(<>[3..(<>.len()-3)].to_string().into()),
+    <s:r#""(\\.|[^"\n])*""#> => Literal::String(s[1..(s.len()-1)].to_string().into()),
+    <s:r#""""(\\.|[^"{3}])*""""#> => Literal::String(s[3..(s.len()-3)].to_string().into()),
 
     // Single quoted string
-    r#"'(\\.|[^'\n])*'"# => Literal::String(<>[1..(<>.len()-1)].to_string().into()),
-    r#"'''(\\.|[^'{3}])*'''"# => Literal::String(<>[3..(<>.len()-3)].to_string().into()),
+    <s:r#"'(\\.|[^'\n])*'"#> => Literal::String(s[1..(s.len()-1)].to_string().into()),
+    <s:r#"'''(\\.|[^'{3}])*'''"#> => Literal::String(s[3..(s.len()-3)].to_string().into()),
 
     // Double quoted bytes
     r#"[bB]"(\\.|[^"\n])*""# => Literal::Bytes(Vec::from(<>.as_bytes()).into()),
