@@ -18,5 +18,5 @@ jobs:
 
       - uses: actions/checkout@v3
       - name: Run e2e tests
-        run: nix develop -c make e2e
+        run: nix run .#bats
 

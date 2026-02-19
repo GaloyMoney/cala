@@ -7,20 +7,25 @@ CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
 DOCKER_ENGINE="${DOCKER_ENGINE:-docker}"
 server_cmd() {
-  server_location="${REPO_ROOT}/target/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
-  if [[ ! -z ${CARGO_TARGET_DIR} ]] ; then
-    server_location="${CARGO_TARGET_DIR}/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
-  fi
+  if [[ -n "${CALA_BIN:-}" ]]; then
+    "${CALA_BIN}" --config "${REPO_ROOT}/bats/cala.yml" "$@"
+  else
+    server_location="${REPO_ROOT}/target/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
+    if [[ ! -z ${CARGO_TARGET_DIR:-} ]] ; then
+      server_location="${CARGO_TARGET_DIR}/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
+    fi
 
-  bash -c ${server_location} $@
+    bash -c ${server_location} $@
+  fi
 }
 
 start_server() {
   # Check for running server
+  local server_pattern="${CALA_BIN:-target/debug/cala-server}"
   if [ -n "$BASH_VERSION" ]; then
-    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${PIPESTATUS[2]})
+    server_process_and_status=$(ps a | grep "$server_pattern" | grep -v grep; echo ${PIPESTATUS[2]})
   elif [ -n "$ZSH_VERSION" ]; then
-    server_process_and_status=$(ps a | grep 'target/debug/cala-server' | grep -v grep; echo ${pipestatus[3]})
+    server_process_and_status=$(ps a | grep "$server_pattern" | grep -v grep; echo ${pipestatus[3]})
   else
     echo "Unsupported shell."
     exit 1

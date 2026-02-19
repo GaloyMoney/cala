@@ -146,6 +146,7 @@ plan:
 
 #@ def bats_test():
 name: bats-test
+serial: true
 plan:
 - in_parallel:
   - get: repo
@@ -153,21 +154,24 @@ plan:
   - get: pipeline-tasks
 - task: bats-test
   privileged: true
+  attempts: 2
   config:
     platform: linux
     image_resource: #@ nix_task_image_config()
     inputs:
-    - name: pipeline-tasks
     - name: repo
-    caches:
-    - path: cargo-home/registry/index
-    - path: cargo-home/registry/cache
-    - path: cargo-target-dir
-    run:
-      path: pipeline-tasks/ci/vendor/tasks/test-bats.sh
     params:
       CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
       CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+    run:
+      path: sh
+      args:
+        - -exc
+        - |
+          set -euo pipefail
+          cd repo
+          cachix use $CACHIX_CACHE_NAME
+          nix run .#bats
 #@ end
 
 #@ def nodejs_audit(level = "high"):
