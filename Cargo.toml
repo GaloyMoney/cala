@@ -13,12 +13,12 @@ members = [
 ]
 
 [workspace.dependencies]
-cel-parser = { path = "cala-cel-parser", package = "cala-cel-parser", version = "0.13.12-dev" }
-cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.13.12-dev" }
-cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.13.12-dev" }
-cala-tracing = { path = "cala-tracing", version = "0.13.12-dev" }
-cala-ledger = { path = "cala-ledger", version = "0.13.12-dev" }
-cala-server = { path = "cala-server", version = "0.13.12-dev" }
+cel-parser = { path = "cala-cel-parser", package = "cala-cel-parser", version = "0.13.14" }
+cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.13.14" }
+cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.13.14" }
+cala-tracing = { path = "cala-tracing", version = "0.13.14" }
+cala-ledger = { path = "cala-ledger", version = "0.13.14" }
+cala-server = { path = "cala-server", version = "0.13.14" }
 
 es-entity = "0.10"
 job = { version = "0.6", features = ["es-entity"] }
