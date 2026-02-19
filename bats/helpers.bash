@@ -6,24 +6,6 @@ GQL_ENDPOINT="http://localhost:2252/graphql"
 CALA_HOME="${CALA_HOME:-.cala}"
 SERVER_PID_FILE="${CALA_HOME}/server-pid"
 DOCKER_ENGINE="${DOCKER_ENGINE:-docker}"
-RUST_EXAMPLE_PID_FILE="${CALA_HOME}/rust-example-pid"
-
-reset_examples_pg() {
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-rust-example-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
-}
-
-# Utility function for a clean server DB for federated sync tests
-reset_server_pg() {
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "DROP SCHEMA public CASCADE"
-  $DOCKER_ENGINE exec "${COMPOSE_PROJECT_NAME}-server-pg-1" psql $PG_CON -c "CREATE SCHEMA public"
-}
-
-reset_pg() {
-  reset_examples_pg
-  reset_server_pg
-}
-
 server_cmd() {
   server_location="${REPO_ROOT}/target/debug/cala-server --config ${REPO_ROOT}/bats/cala.yml"
   if [[ ! -z ${CARGO_TARGET_DIR} ]] ; then
@@ -64,12 +46,6 @@ start_server() {
 stop_server() {
   if [[ -f "$SERVER_PID_FILE" ]]; then
     kill -9 $(cat "$SERVER_PID_FILE") || true
-  fi
-}
-
-stop_rust_example() {
-  if [[ -f "$RUST_EXAMPLE_PID_FILE" ]]; then
-    kill -9 $(cat "$RUST_EXAMPLE_PID_FILE") || true
   fi
 }
 
@@ -146,9 +122,3 @@ random_uuid() {
   fi
 }
 
-wait_for_new_import_job() {
-  job_count=$1
-
-  new_job_count=$(cat .e2e-logs | grep 'Executing CalaOutboxImportJob importing' | wc -l)
-  [[ "$new_job_count" -gt "$job_count" ]] || return 1
-}
