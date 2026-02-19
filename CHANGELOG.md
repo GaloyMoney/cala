@@ -1,3 +1,16 @@
+# [cala release v0.13.15](https://github.com/GaloyMoney/cala/releases/tag/0.13.15)
+
+
+
+### Bug Fixes
+
+- Fmt
+- Sqlx-prepare
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 3 updates (#666)
+
 # [cala release v0.13.14](https://github.com/GaloyMoney/cala/releases/tag/0.13.14)
 
 
