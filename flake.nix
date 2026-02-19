@@ -20,9 +20,6 @@
     flake-utils.lib.eachDefaultSystem
     (system: let
       overlays = [
-        (self: super: {
-          nodejs = super.nodejs_22;
-        })
         (import rust-overlay)
       ];
       pkgs = import nixpkgs {
@@ -50,7 +47,6 @@
           bats
           bc
           jq
-          yarn
           ytt
           podman
           podman-compose

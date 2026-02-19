@@ -2,7 +2,6 @@
 
 #@ load("vendor/pipeline-fragments.lib.yml",
 #@   "public_docker_registry",
-#@   "nodejs_task_image_config",
 #@   "check_code",
 #@   "repo_resource",
 #@   "version_resource",
@@ -81,31 +80,6 @@ jobs:
       - path: cargo-target-dir
       run:
         path: pipeline-tasks/ci/tasks/publish-to-crates.sh
-  - in_parallel:
-    - task: build-osx-release
-      privileged: true
-      config:
-        platform: linux
-        image_resource:
-          type: registry-image
-          source:
-            username: #@ data.values.osxcross_docker_username
-            password: #@ data.values.osxcross_docker_password
-            repository: #@ data.values.osxcross_repository
-        inputs:
-        - name: version
-        - name: pipeline-tasks
-        - name: repo
-        outputs:
-        - name: x86_64-apple-darwin
-        caches:
-        - path: cargo-home
-        - path: cargo-target-dir
-        params:
-          TARGET: x86_64-apple-darwin
-          OUT: x86_64-apple-darwin
-        run:
-          path: pipeline-tasks/ci/tasks/build-release.sh
   - put: repo
     params:
       tag: artifacts/gh-release-tag
