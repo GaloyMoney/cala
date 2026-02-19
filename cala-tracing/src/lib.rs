@@ -87,4 +87,3 @@ pub mod http {
         let _ = tracing::Span::current().set_parent(ctx);
     }
 }
-

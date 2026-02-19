@@ -146,7 +146,6 @@ impl Entries {
             .map(|entry| entry.into_values())
             .collect())
     }
-
 }
 
 impl From<&EntryEvent> for OutboxEventPayload {

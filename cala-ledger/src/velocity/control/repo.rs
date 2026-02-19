@@ -9,9 +9,7 @@ use super::entity::*;
 #[es_repo(
     entity = "VelocityControl",
     err = "VelocityError",
-    columns(
-        name(ty = "String", update(persist = false)),
-    ),
+    columns(name(ty = "String", update(persist = false)),),
     tbl_prefix = "cala",
     persist_event_context = false
 )]

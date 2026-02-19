@@ -309,5 +309,4 @@ impl CalaLedger {
     ) -> obix::out::PersistentOutboxListener<crate::outbox::OutboxEventPayload> {
         self.publisher.inner().listen_persisted(start_after)
     }
-
 }

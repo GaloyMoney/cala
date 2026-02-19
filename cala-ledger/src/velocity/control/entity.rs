@@ -76,7 +76,6 @@ impl NewVelocityControl {
     pub fn builder() -> NewVelocityControlBuilder {
         NewVelocityControlBuilder::default()
     }
-
 }
 
 impl IntoEvents<VelocityControlEvent> for NewVelocityControl {

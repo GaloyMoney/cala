@@ -211,7 +211,6 @@ impl Balances {
         new_balances.extend(latest_balances.into_values());
         new_balances
     }
-
 }
 
 #[cfg(test)]

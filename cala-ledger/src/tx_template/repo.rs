@@ -14,13 +14,11 @@ use super::{entity::*, error::TxTemplateError};
 #[es_repo(
     entity = "TxTemplate",
     err = "TxTemplateError",
-    columns(
-        code(
-            ty = "String",
-            update(accessor = "values().code", persist = false),
-            list_by
-        ),
-    ),
+    columns(code(
+        ty = "String",
+        update(accessor = "values().code", persist = false),
+        list_by
+    ),),
     tbl_prefix = "cala",
     post_persist_hook = "publish",
     persist_event_context = false
@@ -78,7 +76,6 @@ impl TxTemplateRepo {
         }
         Err(TxTemplateError::NotFound)
     }
-
 }
 
 #[cached(

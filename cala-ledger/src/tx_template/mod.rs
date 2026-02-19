@@ -12,12 +12,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 pub use crate::param::*;
-use crate::{
-    entry::NewEntry,
-    outbox::*,
-    primitives::*,
-    transaction::NewTransaction,
-};
+use crate::{entry::NewEntry, outbox::*, primitives::*, transaction::NewTransaction};
 
 pub use entity::*;
 use error::*;
@@ -218,7 +213,6 @@ impl TxTemplates {
 
         Ok(new_entries)
     }
-
 }
 
 impl From<&TxTemplateEvent> for OutboxEventPayload {

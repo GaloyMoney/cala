@@ -81,7 +81,6 @@ impl Journals {
     pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
         self.repo.find_by_code(Some(code)).await
     }
-
 }
 
 impl From<&JournalEvent> for OutboxEventPayload {

@@ -170,7 +170,6 @@ impl Accounts {
             .update_velocity_context_values_in_op(db, values.into())
             .await
     }
-
 }
 
 impl From<&AccountEvent> for OutboxEventPayload {

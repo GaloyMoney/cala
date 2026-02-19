@@ -12,9 +12,7 @@ use es_entity::*;
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TxTemplateId", event_context = false)]
 pub enum TxTemplateEvent {
-    Initialized {
-        values: TxTemplateValues,
-    },
+    Initialized { values: TxTemplateValues },
 }
 
 impl TxTemplateEvent {
@@ -93,7 +91,6 @@ impl NewTxTemplate {
     pub fn builder() -> NewTxTemplateBuilder {
         NewTxTemplateBuilder::default()
     }
-
 }
 
 impl IntoEvents<TxTemplateEvent> for NewTxTemplate {

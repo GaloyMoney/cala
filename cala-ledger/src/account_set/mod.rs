@@ -502,7 +502,6 @@ impl AccountSets {
             .fetch_mappings_in_op(op, journal_id, account_ids)
             .await
     }
-
 }
 
 fn entries_for_add_balance(

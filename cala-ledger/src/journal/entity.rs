@@ -175,7 +175,6 @@ impl NewJournal {
     pub fn builder() -> NewJournalBuilder {
         NewJournalBuilder::default()
     }
-
 }
 
 impl IntoEvents<JournalEvent> for NewJournal {

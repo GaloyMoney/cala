@@ -10,9 +10,7 @@ pub use cala_types::{entry::*, primitives::EntryId};
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "EntryId", event_context = false)]
 pub enum EntryEvent {
-    Initialized {
-        values: EntryValues,
-    },
+    Initialized { values: EntryValues },
 }
 
 #[derive(EsEntity, Builder)]
@@ -90,7 +88,6 @@ impl NewEntry {
     pub fn builder() -> NewEntryBuilder {
         NewEntryBuilder::default()
     }
-
 }
 
 impl IntoEvents<EntryEvent> for NewEntry {

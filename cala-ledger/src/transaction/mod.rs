@@ -8,8 +8,8 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-use crate::primitives::{EntryId, TxTemplateId};
 use crate::outbox::*;
+use crate::primitives::{EntryId, TxTemplateId};
 
 pub use entity::*;
 use error::*;
@@ -94,7 +94,6 @@ impl Transactions {
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
         self.repo.find_all(transaction_ids).await
     }
-
 }
 
 impl From<&TransactionEvent> for OutboxEventPayload {

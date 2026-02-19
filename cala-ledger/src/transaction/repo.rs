@@ -1,7 +1,10 @@
 use es_entity::*;
 use sqlx::PgPool;
 
-use crate::{outbox::OutboxPublisher, primitives::{JournalId, TransactionId, TxTemplateId}};
+use crate::{
+    outbox::OutboxPublisher,
+    primitives::{JournalId, TransactionId, TxTemplateId},
+};
 
 use super::{entity::*, error::TransactionError};
 

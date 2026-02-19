@@ -76,7 +76,6 @@ impl NewVelocityLimit {
     pub fn builder() -> NewVelocityLimitBuilder {
         NewVelocityLimitBuilder::default()
     }
-
 }
 
 impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {

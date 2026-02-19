@@ -164,7 +164,6 @@ impl NewTransaction {
     pub fn builder() -> NewTransactionBuilder {
         NewTransactionBuilder::default()
     }
-
 }
 
 impl IntoEvents<TransactionEvent> for NewTransaction {
