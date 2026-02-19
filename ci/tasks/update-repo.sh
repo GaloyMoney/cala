@@ -28,7 +28,6 @@ sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VER
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" }/" ./Cargo.toml
-sed -i'' "s/cala-ledger-outbox-client\", version = .*/cala-ledger-outbox-client\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cala-server\", version = .*/cala-server\", version = \"${VERSION}\" }/" ./Cargo.toml
 
 cargo update --workspace
