@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT id FROM cala_journals WHERE data_source_id = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN cala_journal_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM jobs WHERE id = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "349c204d02dfef7a0c9da28a3240197b4e705a72557f6eb6cd816cf4528b5262"
+  "hash": "12668646228f369ad4658bf658e75e0be951ea12e9bcb4c016f93df1575bc8eb"
 }

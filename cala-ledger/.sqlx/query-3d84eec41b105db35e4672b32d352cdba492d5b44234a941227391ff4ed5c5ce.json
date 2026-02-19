@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT id FROM cala_velocity_controls WHERE data_source_id = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN cala_velocity_control_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM jobs WHERE (COALESCE(id < $2, true)) ORDER BY id DESC LIMIT $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $3 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id desc, i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -31,6 +31,7 @@
     ],
     "parameters": {
       "Left": [
+        "Int8",
         "Uuid",
         "Bool"
       ]
@@ -43,5 +44,5 @@
       false
     ]
   },
-  "hash": "1e627a779f915baf7e40424a1f37281c4b22b9f84d692a11f8ff9a2d686b1943"
+  "hash": "3d84eec41b105db35e4672b32d352cdba492d5b44234a941227391ff4ed5c5ce"
 }

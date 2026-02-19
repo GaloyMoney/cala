@@ -49,7 +49,8 @@ sdl:
 	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
 
 sqlx-prepare:
-	cargo sqlx prepare --workspace
+	cd cala-ledger && cargo sqlx prepare -- --all-features
+	cd cala-server && cargo sqlx prepare -- --all-features
 
 test-in-ci:
 	SQLX_OFFLINE=true cargo nextest run --verbose --locked

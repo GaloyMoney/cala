@@ -55,6 +55,7 @@ impl From<AccountSetId> for AccountId {
 }
 
 #[derive(
+    Default,
     Debug,
     Serialize,
     Deserialize,
@@ -72,13 +73,8 @@ impl From<AccountSetId> for AccountId {
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum DebitOrCredit {
     Debit,
+    #[default]
     Credit,
-}
-
-impl Default for DebitOrCredit {
-    fn default() -> Self {
-        Self::Credit
-    }
 }
 
 impl TryFrom<CelResult<'_>> for DebitOrCredit {
@@ -106,27 +102,25 @@ impl From<DebitOrCredit> for CelValue {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum Status {
+    #[default]
     Active,
     Locked,
 }
 
-impl Default for Status {
-    fn default() -> Self {
-        Self::Active
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type)]
+#[derive(
+    Default, Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, sqlx::Type,
+)]
 #[sqlx(type_name = "Layer", rename_all = "snake_case")]
 #[cfg_attr(feature = "graphql", derive(async_graphql::Enum))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub enum Layer {
+    #[default]
     Settled,
     Pending,
     Encumbrance,
@@ -152,12 +146,6 @@ impl TryFrom<CelResult<'_>> for Layer {
                 "Layer",
             )),
         }
-    }
-}
-
-impl Default for Layer {
-    fn default() -> Self {
-        Self::Settled
     }
 }
 

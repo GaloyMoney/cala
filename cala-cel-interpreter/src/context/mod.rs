@@ -61,7 +61,7 @@ impl CelContext {
         let mut idents = HashMap::new();
         idents.insert(
             Cow::Borrowed("date"),
-            ContextItem::Function(Box::new(|ctx, args| builtins::date(ctx, args))),
+            ContextItem::Function(Box::new(builtins::date)),
         );
         idents.insert(
             Cow::Borrowed("uuid"),

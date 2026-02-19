@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT id FROM cala_account_sets WHERE data_source_id = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN cala_account_set_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM jobs WHERE unique_per_type = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -31,7 +31,7 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid",
+        "Bool",
         "Bool"
       ]
     },
@@ -43,5 +43,5 @@
       false
     ]
   },
-  "hash": "751002a0b9c5206999f3c5efc17f75867e226dc0b78e183cc00e38be2d012f71"
+  "hash": "ae139606654819ffd6895252999151b67d905c5b481f7c7e13cca53cf9b902cd"
 }
