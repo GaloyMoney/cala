@@ -61,13 +61,13 @@ strum = { version = "0.27", features = ["derive"] }
 futures = "0.3.29"
 http = "1.4.0"
 lazy_static = "1.5"
-lalrpop-util = { version = "0.22", features = ["lexer"] }
-lalrpop = { version = "0.22", features = ["lexer"] }
+lalrpop-util = { version = "0.23", features = ["lexer"] }
+lalrpop = { version = "0.23", features = ["lexer"] }
 rust_decimal_macros = "1.39"
 rust_decimal = "1.39"
 rusty-money = { version = "0.5", features = ["iso", "crypto"] }
 schemars = { version = "1.0", features = ["uuid1"] }
-rand = "0.9"
+rand = "0.10"
 
 [profile.release]
 lto = true
