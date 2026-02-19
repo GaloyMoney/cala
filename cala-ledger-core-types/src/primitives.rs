@@ -1,6 +1,5 @@
 use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
 
@@ -22,7 +21,6 @@ impl From<JournalId> for cel_interpreter::CelValue {
         cel_interpreter::CelValue::Uuid(id.0)
     }
 }
-es_entity::entity_id! { DataSourceId }
 es_entity::entity_id! { TxTemplateId }
 impl From<TxTemplateId> for cel_interpreter::CelValue {
     fn from(id: TxTemplateId) -> Self {
@@ -282,55 +280,6 @@ impl TryFrom<CelResult<'_>> for Currency {
                 CelType::from(&v),
                 "Currency",
             )),
-        }
-    }
-}
-
-const LOCAL_UUID: Uuid = uuid::uuid!("00000000-0000-0000-0000-000000000000");
-
-#[derive(Debug, Copy, Serialize, Deserialize, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-pub enum DataSource {
-    Local,
-    Remote { id: DataSourceId },
-}
-
-impl From<DataSource> for DataSourceId {
-    fn from(source: DataSource) -> Self {
-        match source {
-            DataSource::Local => DataSourceId(LOCAL_UUID),
-            DataSource::Remote { id } => id,
-        }
-    }
-}
-
-impl From<DataSource> for Option<DataSourceId> {
-    fn from(source: DataSource) -> Self {
-        match source {
-            DataSource::Local => None,
-            DataSource::Remote { id } => Some(id),
-        }
-    }
-}
-
-impl std::fmt::Display for DataSource {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            DataSource::Local => write!(f, "00000000-0000-0000-0000-000000000000"),
-            DataSource::Remote { id } => write!(f, "{id}"),
-        }
-    }
-}
-
-impl std::str::FromStr for DataSource {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s == "00000000-0000-0000-0000-000000000000" {
-            Ok(DataSource::Local)
-        } else {
-            Ok(DataSource::Remote { id: s.parse()? })
         }
     }
 }

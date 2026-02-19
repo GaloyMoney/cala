@@ -3,7 +3,6 @@ pub mod error;
 
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
-use std::sync::{Arc, Mutex};
 pub use tracing::instrument;
 use tracing::Instrument;
 
@@ -16,18 +15,12 @@ use crate::{
     balance::Balances,
     entry::Entries,
     journal::Journals,
-    outbox::{server, OutboxPublisher},
+    outbox::OutboxPublisher,
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
     velocity::Velocities,
 };
-#[cfg(feature = "import")]
-mod import_deps {
-    pub use crate::primitives::DataSourceId;
-}
-#[cfg(feature = "import")]
-use import_deps::*;
 
 #[derive(Clone)]
 pub struct CalaLedger {
@@ -42,8 +35,6 @@ pub struct CalaLedger {
     velocities: Velocities,
     balances: Balances,
     publisher: OutboxPublisher,
-    #[allow(clippy::type_complexity)]
-    outbox_handle: Arc<Mutex<Option<tokio::task::JoinHandle<Result<(), LedgerError>>>>>,
 }
 
 impl CalaLedger {
@@ -73,13 +64,6 @@ impl CalaLedger {
 
         let clock = config.clock;
         let publisher = OutboxPublisher::init(&pool, &clock).await?;
-        let mut outbox_handle = None;
-        if let Some(outbox_config) = config.outbox {
-            outbox_handle = Some(Self::start_outbox_server(
-                outbox_config,
-                publisher.inner().clone(),
-            ));
-        }
         let accounts = Accounts::new(&pool, &publisher, &clock);
         let journals = Journals::new(&pool, &publisher, &clock);
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
@@ -99,7 +83,6 @@ impl CalaLedger {
             entries,
             balances,
             velocities,
-            outbox_handle: Arc::new(Mutex::new(outbox_handle)),
             pool,
             clock,
         })
@@ -325,174 +308,5 @@ impl CalaLedger {
         start_after: Option<obix::EventSequence>,
     ) -> obix::out::PersistentOutboxListener<crate::outbox::OutboxEventPayload> {
         self.publisher.inner().listen_persisted(start_after)
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.sync_outbox_event", skip(self, db))]
-    pub async fn sync_outbox_event(
-        &self,
-        db: es_entity::DbOp<'_>,
-        origin: DataSourceId,
-        event: obix::out::PersistentOutboxEvent<crate::outbox::OutboxEventPayload>,
-    ) -> Result<(), LedgerError> {
-        use crate::outbox::OutboxEventPayload::*;
-        use es_entity::WithEventContext;
-
-        let Some(payload) = event.payload else {
-            return Ok(());
-        };
-
-        match payload {
-            Empty => (),
-            AccountCreated { account, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.accounts
-                    .sync_account_creation(op, origin, account)
-                    .await?
-            }
-            AccountUpdated {
-                account, fields, ..
-            } => {
-                let data = {
-                    let mut ctx = es_entity::context::EventContext::current();
-                    let _ = ctx.insert("data_source", &origin);
-                    ctx.data()
-                };
-                let op = db.with_time(event.recorded_at);
-                self.accounts
-                    .sync_account_update(op, account, fields)
-                    .with_event_context(data)
-                    .await?
-            }
-            AccountSetCreated { account_set, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.account_sets
-                    .sync_account_set_creation(op, origin, account_set)
-                    .await?
-            }
-            AccountSetUpdated {
-                account_set,
-                fields,
-                ..
-            } => {
-                let data = {
-                    let mut ctx = es_entity::context::EventContext::current();
-                    let _ = ctx.insert("data_source", &origin);
-                    ctx.data()
-                };
-                let op = db.with_time(event.recorded_at);
-                self.account_sets
-                    .sync_account_set_update(op, account_set, fields)
-                    .with_event_context(data)
-                    .await?
-            }
-            AccountSetMemberCreated {
-                account_set_id,
-                member_id,
-                ..
-            } => {
-                let op = db.with_time(event.recorded_at);
-                self.account_sets
-                    .sync_account_set_member_creation(op, origin, account_set_id, member_id)
-                    .await?
-            }
-            AccountSetMemberRemoved {
-                account_set_id,
-                member_id,
-                ..
-            } => {
-                let op = db.with_time(event.recorded_at);
-                self.account_sets
-                    .sync_account_set_member_removal(op, origin, account_set_id, member_id)
-                    .await?
-            }
-            JournalCreated { journal, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.journals
-                    .sync_journal_creation(op, origin, journal)
-                    .await?
-            }
-            JournalUpdated {
-                journal, fields, ..
-            } => {
-                let data = {
-                    let mut ctx = es_entity::context::EventContext::current();
-                    let _ = ctx.insert("data_source", &origin);
-                    ctx.data()
-                };
-                let op = db.with_time(event.recorded_at);
-                self.journals
-                    .sync_journal_update(op, journal, fields)
-                    .with_event_context(data)
-                    .await?
-            }
-            TransactionCreated { transaction, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.transactions
-                    .sync_transaction_creation(op, origin, transaction)
-                    .await?
-            }
-            TransactionUpdated { transaction, .. } => {
-                let data = {
-                    let mut ctx = es_entity::context::EventContext::current();
-                    let _ = ctx.insert("data_source", &origin);
-                    ctx.data()
-                };
-                let op = db.with_time(event.recorded_at);
-                self.transactions
-                    .sync_transaction_update(op, origin, transaction)
-                    .with_event_context(data)
-                    .await?
-            }
-            TxTemplateCreated { tx_template, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.tx_templates
-                    .sync_tx_template_creation(op, origin, tx_template)
-                    .await?
-            }
-            EntryCreated { entry, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.entries.sync_entry_creation(op, origin, entry).await?
-            }
-            BalanceCreated { balance, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.balances
-                    .sync_balance_creation(op, origin, balance)
-                    .await?
-            }
-            BalanceUpdated { balance, .. } => {
-                let op = db.with_time(event.recorded_at);
-                self.balances
-                    .sync_balance_update(op, origin, balance)
-                    .await?
-            }
-        }
-        Ok(())
-    }
-
-    pub async fn await_outbox_handle(&self) -> Result<(), LedgerError> {
-        let handle = { self.outbox_handle.lock().expect("poisened mutex").take() };
-        if let Some(handle) = handle {
-            return handle.await.expect("Couldn't await outbox handle");
-        }
-        Ok(())
-    }
-
-    pub fn shutdown_outbox(&mut self) -> Result<(), LedgerError> {
-        if let Some(handle) = self.outbox_handle.lock().expect("poisened mutex").take() {
-            handle.abort();
-        }
-        Ok(())
-    }
-
-    #[instrument(name = "cala_ledger.start_outbox_server", skip(outbox))]
-    fn start_outbox_server(
-        config: server::OutboxServerConfig,
-        outbox: crate::outbox::ObixOutbox,
-    ) -> tokio::task::JoinHandle<Result<(), LedgerError>> {
-        tokio::spawn(async move {
-            server::start(config, outbox).await?;
-            Ok(())
-        })
     }
 }

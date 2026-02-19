@@ -33,7 +33,7 @@ check-code: sdl check-event-schemas
 	SQLX_OFFLINE=true cargo fmt --check --all
 	SQLX_OFFLINE=true cargo check
 	SQLX_OFFLINE=true cargo clippy --package cala-server --features=
-	SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="import,graphql"
+	SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="graphql"
 	SQLX_OFFLINE=true cargo clippy --package cala-ledger-core-types --features="graphql"
 	SQLX_OFFLINE=true cargo clippy --workspace --exclude cala-server --exclude cala-ledger --exclude cala-ledger-core-types
 	SQLX_OFFLINE=true cargo audit
@@ -49,8 +49,7 @@ sdl:
 	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
 
 sqlx-prepare:
-	cd cala-ledger && cargo sqlx prepare -- --all-features
-	cd cala-server && cargo sqlx prepare -- --all-features
+	cargo sqlx prepare --workspace
 
 test-in-ci:
 	SQLX_OFFLINE=true cargo nextest run --verbose --locked

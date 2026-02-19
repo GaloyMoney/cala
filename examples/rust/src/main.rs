@@ -41,7 +41,6 @@ async fn main() -> anyhow::Result<()> {
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
-        .outbox(OutboxServerConfig::default())
         .build()?;
     let cala = CalaLedger::init(cala_config).await?;
     let code_string = format!("USERS.{example_suffix}");

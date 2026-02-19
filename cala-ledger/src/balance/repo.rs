@@ -10,7 +10,7 @@ use cala_types::{
 };
 
 use super::{account_balance::AccountBalance, error::BalanceError};
-use crate::{outbox::OutboxPublisher, primitives::DataSource};
+use crate::outbox::OutboxPublisher;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -288,67 +288,14 @@ impl BalanceRepo {
                 op,
                 new_balances.into_iter().map(|balance| {
                     if balance.version == 1 {
-                        OutboxEventPayload::BalanceCreated {
-                            source: DataSource::Local,
-                            balance,
-                        }
+                        OutboxEventPayload::BalanceCreated { balance }
                     } else {
-                        OutboxEventPayload::BalanceUpdated {
-                            source: DataSource::Local,
-                            balance,
-                        }
+                        OutboxEventPayload::BalanceUpdated { balance }
                     }
                 }),
             )
             .await?;
 
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "balance.import_balance", skip_all, err(level = "warn"))]
-    pub async fn import_balance(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        balance: BalanceSnapshot,
-        source: DataSource,
-    ) -> Result<(), BalanceError> {
-        let values_json =
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
-        sqlx::query!(
-            r#"INSERT INTO cala_current_balances
-            (journal_id, account_id, currency, latest_version, latest_values, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            balance.journal_id as JournalId,
-            balance.account_id as AccountId,
-            balance.currency.code(),
-            balance.version as i32,
-            values_json,
-            balance.created_at
-        )
-        .execute(op.as_executor())
-        .await?;
-        sqlx::query!(
-            r#"INSERT INTO cala_balance_history
-            (journal_id, account_id, currency, version, latest_entry_id, values, recorded_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)"#,
-            balance.journal_id as JournalId,
-            balance.account_id as AccountId,
-            balance.currency.code(),
-            balance.version as i32,
-            balance.entry_id as EntryId,
-            values_json,
-            balance.created_at
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(OutboxEventPayload::BalanceCreated { source, balance }),
-            )
-            .await?;
         Ok(())
     }
 
@@ -399,50 +346,5 @@ impl BalanceRepo {
             })
             .collect();
         Ok(ret)
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "balance.import_balance_update", skip_all, err(level = "warn"))]
-    pub async fn import_balance_update(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        balance: BalanceSnapshot,
-        source: DataSource,
-    ) -> Result<(), BalanceError> {
-        let values_json =
-            serde_json::to_value(&balance).expect("Failed to serialize balance snapshot");
-        sqlx::query!(
-            r#"
-            UPDATE cala_current_balances
-            SET latest_version = $1, latest_values = $5
-            WHERE journal_id = $2 AND account_id = $3 AND currency = $4 AND latest_version = $1 - 1"#,
-            balance.version as i32,
-            balance.journal_id as JournalId,
-            balance.account_id as AccountId,
-            balance.currency.code(),
-            values_json
-        )
-        .execute(op.as_executor())
-        .await?;
-        sqlx::query!(
-            r#"INSERT INTO cala_balance_history
-            (journal_id, account_id, currency, version, values, recorded_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            balance.journal_id as JournalId,
-            balance.account_id as AccountId,
-            balance.currency.code(),
-            balance.version as i32,
-            values_json,
-            balance.modified_at,
-        )
-        .execute(op.as_executor())
-        .await?;
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(OutboxEventPayload::BalanceUpdated { source, balance }),
-            )
-            .await?;
-        Ok(())
     }
 }

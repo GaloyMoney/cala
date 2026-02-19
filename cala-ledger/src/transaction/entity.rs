@@ -12,11 +12,6 @@ use super::TransactionError;
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TransactionId", event_context = false)]
 pub enum TransactionEvent {
-    #[cfg(feature = "import")]
-    Imported {
-        source: DataSource,
-        values: TransactionValues,
-    },
     Initialized {
         values: TransactionValues,
     },
@@ -35,18 +30,6 @@ pub struct Transaction {
 }
 
 impl Transaction {
-    #[cfg(feature = "import")]
-    pub(super) fn import(source: DataSourceId, values: TransactionValues) -> Self {
-        let events = EntityEvents::init(
-            values.id,
-            [TransactionEvent::Imported {
-                source: DataSource::Remote { id: source },
-                values,
-            }],
-        );
-        Self::try_from_events(events).expect("Failed to build transaction from events")
-    }
-
     pub fn id(&self) -> TransactionId {
         self.values.id
     }
@@ -141,10 +124,6 @@ impl TryFromEvents<TransactionEvent> for Transaction {
         let mut builder = TransactionBuilder::default();
         for event in events.iter_all() {
             match event {
-                #[cfg(feature = "import")]
-                TransactionEvent::Imported { source: _, values } => {
-                    builder = builder.id(values.id).values(values.clone());
-                }
                 TransactionEvent::Initialized { values } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
@@ -184,10 +163,6 @@ pub struct NewTransaction {
 impl NewTransaction {
     pub fn builder() -> NewTransactionBuilder {
         NewTransactionBuilder::default()
-    }
-
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
     }
 }
 

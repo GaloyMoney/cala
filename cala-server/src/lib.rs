@@ -17,7 +17,6 @@ pub use sqlx;
 pub use tokio;
 pub use tracing;
 
-pub use cala_ledger::outbox;
 pub use cala_ledger::CalaLedger;
 
 pub use cala_ledger as ledger;

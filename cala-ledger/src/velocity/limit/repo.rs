@@ -1,11 +1,8 @@
-use es_entity::{EntityEvents, GenericEvent, *};
+use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use crate::{
-    primitives::{DataSourceId, VelocityLimitId},
-    velocity::error::VelocityError,
-};
+use crate::{primitives::VelocityLimitId, velocity::error::VelocityError};
 
 use super::entity::*;
 
@@ -13,14 +10,7 @@ use super::entity::*;
 #[es_repo(
     entity = "VelocityLimit",
     err = "VelocityError",
-    columns(
-        name(ty = "String", update(persist = false)),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false)
-        ),
-    ),
+    columns(name(ty = "String", update(persist = false)),),
     tbl_prefix = "cala",
     persist_event_context = false
 )]

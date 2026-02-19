@@ -76,10 +76,6 @@ impl NewVelocityLimit {
     pub fn builder() -> NewVelocityLimitBuilder {
         NewVelocityLimitBuilder::default()
     }
-
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
-    }
 }
 
 impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {

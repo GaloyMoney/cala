@@ -3,28 +3,12 @@ services:
     image: busybox
     depends_on:
     - server-pg
-    - rust-example-pg
     - otel-agent
   server-pg:
     image: postgres:16.4
     command: postgres -c shared_preload_libraries=pg_stat_statements -c pg_stat_statements.track=all
     ports:
     - "5432:5432"
-    environment:
-      - POSTGRES_USER=user
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=pg
-    healthcheck:
-      test: [ "CMD-SHELL", "pg_isready" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-  rust-example-pg:
-    image: postgres:16.4
-    ports:
-    - "5434:5432"
-    depends_on:
-      - server-pg
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password

@@ -11,11 +11,6 @@ use crate::primitives::*;
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "AccountId", event_context = false)]
 pub enum AccountEvent {
-    #[cfg(feature = "import")]
-    Imported {
-        source: DataSource,
-        values: AccountValues,
-    },
     Initialized {
         values: AccountValues,
     },
@@ -34,18 +29,6 @@ pub struct Account {
 }
 
 impl Account {
-    #[cfg(feature = "import")]
-    pub(super) fn import(source: DataSourceId, values: AccountValues) -> Self {
-        let events = EntityEvents::init(
-            values.id,
-            [AccountEvent::Imported {
-                source: DataSource::Remote { id: source },
-                values,
-            }],
-        );
-        Self::try_from_events(events).expect("Failed to build account from events")
-    }
-
     pub fn id(&self) -> AccountId {
         self.values.id
     }
@@ -168,10 +151,6 @@ impl TryFromEvents<AccountEvent> for Account {
         let mut builder = AccountBuilder::default();
         for event in events.iter_all() {
             match event {
-                #[cfg(feature = "import")]
-                AccountEvent::Imported { source: _, values } => {
-                    builder = builder.id(values.id).values(values.clone());
-                }
                 AccountEvent::Initialized { values } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
@@ -213,48 +192,6 @@ impl AccountUpdate {
     }
 }
 
-#[cfg(feature = "import")]
-impl From<(AccountValues, Vec<String>)> for AccountUpdate {
-    fn from((values, fields): (AccountValues, Vec<String>)) -> Self {
-        let mut builder = AccountUpdate::default();
-        for field in fields {
-            match field.as_str() {
-                "external_id" => {
-                    if let Some(ref ext_id) = values.external_id {
-                        builder.external_id(ext_id);
-                    }
-                }
-                "code" => {
-                    builder.code(values.code.clone());
-                }
-                "name" => {
-                    builder.name(values.name.clone());
-                }
-                "normal_balance_type" => {
-                    builder.normal_balance_type(values.normal_balance_type);
-                }
-                "description" => {
-                    if let Some(ref desc) = values.description {
-                        builder.description(desc);
-                    }
-                }
-                "status" => {
-                    builder.status(values.status);
-                }
-                "metadata" => {
-                    if let Some(metadata) = values.metadata.clone() {
-                        builder
-                            .metadata(metadata)
-                            .expect("Failed to serialize metadata");
-                    }
-                }
-                _ => unreachable!("Unknown field: {}", field),
-            }
-        }
-        builder
-    }
-}
-
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
 #[derive(Builder, Debug, Clone)]
 pub struct NewAccount {
@@ -285,10 +222,6 @@ pub struct NewAccount {
 impl NewAccount {
     pub fn builder() -> NewAccountBuilder {
         NewAccountBuilder::default()
-    }
-
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
     }
 
     pub(super) fn context_values(&self) -> VelocityContextAccountValues {

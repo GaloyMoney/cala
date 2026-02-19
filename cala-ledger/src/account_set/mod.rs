@@ -8,14 +8,12 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
 use crate::{
     account::*,
     balance::*,
     entry::*,
     outbox::*,
-    primitives::{DataSource, DebitOrCredit, JournalId, Layer},
+    primitives::{DebitOrCredit, JournalId, Layer},
 };
 
 pub use cursor::*;
@@ -504,88 +502,6 @@ impl AccountSets {
             .fetch_mappings_in_op(op, journal_id, account_ids)
             .await
     }
-
-    #[cfg(feature = "import")]
-    pub(crate) async fn sync_account_set_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: AccountSetValues,
-    ) -> Result<(), AccountSetError> {
-        let mut account_set = AccountSet::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut account_set)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub(crate) async fn sync_account_set_update(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        values: AccountSetValues,
-        fields: Vec<String>,
-    ) -> Result<(), AccountSetError> {
-        let mut account_set = self.repo.find_by_id_in_op(&mut db, values.id).await?;
-        let _ = account_set.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut account_set).await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub(crate) async fn sync_account_set_member_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        member_id: AccountSetMemberId,
-    ) -> Result<(), AccountSetError> {
-        match member_id {
-            AccountSetMemberId::Account(account_id) => {
-                self.repo
-                    .import_member_account_in_op(&mut db, origin, account_set_id, account_id)
-                    .await?;
-            }
-            AccountSetMemberId::AccountSet(member_account_set_id) => {
-                self.repo
-                    .import_member_set_in_op(&mut db, origin, account_set_id, member_account_set_id)
-                    .await?;
-            }
-        }
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub(crate) async fn sync_account_set_member_removal(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        member_id: AccountSetMemberId,
-    ) -> Result<(), AccountSetError> {
-        match member_id {
-            AccountSetMemberId::Account(account_id) => {
-                self.repo
-                    .import_remove_member_account(&mut db, origin, account_set_id, account_id)
-                    .await?;
-            }
-            AccountSetMemberId::AccountSet(member_account_set_id) => {
-                self.repo
-                    .import_remove_member_set(
-                        &mut db,
-                        origin,
-                        account_set_id,
-                        member_account_set_id,
-                    )
-                    .await?;
-            }
-        }
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 fn entries_for_add_balance(
@@ -800,30 +716,13 @@ fn entries_for_remove_balance(
 
 impl From<&AccountSetEvent> for OutboxEventPayload {
     fn from(event: &AccountSetEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            AccountSetEvent::Imported {
-                source,
-                values: account_set,
-            } => OutboxEventPayload::AccountSetCreated {
-                source: *source,
-                account_set: account_set.clone(),
-            },
             AccountSetEvent::Initialized {
                 values: account_set,
             } => OutboxEventPayload::AccountSetCreated {
-                source,
                 account_set: account_set.clone(),
             },
             AccountSetEvent::Updated { values, fields } => OutboxEventPayload::AccountSetUpdated {
-                source,
                 account_set: values.clone(),
                 fields: fields.clone(),
             },

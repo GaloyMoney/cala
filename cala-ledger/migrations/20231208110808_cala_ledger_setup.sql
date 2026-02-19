@@ -7,7 +7,7 @@ CREATE TABLE cala_accounts (
   code VARCHAR UNIQUE NOT NULL,
   name VARCHAR NOT NULL,
   external_id VARCHAR UNIQUE,
-  data_source_id UUID NOT NULL,
+
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
   velocity_context_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
@@ -30,7 +30,7 @@ CREATE TABLE cala_journals (
   id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
   code VARCHAR UNIQUE DEFAULT NULL,
-  data_source_id UUID NOT NULL,
+
   created_at TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX idx_cala_journals_name ON cala_journals (name);
@@ -50,7 +50,7 @@ CREATE TABLE cala_account_sets (
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   name VARCHAR NOT NULL,
   external_id VARCHAR UNIQUE,
-  data_source_id UUID NOT NULL,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_account_sets_name ON cala_account_sets (name);
@@ -82,7 +82,7 @@ CREATE TABLE cala_account_set_member_account_sets (
 
 CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,
-  data_source_id UUID NOT NULL,
+
   code VARCHAR UNIQUE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -99,7 +99,7 @@ CREATE TABLE cala_tx_template_events (
 
 CREATE TABLE cala_transactions (
   id UUID PRIMARY KEY,
-  data_source_id UUID NOT NULL,
+
   journal_id UUID NOT NULL,
   tx_template_id UUID NOT NULL,
   external_id VARCHAR DEFAULT NULL UNIQUE,
@@ -125,7 +125,7 @@ CREATE TABLE cala_entries (
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transaction_id UUID NOT NULL,
-  data_source_id UUID NOT NULL,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
@@ -180,7 +180,7 @@ CREATE TABLE cala_cumulative_effective_balances (
 CREATE TABLE cala_velocity_limits (
   id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
-  data_source_id UUID NOT NULL,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_velocity_limits_name ON cala_velocity_limits (name);
@@ -199,7 +199,7 @@ CREATE TABLE cala_velocity_limit_events (
 CREATE TABLE cala_velocity_controls (
   id UUID PRIMARY KEY,
   name VARCHAR NOT NULL,
-  data_source_id UUID NOT NULL,
+
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_velocity_controls_name ON cala_velocity_controls (name);

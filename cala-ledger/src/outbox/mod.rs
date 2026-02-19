@@ -1,5 +1,4 @@
 mod publisher;
-pub mod server;
 
 mod event {
     pub use cala_types::outbox::*;

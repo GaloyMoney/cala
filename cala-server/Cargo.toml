@@ -13,9 +13,8 @@ fail-on-warnings = []
 [dependencies]
 cel-interpreter = { workspace = true }
 cala-types = { workspace = true }
-cala-ledger-outbox-client = { workspace = true }
 cala-tracing = { workspace = true, features = ["http"] }
-cala-ledger = { workspace = true, features = ["import", "graphql"] }
+cala-ledger = { workspace = true, features = ["graphql"] }
 es-entity = { workspace = true, features = ["graphql"] }
 job = { workspace = true }
 obix = { workspace = true }

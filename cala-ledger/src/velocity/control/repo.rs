@@ -1,7 +1,7 @@
 use es_entity::*;
 use sqlx::PgPool;
 
-use crate::{primitives::DataSourceId, velocity::error::VelocityError};
+use crate::velocity::error::VelocityError;
 
 use super::entity::*;
 
@@ -9,14 +9,7 @@ use super::entity::*;
 #[es_repo(
     entity = "VelocityControl",
     err = "VelocityError",
-    columns(
-        name(ty = "String", update(persist = false)),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false)
-        ),
-    ),
+    columns(name(ty = "String", update(persist = false)),),
     tbl_prefix = "cala",
     persist_event_context = false
 )]
