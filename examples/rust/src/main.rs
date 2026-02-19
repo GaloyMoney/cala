@@ -1,5 +1,5 @@
 use anyhow::Context;
-use rand::Rng;
+use rand::RngExt;
 use std::fs;
 
 use cala_ledger::{
