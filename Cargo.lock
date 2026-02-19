@@ -597,7 +597,7 @@ dependencies = [
  "job",
  "obix",
  "opentelemetry",
- "rand 0.9.2",
+ "rand 0.10.0",
  "regex",
  "rust_decimal",
  "rust_decimal_macros",
@@ -640,7 +640,7 @@ version = "0.13.12-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
- "rand 0.9.2",
+ "rand 0.10.0",
  "sqlx",
  "tokio",
 ]
@@ -654,7 +654,7 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "criterion",
- "rand 0.9.2",
+ "rand 0.10.0",
  "rust_decimal",
  "serde",
  "serde_json",
