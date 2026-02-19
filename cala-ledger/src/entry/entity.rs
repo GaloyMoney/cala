@@ -10,11 +10,6 @@ pub use cala_types::{entry::*, primitives::EntryId};
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "EntryId", event_context = false)]
 pub enum EntryEvent {
-    #[cfg(feature = "import")]
-    Imported {
-        source: DataSource,
-        values: EntryValues,
-    },
     Initialized {
         values: EntryValues,
     },
@@ -29,18 +24,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    #[cfg(feature = "import")]
-    pub(super) fn import(source: DataSourceId, values: EntryValues) -> Self {
-        let events = EntityEvents::init(
-            values.id,
-            [EntryEvent::Imported {
-                source: DataSource::Remote { id: source },
-                values,
-            }],
-        );
-        Self::try_from_events(events).expect("Failed to build entry from events")
-    }
-
     pub fn id(&self) -> EntryId {
         self.values.id
     }
@@ -65,10 +48,6 @@ impl TryFromEvents<EntryEvent> for Entry {
         let mut builder = EntryBuilder::default();
         for event in events.iter_all() {
             match event {
-                #[cfg(feature = "import")]
-                EntryEvent::Imported { source: _, values } => {
-                    builder = builder.id(values.id).values(values.clone());
-                }
                 EntryEvent::Initialized { values } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
@@ -112,9 +91,6 @@ impl NewEntry {
         NewEntryBuilder::default()
     }
 
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
-    }
 }
 
 impl IntoEvents<EntryEvent> for NewEntry {

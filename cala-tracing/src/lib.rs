@@ -88,37 +88,3 @@ pub mod http {
     }
 }
 
-#[cfg(feature = "grpc")]
-pub mod grpc {
-    use opentelemetry::propagation::{Extractor, TextMapPropagator};
-    use opentelemetry_sdk::propagation::TraceContextPropagator;
-    use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-    pub fn extract_tracing<T>(request: &tonic::Request<T>) {
-        let propagator = TraceContextPropagator::new();
-        let parent_cx = propagator.extract(&RequestContextExtractor(request));
-        let _ = tracing::Span::current().set_parent(parent_cx);
-    }
-
-    struct RequestContextExtractor<'a, T>(&'a tonic::Request<T>);
-
-    impl<T> Extractor for RequestContextExtractor<'_, T> {
-        fn get(&self, key: &str) -> Option<&str> {
-            self.0.metadata().get(key).and_then(|s| s.to_str().ok())
-        }
-
-        fn keys(&self) -> Vec<&str> {
-            self.0
-                .metadata()
-                .keys()
-                .filter_map(|k| {
-                    if let tonic::metadata::KeyRef::Ascii(key) = k {
-                        Some(key.as_str())
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        }
-    }
-}

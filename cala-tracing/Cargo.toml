@@ -10,7 +10,6 @@ license = "Apache-2.0"
 
 fail-on-warnings = []
 http = ["dep:opentelemetry-http", "dep:http"]
-grpc = ["dep:tonic"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -25,6 +24,5 @@ opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
 
-tonic = { workspace = true, optional = true }
 opentelemetry-http = { workspace = true, optional = true }
 http = { workspace = true, optional = true }

@@ -77,9 +77,6 @@ impl NewVelocityControl {
         NewVelocityControlBuilder::default()
     }
 
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
-    }
 }
 
 impl IntoEvents<VelocityControlEvent> for NewVelocityControl {

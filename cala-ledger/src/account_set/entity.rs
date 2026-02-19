@@ -13,11 +13,6 @@ use crate::primitives::*;
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "AccountSetId", event_context = false)]
 pub enum AccountSetEvent {
-    #[cfg(feature = "import")]
-    Imported {
-        source: DataSource,
-        values: AccountSetValues,
-    },
     Initialized {
         values: AccountSetValues,
     },
@@ -36,18 +31,6 @@ pub struct AccountSet {
 }
 
 impl AccountSet {
-    #[cfg(feature = "import")]
-    pub(super) fn import(source: DataSourceId, values: AccountSetValues) -> Self {
-        let events = EntityEvents::init(
-            values.id,
-            [AccountSetEvent::Imported {
-                source: DataSource::Remote { id: source },
-                values,
-            }],
-        );
-        Self::try_from_events(events).expect("Failed to build account set from events")
-    }
-
     pub fn id(&self) -> AccountSetId {
         self.values.id
     }
@@ -197,10 +180,6 @@ impl TryFromEvents<AccountSetEvent> for AccountSet {
         let mut builder = AccountSetBuilder::default();
         for event in events.iter_all() {
             match event {
-                #[cfg(feature = "import")]
-                AccountSetEvent::Imported { source: _, values } => {
-                    builder = builder.id(values.id).values(values.clone());
-                }
                 AccountSetEvent::Initialized { values } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
@@ -235,10 +214,6 @@ pub struct NewAccountSet {
 impl NewAccountSet {
     pub fn builder() -> NewAccountSetBuilder {
         NewAccountSetBuilder::default()
-    }
-
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
     }
 
     pub(super) fn context_values(&self) -> VelocityContextAccountValues {

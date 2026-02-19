@@ -6,11 +6,9 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
 use crate::{
     outbox::*,
-    primitives::{AccountId, AccountSetId, DataSource, JournalId, TransactionId},
+    primitives::{AccountId, AccountSetId, JournalId, TransactionId},
 };
 
 pub use entity::*;
@@ -149,41 +147,12 @@ impl Entries {
             .collect())
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.entries.sync_entry_creation", skip_all)]
-    pub(crate) async fn sync_entry_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: EntryValues,
-    ) -> Result<(), EntryError> {
-        let mut entry = Entry::import(origin, values);
-        self.repo.import(&mut db, origin, &mut entry).await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 impl From<&EntryEvent> for OutboxEventPayload {
     fn from(event: &EntryEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            EntryEvent::Imported {
-                source,
-                values: entry,
-            } => OutboxEventPayload::EntryCreated {
-                source: *source,
-                entry: entry.clone(),
-            },
             EntryEvent::Initialized { values: entry } => OutboxEventPayload::EntryCreated {
-                source,
                 entry: entry.clone(),
             },
         }

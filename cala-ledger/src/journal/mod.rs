@@ -8,9 +8,7 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{outbox::*, primitives::DataSource};
+use crate::outbox::*;
 
 pub use entity::*;
 use error::*;
@@ -84,59 +82,15 @@ impl Journals {
         self.repo.find_by_code(Some(code)).await
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.journals.sync_journal_creation", skip(self, db))]
-    pub async fn sync_journal_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: JournalValues,
-    ) -> Result<(), JournalError> {
-        let mut journal = Journal::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut journal)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.journals.sync_journal_update", skip(self, db))]
-    pub async fn sync_journal_update(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        values: JournalValues,
-        fields: Vec<String>,
-    ) -> Result<(), JournalError> {
-        let mut journal = self.repo.find_by_id_in_op(&mut db, values.id).await?;
-        let _ = journal.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut journal).await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 impl From<&JournalEvent> for OutboxEventPayload {
     fn from(event: &JournalEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            JournalEvent::Imported { source, values } => OutboxEventPayload::JournalCreated {
-                source: *source,
-                journal: values.clone(),
-            },
             JournalEvent::Initialized { values } => OutboxEventPayload::JournalCreated {
-                source,
                 journal: values.clone(),
             },
             JournalEvent::Updated { values, fields } => OutboxEventPayload::JournalUpdated {
-                source,
                 journal: values.clone(),
                 fields: fields.clone(),
             },

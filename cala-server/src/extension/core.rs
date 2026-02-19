@@ -1,13 +1,10 @@
-#[derive(async_graphql::SimpleObject, Default)]
-pub struct CoreMutationExtension {
-    #[graphql(flatten)]
-    cala_outbox_import: super::cala_outbox_import::Mutation,
-}
-
-#[derive(async_graphql::SimpleObject, Default)]
-pub struct MutationExtension {
-    #[graphql(flatten)]
-    core: CoreMutationExtension,
+#[derive(Default)]
+pub struct MutationExtension;
+#[async_graphql::Object]
+impl MutationExtension {
+    async fn mutation_version(&self) -> &str {
+        clap::crate_version!()
+    }
 }
 impl super::MutationExtensionMarker for MutationExtension {}
 

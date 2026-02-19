@@ -15,7 +15,7 @@ pub use crate::param::*;
 use crate::{
     entry::NewEntry,
     outbox::*,
-    primitives::{DataSource, *},
+    primitives::*,
     transaction::NewTransaction,
 };
 
@@ -219,51 +219,14 @@ impl TxTemplates {
         Ok(new_entries)
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(
-        name = "tx_template.sync_creation",
-        skip(self, db, values),
-        fields(
-            template_id = %values.id,
-            template_code = %values.code,
-            origin = ?origin
-        ),
-        err
-    )]
-    pub async fn sync_tx_template_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: TxTemplateValues,
-    ) -> Result<(), TxTemplateError> {
-        let mut tx_template = TxTemplate::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut tx_template)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 impl From<&TxTemplateEvent> for OutboxEventPayload {
     fn from(event: &TxTemplateEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            TxTemplateEvent::Imported { source, values } => OutboxEventPayload::TxTemplateCreated {
-                source: *source,
-                tx_template: values.clone(),
-            },
             TxTemplateEvent::Initialized {
                 values: tx_template,
             } => OutboxEventPayload::TxTemplateCreated {
-                source,
                 tx_template: tx_template.clone(),
             },
         }

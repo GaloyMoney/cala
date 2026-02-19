@@ -212,35 +212,6 @@ impl Balances {
         new_balances
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.balance.sync_balance_creation", skip(self, db, balance), fields(origin = %origin))]
-    pub async fn sync_balance_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        balance: BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
-        self.repo
-            .import_balance(&mut db, balance, DataSource::Remote { id: origin })
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.balance.sync_balance_update", skip(self, db, balance), fields(origin = %origin))]
-    pub async fn sync_balance_update(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        balance: BalanceSnapshot,
-    ) -> Result<(), BalanceError> {
-        self.repo
-            .import_balance_update(&mut db, balance, DataSource::Remote { id: origin })
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]

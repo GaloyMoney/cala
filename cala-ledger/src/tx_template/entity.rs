@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 pub use crate::param::definition::*;
-use crate::primitives::*;
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 use cel_interpreter::CelExpression;
 use es_entity::*;
@@ -13,11 +12,6 @@ use es_entity::*;
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "TxTemplateId", event_context = false)]
 pub enum TxTemplateEvent {
-    #[cfg(feature = "import")]
-    Imported {
-        source: DataSource,
-        values: TxTemplateValues,
-    },
     Initialized {
         values: TxTemplateValues,
     },
@@ -26,8 +20,6 @@ pub enum TxTemplateEvent {
 impl TxTemplateEvent {
     pub fn into_values(self) -> TxTemplateValues {
         match self {
-            #[cfg(feature = "import")]
-            TxTemplateEvent::Imported { values, .. } => values,
             TxTemplateEvent::Initialized { values } => values,
         }
     }
@@ -42,18 +34,6 @@ pub struct TxTemplate {
 }
 
 impl TxTemplate {
-    #[cfg(feature = "import")]
-    pub(super) fn import(source: DataSourceId, values: TxTemplateValues) -> Self {
-        let events = EntityEvents::init(
-            values.id,
-            [TxTemplateEvent::Imported {
-                source: DataSource::Remote { id: source },
-                values,
-            }],
-        );
-        Self::try_from_events(events).expect("Failed to build tx_template from events")
-    }
-
     pub fn id(&self) -> TxTemplateId {
         self.values.id
     }
@@ -84,10 +64,6 @@ impl TryFromEvents<TxTemplateEvent> for TxTemplate {
         let mut builder = TxTemplateBuilder::default();
         for event in events.iter_all() {
             match event {
-                #[cfg(feature = "import")]
-                TxTemplateEvent::Imported { source: _, values } => {
-                    builder = builder.id(values.id).values(values.clone());
-                }
                 TxTemplateEvent::Initialized { values } => {
                     builder = builder.id(values.id).values(values.clone());
                 }
@@ -118,9 +94,6 @@ impl NewTxTemplate {
         NewTxTemplateBuilder::default()
     }
 
-    pub(super) fn data_source(&self) -> DataSource {
-        DataSource::Local
-    }
 }
 
 impl IntoEvents<TxTemplateEvent> for NewTxTemplate {

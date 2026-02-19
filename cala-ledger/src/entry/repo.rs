@@ -1,6 +1,6 @@
 use crate::{
     outbox::OutboxPublisher,
-    primitives::{AccountId, AccountSetId, DataSourceId, EntryId, JournalId, TransactionId},
+    primitives::{AccountId, AccountSetId, EntryId, JournalId, TransactionId},
 };
 use es_entity::*;
 use sqlx::PgPool;
@@ -16,11 +16,6 @@ use super::{entity::*, error::*};
         account_id(ty = "AccountId", list_for, update(persist = false)),
         journal_id(ty = "JournalId", list_for, update(persist = false)),
         transaction_id(ty = "TransactionId", list_for, update(persist = false)),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false),
-        ),
     ),
     tbl_prefix = "cala",
     post_persist_hook = "publish",
@@ -113,30 +108,6 @@ impl EntryRepo {
             has_next_page,
             end_cursor,
         })
-    }
-
-    #[cfg(feature = "import")]
-    pub(super) async fn import(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        entry: &mut Entry,
-    ) -> Result<(), EntryError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_entries (data_source_id, id, journal_id, account_id, transaction_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            origin as DataSourceId,
-            entry.values().id as EntryId,
-            entry.values().journal_id as JournalId,
-            entry.values().account_id as AccountId,
-            entry.values().transaction_id as TransactionId,
-            recorded_at,
-        )
-        .execute(op.as_executor())
-        .await?;
-        self.persist_events(op, entry.events_mut()).await?;
-        Ok(())
     }
 
     async fn publish(

@@ -9,12 +9,7 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
-use crate::{
-    outbox::*,
-    primitives::{DataSource, Status},
-};
+use crate::{outbox::*, primitives::Status};
 
 pub use entity::*;
 use error::*;
@@ -176,65 +171,18 @@ impl Accounts {
             .await
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.accounts.sync_account_creation", skip_all)]
-    pub async fn sync_account_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: AccountValues,
-    ) -> Result<(), AccountError> {
-        let mut account = Account::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut account)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.accounts.sync_account_update", skip_all)]
-    pub async fn sync_account_update(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        values: AccountValues,
-        fields: Vec<String>,
-    ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id_in_op(&mut db, values.id).await?;
-        let _ = account.update((values, fields));
-        self.repo.update_in_op(&mut db, &mut account).await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            AccountEvent::Imported {
-                source,
-                values: account,
-            } => OutboxEventPayload::AccountCreated {
-                source: *source,
-                account: account.clone(),
-            },
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
-                source,
                 account: account.clone(),
             },
             AccountEvent::Updated {
                 values: account,
                 fields,
             } => OutboxEventPayload::AccountUpdated {
-                source,
                 account: account.clone(),
                 fields: fields.clone(),
             },

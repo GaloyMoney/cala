@@ -12,7 +12,6 @@ categories = ["finance"]
 [features]
 
 fail-on-warnings = []
-import = []
 graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
 json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
 
@@ -24,7 +23,7 @@ required-features = ["json-schema"]
 [dependencies]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
-cala-tracing = { workspace = true, features = ["grpc"] }
+cala-tracing = { workspace = true }
 es-entity = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
@@ -42,12 +41,8 @@ regex = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
-tonic = { workspace = true }
-tonic-health = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-prost = { workspace = true }
-prost-wkt-types = { workspace = true }
 opentelemetry = { workspace = true }
 tracing-opentelemetry = { workspace = true }
 futures = { workspace = true }
@@ -61,5 +56,3 @@ tokio-test = "0.4"
 rust_decimal_macros = { workspace = true }
 
 [build-dependencies]
-protobuf-src = { workspace = true }
-tonic-build = { workspace = true }

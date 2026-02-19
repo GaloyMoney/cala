@@ -6,7 +6,7 @@ use tracing::instrument;
 
 use std::sync::Arc;
 
-use crate::{outbox::OutboxPublisher, primitives::DataSourceId};
+use crate::outbox::OutboxPublisher;
 
 use super::{entity::*, error::TxTemplateError};
 
@@ -19,11 +19,6 @@ use super::{entity::*, error::TxTemplateError};
             ty = "String",
             update(accessor = "values().code", persist = false),
             list_by
-        ),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false),
         ),
     ),
     tbl_prefix = "cala",
@@ -84,28 +79,6 @@ impl TxTemplateRepo {
         Err(TxTemplateError::NotFound)
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "tx_template.import_in_op", skip_all, err(level = "warn"))]
-    pub async fn import_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        tx_template: &mut TxTemplate,
-    ) -> Result<(), TxTemplateError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_tx_templates (data_source_id, id, code, created_at)
-            VALUES ($1, $2, $3, $4)"#,
-            origin as DataSourceId,
-            tx_template.values().id as TxTemplateId,
-            tx_template.values().code,
-            recorded_at
-        )
-        .execute(op.as_executor())
-        .await?;
-        self.persist_events(op, tx_template.events_mut()).await?;
-        Ok(())
-    }
 }
 
 #[cached(

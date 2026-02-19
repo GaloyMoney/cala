@@ -8,10 +8,8 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-#[cfg(feature = "import")]
-use crate::primitives::DataSourceId;
 use crate::primitives::{EntryId, TxTemplateId};
-use crate::{outbox::*, primitives::DataSource};
+use crate::outbox::*;
 
 pub use entity::*;
 use error::*;
@@ -97,66 +95,18 @@ impl Transactions {
         self.repo.find_all(transaction_ids).await
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.transactions.sync_transaction_creation", skip_all)]
-    pub async fn sync_transaction_creation(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: TransactionValues,
-    ) -> Result<(), TransactionError> {
-        let mut transaction = Transaction::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut transaction)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "cala_ledger.transactions.sync_transaction_update", skip_all)]
-    pub async fn sync_transaction_update(
-        &self,
-        mut db: es_entity::DbOpWithTime<'_>,
-        origin: DataSourceId,
-        values: TransactionValues,
-    ) -> Result<(), TransactionError> {
-        let mut transaction = Transaction::import(origin, values);
-        self.repo
-            .import_in_op(&mut db, origin, &mut transaction)
-            .await?;
-        db.commit().await?;
-        Ok(())
-    }
 }
 
 impl From<&TransactionEvent> for OutboxEventPayload {
     fn from(event: &TransactionEvent) -> Self {
-        let source = es_entity::context::EventContext::current()
-            .data()
-            .lookup("data_source")
-            .ok()
-            .flatten()
-            .unwrap_or(DataSource::Local);
-
         match event {
-            #[cfg(feature = "import")]
-            TransactionEvent::Imported {
-                source,
-                values: transaction,
-            } => OutboxEventPayload::TransactionCreated {
-                source: *source,
-                transaction: transaction.clone(),
-            },
             TransactionEvent::Initialized {
                 values: transaction,
             } => OutboxEventPayload::TransactionCreated {
-                source,
                 transaction: transaction.clone(),
             },
             TransactionEvent::Updated { values, fields } => {
                 OutboxEventPayload::TransactionUpdated {
-                    source,
                     transaction: values.clone(),
                     fields: fields.clone(),
                 }

@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use crate::{
     outbox::OutboxPublisher,
-    primitives::{AccountId, DataSourceId, JournalId},
+    primitives::{AccountId, JournalId},
 };
 
 use super::{entity::*, error::*};
@@ -105,11 +105,6 @@ use members_cursor::*;
             ty = "Option<String>",
             update(accessor = "values().external_id"),
             list_by
-        ),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false)
         ),
     ),
     tbl_prefix = "cala",
@@ -408,8 +403,6 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        use crate::primitives::DataSource;
-
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -465,7 +458,6 @@ impl AccountSetRepo {
             .publish_all(
                 db,
                 std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    source: DataSource::Local,
                     account_set_id,
                     member_id: crate::account_set::AccountSetMemberId::Account(account_id),
                 }),
@@ -481,8 +473,6 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        use crate::primitives::DataSource;
-
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -535,7 +525,6 @@ impl AccountSetRepo {
             .publish_all(
                 db,
                 std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    source: DataSource::Local,
                     account_set_id,
                     member_id: crate::account_set::AccountSetMemberId::Account(account_id),
                 }),
@@ -551,8 +540,6 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        use crate::primitives::DataSource;
-
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -616,7 +603,6 @@ impl AccountSetRepo {
             .publish_all(
                 db,
                 std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    source: DataSource::Local,
                     account_set_id,
                     member_id: crate::account_set::AccountSetMemberId::AccountSet(
                         member_account_set_id,
@@ -634,8 +620,6 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        use crate::primitives::DataSource;
-
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -694,7 +678,6 @@ impl AccountSetRepo {
             .publish_all(
                 db,
                 std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    source: DataSource::Local,
                     account_set_id,
                     member_id: crate::account_set::AccountSetMemberId::AccountSet(
                         member_account_set_id,
@@ -803,31 +786,6 @@ impl AccountSetRepo {
         })
     }
 
-    #[cfg(feature = "import")]
-    #[instrument(name = "account_set.import_in_op", skip_all, err(level = "warn"))]
-    pub async fn import_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        account_set: &mut AccountSet,
-    ) -> Result<(), AccountSetError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_account_sets (data_source_id, id, journal_id, name, external_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6)"#,
-            origin as DataSourceId,
-            account_set.values().id as AccountSetId,
-            account_set.values().journal_id as JournalId,
-            account_set.values().name,
-            account_set.values().external_id,
-            recorded_at
-        )
-        .execute(op.as_executor())
-        .await?;
-        self.persist_events(op, account_set.events_mut()).await?;
-        Ok(())
-    }
-
     #[instrument(
         name = "account_set.fetch_mappings_in_op",
         skip_all,
@@ -859,134 +817,6 @@ impl AccountSetRepo {
                 .push(row.set_id);
         }
         Ok(mappings)
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn import_member_account_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, created_at)
-            VALUES ($1, $2, $3)"#,
-            account_set_id as AccountSetId,
-            account_id as AccountId,
-            recorded_at
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    source: crate::primitives::DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
-                }),
-            )
-            .await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn import_remove_member_account(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            r#"DELETE FROM cala_account_set_member_accounts
-            WHERE account_set_id = $1 AND member_account_id = $2"#,
-            account_set_id as AccountSetId,
-            account_id as AccountId,
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    source: crate::primitives::DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
-                }),
-            )
-            .await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn import_member_set_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id, created_at)
-            VALUES ($1, $2, $3)"#,
-            account_set_id as AccountSetId,
-            member_account_set_id as AccountSetId,
-            recorded_at
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    source: crate::primitives::DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
-                        member_account_set_id,
-                    ),
-                }),
-            )
-            .await?;
-        Ok(())
-    }
-
-    #[cfg(feature = "import")]
-    pub async fn import_remove_member_set(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        origin: DataSourceId,
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            r#"DELETE FROM cala_account_set_member_account_sets
-            WHERE account_set_id = $1 AND member_account_set_id = $2"#,
-            account_set_id as AccountSetId,
-            member_account_set_id as AccountSetId,
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    source: crate::primitives::DataSource::Remote { id: origin },
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
-                        member_account_set_id,
-                    ),
-                }),
-            )
-            .await?;
-        Ok(())
     }
 
     async fn publish(

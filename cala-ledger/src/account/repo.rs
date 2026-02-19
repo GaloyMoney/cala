@@ -4,7 +4,7 @@ use tracing::instrument;
 
 use crate::{
     outbox::OutboxPublisher,
-    primitives::{AccountId, DataSourceId, DebitOrCredit, Status},
+    primitives::{AccountId, DebitOrCredit, Status},
 };
 
 use super::{entity::*, error::AccountError};
@@ -32,11 +32,6 @@ use super::{entity::*, error::AccountError};
             create(accessor = "context_values()"),
             update(accessor = "context_values()")
         ),
-        data_source_id(
-            ty = "DataSourceId",
-            create(accessor = "data_source().into()"),
-            update(persist = false)
-        ),
     ),
     tbl_prefix = "cala",
     post_persist_hook = "publish",
@@ -53,39 +48,6 @@ impl AccountRepo {
             pool: pool.clone(),
             publisher: publisher.clone(),
         }
-    }
-
-    #[cfg(feature = "import")]
-    #[instrument(name = "account.import_in_op", skip_all, err(level = "warn"))]
-    pub async fn import_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperationWithTime,
-        origin: DataSourceId,
-        account: &mut Account,
-    ) -> Result<(), AccountError> {
-        let recorded_at = op.now();
-        sqlx::query!(
-            r#"INSERT INTO cala_accounts (data_source_id, id, code, name, external_id, normal_balance_type, status, eventually_consistent, created_at, 
-        velocity_context_values)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
-            origin as DataSourceId,
-            account.values().id as AccountId,
-            account.values().code,
-            account.values().name,
-            account.values().external_id,
-            account.values().normal_balance_type as DebitOrCredit,
-            account.values().status as Status,
-            account.values().config.eventually_consistent,
-            recorded_at,
-            account.context_values() as VelocityContextAccountValues,
-        )
-        .execute(op.as_executor())
-        .await?;
-        let n_events = self.persist_events(op, account.events_mut()).await?;
-        self.publish(op, account, account.events().last_persisted(n_events))
-            .await?;
-
-        Ok(())
     }
 
     #[instrument(
