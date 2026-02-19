@@ -606,10 +606,10 @@ dependencies = [
  "job",
  "obix",
  "opentelemetry",
- "prost 0.13.5",
+ "prost 0.14.3",
  "prost-wkt-types",
  "protobuf-src",
- "rand 0.9.2",
+ "rand 0.10.0",
  "regex",
  "rust_decimal",
  "rust_decimal_macros",
@@ -621,7 +621,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tokio-test",
- "tonic 0.13.1",
+ "tonic",
  "tonic-build",
  "tonic-health",
  "tracing",
@@ -655,7 +655,7 @@ version = "0.13.12-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
- "rand 0.9.2",
+ "rand 0.10.0",
  "sqlx",
  "tokio",
 ]
@@ -669,14 +669,14 @@ dependencies = [
  "chrono",
  "futures",
  "obix",
- "prost 0.13.5",
+ "prost 0.14.3",
  "prost-wkt-types",
  "protobuf-src",
  "rust_decimal",
  "serde",
  "serde_json",
  "thiserror",
- "tonic 0.13.1",
+ "tonic",
  "tonic-build",
  "tracing",
  "uuid",
@@ -691,7 +691,7 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "criterion",
- "rand 0.9.2",
+ "rand 0.10.0",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -749,7 +749,7 @@ dependencies = [
  "opentelemetry_sdk",
  "serde",
  "serde_json",
- "tonic 0.13.1",
+ "tonic",
  "tracing",
  "tracing-opentelemetry",
  "tracing-subscriber",
@@ -1798,7 +1798,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.2",
+ "socket2",
  "tokio",
  "tower-service",
  "tracing",
@@ -2425,7 +2425,7 @@ dependencies = [
  "reqwest",
  "thiserror",
  "tokio",
- "tonic 0.14.4",
+ "tonic",
 ]
 
 [[package]]
@@ -2437,7 +2437,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "prost 0.14.3",
- "tonic 0.14.4",
+ "tonic",
  "tonic-prost",
 ]
 
@@ -3548,16 +3548,6 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
-dependencies = [
- "libc",
- "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "socket2"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86f4aa3ad99f2088c990dfa82d367e19cb29268ed67c574d10d0a4bfe71f07e0"
@@ -4030,7 +4020,7 @@ dependencies = [
  "mio",
  "parking_lot",
  "pin-project-lite",
- "socket2 0.6.2",
+ "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
 ]
@@ -4127,9 +4117,9 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.13.1"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e581ba15a835f4d9ea06c55ab1bd4dce26fc53752c69a04aac00703bfb49ba9"
+checksum = "7f32a6f80051a4111560201420c7885d0082ba9efe2ab61875c587bb6b18b9a0"
 dependencies = [
  "async-trait",
  "axum",
@@ -4144,33 +4134,7 @@ dependencies = [
  "hyper-util",
  "percent-encoding",
  "pin-project",
- "prost 0.13.5",
- "socket2 0.5.10",
- "tokio",
- "tokio-stream",
- "tower",
- "tower-layer",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "tonic"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f32a6f80051a4111560201420c7885d0082ba9efe2ab61875c587bb6b18b9a0"
-dependencies = [
- "async-trait",
- "base64",
- "bytes",
- "http",
- "http-body",
- "http-body-util",
- "hyper",
- "hyper-timeout",
- "hyper-util",
- "percent-encoding",
- "pin-project",
+ "socket2",
  "sync_wrapper",
  "tokio",
  "tokio-stream",
@@ -4203,7 +4167,7 @@ dependencies = [
  "prost 0.14.3",
  "tokio",
  "tokio-stream",
- "tonic 0.14.4",
+ "tonic",
  "tonic-prost",
 ]
 
@@ -4215,7 +4179,7 @@ checksum = "9f86539c0089bfd09b1f8c0ab0239d80392af74c21bc9e0f15e1b4aca4c1647f"
 dependencies = [
  "bytes",
  "prost 0.14.3",
- "tonic 0.14.4",
+ "tonic",
 ]
 
 [[package]]
@@ -4758,7 +4722,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
