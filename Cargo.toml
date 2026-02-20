@@ -25,7 +25,7 @@ job = { version = "0.6", features = ["es-entity"] }
 obix = { version = "0.2", default-features = false }
 
 anyhow = "1.0.99"
-async-graphql = { version = "8.0.0-rc.3", default-features = false, features = ["dataloader", "tracing", "chrono", "graphiql", "tokio"] }
+async-graphql = { version = "8.0.0-rc.3", default-features = false, features = ["dataloader", "tracing", "chrono", "tokio"] }
 async-graphql-axum = "8.0.0-rc.3"
 async-trait = "0.1"
 axum = { version = "0.8.6", features = ["macros"] }
