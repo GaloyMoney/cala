@@ -23,7 +23,7 @@ pub async fn run<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
     let app = Router::new()
         .route(
             "/graphql",
-            get(playground).post(axum::routing::post(graphql_handler::<Q, M>)),
+            get(graphiql).post(axum::routing::post(graphql_handler::<Q, M>)),
         )
         .layer(Extension(schema))
         .layer(Extension(ledger));
@@ -80,10 +80,12 @@ pub async fn graphql_handler<Q: QueryExtensionMarker, M: MutationExtensionMarker
     res.into()
 }
 
-async fn playground() -> impl axum::response::IntoResponse {
-    axum::response::Html(async_graphql::http::playground_source(
-        async_graphql::http::GraphQLPlaygroundConfig::new("/graphql"),
-    ))
+async fn graphiql() -> impl axum::response::IntoResponse {
+    axum::response::Html(
+        async_graphql::http::GraphiQLSource::build()
+            .endpoint("/graphql")
+            .finish(),
+    )
 }
 
 async fn maybe_init_atomic_operation(
