@@ -12,9 +12,10 @@ use package::CelPackage;
 
 const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
 
-type CelFunction = Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+type CelFunction =
+    Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, CelError> + Send + Sync>;
 pub(crate) type CelMemberFunction =
-    Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Sync>;
+    Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Send + Sync>;
 
 pub struct CelContext {
     idents: HashMap<Cow<'static, str>, ContextItem>,
