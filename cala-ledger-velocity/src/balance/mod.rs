@@ -147,7 +147,9 @@ impl VelocityBalances {
                     Some(balance) => {
                         cala_types::balance::Snapshots::update_snapshot(time, balance, entry)
                     }
-                    None => cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
+                    None => {
+                        cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, entry)
+                    }
                 };
 
                 let ctx = context.context_for_entry(key.account_id, entry);

@@ -5,8 +5,8 @@ use std::collections::HashMap;
 
 use cala_types::{balance::BalanceSnapshot, velocity::Window};
 
-use cala_types::primitives::*;
 use crate::error::VelocityError;
+use cala_types::primitives::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct VelocityBalanceKey {

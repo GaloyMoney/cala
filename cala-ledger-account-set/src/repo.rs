@@ -455,10 +455,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                std::iter::once(cala_types::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    account_set_id,
-                    member_id: crate::AccountSetMemberId::Account(account_id),
-                }),
+                std::iter::once(
+                    cala_types::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id,
+                        member_id: crate::AccountSetMemberId::Account(account_id),
+                    },
+                ),
             )
             .await?;
 
@@ -522,10 +524,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                std::iter::once(cala_types::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    account_set_id,
-                    member_id: crate::AccountSetMemberId::Account(account_id),
-                }),
+                std::iter::once(
+                    cala_types::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                        account_set_id,
+                        member_id: crate::AccountSetMemberId::Account(account_id),
+                    },
+                ),
             )
             .await?;
 
@@ -600,12 +604,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                std::iter::once(cala_types::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    account_set_id,
-                    member_id: crate::AccountSetMemberId::AccountSet(
-                        member_account_set_id,
-                    ),
-                }),
+                std::iter::once(
+                    cala_types::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id,
+                        member_id: crate::AccountSetMemberId::AccountSet(member_account_set_id),
+                    },
+                ),
             )
             .await?;
 
@@ -675,12 +679,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                std::iter::once(cala_types::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    account_set_id,
-                    member_id: crate::AccountSetMemberId::AccountSet(
-                        member_account_set_id,
-                    ),
-                }),
+                std::iter::once(
+                    cala_types::outbox::OutboxEventPayload::AccountSetMemberRemoved {
+                        account_set_id,
+                        member_id: crate::AccountSetMemberId::AccountSet(member_account_set_id),
+                    },
+                ),
             )
             .await?;
 

@@ -2,8 +2,8 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use cala_types::primitives::VelocityLimitId;
 use crate::error::VelocityError;
+use cala_types::primitives::VelocityLimitId;
 
 use super::entity::*;
 

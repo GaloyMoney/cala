@@ -11,8 +11,8 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use cala_types::{balance::BalanceProvider, outbox::OutboxEventPayload};
 use cala_ledger_outbox::OutboxPublisher;
+use cala_types::{balance::BalanceProvider, outbox::OutboxEventPayload};
 
 pub use cursor::*;
 pub use entity::*;
@@ -21,7 +21,6 @@ use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
 pub use cala_types::primitives::*;
-
 
 const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
 

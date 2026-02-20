@@ -1,7 +1,7 @@
 use rust_decimal::Decimal;
 
-use cala_types::primitives::*;
 use cala_types::balance::*;
+use cala_types::primitives::*;
 
 /// Representation of account's balance tracked in 3 distinct layers.
 #[derive(Debug, Clone)]

@@ -24,8 +24,9 @@ pub trait BalanceProvider: Clone + Send + Sync + 'static {
         db: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
-    ) -> impl Future<Output = Result<std::collections::HashMap<Currency, BalanceSnapshot>, Self::Error>>
-           + Send;
+    ) -> impl Future<
+        Output = Result<std::collections::HashMap<Currency, BalanceSnapshot>, Self::Error>,
+    > + Send;
     fn update_balances_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,

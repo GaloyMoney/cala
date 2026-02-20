@@ -12,12 +12,12 @@ use sqlx::PgPool;
 use std::collections::{BTreeSet, HashMap};
 use tracing::instrument;
 
+use cala_ledger_outbox::*;
 pub use cala_types::{
     balance::{BalanceAmount, BalanceSnapshot, JournalChecker, JournalInfo},
     entry::EntryValues,
     primitives::*,
 };
-use cala_ledger_outbox::*;
 
 pub use account_balance::*;
 use effective::*;
@@ -243,8 +243,15 @@ impl<J: JournalChecker> BalanceProvider for Balances<J> {
         created_at: DateTime<Utc>,
         account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), Self::Error> {
-        self.update_balances_in_op(db, journal_id, entries, effective, created_at, account_set_mappings)
-            .await
+        self.update_balances_in_op(
+            db,
+            journal_id,
+            entries,
+            effective,
+            created_at,
+            account_set_mappings,
+        )
+        .await
     }
 }
 

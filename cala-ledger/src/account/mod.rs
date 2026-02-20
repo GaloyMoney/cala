@@ -188,17 +188,15 @@ impl AccountCreator for Accounts {
             .code(params.code)
             .normal_balance_type(params.normal_balance_type)
             .is_account_set(params.is_account_set)
-            .velocity_context_values(
-                params
-                    .velocity_context_values
-                    .unwrap_or(VelocityContextAccountValues {
-                        id: params.id,
-                        name: String::new(),
-                        normal_balance_type: params.normal_balance_type,
-                        external_id: None,
-                        metadata: None,
-                    }),
-            )
+            .velocity_context_values(params.velocity_context_values.unwrap_or(
+                VelocityContextAccountValues {
+                    id: params.id,
+                    name: String::new(),
+                    normal_balance_type: params.normal_balance_type,
+                    external_id: None,
+                    metadata: None,
+                },
+            ))
             .build()
             .expect("Failed to build account from params");
         self.create_in_op(db, new_account).await?;
@@ -219,16 +217,15 @@ impl AccountCreator for Accounts {
                     .code(p.code)
                     .normal_balance_type(p.normal_balance_type)
                     .is_account_set(p.is_account_set)
-                    .velocity_context_values(
-                        p.velocity_context_values
-                            .unwrap_or(VelocityContextAccountValues {
-                                id: p.id,
-                                name: p.name,
-                                normal_balance_type: p.normal_balance_type,
-                                external_id: None,
-                                metadata: None,
-                            }),
-                    )
+                    .velocity_context_values(p.velocity_context_values.unwrap_or(
+                        VelocityContextAccountValues {
+                            id: p.id,
+                            name: p.name,
+                            normal_balance_type: p.normal_balance_type,
+                            external_id: None,
+                            metadata: None,
+                        },
+                    ))
                     .build()
                     .expect("Failed to build account from params")
             })

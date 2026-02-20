@@ -100,8 +100,7 @@ impl AccountVelocityLimit {
                     continue;
                 }
             }
-            let balance =
-                BalanceWithDirection::new(limit.enforcement_direction, snapshot);
+            let balance = BalanceWithDirection::new(limit.enforcement_direction, snapshot);
             let requested = balance.available(limit.layer);
 
             if requested > limit.amount {
@@ -286,7 +285,8 @@ mod tests {
             },
         };
         let entry = entry();
-        let mut ctx = cala_types::cel_context::initialize(es_entity::clock::Clock::handle().clone());
+        let mut ctx =
+            cala_types::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         ctx.add_variable("entry", &entry);
         let window = limit.window_for_enforcement(&ctx, &entry).unwrap();
         assert_eq!(
@@ -319,15 +319,18 @@ mod tests {
             },
         };
         let mut entry = entry();
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         entry.direction = DebitOrCredit::Credit;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
@@ -354,7 +357,8 @@ mod tests {
         };
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
@@ -382,23 +386,27 @@ mod tests {
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
         entry.layer = Layer::Settled;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         entry.layer = Layer::Pending;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
 
         entry.layer = Layer::Encumbrance;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
 
     #[test]
     fn enforce_is_time_aware() {
-        let mut ctx = cala_types::cel_context::initialize(es_entity::clock::Clock::handle().clone());
+        let mut ctx =
+            cala_types::cel_context::initialize(es_entity::clock::Clock::handle().clone());
         let time = Utc::now();
         let limit = AccountVelocityLimit {
             limit_id: VelocityLimitId::new(),
@@ -419,7 +427,8 @@ mod tests {
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
         ctx.add_variable("time", time);
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         ctx.add_variable("time", time - chrono::Duration::minutes(1));
@@ -452,11 +461,13 @@ mod tests {
         };
         let mut entry = entry();
         entry.direction = DebitOrCredit::Credit;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            cala_types::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
     }
