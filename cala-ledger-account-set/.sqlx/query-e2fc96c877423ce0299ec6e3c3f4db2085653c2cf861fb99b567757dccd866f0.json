@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH pairs AS (\n            SELECT account_id, currency\n            FROM (\n              SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            ) AS v\n            JOIN cala_accounts a\n            ON account_id = a.id\n            WHERE eventually_consistent = FALSE\n          ),\n          delete_balances AS (\n            DELETE FROM cala_cumulative_effective_balances\n            WHERE journal_id = $1\n              AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)\n              AND effective > $4\n            RETURNING account_id, currency, effective, values\n          ),\n          values AS (\n            SELECT \n              p.account_id,\n              p.currency,\n              b.values,\n              b.all_time_version,\n              b.effective\n            FROM pairs p\n            LEFT JOIN LATERAL (\n              SELECT DISTINCT ON (account_id, currency)\n                account_id,\n                currency,\n                values,\n                all_time_version,\n                effective\n              FROM cala_cumulative_effective_balances\n              WHERE journal_id = $1\n                AND effective <= $4\n                AND account_id = p.account_id\n                AND currency = p.currency\n              ORDER BY account_id, currency, all_time_version DESC\n            ) b ON TRUE\n          )\n          SELECT\n            v.account_id AS \"account_id!: AccountId\",\n            v.currency AS \"currency!\",\n            v.values AS \"values?: serde_json::Value\",\n            v.all_time_version AS \"all_time_version?: i32\",\n            v.effective AS \"effective_date?: chrono::NaiveDate\",\n            COALESCE(\n              jsonb_agg(\n                jsonb_build_object('effective', d.effective, 'values', d.values)\n              ) FILTER (WHERE d.values IS NOT NULL),\n              '[]'::jsonb\n            ) AS \"deleted_values!: serde_json::Value\"\n          FROM values v\n          LEFT JOIN delete_balances d\n            ON v.account_id = d.account_id AND v.currency = d.currency\n          GROUP BY v.account_id, v.currency, v.values, v.all_time_version, v.effective\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values?: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "all_time_version?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_values!: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "e2fc96c877423ce0299ec6e3c3f4db2085653c2cf861fb99b567757dccd866f0"
+}

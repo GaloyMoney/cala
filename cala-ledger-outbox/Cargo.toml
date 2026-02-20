@@ -1,0 +1,20 @@
+[package]
+name = "cala-ledger-outbox"
+description = "Outbox module for the cala-ledger"
+repository = "https://github.com/GaloyMoney/cala"
+version = "0.13.17-dev"
+edition = "2021"
+license = "Apache-2.0"
+
+[features]
+fail-on-warnings = []
+
+[dependencies]
+cala-types = { workspace = true }
+es-entity = { workspace = true }
+obix = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+serde_json = { workspace = true }
+
+[build-dependencies]

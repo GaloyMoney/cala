@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE parents AS (\n            SELECT m.member_account_set_id, m.account_set_id\n            FROM cala_account_set_member_account_sets m\n            JOIN cala_account_sets s\n            ON s.id = m.account_set_id\n            WHERE m.member_account_set_id = $1\n\n            UNION ALL\n            SELECT p.member_account_set_id, m.account_set_id\n            FROM parents p\n            JOIN cala_account_set_member_account_sets m\n                ON p.account_set_id = m.member_account_set_id\n          ),\n          set_insert AS (\n            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)\n            VALUES ($1, $2)\n          ),\n          new_members AS (\n            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)\n            SELECT $1, m.member_account_id, TRUE\n            FROM cala_account_set_member_accounts m\n            WHERE m.account_set_id = $2\n            RETURNING member_account_id\n          ),\n          transitive_inserts AS (\n            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)\n            SELECT p.account_set_id, n.member_account_id, TRUE\n            FROM parents p\n            CROSS JOIN new_members n\n          )\n          SELECT account_set_id, NULL AS now\n          FROM parents\n          UNION ALL\n          SELECT NULL AS account_set_id, NOW() AS now\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "now",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "35838a1dadec39b3ff3d8cf9a69453db63a834a9fea6ec03dc9b40b1ffab5245"
+}

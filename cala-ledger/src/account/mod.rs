@@ -172,6 +172,80 @@ impl Accounts {
     }
 }
 
+use cala_types::account_set::{AccountCreator, NewAccountParams};
+
+impl AccountCreator for Accounts {
+    type Error = AccountError;
+
+    async fn create_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        params: NewAccountParams,
+    ) -> Result<(), Self::Error> {
+        let new_account = NewAccount::builder()
+            .id(params.id)
+            .name(params.name)
+            .code(params.code)
+            .normal_balance_type(params.normal_balance_type)
+            .is_account_set(params.is_account_set)
+            .velocity_context_values(
+                params
+                    .velocity_context_values
+                    .unwrap_or(VelocityContextAccountValues {
+                        id: params.id,
+                        name: String::new(),
+                        normal_balance_type: params.normal_balance_type,
+                        external_id: None,
+                        metadata: None,
+                    }),
+            )
+            .build()
+            .expect("Failed to build account from params");
+        self.create_in_op(db, new_account).await?;
+        Ok(())
+    }
+
+    async fn create_all_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        params: Vec<NewAccountParams>,
+    ) -> Result<(), Self::Error> {
+        let new_accounts = params
+            .into_iter()
+            .map(|p| {
+                NewAccount::builder()
+                    .id(p.id)
+                    .name(p.name.clone())
+                    .code(p.code)
+                    .normal_balance_type(p.normal_balance_type)
+                    .is_account_set(p.is_account_set)
+                    .velocity_context_values(
+                        p.velocity_context_values
+                            .unwrap_or(VelocityContextAccountValues {
+                                id: p.id,
+                                name: p.name,
+                                normal_balance_type: p.normal_balance_type,
+                                external_id: None,
+                                metadata: None,
+                            }),
+                    )
+                    .build()
+                    .expect("Failed to build account from params")
+            })
+            .collect();
+        self.create_all_in_op(db, new_accounts).await?;
+        Ok(())
+    }
+
+    async fn update_velocity_context_values_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        values: VelocityContextAccountValues,
+    ) -> Result<(), Self::Error> {
+        self.update_velocity_context_values_in_op(db, values).await
+    }
+}
+
 impl From<&AccountEvent> for OutboxEventPayload {
     fn from(event: &AccountEvent) -> Self {
         match event {

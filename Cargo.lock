@@ -587,7 +587,10 @@ dependencies = [
  "base64",
  "cached",
  "cala-cel-interpreter",
+ "cala-ledger-account-set",
+ "cala-ledger-balance",
  "cala-ledger-core-types",
+ "cala-ledger-outbox",
  "cala-ledger-velocity",
  "cala-tracing",
  "chrono",
@@ -611,6 +614,47 @@ dependencies = [
  "tokio-test",
  "tracing",
  "tracing-opentelemetry",
+ "uuid",
+]
+
+[[package]]
+name = "cala-ledger-account-set"
+version = "0.13.17-dev"
+dependencies = [
+ "async-graphql",
+ "base64",
+ "cala-ledger-core-types",
+ "cala-ledger-outbox",
+ "chrono",
+ "derive_builder",
+ "es-entity",
+ "rust_decimal",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
+name = "cala-ledger-balance"
+version = "0.13.17-dev"
+dependencies = [
+ "async-graphql",
+ "base64",
+ "cala-ledger-core-types",
+ "cala-ledger-outbox",
+ "chrono",
+ "es-entity",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tracing",
  "uuid",
 ]
 
@@ -647,8 +691,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cala-ledger-outbox"
+version = "0.13.17-dev"
+dependencies = [
+ "cala-ledger-core-types",
+ "chrono",
+ "es-entity",
+ "obix",
+ "serde_json",
+ "sqlx",
+]
+
+[[package]]
 name = "cala-ledger-velocity"
-version = "0.13.16-dev"
+version = "0.13.17-dev"
 dependencies = [
  "cala-cel-interpreter",
  "cala-ledger-core-types",

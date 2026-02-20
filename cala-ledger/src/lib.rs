@@ -127,8 +127,8 @@
 mod param;
 
 pub mod account;
-pub mod account_set;
-pub mod balance;
+pub use cala_ledger_account_set as account_set;
+pub use cala_ledger_balance as balance;
 pub mod entry;
 pub mod journal;
 pub mod migrate;
