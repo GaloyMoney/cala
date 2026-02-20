@@ -13,7 +13,7 @@ categories = ["finance"]
 
 fail-on-warnings = []
 graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
-json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
+json-schema = ["cala-types/json-schema", "cala-ledger-velocity/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
 
 [[bin]]
 name = "event-schemas"
@@ -22,6 +22,7 @@ required-features = ["json-schema"]
 
 [dependencies]
 cala-types = { workspace = true }
+cala-ledger-velocity = { workspace = true }
 cel-interpreter = { workspace = true }
 cala-tracing = { workspace = true }
 es-entity = { workspace = true }

@@ -19,8 +19,8 @@ use crate::{
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
-    velocity::Velocities,
 };
+use cala_ledger_velocity::Velocities;
 
 #[derive(Clone)]
 pub struct CalaLedger {

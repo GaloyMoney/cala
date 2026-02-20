@@ -2,6 +2,7 @@ use rust_decimal::Decimal;
 
 use crate::primitives::*;
 use cala_types::balance::*;
+pub(crate) use cala_types::balance::BalanceWithDirection;
 
 /// Representation of account's balance tracked in 3 distinct layers.
 #[derive(Debug, Clone)]
@@ -67,49 +68,6 @@ impl AccountBalance {
             details: &self.details,
         }
         .available(layer)
-    }
-}
-
-pub(crate) struct BalanceWithDirection<'a> {
-    direction: DebitOrCredit,
-    details: &'a BalanceSnapshot,
-}
-
-impl<'a> BalanceWithDirection<'a> {
-    pub fn new(direction: DebitOrCredit, details: &'a BalanceSnapshot) -> Self {
-        Self { direction, details }
-    }
-
-    pub fn pending(&self) -> Decimal {
-        if self.direction == DebitOrCredit::Credit {
-            self.details.pending.cr_balance - self.details.pending.dr_balance
-        } else {
-            self.details.pending.dr_balance - self.details.pending.cr_balance
-        }
-    }
-
-    pub fn settled(&self) -> Decimal {
-        if self.direction == DebitOrCredit::Credit {
-            self.details.settled.cr_balance - self.details.settled.dr_balance
-        } else {
-            self.details.settled.dr_balance - self.details.settled.cr_balance
-        }
-    }
-
-    pub fn encumbrance(&self) -> Decimal {
-        if self.direction == DebitOrCredit::Credit {
-            self.details.encumbrance.cr_balance - self.details.encumbrance.dr_balance
-        } else {
-            self.details.encumbrance.dr_balance - self.details.encumbrance.cr_balance
-        }
-    }
-
-    pub fn available(&self, layer: Layer) -> Decimal {
-        match layer {
-            Layer::Settled => self.settled(),
-            Layer::Pending => self.pending() + self.settled(),
-            Layer::Encumbrance => self.encumbrance() + self.pending() + self.settled(),
-        }
     }
 }
 

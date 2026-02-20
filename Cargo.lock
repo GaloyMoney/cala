@@ -588,6 +588,7 @@ dependencies = [
  "cached",
  "cala-cel-interpreter",
  "cala-ledger-core-types",
+ "cala-ledger-velocity",
  "cala-tracing",
  "chrono",
  "derive_builder",
@@ -630,6 +631,7 @@ dependencies = [
  "sqlx",
  "strum",
  "thiserror",
+ "tracing",
  "uuid",
 ]
 
@@ -642,6 +644,25 @@ dependencies = [
  "rand 0.10.0",
  "sqlx",
  "tokio",
+]
+
+[[package]]
+name = "cala-ledger-velocity"
+version = "0.13.16-dev"
+dependencies = [
+ "cala-cel-interpreter",
+ "cala-ledger-core-types",
+ "chrono",
+ "derive_builder",
+ "es-entity",
+ "rust_decimal",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

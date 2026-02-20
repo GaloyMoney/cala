@@ -4,6 +4,7 @@
 pub mod account;
 pub mod account_set;
 pub mod balance;
+pub mod cel_context;
 pub mod entry;
 pub mod journal;
 pub mod outbox;

@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use tracing::instrument;
 use uuid::Uuid;
 
-pub use crate::param::*;
+pub use crate::param::{definition, error as param_error, Params, ParamDataType, ParamDefinition};
 use crate::{entry::NewEntry, outbox::*, primitives::*, transaction::NewTransaction};
 
 pub use entity::*;

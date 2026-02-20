@@ -124,7 +124,6 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
-mod cel_context;
 mod param;
 
 pub mod account;
@@ -135,7 +134,7 @@ pub mod journal;
 pub mod migrate;
 pub mod transaction;
 pub mod tx_template;
-pub mod velocity;
+pub use cala_ledger_velocity as velocity;
 
 pub use es_entity;
 
