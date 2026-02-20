@@ -20,7 +20,7 @@ cala-tracing = { path = "cala-tracing", version = "0.13.17-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.13.17-dev" }
 cala-server = { path = "cala-server", version = "0.13.17-dev" }
 
-es-entity = "0.10"
+es-entity = "0.10.18"
 job = { version = "0.6", features = ["es-entity"] }
 obix = { version = "0.2", default-features = false }
 
