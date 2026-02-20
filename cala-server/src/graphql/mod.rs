@@ -36,7 +36,8 @@ pub fn schema<Q: QueryExtensionMarker, M: MutationExtensionMarker>(
                     LedgerDataLoader {
                         ledger: app.ledger().clone(),
                     },
-                    tokio::task::spawn,
+                    async_graphql::runtime::TokioSpawner::current(),
+                    async_graphql::runtime::TokioTimer::default(),
                 )
                 // Set delay to 0 as per https://github.com/async-graphql/async-graphql/issues/1306
                 .delay(std::time::Duration::from_secs(0)),
