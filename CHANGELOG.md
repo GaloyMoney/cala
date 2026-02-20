@@ -1,3 +1,11 @@
+# [cala release v0.13.16](https://github.com/GaloyMoney/cala/releases/tag/0.13.16)
+
+
+
+### Refactor
+
+- Replace lazy_static with std::sync::LazyLock in cel-interpreter (#668)
+
 # [cala release v0.13.15](https://github.com/GaloyMoney/cala/releases/tag/0.13.15)
 
 
