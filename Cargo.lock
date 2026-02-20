@@ -553,7 +553,7 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -570,7 +570,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "cached",
  "lalrpop",
@@ -580,7 +580,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "async-graphql",
  "cala-cel-interpreter",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -646,7 +646,7 @@ dependencies = [
 
 [[package]]
 name = "cala-perf"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "cala-server"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -698,7 +698,7 @@ dependencies = [
 
 [[package]]
 name = "cala-tracing"
-version = "0.13.16"
+version = "0.13.17-dev"
 dependencies = [
  "anyhow",
  "axum-extra",
