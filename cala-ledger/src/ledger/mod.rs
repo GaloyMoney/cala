@@ -11,29 +11,30 @@ use error::*;
 
 use crate::{
     account::Accounts,
-    account_set::AccountSets,
-    balance::Balances,
     entry::Entries,
     journal::Journals,
     outbox::OutboxPublisher,
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
-    velocity::Velocities,
 };
+use cala_ledger_velocity::Velocities;
+
+type CalaBalances = cala_ledger_balance::Balances<Journals>;
+type CalaAccountSets = cala_ledger_account_set::AccountSets<Accounts, Entries, CalaBalances>;
 
 #[derive(Clone)]
 pub struct CalaLedger {
     pool: PgPool,
     clock: ClockHandle,
     accounts: Accounts,
-    account_sets: AccountSets,
+    account_sets: CalaAccountSets,
     journals: Journals,
     transactions: Transactions,
     tx_templates: TxTemplates,
     entries: Entries,
     velocities: Velocities,
-    balances: Balances,
+    balances: CalaBalances,
     publisher: OutboxPublisher,
 }
 
@@ -69,10 +70,10 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
         let transactions = Transactions::new(&pool, &publisher);
         let entries = Entries::new(&pool, &publisher);
-        let balances = Balances::new(&pool, &publisher, &journals);
+        let balances = CalaBalances::new(&pool, &publisher, journals.clone());
         let velocities = Velocities::new(&pool, &clock);
         let account_sets =
-            AccountSets::new(&pool, &publisher, &accounts, &entries, &balances, &clock);
+            CalaAccountSets::new(&pool, &publisher, &accounts, &entries, &balances, &clock);
         Ok(Self {
             accounts,
             account_sets,
@@ -111,7 +112,7 @@ impl CalaLedger {
         &self.velocities
     }
 
-    pub fn account_sets(&self) -> &AccountSets {
+    pub fn account_sets(&self) -> &CalaAccountSets {
         &self.account_sets
     }
 
@@ -123,7 +124,7 @@ impl CalaLedger {
         &self.tx_templates
     }
 
-    pub fn balances(&self) -> &Balances {
+    pub fn balances(&self) -> &CalaBalances {
         &self.balances
     }
 

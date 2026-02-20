@@ -1,0 +1,28 @@
+[package]
+name = "cala-ledger-velocity"
+description = "Velocity limits module for the cala-ledger"
+repository = "https://github.com/GaloyMoney/cala"
+version = "0.13.17-dev"
+edition = "2021"
+license = "Apache-2.0"
+
+[features]
+fail-on-warnings = []
+json-schema = ["dep:schemars", "cala-types/json-schema", "es-entity/json-schema"]
+
+[dependencies]
+cala-types = { workspace = true }
+cel-interpreter = { workspace = true }
+es-entity = { workspace = true }
+sqlx = { workspace = true }
+chrono = { workspace = true }
+rust_decimal = { workspace = true }
+derive_builder = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+schemars = { workspace = true, optional = true }
+
+[build-dependencies]

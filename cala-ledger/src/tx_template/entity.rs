@@ -2,7 +2,7 @@ use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-pub use crate::param::definition::*;
+pub use crate::param::definition::{NewParamDefinition, NewParamDefinitionBuilder};
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
 use cel_interpreter::CelExpression;
 use es_entity::*;

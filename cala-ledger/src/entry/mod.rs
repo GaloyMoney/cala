@@ -148,6 +148,44 @@ impl Entries {
     }
 }
 
+use cala_types::account_set::{EntryCreator, NewEntryParams};
+
+impl EntryCreator for Entries {
+    type Error = EntryError;
+
+    async fn create_all_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        params: Vec<NewEntryParams>,
+    ) -> Result<Vec<cala_types::entry::EntryValues>, Self::Error> {
+        let new_entries = params
+            .into_iter()
+            .map(|p| {
+                let mut builder = NewEntry::builder();
+                builder
+                    .id(p.id)
+                    .transaction_id(p.transaction_id)
+                    .journal_id(p.journal_id)
+                    .account_id(p.account_id)
+                    .entry_type(p.entry_type)
+                    .sequence(p.sequence)
+                    .layer(p.layer)
+                    .currency(p.currency)
+                    .units(p.units)
+                    .direction(p.direction);
+                if let Some(description) = p.description {
+                    builder.description(description);
+                }
+                if let Some(metadata) = p.metadata {
+                    builder.metadata(metadata);
+                }
+                builder.build().expect("Failed to build entry from params")
+            })
+            .collect();
+        self.create_all_in_op(db, new_entries).await
+    }
+}
+
 impl From<&EntryEvent> for OutboxEventPayload {
     fn from(event: &EntryEvent) -> Self {
         match event {

@@ -5,8 +5,8 @@ use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
     transaction::error::TransactionError, tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
 };
+use cala_ledger_velocity::error::VelocityError;
 
 #[derive(Error, Debug)]
 pub enum LedgerError {

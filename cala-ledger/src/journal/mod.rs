@@ -83,6 +83,24 @@ impl Journals {
     }
 }
 
+use cala_types::balance::{JournalChecker, JournalInfo};
+
+impl JournalChecker for Journals {
+    type Error = JournalError;
+
+    async fn check_journal(
+        &self,
+        journal_id: crate::primitives::JournalId,
+    ) -> Result<JournalInfo, Self::Error> {
+        let journal = self.find(journal_id).await?;
+        Ok(JournalInfo {
+            id: journal.id(),
+            is_locked: journal.is_locked(),
+            enable_effective_balances: journal.insert_effective_balances(),
+        })
+    }
+}
+
 impl From<&JournalEvent> for OutboxEventPayload {
     fn from(event: &JournalEvent) -> Self {
         match event {
