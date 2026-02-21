@@ -1,6 +1,6 @@
 [package]
 name = "cala-ledger-example-rust"
-version = "0.13.17"
+version = "0.13.18-dev"
 edition = "2021"
 license = "Apache-2.0"
 workspace = "../../"
