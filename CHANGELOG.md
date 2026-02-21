@@ -1,3 +1,11 @@
+# [cala release v0.13.17](https://github.com/GaloyMoney/cala/releases/tag/0.13.17)
+
+
+
+### Miscellaneous Tasks
+
+- Upgrade async-graphql to 8.0.0-rc.3 (#671)
+
 # [cala release v0.13.16](https://github.com/GaloyMoney/cala/releases/tag/0.13.16)
 
 
