@@ -83,7 +83,7 @@ impl Transactions {
         TransactionError,
     > {
         self.repo
-            .list_for_tx_template_id_by_created_at(template_id, query, direction)
+            .list_for_filters_by_created_at(TransactionsFilters { tx_template_id: Some(template_id), ..Default::default() }, query, direction)
             .await
     }
 

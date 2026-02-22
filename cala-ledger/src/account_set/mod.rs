@@ -392,7 +392,7 @@ impl AccountSets {
         AccountSetError,
     > {
         self.repo
-            .list_for_name_by_created_at(name, args, Default::default())
+            .list_for_filters_by_created_at(AccountSetsFilters { name: Some(name), ..Default::default() }, args, Default::default())
             .await
     }
 
@@ -407,7 +407,7 @@ impl AccountSets {
         AccountSetError,
     > {
         self.repo
-            .list_for_name_by_created_at_in_op(op, name, args, Default::default())
+            .list_for_filters_by_created_at_in_op(op, AccountSetsFilters { name: Some(name), ..Default::default() }, args, Default::default())
             .await
     }
 

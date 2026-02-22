@@ -108,6 +108,7 @@ use members_cursor::*;
         ),
     ),
     tbl_prefix = "cala",
+    list_for_by = false,
     post_persist_hook = "publish",
     persist_event_context = false
 )]

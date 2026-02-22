@@ -4,10 +4,11 @@ description = "An embeddable double sided accounting ledger built on PG/SQLx"
 repository = "https://github.com/GaloyMoney/cala"
 documentation = "https://docs.rs/cala-ledger"
 readme = "../README.md"
-version = "0.13.18-dev"
+version = "0.13.17"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["finance"]
+include = ["src/", "build.rs", "migrations/", "schemas/", "tests/", ".sqlx/**"]
 
 [features]
 

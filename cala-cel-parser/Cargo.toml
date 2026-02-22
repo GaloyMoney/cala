@@ -2,7 +2,7 @@
 name = "cala-cel-parser"
 description = "A parser for the Common Expression Language (CEL)"
 repository = "https://github.com/GaloyMoney/cala"
-version = "0.13.18-dev"
+version = "0.13.17"
 authors = ["Justin Carter <justin@galoy.io>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,6 +11,10 @@ categories = ["parsing", "compilers"]
 [features]
 
 fail-on-warnings = []
+# Enable this feature to regenerate the parser from cel.lalrpop via build.rs.
+# After building, copy the generated file:
+#   cp target/debug/build/cala-cel-parser-*/out/cel.rs cala-cel-parser/src/cel.rs
+regenerate-parser = ["dep:lalrpop"]
 
 [dependencies]
 lalrpop-util = { workspace = true }
@@ -18,4 +22,4 @@ tracing = { workspace = true }
 cached = { workspace = true }
 
 [build-dependencies]
-lalrpop = { workspace = true }
+lalrpop = { workspace = true, optional = true }

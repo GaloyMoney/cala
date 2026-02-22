@@ -44,7 +44,7 @@ impl Entries {
         direction: es_entity::ListDirection,
     ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
         self.repo
-            .list_for_account_id_by_created_at(account_id, query, direction)
+            .list_for_filters_by_created_at(EntriesFilters { account_id: Some(account_id), ..Default::default() }, query, direction)
             .await
     }
 
@@ -68,7 +68,7 @@ impl Entries {
         direction: es_entity::ListDirection,
     ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
         self.repo
-            .list_for_journal_id_by_created_at(journal_id, query, direction)
+            .list_for_filters_by_created_at(EntriesFilters { journal_id: Some(journal_id), ..Default::default() }, query, direction)
             .await
     }
 
@@ -79,8 +79,8 @@ impl Entries {
     ) -> Result<Vec<Entry>, EntryError> {
         let mut entries = self
             .repo
-            .list_for_transaction_id_by_created_at(
-                transaction_id,
+            .list_for_filters_by_created_at(
+                EntriesFilters { transaction_id: Some(transaction_id), ..Default::default() },
                 Default::default(),
                 Default::default(),
             )
