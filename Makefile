@@ -1,6 +1,9 @@
 next-watch:
 	cargo watch -s 'cargo nextest run'
 
+podman-service-start:
+	@./dev/bin/podman-service-start.sh
+
 clean-deps:
 	./dev/bin/clean-deps.sh
 
