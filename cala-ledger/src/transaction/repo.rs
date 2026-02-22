@@ -20,6 +20,7 @@ use super::{entity::*, error::TransactionError};
         effective(ty = "chrono::NaiveDate", update(persist = false)),
     ),
     tbl_prefix = "cala",
+    list_for_by = false,
     post_persist_hook = "publish",
     persist_event_context = false
 )]

@@ -74,3 +74,7 @@ lto = true
 
 [profile.bench]
 debug = true
+
+[patch.crates-io]
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", branch = "build/list-for-by-attribute" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", branch = "build/list-for-by-attribute" }
