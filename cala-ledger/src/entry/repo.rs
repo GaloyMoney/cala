@@ -18,6 +18,7 @@ use super::{entity::*, error::*};
         transaction_id(ty = "TransactionId", list_for, update(persist = false)),
     ),
     tbl_prefix = "cala",
+    list_for_by = false,
     post_persist_hook = "publish",
     persist_event_context = false
 )]
