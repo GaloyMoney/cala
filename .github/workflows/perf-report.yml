@@ -21,6 +21,8 @@ jobs:
 
       - name: Generate performance data
         id: perf
+        env:
+          ENGINE_DEFAULT: podman
         run: |
           # Run the performance report script and output to file
           nix develop -c ./bin/perf-report.sh perf-report.md
