@@ -2,19 +2,19 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 use cached::proc_macro::cached;
-use lalrpop_util::lalrpop_mod;
 use tracing::instrument;
 
 pub mod ast;
 
 pub use ast::*;
 
-// Private module - use parse_expression() instead
-lalrpop_mod!(
-    #[allow(clippy::all)]
-    parser,
-    "/cel.rs"
-);
+// Pre-generated LALRPOP parser - regenerate with:
+//   cargo build -p cala-cel-parser --features regenerate-parser
+//   cp target/debug/build/cala-cel-parser-*/out/cel.rs cala-cel-parser/src/cel.rs
+#[allow(clippy::all)]
+mod parser {
+    include!("cel.rs");
+}
 
 /// Error type for batch parsing
 #[derive(Debug)]
