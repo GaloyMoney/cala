@@ -49,7 +49,7 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    #[instrument(name = "cala_ledger.tx_template.create_in_op", skip(self, db), err)]
+    #[instrument(name = "cala_ledger.tx_template.create_in_op", skip(self, db))]
     pub async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
