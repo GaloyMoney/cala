@@ -13,9 +13,9 @@ use super::{entity::*, error::*};
     entity = "Entry",
     err = "EntryError",
     columns(
-        account_id(ty = "AccountId", list_for, update(persist = false)),
-        journal_id(ty = "JournalId", list_for, update(persist = false)),
-        transaction_id(ty = "TransactionId", list_for, update(persist = false)),
+        account_id(ty = "AccountId", list_for(by(created_at)), update(persist = false)),
+        journal_id(ty = "JournalId", list_for(by(created_at)), update(persist = false)),
+        transaction_id(ty = "TransactionId", list_for(by(created_at)), update(persist = false)),
     ),
     tbl_prefix = "cala",
     post_persist_hook = "publish",

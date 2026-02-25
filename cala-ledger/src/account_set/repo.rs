@@ -99,7 +99,7 @@ use members_cursor::*;
     entity = "AccountSet",
     err = "AccountSetError",
     columns(
-        name(ty = "String", update(accessor = "values().name"), list_by, list_for),
+        name(ty = "String", update(accessor = "values().name"), list_by, list_for(by(created_at))),
         journal_id(ty = "JournalId", update(persist = false)),
         external_id(
             ty = "Option<String>",
