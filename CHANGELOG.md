@@ -1,3 +1,11 @@
+# [cala release v0.13.19](https://github.com/GaloyMoney/cala/releases/tag/0.13.19)
+
+
+
+### Miscellaneous Tasks
+
+- Rm tx template create_in_op error-level event (#677)
+
 # [cala release v0.13.18](https://github.com/GaloyMoney/cala/releases/tag/0.13.18)
 
 
