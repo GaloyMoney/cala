@@ -1,3 +1,15 @@
+# [cala release v0.13.20](https://github.com/GaloyMoney/cala/releases/tag/0.13.20)
+
+
+
+### Bug Fixes
+
+- Fmt
+
+### Miscellaneous Tasks
+
+- Bump es-entity
+
 # [cala release v0.13.19](https://github.com/GaloyMoney/cala/releases/tag/0.13.19)
 
 
