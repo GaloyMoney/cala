@@ -18,4 +18,4 @@ jobs:
         uses: DeterminateSystems/magic-nix-cache-action@v8
       - uses: actions/checkout@v4
       - name: Run check code
-        run: nix develop -c make check-code
+        run: nix flake check

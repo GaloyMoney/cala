@@ -28,16 +28,8 @@ run-server:
 rust-example:
 	cargo run --bin cala-ledger-example-rust
 
-check-code: sdl check-event-schemas
-	git diff --exit-code cala-server/schema.graphql
-	SQLX_OFFLINE=true cargo fmt --check --all
-	SQLX_OFFLINE=true cargo check
-	SQLX_OFFLINE=true cargo clippy --package cala-server --features=
-	SQLX_OFFLINE=true cargo clippy --package cala-ledger --features="graphql"
-	SQLX_OFFLINE=true cargo clippy --package cala-ledger-core-types --features="graphql"
-	SQLX_OFFLINE=true cargo clippy --workspace --exclude cala-server --exclude cala-ledger --exclude cala-ledger-core-types
-	SQLX_OFFLINE=true cargo audit
-	SQLX_OFFLINE=true cargo deny check
+check-code:
+	nix flake check
 
 build:
 	SQLX_OFFLINE=true cargo build --locked

@@ -2,17 +2,15 @@
 
 #@ load("vendor/pipeline-fragments.lib.yml",
 #@   "public_docker_registry",
-#@   "check_code",
 #@   "repo_resource",
 #@   "version_resource",
 #@   "gh_release_resource",
 #@   "pipeline_tasks_resource",
 #@   "release_task_image_config",
 #@   "rust_task_image_config",
+#@   "nix_task_image_config",
 #@   "charts_repo_resource",
 #@   "charts_repo_bot_branch",
-#@   "integration_test",
-#@   "bats_test",
 #@ )
 
 groups:
@@ -25,9 +23,85 @@ groups:
   - set-dev-version
 
 jobs:
-- #@ check_code()
-- #@ integration_test()
-- #@ bats_test()
+- name: check-code
+  serial: true
+  plan:
+  - in_parallel:
+    - { get: repo, trigger: true }
+    - { get: pipeline-tasks }
+  - task: check-code
+    config:
+      platform: linux
+      image_resource: #@ nix_task_image_config()
+      inputs:
+      - name: repo
+      run:
+        path: sh
+        args:
+          - -exc
+          - |
+            set -euo pipefail
+            cd repo
+            cachix use $CACHIX_CACHE_NAME
+            cachix watch-exec $CACHIX_CACHE_NAME -- nix flake check
+      params:
+        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
+        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+
+- name: integration-test
+  plan:
+  - in_parallel:
+    - get: repo
+      trigger: true
+    - { get: pipeline-tasks }
+  - task: integration-test
+    privileged: true
+    attempts: 2
+    config:
+      platform: linux
+      image_resource: #@ nix_task_image_config()
+      inputs:
+        - name: repo
+      run:
+        path: sh
+        args:
+          - -exc
+          - |
+            set -euo pipefail
+            cd repo
+            cachix use $CACHIX_CACHE_NAME
+            cachix watch-exec $CACHIX_CACHE_NAME -- nix run .#nextest
+      params:
+        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
+        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+
+- name: bats-test
+  serial: true
+  plan:
+  - in_parallel:
+    - get: repo
+      trigger: true
+    - get: pipeline-tasks
+  - task: bats-test
+    privileged: true
+    attempts: 2
+    config:
+      platform: linux
+      image_resource: #@ nix_task_image_config()
+      inputs:
+      - name: repo
+      run:
+        path: sh
+        args:
+          - -exc
+          - |
+            set -euo pipefail
+            cd repo
+            cachix use $CACHIX_CACHE_NAME
+            cachix watch-exec $CACHIX_CACHE_NAME -- nix run .#bats
+      params:
+        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
+        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
 - name: release
   serial: true
   plan:
