@@ -14,7 +14,7 @@ pub enum EntryEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct Entry {
     pub id: EntryId,
     values: EntryValues,
@@ -42,7 +42,7 @@ impl Entry {
 }
 
 impl TryFromEvents<EntryEvent> for Entry {
-    fn try_from_events(events: EntityEvents<EntryEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(events: EntityEvents<EntryEvent>) -> Result<Self, EntityHydrationError> {
         let mut builder = EntryBuilder::default();
         for event in events.iter_all() {
             match event {

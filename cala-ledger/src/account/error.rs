@@ -1,15 +1,20 @@
 use thiserror::Error;
 
+use super::repo::{AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError};
 use crate::primitives::AccountId;
 
 #[derive(Error, Debug)]
 pub enum AccountError {
     #[error("AccountError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("AccountError - EsEntityError: {0}")]
-    EsEntityError(es_entity::EsEntityError),
-    #[error("AccountError - CursorDestructureError: {0}")]
-    CursorDestructureError(#[from] es_entity::CursorDestructureError),
+    Sqlx(#[from] sqlx::Error),
+    #[error("AccountError - Create: {0}")]
+    Create(AccountCreateError),
+    #[error("AccountError - Modify: {0}")]
+    Modify(#[from] AccountModifyError),
+    #[error("AccountError - Find: {0}")]
+    Find(#[from] AccountFindError),
+    #[error("AccountError - Query: {0}")]
+    Query(#[from] AccountQueryError),
     #[error("AccountError - NotFound: id '{0}' not found")]
     CouldNotFindById(AccountId),
     #[error("AccountError - NotFound: external id '{0}' not found")]
@@ -24,19 +29,14 @@ pub enum AccountError {
     CannotUpdateAccountSetAccounts,
 }
 
-impl From<sqlx::Error> for AccountError {
-    fn from(error: sqlx::Error) -> Self {
-        if let Some(err) = error.as_database_error() {
-            if let Some(constraint) = err.constraint() {
-                if constraint.contains("external_id") {
-                    return Self::ExternalIdAlreadyExists;
-                } else if constraint.contains("code") {
-                    return Self::CodeAlreadyExists;
-                }
-            }
+impl From<AccountCreateError> for AccountError {
+    fn from(error: AccountCreateError) -> Self {
+        if error.was_duplicate(AccountColumn::ExternalId) {
+            return Self::ExternalIdAlreadyExists;
         }
-        Self::Sqlx(error)
+        if error.was_duplicate(AccountColumn::Code) {
+            return Self::CodeAlreadyExists;
+        }
+        Self::Create(error)
     }
 }
-
-es_entity::from_es_entity_error!(AccountError);

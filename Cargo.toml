@@ -20,9 +20,9 @@ cala-tracing = { path = "cala-tracing", version = "0.13.21-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.13.21-dev" }
 cala-server = { path = "cala-server", version = "0.13.21-dev" }
 
-es-entity = "0.10.19"
-job = { version = "0.6", features = ["es-entity"] }
-obix = { version = "0.2", default-features = false }
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", branch = "refactor-errors" }
+job = { git = "https://github.com/GaloyMoney/job", branch = "es-entity-errors", features = ["es-entity"] }
+obix = { git = "https://github.com/GaloyMoney/obix", branch = "es-entity-errors", default-features = false }
 
 anyhow = "1.0.99"
 async-graphql = { version = "8.0.0-rc.3", default-features = false, features = ["dataloader", "tracing", "chrono", "tokio"] }

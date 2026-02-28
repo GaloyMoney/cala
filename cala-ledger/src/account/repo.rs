@@ -12,7 +12,6 @@ use super::{entity::*, error::AccountError};
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Account",
-    err = "AccountError",
     columns(
         name(ty = "String", update(accessor = "values().name"), list_by),
         code(ty = "String", update(accessor = "values().code"), list_by),
@@ -79,7 +78,7 @@ impl AccountRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Account,
         new_events: es_entity::LastPersisted<'_, AccountEvent>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

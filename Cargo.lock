@@ -1197,9 +1197,8 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7551e7682060b591efa40091d18e12935b596346049e8303def7d96af39da85b"
+version = "0.10.20-dev"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=refactor-errors#1941a19dd9d4e0edf79bdf1dddebd77f64efceb2"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1224,9 +1223,8 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "afc138e9403ec813dd2bef9f2b411cb4afabd892f18be6bb577cf0461cfd6849"
+version = "0.10.20-dev"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=refactor-errors#1941a19dd9d4e0edf79bdf1dddebd77f64efceb2"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1922,9 +1920,8 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53699e74b85ceac4f6ba910cf940ec47e4cba5adb03ee5268227c84130a044b6"
+version = "0.6.7-dev"
+source = "git+https://github.com/GaloyMoney/job?branch=es-entity-errors#977833cedc164cf39180350ed8bafe5c362ef499"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2205,9 +2202,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "526e230434f0181cac243f3138350b34a693d1313fdfc79072aa2b17ce691cb7"
+version = "0.2.15-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=es-entity-errors#f6ffd3823934c7434c1d1282f9ebabb54ba28e58"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2227,9 +2223,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd91e3ed2cc29cfb329d02d8bd19363099d84ff55b7193d40e7fa0d720dfa092"
+version = "0.2.15-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=es-entity-errors#f6ffd3823934c7434c1d1282f9ebabb54ba28e58"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",

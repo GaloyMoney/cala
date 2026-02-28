@@ -24,7 +24,7 @@ impl TxTemplateEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct TxTemplate {
     pub id: TxTemplateId,
     values: TxTemplateValues,
@@ -58,7 +58,7 @@ impl TxTemplate {
 }
 
 impl TryFromEvents<TxTemplateEvent> for TxTemplate {
-    fn try_from_events(events: EntityEvents<TxTemplateEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(events: EntityEvents<TxTemplateEvent>) -> Result<Self, EntityHydrationError> {
         let mut builder = TxTemplateBuilder::default();
         for event in events.iter_all() {
             match event {

@@ -33,7 +33,7 @@ impl Entries {
         &self,
         entry_ids: &[EntryId],
     ) -> Result<HashMap<EntryId, Entry>, EntryError> {
-        self.repo.find_all(entry_ids).await
+        self.repo.find_all(entry_ids).await.map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.entries.list_for_account_id", skip_all)]
@@ -46,6 +46,7 @@ impl Entries {
         self.repo
             .list_for_account_id_by_created_at(account_id, query, direction)
             .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.entries.list_for_account_set_id", skip_all)]
@@ -58,6 +59,7 @@ impl Entries {
         self.repo
             .list_for_account_set_id_by_created_at(account_id, query, direction)
             .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.entries.list_for_journal_id", skip_all)]
@@ -70,6 +72,7 @@ impl Entries {
         self.repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
             .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.entries.list_for_transaction_id", skip_all)]

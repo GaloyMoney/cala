@@ -13,7 +13,6 @@ use super::{entity::*, error::TxTemplateError};
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "TxTemplate",
-    err = "TxTemplateError",
     columns(code(
         ty = "String",
         update(accessor = "values().code", persist = false),
@@ -41,7 +40,7 @@ impl TxTemplateRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &TxTemplate,
         new_events: es_entity::LastPersisted<'_, TxTemplateEvent>,
-    ) -> Result<(), TxTemplateError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

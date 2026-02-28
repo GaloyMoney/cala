@@ -1,20 +1,24 @@
-use regex::Regex;
 use thiserror::Error;
 
+use super::repo::{TransactionColumn, TransactionCreateError, TransactionFindError, TransactionModifyError, TransactionQueryError};
 use cala_types::primitives::TransactionId;
 
 #[derive(Error, Debug)]
 pub enum TransactionError {
     #[error("TransactionError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
+    Sqlx(#[from] sqlx::Error),
+    #[error("TransactionError - Create: {0}")]
+    Create(TransactionCreateError),
+    #[error("TransactionError - Modify: {0}")]
+    Modify(#[from] TransactionModifyError),
+    #[error("TransactionError - Find: {0}")]
+    Find(#[from] TransactionFindError),
+    #[error("TransactionError - Query: {0}")]
+    Query(#[from] TransactionQueryError),
     #[error("TransactionError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
     #[error("TransactionError - NotFound: id '{0}' not found")]
     CouldNotFindById(TransactionId),
-    #[error("TransactionError - EsEntityError: {0}")]
-    EsEntityError(es_entity::EsEntityError),
-    #[error("TransactionError - CursorDestructureError: {0}")]
-    CursorDestructureError(#[from] es_entity::CursorDestructureError),
     #[error("TransactionError - DuplicateExternalId: external_id '{0}' already exists")]
     DuplicateExternalId(String),
     #[error("TransactionError - DuplicateId: id '{0}' already exists")]
@@ -23,38 +27,16 @@ pub enum TransactionError {
     AlreadyVoided(TransactionId),
 }
 
-impl From<sqlx::Error> for TransactionError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(ref err) if err.is_unique_violation() => {
-                if err.constraint().is_none() {
-                    return Self::Sqlx(e);
-                };
-
-                let detail = err
-                    .downcast_ref::<sqlx::postgres::PgDatabaseError>()
-                    .detail();
-
-                if let Some(detail_msg) = detail {
-                    let re = Regex::new(r"Key \((?P<field>[^)]+)\)=\((?P<value>[^)]+)\)").unwrap();
-
-                    if let Some(caps) = re.captures(detail_msg) {
-                        let field = &caps["field"];
-                        let value = &caps["value"];
-
-                        match field {
-                            "external_id" => return Self::DuplicateExternalId(value.to_string()),
-                            "id" => return Self::DuplicateId(value.to_string()),
-                            _ => {}
-                        }
-                    }
-                }
-
-                Self::Sqlx(e)
+impl From<TransactionCreateError> for TransactionError {
+    fn from(error: TransactionCreateError) -> Self {
+        if let Some(value) = error.duplicate_value() {
+            if error.was_duplicate(TransactionColumn::ExternalId) {
+                return Self::DuplicateExternalId(value.to_string());
             }
-            e => Self::Sqlx(e),
+            if error.was_duplicate(TransactionColumn::Id) {
+                return Self::DuplicateId(value.to_string());
+            }
         }
+        Self::Create(error)
     }
 }
-
-es_entity::from_es_entity_error!(TransactionError);

@@ -6,12 +6,11 @@ use crate::{
     primitives::{JournalId, TransactionId, TxTemplateId},
 };
 
-use super::{entity::*, error::TransactionError};
+use super::entity::*;
 
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "Transaction",
-    err = "TransactionError",
     columns(
         external_id(ty = "Option<String>", update(persist = false)),
         correlation_id(ty = "String", update(persist = false)),
@@ -41,7 +40,7 @@ impl TransactionRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Transaction,
         new_events: es_entity::LastPersisted<'_, TransactionEvent>,
-    ) -> Result<(), TransactionError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

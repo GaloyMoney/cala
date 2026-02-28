@@ -1,15 +1,20 @@
 use thiserror::Error;
 
+use super::repo::{AccountSetColumn, AccountSetCreateError, AccountSetFindError, AccountSetModifyError, AccountSetQueryError};
 use crate::primitives::AccountSetId;
 
 #[derive(Error, Debug)]
 pub enum AccountSetError {
     #[error("AccountSetError - Sqlx: {0}")]
     Sqlx(sqlx::Error),
-    #[error("AccountSetError - EsEntityError: {0}")]
-    EsEntityError(es_entity::EsEntityError),
-    #[error("AccountSetError - CursorDestructureError: {0}")]
-    CursorDestructureError(#[from] es_entity::CursorDestructureError),
+    #[error("AccountSetError - Create: {0}")]
+    Create(AccountSetCreateError),
+    #[error("AccountSetError - Modify: {0}")]
+    Modify(#[from] AccountSetModifyError),
+    #[error("AccountSetError - Find: {0}")]
+    Find(#[from] AccountSetFindError),
+    #[error("AccountSetError - Query: {0}")]
+    Query(#[from] AccountSetQueryError),
     #[error("AccountSetError - AccountError: {0}")]
     AccountError(#[from] crate::account::error::AccountError),
     #[error("AccountSetError - BalanceError: {0}")]
@@ -28,15 +33,20 @@ pub enum AccountSetError {
     MemberAlreadyAdded,
 }
 
-es_entity::from_es_entity_error!(AccountSetError);
+impl From<AccountSetCreateError> for AccountSetError {
+    fn from(error: AccountSetCreateError) -> Self {
+        if error.was_duplicate(AccountSetColumn::ExternalId) {
+            return Self::ExternalIdAlreadyExists;
+        }
+        Self::Create(error)
+    }
+}
 
 impl From<sqlx::Error> for AccountSetError {
     fn from(error: sqlx::Error) -> Self {
         if let Some(err) = error.as_database_error() {
             if let Some(constraint) = err.constraint() {
-                if constraint.contains("external_id") {
-                    return Self::ExternalIdAlreadyExists;
-                } else if constraint
+                if constraint
                     .contains("cala_account_set_member_accou_account_set_id_member_account_key")
                     || constraint
                         .contains("cala_account_set_member_accou_account_set_id_member_accoun_key1")

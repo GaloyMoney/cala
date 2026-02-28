@@ -1,13 +1,17 @@
 use thiserror::Error;
 
+use super::repo::{EntryCreateError, EntryFindError, EntryModifyError, EntryQueryError};
+
 #[derive(Error, Debug)]
 pub enum EntryError {
     #[error("EntryError - Sqlx: {0}")]
     Sqlx(#[from] sqlx::Error),
-    #[error("JournalError - EsEntityError: {0}")]
-    EsEntityError(es_entity::EsEntityError),
-    #[error("JournalError - CursorDestructureError: {0}")]
-    CursorDestructureError(#[from] es_entity::CursorDestructureError),
+    #[error("EntryError - Create: {0}")]
+    Create(#[from] EntryCreateError),
+    #[error("EntryError - Modify: {0}")]
+    Modify(#[from] EntryModifyError),
+    #[error("EntryError - Find: {0}")]
+    Find(#[from] EntryFindError),
+    #[error("EntryError - Query: {0}")]
+    Query(#[from] EntryQueryError),
 }
-
-es_entity::from_es_entity_error!(EntryError);

@@ -17,7 +17,7 @@ pub enum VelocityLimitEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct VelocityLimit {
     pub id: VelocityLimitId,
     values: VelocityLimitValues,
@@ -39,7 +39,7 @@ impl VelocityLimit {
 }
 
 impl TryFromEvents<VelocityLimitEvent> for VelocityLimit {
-    fn try_from_events(events: EntityEvents<VelocityLimitEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(events: EntityEvents<VelocityLimitEvent>) -> Result<Self, EntityHydrationError> {
         let mut builder = VelocityLimitBuilder::default();
         for event in events.iter_all() {
             match event {
