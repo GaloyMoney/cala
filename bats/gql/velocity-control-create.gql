@@ -1,7 +1,0 @@
-mutation VelocityControlCreate($input: VelocityControlCreateInput!) {
-  velocityControlCreate(input: $input) {
-    velocityControl {
-      velocityControlId
-    }
-  }
-}

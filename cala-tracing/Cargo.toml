@@ -9,11 +9,9 @@ license = "Apache-2.0"
 [features]
 
 fail-on-warnings = []
-http = ["dep:opentelemetry-http", "dep:http"]
 
 [dependencies]
 anyhow = { workspace = true }
-axum-extra = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
@@ -23,6 +21,3 @@ opentelemetry-otlp = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
-
-opentelemetry-http = { workspace = true, optional = true }
-http = { workspace = true, optional = true }

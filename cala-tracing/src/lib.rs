@@ -73,17 +73,3 @@ pub fn insert_error_fields(level: tracing::Level, error: impl std::fmt::Display)
     Span::current().record("error.level", tracing::field::display(level));
     Span::current().record("error.message", tracing::field::display(error));
 }
-
-#[cfg(feature = "http")]
-pub mod http {
-    pub fn extract_tracing(headers: &axum_extra::headers::HeaderMap) {
-        use opentelemetry::propagation::text_map_propagator::TextMapPropagator;
-        use opentelemetry_http::HeaderExtractor;
-        use opentelemetry_sdk::propagation::TraceContextPropagator;
-        use tracing_opentelemetry::OpenTelemetrySpanExt;
-        let extractor = HeaderExtractor(headers);
-        let propagator = TraceContextPropagator::new();
-        let ctx = propagator.extract(&extractor);
-        let _ = tracing::Span::current().set_parent(ctx);
-    }
-}
