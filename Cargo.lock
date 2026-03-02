@@ -530,7 +530,7 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "cached",
  "lalrpop",
@@ -557,7 +557,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -592,7 +592,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "async-graphql",
  "cala-cel-interpreter",
@@ -612,7 +612,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "cala-perf"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -641,7 +641,7 @@ dependencies = [
 
 [[package]]
 name = "cala-server"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -675,7 +675,7 @@ dependencies = [
 
 [[package]]
 name = "cala-tracing"
-version = "0.13.21-dev"
+version = "0.13.21"
 dependencies = [
  "anyhow",
  "axum-extra",
@@ -1197,8 +1197,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.20-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=refactor-errors#1941a19dd9d4e0edf79bdf1dddebd77f64efceb2"
+version = "0.10.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "607c24be4bb7c66fedf170c5295706602fa0fb08732aca00004778e2a4a18520"
 dependencies = [
  "async-graphql",
  "base64",
@@ -1223,8 +1224,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.20-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=refactor-errors#1941a19dd9d4e0edf79bdf1dddebd77f64efceb2"
+version = "0.10.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49da0c534f576919b41757bfb4a35d76b2c66fd228925e11f0ba37a26dd6cb9b"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1920,8 +1922,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.7-dev"
-source = "git+https://github.com/GaloyMoney/job?branch=es-entity-errors#977833cedc164cf39180350ed8bafe5c362ef499"
+version = "0.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8fc00c6da5bbd66ac5e0d3e8d00cb0cf868f2dc69f21cd9d2ffc6434754e72e7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2202,8 +2205,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.15-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=es-entity-errors#f6ffd3823934c7434c1d1282f9ebabb54ba28e58"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e620c771cc64f1711e8383b02f88aa8fc41d3555cba7436f71950d41e94b801c"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2223,8 +2227,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.15-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=es-entity-errors#f6ffd3823934c7434c1d1282f9ebabb54ba28e58"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51c22dd0f158bd35d366f089cdb973af42af36664709bf2009f7d6544acf9186"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",

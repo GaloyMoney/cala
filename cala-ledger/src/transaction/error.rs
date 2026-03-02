@@ -27,6 +27,12 @@ pub enum TransactionError {
     AlreadyVoided(TransactionId),
 }
 
+impl TransactionError {
+    pub fn was_not_found(&self) -> bool {
+        matches!(self, Self::Find(e) if e.was_not_found())
+    }
+}
+
 impl From<TransactionCreateError> for TransactionError {
     fn from(error: TransactionCreateError) -> Self {
         if let Some(value) = error.duplicate_value() {
