@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH balance_ids AS (\n              SELECT journal_id, account_id, currency, normal_balance_type\n              FROM (\n                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])\n                AS v(journal_id, account_id, currency)\n              ) AS v\n              JOIN cala_accounts a\n              ON account_id = a.id\n            )\n            SELECT\n                values,\n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                h.journal_id as \"journal_id: JournalId\",\n                h.account_id as \"account_id: AccountId\",\n                h.currency\n            FROM balance_ids\n            JOIN LATERAL (\n                SELECT DISTINCT ON (journal_id, account_id, currency)\n                    journal_id, account_id, currency, values\n                FROM cala_cumulative_effective_balances\n                WHERE journal_id = balance_ids.journal_id\n                  AND account_id = balance_ids.account_id\n                  AND currency = balance_ids.currency\n                  AND effective <= $4\n                ORDER BY journal_id, account_id, currency, effective DESC, version DESC\n            ) h ON TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "journal_id: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c9268836b7c65eb368870a1ee2f11457625e53af77bcc15d5444582ce79c2b9f"
+}
