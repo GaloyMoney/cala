@@ -3,12 +3,11 @@ use sqlx::PgPool;
 
 use crate::outbox::OutboxPublisher;
 
-use super::{entity::*, error::JournalError};
+use super::entity::*;
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Journal",
-    err = "JournalError",
     columns(
         name(ty = "String", update(accessor = "values().name")),
         code(ty = "Option<String>", update(accessor = "values().code")),
@@ -35,7 +34,7 @@ impl JournalRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Journal,
         new_events: es_entity::LastPersisted<'_, JournalEvent>,
-    ) -> Result<(), JournalError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

@@ -11,7 +11,6 @@ use super::{entity::*, error::*};
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Entry",
-    err = "EntryError",
     columns(
         account_id(ty = "AccountId", list_for(by(created_at)), update(persist = false)),
         journal_id(ty = "JournalId", list_for(by(created_at)), update(persist = false)),
@@ -119,7 +118,7 @@ impl EntryRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Entry,
         new_events: es_entity::LastPersisted<'_, EntryEvent>,
-    ) -> Result<(), EntryError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

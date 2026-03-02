@@ -23,7 +23,7 @@ pub enum AccountSetEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct AccountSet {
     pub id: AccountSetId,
     values: AccountSetValues,
@@ -176,7 +176,9 @@ impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
 }
 
 impl TryFromEvents<AccountSetEvent> for AccountSet {
-    fn try_from_events(events: EntityEvents<AccountSetEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(
+        events: EntityEvents<AccountSetEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = AccountSetBuilder::default();
         for event in events.iter_all() {
             match event {

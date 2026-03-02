@@ -97,7 +97,6 @@ use members_cursor::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "AccountSet",
-    err = "AccountSetError",
     columns(
         name(
             ty = "String",
@@ -829,7 +828,7 @@ impl AccountSetRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &AccountSet,
         new_events: es_entity::LastPersisted<'_, AccountSetEvent>,
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), sqlx::Error> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

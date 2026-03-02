@@ -20,7 +20,7 @@ pub enum JournalEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct Journal {
     pub id: JournalId,
     values: JournalValues,
@@ -137,7 +137,7 @@ impl From<(JournalValues, Vec<String>)> for JournalUpdate {
 }
 
 impl TryFromEvents<JournalEvent> for Journal {
-    fn try_from_events(events: EntityEvents<JournalEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(events: EntityEvents<JournalEvent>) -> Result<Self, EntityHydrationError> {
         let mut builder = JournalBuilder::default();
         for event in events.iter_all() {
             match event {

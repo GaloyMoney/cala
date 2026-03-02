@@ -22,7 +22,7 @@ pub enum TransactionEvent {
 }
 
 #[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EsEntityError"))]
+#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
 pub struct Transaction {
     pub id: TransactionId,
     values: TransactionValues,
@@ -120,7 +120,9 @@ impl Transaction {
 }
 
 impl TryFromEvents<TransactionEvent> for Transaction {
-    fn try_from_events(events: EntityEvents<TransactionEvent>) -> Result<Self, EsEntityError> {
+    fn try_from_events(
+        events: EntityEvents<TransactionEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = TransactionBuilder::default();
         for event in events.iter_all() {
             match event {

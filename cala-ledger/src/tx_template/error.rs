@@ -4,10 +4,23 @@ use thiserror::Error;
 use cala_types::primitives::{Currency, Layer};
 use cel_interpreter::CelError;
 
+use super::repo::{
+    TxTemplateColumn, TxTemplateCreateError, TxTemplateFindError, TxTemplateModifyError,
+    TxTemplateQueryError,
+};
+
 #[derive(Error, Debug)]
 pub enum TxTemplateError {
     #[error("TxTemplateError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
+    Sqlx(#[from] sqlx::Error),
+    #[error("TxTemplateError - Create: {0}")]
+    Create(TxTemplateCreateError),
+    #[error("TxTemplateError - Modify: {0}")]
+    Modify(#[from] TxTemplateModifyError),
+    #[error("TxTemplateError - Find: {0}")]
+    Find(#[from] TxTemplateFindError),
+    #[error("TxTemplateError - Query: {0}")]
+    Query(#[from] TxTemplateQueryError),
     #[error("TxTemplateError - DuplicateCode: code already exists")]
     DuplicateCode,
     #[error("TxTemplateError - DuplicateId: id already exists")]
@@ -24,30 +37,16 @@ pub enum TxTemplateError {
     CouldNotFindByCode(String),
     #[error("{0}")]
     ParamError(#[from] crate::param::error::ParamError),
-    #[error("TxTemplateError - EsEntityError: {0}")]
-    EsEntityError(es_entity::EsEntityError),
-    #[error("TxTemplateError - CursorDestructureError: {0}")]
-    CursorDestructureError(#[from] es_entity::CursorDestructureError),
 }
 
-impl From<sqlx::Error> for TxTemplateError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(ref err) if err.is_unique_violation() => {
-                let Some(constraint) = err.constraint() else {
-                    return Self::Sqlx(e);
-                };
-                if constraint.contains("code") {
-                    Self::DuplicateCode
-                } else if constraint.contains("id") {
-                    Self::DuplicateId
-                } else {
-                    Self::Sqlx(e)
-                }
-            }
-            e => Self::Sqlx(e),
+impl From<TxTemplateCreateError> for TxTemplateError {
+    fn from(error: TxTemplateCreateError) -> Self {
+        if error.was_duplicate(TxTemplateColumn::Code) {
+            return Self::DuplicateCode;
         }
+        if error.was_duplicate(TxTemplateColumn::Id) {
+            return Self::DuplicateId;
+        }
+        Self::Create(error)
     }
 }
-
-es_entity::from_es_entity_error!(TxTemplateError);

@@ -9,7 +9,6 @@ use super::entity::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "VelocityLimit",
-    err = "VelocityError",
     columns(name(ty = "String", update(persist = false)),),
     tbl_prefix = "cala",
     persist_event_context = false
