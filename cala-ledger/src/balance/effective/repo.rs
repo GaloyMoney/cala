@@ -149,6 +149,69 @@ impl EffectiveBalanceRepo {
         Ok((first, last, last_version - first_version))
     }
 
+    #[instrument(name = "cala_ledger.balances.effective.find_all", skip_all)]
+    pub(super) async fn find_all(
+        &self,
+        ids: &[BalanceId],
+        date: NaiveDate,
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        let mut currencies = Vec::with_capacity(ids.len());
+        for (journal_id, account_id, currency) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+            currencies.push(currency.code().to_string());
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            WITH balance_ids AS (
+              SELECT journal_id, account_id, currency, normal_balance_type
+              FROM (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
+                AS v(journal_id, account_id, currency)
+              ) AS v
+              JOIN cala_accounts a
+              ON account_id = a.id
+            )
+            SELECT
+                values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                h.journal_id as "journal_id: JournalId",
+                h.account_id as "account_id: AccountId",
+                h.currency
+            FROM balance_ids
+            JOIN LATERAL (
+                SELECT DISTINCT ON (journal_id, account_id, currency)
+                    journal_id, account_id, currency, values
+                FROM cala_cumulative_effective_balances
+                WHERE journal_id = balance_ids.journal_id
+                  AND account_id = balance_ids.account_id
+                  AND currency = balance_ids.currency
+                  AND effective <= $4
+                ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+            ) h ON TRUE
+            "#,
+            &journal_ids[..],
+            &account_ids[..],
+            &currencies[..],
+            date,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let details: BalanceSnapshot =
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let balance_id = (details.journal_id, details.account_id, details.currency);
+            let balance = AccountBalance::new(row.normal_balance_type, details);
+            ret.insert(balance_id, balance);
+        }
+        Ok(ret)
+    }
+
     #[instrument(name = "cala_ledger.balances.effective.find_range_all", skip_all)]
     pub(super) async fn find_range_all(
         &self,

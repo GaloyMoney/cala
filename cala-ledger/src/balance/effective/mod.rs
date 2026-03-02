@@ -59,6 +59,15 @@ impl EffectiveBalances {
         }
     }
 
+    #[instrument(name = "cala_ledger.balance.effective.find_all_cumulative", skip(self))]
+    pub async fn find_all_cumulative(
+        &self,
+        ids: &[BalanceId],
+        date: NaiveDate,
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all(ids, date).await
+    }
+
     #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
     pub async fn find_all_in_range(
         &self,
