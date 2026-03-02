@@ -64,7 +64,10 @@ impl TxTemplates {
         &self,
         tx_template_ids: &[TxTemplateId],
     ) -> Result<HashMap<TxTemplateId, T>, TxTemplateError> {
-        self.repo.find_all(tx_template_ids).await.map_err(Into::into)
+        self.repo
+            .find_all(tx_template_ids)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.tx_templates.list", skip(self))]
@@ -74,12 +77,18 @@ impl TxTemplates {
         direction: es_entity::ListDirection,
     ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplatesByCodeCursor>, TxTemplateError>
     {
-        self.repo.list_by_code(cursor, direction).await.map_err(Into::into)
+        self.repo
+            .list_by_code(cursor, direction)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err)]
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
-        self.repo.find_by_code(code.as_ref().to_string()).await.map_err(Into::into)
+        self.repo
+            .find_by_code(code.as_ref().to_string())
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(

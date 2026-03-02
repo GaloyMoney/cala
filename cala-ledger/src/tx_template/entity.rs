@@ -58,7 +58,9 @@ impl TxTemplate {
 }
 
 impl TryFromEvents<TxTemplateEvent> for TxTemplate {
-    fn try_from_events(events: EntityEvents<TxTemplateEvent>) -> Result<Self, EntityHydrationError> {
+    fn try_from_events(
+        events: EntityEvents<TxTemplateEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = TxTemplateBuilder::default();
         for event in events.iter_all() {
             match event {

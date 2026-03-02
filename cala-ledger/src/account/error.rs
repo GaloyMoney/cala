@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use super::repo::{AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError};
+use super::repo::{
+    AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError,
+};
 use crate::primitives::AccountId;
 
 #[derive(Error, Debug)]

@@ -4,7 +4,10 @@ use thiserror::Error;
 use cala_types::primitives::{Currency, Layer};
 use cel_interpreter::CelError;
 
-use super::repo::{TxTemplateColumn, TxTemplateCreateError, TxTemplateFindError, TxTemplateModifyError, TxTemplateQueryError};
+use super::repo::{
+    TxTemplateColumn, TxTemplateCreateError, TxTemplateFindError, TxTemplateModifyError,
+    TxTemplateQueryError,
+};
 
 #[derive(Error, Debug)]
 pub enum TxTemplateError {

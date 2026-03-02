@@ -1,6 +1,9 @@
 use thiserror::Error;
 
-use super::repo::{TransactionColumn, TransactionCreateError, TransactionFindError, TransactionModifyError, TransactionQueryError};
+use super::repo::{
+    TransactionColumn, TransactionCreateError, TransactionFindError, TransactionModifyError,
+    TransactionQueryError,
+};
 use cala_types::primitives::TransactionId;
 
 #[derive(Error, Debug)]

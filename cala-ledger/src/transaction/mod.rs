@@ -61,7 +61,10 @@ impl Transactions {
         &self,
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
-        self.repo.find_by_external_id(Some(external_id)).await.map_err(Into::into)
+        self.repo
+            .find_by_external_id(Some(external_id))
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self))]
@@ -69,7 +72,10 @@ impl Transactions {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        self.repo.find_by_id(transaction_id).await.map_err(Into::into)
+        self.repo
+            .find_by_id(transaction_id)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.transactions.list_for_template_id", skip(self))]
@@ -93,7 +99,10 @@ impl Transactions {
         &self,
         transaction_ids: &[TransactionId],
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        self.repo.find_all(transaction_ids).await.map_err(Into::into)
+        self.repo
+            .find_all(transaction_ids)
+            .await
+            .map_err(Into::into)
     }
 }
 

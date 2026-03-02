@@ -120,7 +120,9 @@ impl Transaction {
 }
 
 impl TryFromEvents<TransactionEvent> for Transaction {
-    fn try_from_events(events: EntityEvents<TransactionEvent>) -> Result<Self, EntityHydrationError> {
+    fn try_from_events(
+        events: EntityEvents<TransactionEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = TransactionBuilder::default();
         for event in events.iter_all() {
             match event {

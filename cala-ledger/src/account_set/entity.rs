@@ -176,7 +176,9 @@ impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
 }
 
 impl TryFromEvents<AccountSetEvent> for AccountSet {
-    fn try_from_events(events: EntityEvents<AccountSetEvent>) -> Result<Self, EntityHydrationError> {
+    fn try_from_events(
+        events: EntityEvents<AccountSetEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = AccountSetBuilder::default();
         for event in events.iter_all() {
             match event {

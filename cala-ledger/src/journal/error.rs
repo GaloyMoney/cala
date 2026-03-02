@@ -1,6 +1,8 @@
 use thiserror::Error;
 
-use super::repo::{JournalColumn, JournalCreateError, JournalFindError, JournalModifyError, JournalQueryError};
+use super::repo::{
+    JournalColumn, JournalCreateError, JournalFindError, JournalModifyError, JournalQueryError,
+};
 
 #[derive(Error, Debug)]
 pub enum JournalError {

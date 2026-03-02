@@ -59,7 +59,6 @@ impl Entries {
         self.repo
             .list_for_account_set_id_by_created_at(account_id, query, direction)
             .await
-            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.entries.list_for_journal_id", skip_all)]

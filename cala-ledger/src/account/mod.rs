@@ -89,12 +89,18 @@ impl Accounts {
         db: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
-        self.repo.find_all_in_op(db, account_ids).await.map_err(Into::into)
+        self.repo
+            .find_all_in_op(db, account_ids)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self))]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
-        self.repo.find_by_external_id(Some(external_id)).await.map_err(Into::into)
+        self.repo
+            .find_by_external_id(Some(external_id))
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.accounts.find_by_code", skip(self))]
@@ -107,7 +113,10 @@ impl Accounts {
         &self,
         query: es_entity::PaginatedQueryArgs<AccountsByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<Account, AccountsByNameCursor>, AccountError> {
-        self.repo.list_by_name(query, Default::default()).await.map_err(Into::into)
+        self.repo
+            .list_by_name(query, Default::default())
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.accounts.lock_in_op", skip(self, db))]

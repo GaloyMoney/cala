@@ -43,7 +43,9 @@ impl VelocityControl {
 }
 
 impl TryFromEvents<VelocityControlEvent> for VelocityControl {
-    fn try_from_events(events: EntityEvents<VelocityControlEvent>) -> Result<Self, EntityHydrationError> {
+    fn try_from_events(
+        events: EntityEvents<VelocityControlEvent>,
+    ) -> Result<Self, EntityHydrationError> {
         let mut builder = VelocityControlBuilder::default();
         for event in events.iter_all() {
             match event {

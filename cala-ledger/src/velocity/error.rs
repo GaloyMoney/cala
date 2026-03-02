@@ -5,8 +5,14 @@ use cel_interpreter::CelError;
 
 use crate::primitives::*;
 
-use super::control::{VelocityControlColumn, VelocityControlCreateError, VelocityControlFindError, VelocityControlModifyError, VelocityControlQueryError};
-use super::limit::{VelocityLimitColumn, VelocityLimitCreateError, VelocityLimitFindError, VelocityLimitModifyError, VelocityLimitQueryError};
+use super::control::{
+    VelocityControlColumn, VelocityControlCreateError, VelocityControlFindError,
+    VelocityControlModifyError, VelocityControlQueryError,
+};
+use super::limit::{
+    VelocityLimitColumn, VelocityLimitCreateError, VelocityLimitFindError,
+    VelocityLimitModifyError, VelocityLimitQueryError,
+};
 
 #[derive(Error, Debug)]
 pub enum VelocityError {

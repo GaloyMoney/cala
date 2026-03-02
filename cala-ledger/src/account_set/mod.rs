@@ -327,7 +327,10 @@ impl AccountSets {
         &self,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        self.repo.find_all(account_set_ids).await.map_err(Into::into)
+        self.repo
+            .find_all(account_set_ids)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
@@ -336,12 +339,18 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        self.repo.find_all_in_op(op, account_set_ids).await.map_err(Into::into)
+        self.repo
+            .find_all_in_op(op, account_set_ids)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find", skip(self))]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
-        self.repo.find_by_id(account_set_id).await.map_err(Into::into)
+        self.repo
+            .find_by_id(account_set_id)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
@@ -350,7 +359,10 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
     ) -> Result<AccountSet, AccountSetError> {
-        self.repo.find_by_id_in_op(op, account_set_id).await.map_err(Into::into)
+        self.repo
+            .find_by_id_in_op(op, account_set_id)
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.accounts_sets.find_by_external_id", skip(self))]
@@ -358,7 +370,10 @@ impl AccountSets {
         &self,
         external_id: String,
     ) -> Result<AccountSet, AccountSetError> {
-        self.repo.find_by_external_id(Some(external_id)).await.map_err(Into::into)
+        self.repo
+            .find_by_external_id(Some(external_id))
+            .await
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self))]
