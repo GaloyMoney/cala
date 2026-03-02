@@ -66,6 +66,7 @@
         bacon
         postgresql
         docker-compose
+        wait4x
         bc
         jq
         podman
