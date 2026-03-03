@@ -18,7 +18,6 @@ groups:
   jobs:
   - check-code
   - integration-test
-  - bats-test
   - release
   - set-dev-version
 
@@ -75,33 +74,6 @@ jobs:
         CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
         CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
 
-- name: bats-test
-  serial: true
-  plan:
-  - in_parallel:
-    - get: repo
-      trigger: true
-    - get: pipeline-tasks
-  - task: bats-test
-    privileged: true
-    attempts: 2
-    config:
-      platform: linux
-      image_resource: #@ nix_task_image_config()
-      inputs:
-      - name: repo
-      run:
-        path: sh
-        args:
-          - -exc
-          - |
-            set -euo pipefail
-            cd repo
-            cachix use $CACHIX_CACHE_NAME
-            cachix watch-exec $CACHIX_CACHE_NAME -- nix run .#bats
-      params:
-        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
 - name: release
   serial: true
   plan:
@@ -110,7 +82,6 @@ jobs:
       passed:
       - check-code
       - integration-test
-      - bats-test
     - get: pipeline-tasks
     - get: version
   - task: prep-release

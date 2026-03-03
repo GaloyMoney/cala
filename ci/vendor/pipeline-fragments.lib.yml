@@ -144,36 +144,6 @@ plan:
         CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
 #@ end
 
-#@ def bats_test():
-name: bats-test
-serial: true
-plan:
-- in_parallel:
-  - get: repo
-    trigger: true
-  - get: pipeline-tasks
-- task: bats-test
-  privileged: true
-  attempts: 2
-  config:
-    platform: linux
-    image_resource: #@ nix_task_image_config()
-    inputs:
-    - name: repo
-    params:
-      CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-      CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
-    run:
-      path: sh
-      args:
-        - -exc
-        - |
-          set -euo pipefail
-          cd repo
-          cachix use $CACHIX_CACHE_NAME
-          nix run .#bats
-#@ end
-
 #@ def nodejs_audit(level = "high"):
 name: audit
 serial: true

@@ -54,6 +54,7 @@
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
       nativeBuildInputs = with pkgs; [
+        ytt
         gnuplot
         rustToolchain
         alejandra
