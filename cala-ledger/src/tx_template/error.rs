@@ -18,13 +18,13 @@ pub enum TxTemplateError {
     #[error("TxTemplateError - Modify: {0}")]
     Modify(#[from] TxTemplateModifyError),
     #[error("TxTemplateError - Find: {0}")]
-    Find(#[from] TxTemplateFindError),
+    Find(TxTemplateFindError),
     #[error("TxTemplateError - Query: {0}")]
     Query(#[from] TxTemplateQueryError),
-    #[error("TxTemplateError - DuplicateCode: code already exists")]
-    DuplicateCode,
-    #[error("TxTemplateError - DuplicateId: id already exists")]
-    DuplicateId,
+    #[error("TxTemplateError - DuplicateCode: code '{0}' already exists")]
+    DuplicateCode(String),
+    #[error("TxTemplateError - DuplicateId: id '{0}' already exists")]
+    DuplicateId(String),
     #[error("TxTemplateError - CelError: {0}")]
     CelError(#[from] CelError),
     #[error("TxTemplateError - NotFound")]
@@ -39,14 +39,33 @@ pub enum TxTemplateError {
     ParamError(#[from] crate::param::error::ParamError),
 }
 
+impl From<TxTemplateFindError> for TxTemplateError {
+    fn from(error: TxTemplateFindError) -> Self {
+        match error {
+            TxTemplateFindError::NotFound {
+                column: Some(TxTemplateColumn::Code),
+                value,
+                ..
+            } => Self::CouldNotFindByCode(value),
+            other => Self::Find(other),
+        }
+    }
+}
+
 impl From<TxTemplateCreateError> for TxTemplateError {
     fn from(error: TxTemplateCreateError) -> Self {
-        if error.was_duplicate(TxTemplateColumn::Code) {
-            return Self::DuplicateCode;
+        match error {
+            TxTemplateCreateError::ConstraintViolation {
+                column: Some(TxTemplateColumn::Code),
+                value,
+                ..
+            } => Self::DuplicateCode(value.unwrap_or_default()),
+            TxTemplateCreateError::ConstraintViolation {
+                column: Some(TxTemplateColumn::Id),
+                value,
+                ..
+            } => Self::DuplicateId(value.unwrap_or_default()),
+            other => Self::Create(other),
         }
-        if error.was_duplicate(TxTemplateColumn::Id) {
-            return Self::DuplicateId;
-        }
-        Self::Create(error)
     }
 }

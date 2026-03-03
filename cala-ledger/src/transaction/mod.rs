@@ -61,10 +61,7 @@ impl Transactions {
         &self,
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
-        self.repo
-            .find_by_external_id(Some(external_id))
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
     #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self))]
@@ -72,10 +69,7 @@ impl Transactions {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        self.repo
-            .find_by_id(transaction_id)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_by_id(transaction_id).await?)
     }
 
     #[instrument(name = "cala_ledger.transactions.list_for_template_id", skip(self))]
@@ -88,10 +82,10 @@ impl Transactions {
         es_entity::PaginatedQueryRet<Transaction, TransactionsByCreatedAtCursor>,
         TransactionError,
     > {
-        self.repo
+        Ok(self
+            .repo
             .list_for_tx_template_id_by_created_at(template_id, query, direction)
-            .await
-            .map_err(Into::into)
+            .await?)
     }
 
     #[instrument(name = "cala_ledger.transactions.find_all", skip(self))]
@@ -99,10 +93,7 @@ impl Transactions {
         &self,
         transaction_ids: &[TransactionId],
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        self.repo
-            .find_all(transaction_ids)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_all(transaction_ids).await?)
     }
 }
 

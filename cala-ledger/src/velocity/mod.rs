@@ -105,10 +105,7 @@ impl Velocities {
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
         self.limits.add_limit_to_control(db, control, limit).await?;
-        self.controls
-            .find_by_id_in_op(db, control)
-            .await
-            .map_err(Into::into)
+        Ok(self.controls.find_by_id_in_op(db, control).await?)
     }
 
     #[instrument(name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
@@ -265,7 +262,7 @@ impl Velocities {
         &self,
         limit_ids: &[VelocityLimitId],
     ) -> Result<HashMap<VelocityLimitId, T>, VelocityError> {
-        self.limits.find_all(limit_ids).await.map_err(Into::into)
+        Ok(self.limits.find_all(limit_ids).await?)
     }
 
     #[instrument(name = "velocity.find_all_controls", skip(self), fields(count = control_ids.len()))]
@@ -273,9 +270,6 @@ impl Velocities {
         &self,
         control_ids: &[VelocityControlId],
     ) -> Result<HashMap<VelocityControlId, T>, VelocityError> {
-        self.controls
-            .find_all(control_ids)
-            .await
-            .map_err(Into::into)
+        Ok(self.controls.find_all(control_ids).await?)
     }
 }

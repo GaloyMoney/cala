@@ -16,15 +16,19 @@ pub enum JournalError {
     Find(#[from] JournalFindError),
     #[error("JournalError - Query: {0}")]
     Query(#[from] JournalQueryError),
-    #[error("JournalError - code already exists")]
-    CodeAlreadyExists,
+    #[error("JournalError - code '{0}' already exists")]
+    CodeAlreadyExists(String),
 }
 
 impl From<JournalCreateError> for JournalError {
     fn from(error: JournalCreateError) -> Self {
-        if error.was_duplicate(JournalColumn::Code) {
-            return Self::CodeAlreadyExists;
+        match error {
+            JournalCreateError::ConstraintViolation {
+                column: Some(JournalColumn::Code),
+                value,
+                ..
+            } => Self::CodeAlreadyExists(value.unwrap_or_default()),
+            other => Self::Create(other),
         }
-        Self::Create(error)
     }
 }
