@@ -53,18 +53,7 @@
       };
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
-      cala-server-debug = craneLib.buildPackage {
-        src = rustSource;
-        strictDeps = true;
-        SQLX_OFFLINE = true;
-        pname = "cala-server-debug";
-        cargoExtraArgs = "-p cala-server";
-        inherit (craneLib.crateNameFromCargoToml {cargoToml = ./cala-server/Cargo.toml;}) version;
-        doCheck = false;
-      };
-
       nativeBuildInputs = with pkgs; [
-        wait4x
         gnuplot
         rustToolchain
         alejandra
@@ -77,14 +66,11 @@
         bacon
         postgresql
         docker-compose
-        bats
+        wait4x
         bc
         jq
-        ytt
         podman
         podman-compose
-        curl
-        procps
       ];
       devEnvVars = rec {
         OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
@@ -93,94 +79,116 @@
       };
       podman-runner = pkgs.callPackage ./nix/podman-runner.nix {};
 
-      bats-runner = let
-        binPath = pkgs.lib.makeBinPath [
+      perf-runner = pkgs.writeShellScriptBin "perf-runner" ''
+        set -e
+
+        export PATH="${pkgs.lib.makeBinPath [
           podman-runner.podman-compose-runner
-          pkgs.podman
           pkgs.wait4x
-          pkgs.bats
-          pkgs.jq
-          pkgs.curl
-          pkgs.procps
-          pkgs.coreutils
-          pkgs.gnugrep
-          pkgs.gnused
-          pkgs.findutils
           pkgs.sqlx-cli
-          cala-server-debug
-        ];
-      in
-        pkgs.symlinkJoin {
-          name = "bats-runner";
-          paths = [
-            podman-runner.podman-compose-runner
-            pkgs.podman
-            pkgs.wait4x
-            pkgs.bats
-            pkgs.jq
-            pkgs.curl
-            pkgs.procps
-            pkgs.coreutils
-            pkgs.gnugrep
-            pkgs.gnused
-            pkgs.findutils
-            pkgs.sqlx-cli
-            cala-server-debug
-          ];
-          postBuild = ''
-            mkdir -p $out/bin
-            cat > $out/bin/bats-runner << 'EOF'
-            #!${pkgs.bash}/bin/bash
-            set -euo pipefail
+          pkgs.coreutils
+          pkgs.gnumake
+          pkgs.gnuplot
+          pkgs.jq
+          pkgs.bc
+          pkgs.gnused
+          pkgs.gnugrep
+          pkgs.findutils
+          pkgs.postgresql
+          rustToolchain
+          pkgs.stdenv.cc
+        ]}:$PATH"
 
-            # Add all tools to PATH
-            export PATH="${binPath}:$PATH"
+        export SQLX_OFFLINE="true"
+        export DATABASE_URL="${devEnvVars.DATABASE_URL}"
+        export PG_CON="${devEnvVars.PG_CON}"
 
-            # Set environment variables
-            export CALA_BIN="${cala-server-debug}/bin/cala-server"
-            export PG_CON="${devEnvVars.PG_CON}"
-            export DATABASE_URL="${devEnvVars.DATABASE_URL}"
-            export DOCKER_ENGINE=podman
+        if [ $# -eq 0 ]; then
+          echo "Usage: perf-runner <output-file>"
+          exit 1
+        fi
+        OUTPUT_FILE="$1"
 
-            # Function to cleanup on exit
-            cleanup() {
-              echo "Stopping podman-compose..."
-              podman-compose-runner -f docker-compose.yml down || true
-            }
+        cleanup() {
+          echo "Stopping deps..."
+          ${podman-runner.podman-compose-runner}/bin/podman-compose-runner down || true
+        }
+        trap cleanup EXIT
 
-            # Register cleanup function
-            trap cleanup EXIT
+        echo "Starting dependencies..."
+        ${podman-runner.podman-compose-runner}/bin/podman-compose-runner up -d integration-deps
 
-            echo "Starting dependencies with podman-compose..."
-            podman-compose-runner -f docker-compose.yml up -d integration-deps
+        echo "Waiting for PostgreSQL to be ready..."
+        ${pkgs.wait4x}/bin/wait4x postgresql "$DATABASE_URL" --timeout 120s
 
-            echo "Waiting for PostgreSQL to be ready..."
-            wait4x postgresql "$PG_CON" --timeout 120s
+        echo "Running database migrations..."
+        for i in $(seq 1 30); do
+          if (cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run 2>/dev/null); then
+            echo "Migrations complete"
+            break
+          fi
+          echo "Attempt $i: Database not ready, waiting..."
+          sleep 1
+          if [ "$i" -eq 30 ]; then
+            echo "Database failed to become ready after 30 attempts"
+            cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run
+          fi
+        done
 
-            echo "Running database migrations..."
-            for i in $(seq 1 30); do
-              if (cd cala-ledger && sqlx migrate run 2>/dev/null); then
-                echo "Migrations complete"
-                break
-              fi
-              echo "Attempt $i: Database not ready, waiting..."
-              sleep 1
-              if [ "$i" -eq 30 ]; then
-                echo "Database failed to become ready after 30 attempts"
-                cd cala-ledger && sqlx migrate run
-              fi
-            done
+        echo "Running perf DB setup..."
+        ${pkgs.postgresql}/bin/psql "$DATABASE_URL" -f ./cala-perf/pg-tools/setup.sql
 
-            # Set TERM for CI environments
-            export TERM="''${TERM:-dumb}"
-            echo "Running bats tests with CALA_BIN=$CALA_BIN..."
-            bats -t bats
+        echo "Running benchmarks..."
+        cargo bench -p cala-perf
 
-            echo "Tests completed successfully!"
-            EOF
-            chmod +x $out/bin/bats-runner
-          '';
-        };
+        echo "Running load tests..."
+        cargo run -p cala-perf 2>&1 | tee load-output.txt
+        load_output=$(cat load-output.txt)
+
+        {
+        echo "## Cala Performance Benchmark Results (non-representative)"
+        echo "### Criterion Benchmark Results (single-threaded)"
+        echo ""
+        echo "| Benchmark | Time per Run | Throughput | % vs Baseline |"
+        echo "|-----------|--------------|------------|---------------|"
+
+        baseline_time=""
+        for json_file in target/criterion/*/new/estimates.json; do
+            if [[ -f "$json_file" ]]; then
+                bench_name=$(basename "$(dirname "$(dirname "$json_file")")")
+                time_ns=$(${pkgs.jq}/bin/jq -r '.mean.point_estimate' "$json_file")
+                if [[ -n "$time_ns" && "$time_ns" != "null" ]]; then
+                    time_ms=$(echo "scale=3; $time_ns / 1000000" | ${pkgs.bc}/bin/bc -l)
+                    time_display="''${time_ms}ms"
+                    tx_per_sec=$(echo "scale=0; 1000000000 / $time_ns" | ${pkgs.bc}/bin/bc -l)
+                    if [[ -z "$baseline_time" ]]; then
+                        baseline_time=$time_ns
+                        perc_diff="0 (baseline)"
+                    else
+                        perc_diff=$(echo "scale=2; ($time_ns - $baseline_time) / $baseline_time * 100" | ${pkgs.bc}/bin/bc -l | xargs printf "%.1f")
+                        if (( $(echo "$perc_diff >= 0" | ${pkgs.bc}/bin/bc -l) )); then
+                            perc_diff="-''${perc_diff}%"
+                        else
+                            perc_diff="+''${perc_diff#-}%"
+                        fi
+                    fi
+                    echo "| ''${bench_name#* } | $time_display | ''${tx_per_sec} tx/s | $perc_diff |"
+                fi
+            fi
+        done
+
+        echo ""
+        echo "### Load Testing Results (parallel-execution)"
+        echo ""
+        echo "$load_output" | ${pkgs.gnused}/bin/sed -n '/PERFORMANCE SUMMARY TABLE/,/All performance tests completed!/p' | ${pkgs.gnused}/bin/sed '$d' | ${pkgs.gnused}/bin/sed '1,2d'
+        echo "---"
+        echo ""
+        echo "**Note**: Performance results may vary based on system resources and database state."
+        } > "$OUTPUT_FILE"
+
+        echo "Performance report generated: $OUTPUT_FILE"
+      '';
+
       nextest-runner = pkgs.writeShellScriptBin "nextest-runner" ''
         set -e
 
@@ -240,9 +248,8 @@
     in
       with pkgs; {
         packages = {
-          cala-server-debug = cala-server-debug;
-          bats-runner = bats-runner;
           nextest = nextest-runner;
+          perf = perf-runner;
         };
 
         checks = {
@@ -278,11 +285,6 @@
           // {
             inherit nativeBuildInputs;
           });
-
-        apps.bats = flake-utils.lib.mkApp {
-          drv = self.packages.${system}.bats-runner;
-          name = "bats-runner";
-        };
 
         formatter = alejandra;
       });

@@ -21,10 +21,6 @@ reset-deps: clean-deps start-deps setup-db
 reset-deps-perf: clean-deps start-deps setup-db
 	psql postgres://user:password@localhost:5432/pg -f ./cala-perf/pg-tools/setup.sql
 
-
-run-server:
-	cargo run --bin cala-server -- --config ./bats/cala.yml
-
 rust-example:
 	cargo run --bin cala-ledger-example-rust
 
@@ -34,26 +30,13 @@ check-code:
 build:
 	SQLX_OFFLINE=true cargo build --locked
 
-e2e: clean-deps start-deps build
-	bats -t bats
-
-sdl:
-	SQLX_OFFLINE=true cargo run --bin write_sdl > cala-server/schema.graphql
-
 sqlx-prepare:
 	cd cala-ledger && cargo sqlx prepare -- --all-features
-	cd cala-server && cargo sqlx prepare -- --all-features
 
 test-in-ci:
 	SQLX_OFFLINE=true cargo nextest run --verbose --locked
 	SQLX_OFFLINE=true cargo test --doc
 	SQLX_OFFLINE=true cargo doc --no-deps
-
-build-x86_64-unknown-linux-musl-release:
-	SQLX_OFFLINE=true cargo build --release --locked --bin cala-server --target x86_64-unknown-linux-musl
-
-build-x86_64-apple-darwin-release:
-	bin/osxcross-compile.sh
 
 event-schemas:
 	SQLX_OFFLINE=true cargo run -p cala-ledger --bin event-schemas --features json-schema
