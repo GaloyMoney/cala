@@ -130,20 +130,6 @@ jobs:
       tag: artifacts/gh-release-tag
       repository: repo
       merge: true
-  - task: github-release
-    config:
-      image_resource: #@ rust_task_image_config()
-      platform: linux
-      inputs:
-      - name: version
-      - name: pipeline-tasks
-      - name: artifacts
-      outputs:
-      - name: artifacts
-      params:
-        BRANCH: #@ data.values.git_branch
-      run:
-        path: pipeline-tasks/ci/tasks/github-release.sh
   - put: gh-release
     params:
       name: artifacts/gh-release-name
