@@ -327,10 +327,7 @@ impl AccountSets {
         &self,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        self.repo
-            .find_all(account_set_ids)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_all(account_set_ids).await?)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
@@ -339,18 +336,12 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
-        self.repo
-            .find_all_in_op(op, account_set_ids)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_all_in_op(op, account_set_ids).await?)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find", skip(self))]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
-        self.repo
-            .find_by_id(account_set_id)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_by_id(account_set_id).await?)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
@@ -359,10 +350,7 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
     ) -> Result<AccountSet, AccountSetError> {
-        self.repo
-            .find_by_id_in_op(op, account_set_id)
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_by_id_in_op(op, account_set_id).await?)
     }
 
     #[instrument(name = "cala_ledger.accounts_sets.find_by_external_id", skip(self))]
@@ -370,10 +358,7 @@ impl AccountSets {
         &self,
         external_id: String,
     ) -> Result<AccountSet, AccountSetError> {
-        self.repo
-            .find_by_external_id(Some(external_id))
-            .await
-            .map_err(Into::into)
+        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
     #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self))]
@@ -406,10 +391,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSet, AccountSetsByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo
+        Ok(self
+            .repo
             .list_for_name_by_created_at(name, args, Default::default())
-            .await
-            .map_err(Into::into)
+            .await?)
     }
 
     #[instrument(name = "cala_ledger.account_sets.list_for_name_in_op", skip(self, op))]
@@ -422,10 +407,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSet, AccountSetsByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo
+        Ok(self
+            .repo
             .list_for_name_by_created_at_in_op(op, name, args, Default::default())
-            .await
-            .map_err(Into::into)
+            .await?)
     }
 
     #[instrument(

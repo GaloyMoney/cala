@@ -15,7 +15,7 @@ pub enum AccountSetError {
     #[error("AccountSetError - Modify: {0}")]
     Modify(#[from] AccountSetModifyError),
     #[error("AccountSetError - Find: {0}")]
-    Find(#[from] AccountSetFindError),
+    Find(AccountSetFindError),
     #[error("AccountSetError - Query: {0}")]
     Query(#[from] AccountSetQueryError),
     #[error("AccountSetError - AccountError: {0}")]
@@ -28,20 +28,42 @@ pub enum AccountSetError {
     CouldNotFindById(AccountSetId),
     #[error("AccountSetError - NotFound: external id '{0}' not found")]
     CouldNotFindByExternalId(String),
-    #[error("AccountSetError - external_id already exists")]
-    ExternalIdAlreadyExists,
+    #[error("AccountSetError - external_id '{0}' already exists")]
+    ExternalIdAlreadyExists(String),
     #[error("AccountSetError - JournalIdMismatch")]
     JournalIdMismatch,
     #[error("AccountSetError - Member already added to account set")]
     MemberAlreadyAdded,
 }
 
+impl From<AccountSetFindError> for AccountSetError {
+    fn from(error: AccountSetFindError) -> Self {
+        match error {
+            AccountSetFindError::NotFound {
+                column: Some(AccountSetColumn::Id),
+                value,
+                ..
+            } => Self::CouldNotFindById(value.parse().expect("invalid uuid")),
+            AccountSetFindError::NotFound {
+                column: Some(AccountSetColumn::ExternalId),
+                value,
+                ..
+            } => Self::CouldNotFindByExternalId(value),
+            other => Self::Find(other),
+        }
+    }
+}
+
 impl From<AccountSetCreateError> for AccountSetError {
     fn from(error: AccountSetCreateError) -> Self {
-        if error.was_duplicate(AccountSetColumn::ExternalId) {
-            return Self::ExternalIdAlreadyExists;
+        match error {
+            AccountSetCreateError::ConstraintViolation {
+                column: Some(AccountSetColumn::ExternalId),
+                value,
+                ..
+            } => Self::ExternalIdAlreadyExists(value.unwrap_or_default()),
+            other => Self::Create(other),
         }
-        Self::Create(error)
     }
 }
 

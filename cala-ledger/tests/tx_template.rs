@@ -16,7 +16,7 @@ async fn duplicate_code() -> anyhow::Result<()> {
 
     let new_template = helpers::currency_conversion_template("tx_template_code");
     let res = cala.tx_templates().create(new_template).await;
-    assert!(matches!(res, Err(TxTemplateError::DuplicateCode)));
+    assert!(matches!(res, Err(TxTemplateError::DuplicateCode(_))));
 
     Ok(())
 }

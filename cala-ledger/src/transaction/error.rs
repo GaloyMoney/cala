@@ -15,13 +15,13 @@ pub enum TransactionError {
     #[error("TransactionError - Modify: {0}")]
     Modify(#[from] TransactionModifyError),
     #[error("TransactionError - Find: {0}")]
-    Find(#[from] TransactionFindError),
+    Find(TransactionFindError),
     #[error("TransactionError - Query: {0}")]
     Query(#[from] TransactionQueryError),
-    #[error("TransactionError - NotFound: external id '{0}' not found")]
-    CouldNotFindByExternalId(String),
     #[error("TransactionError - NotFound: id '{0}' not found")]
     CouldNotFindById(TransactionId),
+    #[error("TransactionError - NotFound: external id '{0}' not found")]
+    CouldNotFindByExternalId(String),
     #[error("TransactionError - DuplicateExternalId: external_id '{0}' already exists")]
     DuplicateExternalId(String),
     #[error("TransactionError - DuplicateId: id '{0}' already exists")]
@@ -32,20 +32,45 @@ pub enum TransactionError {
 
 impl TransactionError {
     pub fn was_not_found(&self) -> bool {
-        matches!(self, Self::Find(e) if e.was_not_found())
+        matches!(
+            self,
+            Self::CouldNotFindById(_) | Self::CouldNotFindByExternalId(_)
+        )
+    }
+}
+
+impl From<TransactionFindError> for TransactionError {
+    fn from(error: TransactionFindError) -> Self {
+        match error {
+            TransactionFindError::NotFound {
+                column: Some(TransactionColumn::Id),
+                value,
+                ..
+            } => Self::CouldNotFindById(value.parse().expect("invalid uuid")),
+            TransactionFindError::NotFound {
+                column: Some(TransactionColumn::ExternalId),
+                value,
+                ..
+            } => Self::CouldNotFindByExternalId(value),
+            other => Self::Find(other),
+        }
     }
 }
 
 impl From<TransactionCreateError> for TransactionError {
     fn from(error: TransactionCreateError) -> Self {
-        if let Some(value) = error.duplicate_value() {
-            if error.was_duplicate(TransactionColumn::ExternalId) {
-                return Self::DuplicateExternalId(value.to_string());
-            }
-            if error.was_duplicate(TransactionColumn::Id) {
-                return Self::DuplicateId(value.to_string());
-            }
+        match error {
+            TransactionCreateError::ConstraintViolation {
+                column: Some(TransactionColumn::ExternalId),
+                value,
+                ..
+            } => Self::DuplicateExternalId(value.unwrap_or_default()),
+            TransactionCreateError::ConstraintViolation {
+                column: Some(TransactionColumn::Id),
+                value,
+                ..
+            } => Self::DuplicateId(value.unwrap_or_default()),
+            other => Self::Create(other),
         }
-        Self::Create(error)
     }
 }

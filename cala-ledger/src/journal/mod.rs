@@ -51,12 +51,12 @@ impl Journals {
         &self,
         journal_ids: &[JournalId],
     ) -> Result<HashMap<JournalId, T>, JournalError> {
-        self.repo.find_all(journal_ids).await.map_err(Into::into)
+        Ok(self.repo.find_all(journal_ids).await?)
     }
 
     #[instrument(name = "cala_ledger.journals.find_by_id", skip(self))]
     pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        self.repo.find_by_id(journal_id).await.map_err(Into::into)
+        Ok(self.repo.find_by_id(journal_id).await?)
     }
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
@@ -79,7 +79,7 @@ impl Journals {
 
     #[instrument(name = "cala_ledger.journal.find_by_code", skip(self))]
     pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
-        self.repo.find_by_code(Some(code)).await.map_err(Into::into)
+        Ok(self.repo.find_by_code(Some(code)).await?)
     }
 }
 

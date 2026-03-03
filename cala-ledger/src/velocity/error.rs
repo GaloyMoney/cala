@@ -33,7 +33,7 @@ pub enum VelocityError {
     #[error("VelocityError - VelocityControlModify: {0}")]
     VelocityControlModify(#[from] VelocityControlModifyError),
     #[error("VelocityError - VelocityControlFind: {0}")]
-    VelocityControlFind(#[from] VelocityControlFindError),
+    VelocityControlFind(VelocityControlFindError),
     #[error("VelocityError - VelocityControlQuery: {0}")]
     VelocityControlQuery(#[from] VelocityControlQueryError),
     #[error("VelocityError - VelocityLimitCreate: {0}")]
@@ -44,12 +44,25 @@ pub enum VelocityError {
     VelocityLimitFind(#[from] VelocityLimitFindError),
     #[error("VelocityError - VelocityLimitQuery: {0}")]
     VelocityLimitQuery(#[from] VelocityLimitQueryError),
-    #[error("VelocityError - control_id already exists")]
-    ControlIdAlreadyExists,
-    #[error("VelocityError - limit_id already exists")]
-    LimitIdAlreadyExists,
+    #[error("VelocityError - control_id '{0}' already exists")]
+    ControlIdAlreadyExists(String),
+    #[error("VelocityError - limit_id '{0}' already exists")]
+    LimitIdAlreadyExists(String),
     #[error("VelocityError - Limit already added to Control")]
     LimitAlreadyAddedToControl,
+}
+
+impl From<VelocityControlFindError> for VelocityError {
+    fn from(error: VelocityControlFindError) -> Self {
+        match error {
+            VelocityControlFindError::NotFound {
+                column: Some(VelocityControlColumn::Id),
+                value,
+                ..
+            } => Self::CouldNotFindControlById(value.parse().expect("invalid uuid")),
+            other => Self::VelocityControlFind(other),
+        }
+    }
 }
 
 impl From<sqlx::Error> for VelocityError {
@@ -69,19 +82,27 @@ impl From<sqlx::Error> for VelocityError {
 
 impl From<VelocityControlCreateError> for VelocityError {
     fn from(error: VelocityControlCreateError) -> Self {
-        if error.was_duplicate(VelocityControlColumn::Id) {
-            return Self::ControlIdAlreadyExists;
+        match error {
+            VelocityControlCreateError::ConstraintViolation {
+                column: Some(VelocityControlColumn::Id),
+                value,
+                ..
+            } => Self::ControlIdAlreadyExists(value.unwrap_or_default()),
+            other => Self::VelocityControlCreate(other),
         }
-        Self::VelocityControlCreate(error)
     }
 }
 
 impl From<VelocityLimitCreateError> for VelocityError {
     fn from(error: VelocityLimitCreateError) -> Self {
-        if error.was_duplicate(VelocityLimitColumn::Id) {
-            return Self::LimitIdAlreadyExists;
+        match error {
+            VelocityLimitCreateError::ConstraintViolation {
+                column: Some(VelocityLimitColumn::Id),
+                value,
+                ..
+            } => Self::LimitIdAlreadyExists(value.unwrap_or_default()),
+            other => Self::VelocityLimitCreate(other),
         }
-        Self::VelocityLimitCreate(error)
     }
 }
 
