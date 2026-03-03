@@ -1,3 +1,20 @@
+# [cala release v0.14.0](https://github.com/GaloyMoney/cala/releases/tag/0.14.0)
+
+
+
+### Features
+
+- Add find_all_cumulative for batch point-in-time balance lookups (#681)
+
+### Miscellaneous Tasks
+
+- Remove cala-server (#682)
+
+### Refactor
+
+- Clean up error types and upgrade es-entity to 0.10.22 (#683)
+- [**breaking**] Adopt typed es-entity errors per operation (#680)
+
 # [cala release v0.13.20](https://github.com/GaloyMoney/cala/releases/tag/0.13.20)
 
 
