@@ -142,7 +142,8 @@
         cargo bench -p cala-perf
 
         echo "Running load tests..."
-        load_output=$(cargo run -p cala-perf 2>&1)
+        cargo run -p cala-perf 2>&1 | tee load-output.txt
+        load_output=$(cat load-output.txt)
 
         {
         echo "## Cala Performance Benchmark Results (non-representative)"
