@@ -1,3 +1,11 @@
+# [cala release v0.14.1](https://github.com/GaloyMoney/cala/releases/tag/0.14.1)
+
+
+
+### Bug Fixes
+
+- Add ORDER BY to advisory lock queries to prevent deadlocks (#684)
+
 # [cala release v0.14.0](https://github.com/GaloyMoney/cala/releases/tag/0.14.0)
 
 
