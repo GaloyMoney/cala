@@ -156,6 +156,7 @@ impl BalanceRepo {
             JOIN cala_accounts a
             ON account_id = a.id
             WHERE eventually_consistent = FALSE
+            ORDER BY account_id, currency
             "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
