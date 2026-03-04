@@ -108,6 +108,7 @@ impl VelocityBalanceRepo {
             $5::uuid[]
         )
         AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
+        ORDER BY account_id, velocity_control_id, velocity_limit_id, currency, journal_id
         "#,
             &currencies as &[&str],
             &journal_ids as &[JournalId],
