@@ -1,3 +1,12 @@
+# [cala release v0.14.2](https://github.com/GaloyMoney/cala/releases/tag/0.14.2)
+
+
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.10.30, job to 0.6.11, obix to 0.2.18 (#691)
+- Bump rustls-webpki from 0.103.9 to 0.103.10 (#690)
+
 # [cala release v0.14.1](https://github.com/GaloyMoney/cala/releases/tag/0.14.1)
 
 
