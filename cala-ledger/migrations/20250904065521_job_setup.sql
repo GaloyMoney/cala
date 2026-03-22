@@ -51,42 +51,37 @@ CREATE INDEX idx_job_executions_running_queue_id
   ON job_executions(queue_id)
   WHERE state = 'running' AND queue_id IS NOT NULL;
 
-CREATE OR REPLACE FUNCTION notify_job_execution_insert() RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
 BEGIN
-  PERFORM pg_notify('job_execution', NEW.job_type);
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE OR REPLACE FUNCTION notify_job_execution_update() RETURNS TRIGGER AS $$
-BEGIN
-  IF NEW.execute_at IS DISTINCT FROM OLD.execute_at THEN
-    PERFORM pg_notify('job_execution', NEW.job_type);
+  IF TG_OP = 'INSERT' THEN
+    PERFORM pg_notify('job_events',
+      json_build_object('type', 'execution_ready', 'job_type', NEW.job_type)::text);
+    RETURN NULL;
   END IF;
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
 
-CREATE TRIGGER job_executions_notify_insert_trigger
-AFTER INSERT ON job_executions
-FOR EACH ROW
-EXECUTE FUNCTION notify_job_execution_insert();
-
-CREATE TRIGGER job_executions_notify_update_trigger
-AFTER UPDATE ON job_executions
-FOR EACH ROW
-EXECUTE FUNCTION notify_job_execution_update();
-
-CREATE OR REPLACE FUNCTION notify_job_execution_delete() RETURNS TRIGGER AS $$
-BEGIN
-  IF OLD.queue_id IS NOT NULL THEN
-    PERFORM pg_notify('job_execution', OLD.job_type);
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.execute_at IS DISTINCT FROM OLD.execute_at THEN
+      PERFORM pg_notify('job_events',
+        json_build_object('type', 'execution_ready', 'job_type', NEW.job_type)::text);
+    END IF;
+    RETURN NULL;
   END IF;
+
+  IF TG_OP = 'DELETE' THEN
+    PERFORM pg_notify('job_events',
+      json_build_object('type', 'job_terminal', 'job_id', OLD.id::text)::text);
+    IF OLD.queue_id IS NOT NULL THEN
+      PERFORM pg_notify('job_events',
+        json_build_object('type', 'execution_ready', 'job_type', OLD.job_type)::text);
+    END IF;
+    RETURN NULL;
+  END IF;
+
   RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER job_executions_notify_delete_trigger
-AFTER DELETE ON job_executions
+CREATE TRIGGER job_executions_notify_event_trigger
+AFTER INSERT OR UPDATE OR DELETE ON job_executions
 FOR EACH ROW
-EXECUTE FUNCTION notify_job_execution_delete();
+EXECUTE FUNCTION notify_job_event();
