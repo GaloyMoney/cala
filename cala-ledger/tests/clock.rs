@@ -1,7 +1,7 @@
 mod helpers;
 
 use chrono::{TimeZone, Utc};
-use es_entity::clock::{ArtificialClockConfig, ClockHandle};
+use es_entity::clock::ClockHandle;
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
@@ -9,10 +9,8 @@ use cala_ledger::{tx_template::*, *};
 
 #[tokio::test]
 async fn transaction_effective_date_uses_clock() -> anyhow::Result<()> {
-    let (clock_handle, clock_ctrl) = ClockHandle::artificial(ArtificialClockConfig::manual());
-
     let fixed_time = Utc.with_ymd_and_hms(2025, 6, 15, 10, 30, 0).unwrap();
-    clock_ctrl.set_time(fixed_time);
+    let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
@@ -50,10 +48,8 @@ async fn transaction_effective_date_uses_clock() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
-    let (clock_handle, clock_ctrl) = ClockHandle::artificial(ArtificialClockConfig::manual());
-
     let time_1 = Utc.with_ymd_and_hms(2025, 1, 1, 12, 0, 0).unwrap();
-    clock_ctrl.set_time(time_1);
+    let (clock_handle, clock_ctrl) = ClockHandle::manual_at(time_1);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
@@ -85,7 +81,10 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
         .await?;
 
     let time_2 = Utc.with_ymd_and_hms(2025, 12, 25, 14, 0, 0).unwrap();
-    clock_ctrl.set_time(time_2);
+    let advance_duration = (time_2 - time_1)
+        .to_std()
+        .expect("positive duration");
+    clock_ctrl.advance(advance_duration).await;
 
     let mut params = Params::new();
     params.insert("journal_id", journal.id().to_string());
@@ -106,10 +105,8 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
-    let (clock_handle, clock_ctrl) = ClockHandle::artificial(ArtificialClockConfig::manual());
-
     let original_time = Utc.with_ymd_and_hms(2025, 3, 1, 9, 0, 0).unwrap();
-    clock_ctrl.set_time(original_time);
+    let (clock_handle, clock_ctrl) = ClockHandle::manual_at(original_time);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
@@ -142,7 +139,10 @@ async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
         .await?;
 
     let void_time = Utc.with_ymd_and_hms(2025, 3, 15, 16, 30, 0).unwrap();
-    clock_ctrl.set_time(void_time);
+    let advance_duration = (void_time - original_time)
+        .to_std()
+        .expect("positive duration");
+    clock_ctrl.advance(advance_duration).await;
 
     let voiding_tx_id = TransactionId::new();
     let voided_tx = cala.void_transaction(voiding_tx_id, original_tx_id).await?;
@@ -155,10 +155,8 @@ async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn begin_operation_attaches_clock_time() -> anyhow::Result<()> {
-    let (clock_handle, clock_ctrl) = ClockHandle::artificial(ArtificialClockConfig::manual());
-
     let fixed_time = Utc.with_ymd_and_hms(2025, 7, 4, 12, 0, 0).unwrap();
-    clock_ctrl.set_time(fixed_time);
+    let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
@@ -180,10 +178,8 @@ async fn begin_operation_attaches_clock_time() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn clock_propagates_through_atomic_operations() -> anyhow::Result<()> {
-    let (clock_handle, clock_ctrl) = ClockHandle::artificial(ArtificialClockConfig::manual());
-
     let fixed_time = Utc.with_ymd_and_hms(2025, 9, 21, 8, 15, 0).unwrap();
-    clock_ctrl.set_time(fixed_time);
+    let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
