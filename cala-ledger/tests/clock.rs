@@ -81,9 +81,7 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
         .await?;
 
     let time_2 = Utc.with_ymd_and_hms(2025, 12, 25, 14, 0, 0).unwrap();
-    let advance_duration = (time_2 - time_1)
-        .to_std()
-        .expect("positive duration");
+    let advance_duration = (time_2 - time_1).to_std().expect("positive duration");
     clock_ctrl.advance(advance_duration).await;
 
     let mut params = Params::new();
