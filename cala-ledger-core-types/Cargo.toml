@@ -2,7 +2,7 @@
 name = "cala-ledger-core-types"
 repository = "https://github.com/GaloyMoney/cala"
 description = "Core types for cala"
-version = "0.14.3"
+version = "0.14.4-dev"
 edition = "2021"
 license = "Apache-2.0"
 
