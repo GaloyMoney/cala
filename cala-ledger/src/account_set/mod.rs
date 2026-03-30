@@ -1,4 +1,3 @@
-mod cursor;
 mod entity;
 pub mod error;
 mod repo;
@@ -16,7 +15,6 @@ use crate::{
     primitives::{DebitOrCredit, JournalId, Layer},
 };
 
-pub use cursor::*;
 pub use entity::*;
 use error::*;
 use repo::*;
