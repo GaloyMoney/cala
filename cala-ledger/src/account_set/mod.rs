@@ -365,8 +365,8 @@ impl AccountSets {
     pub async fn find_where_member(
         &self,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {
@@ -421,8 +421,8 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {

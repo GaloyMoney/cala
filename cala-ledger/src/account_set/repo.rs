@@ -696,8 +696,8 @@ impl AccountSetRepo {
     pub async fn find_where_account_is_member(
         &self,
         account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         self.find_where_account_is_member_in_op(&self.pool, account_id, query)
             .await
@@ -707,8 +707,8 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -730,7 +730,7 @@ impl AccountSetRepo {
 
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetsByNameCursor {
+            end_cursor = Some(AccountSetByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });
@@ -745,8 +745,8 @@ impl AccountSetRepo {
     pub async fn find_where_account_set_is_member(
         &self,
         account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         self.find_where_account_set_is_member_in_op(&self.pool, account_set_id, query)
             .await
@@ -756,8 +756,8 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -778,7 +778,7 @@ impl AccountSetRepo {
         .await?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetsByNameCursor {
+            end_cursor = Some(AccountSetByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });

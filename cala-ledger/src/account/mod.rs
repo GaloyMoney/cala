@@ -105,8 +105,8 @@ impl Accounts {
     #[instrument(name = "cala_ledger.accounts.list", skip(self))]
     pub async fn list(
         &self,
-        query: es_entity::PaginatedQueryArgs<AccountsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<Account, AccountsByNameCursor>, AccountError> {
+        query: es_entity::PaginatedQueryArgs<AccountByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
         Ok(self.repo.list_by_name(query, Default::default()).await?)
     }
 
