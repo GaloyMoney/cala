@@ -16,7 +16,7 @@ use crate::{entry::NewEntry, outbox::*, primitives::*, transaction::NewTransacti
 
 pub use entity::*;
 use error::*;
-pub use repo::tx_template_cursor::TxTemplatesByCodeCursor;
+pub use repo::tx_template_cursor::TxTemplateByCodeCursor;
 use repo::*;
 
 pub(crate) struct PreparedTransaction {
@@ -70,9 +70,9 @@ impl TxTemplates {
     #[instrument(name = "cala_ledger.tx_templates.list", skip(self))]
     pub async fn list(
         &self,
-        cursor: es_entity::PaginatedQueryArgs<TxTemplatesByCodeCursor>,
+        cursor: es_entity::PaginatedQueryArgs<TxTemplateByCodeCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplatesByCodeCursor>, TxTemplateError>
+    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, TxTemplateError>
     {
         Ok(self.repo.list_by_code(cursor, direction).await?)
     }

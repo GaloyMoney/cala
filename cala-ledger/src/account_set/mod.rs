@@ -386,9 +386,9 @@ impl AccountSets {
     pub async fn list_for_name(
         &self,
         name: String,
-        args: es_entity::PaginatedQueryArgs<AccountSetsByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSet, AccountSetsByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>,
         AccountSetError,
     > {
         Ok(self
@@ -402,9 +402,9 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         name: String,
-        args: es_entity::PaginatedQueryArgs<AccountSetsByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSet, AccountSetsByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>,
         AccountSetError,
     > {
         Ok(self
@@ -441,9 +441,9 @@ impl AccountSets {
     pub async fn list_members_by_created_at(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
         self.repo.list_children_by_created_at(id, args).await
@@ -453,9 +453,9 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
         self.repo
@@ -466,11 +466,11 @@ impl AccountSets {
     pub async fn list_members_by_external_id(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<
             AccountSetMemberByExternalId,
-            AccountSetMembersByExternalIdCursor,
+            AccountSetMemberByExternalIdCursor,
         >,
         AccountSetError,
     > {
@@ -481,11 +481,11 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<
             AccountSetMemberByExternalId,
-            AccountSetMembersByExternalIdCursor,
+            AccountSetMemberByExternalIdCursor,
         >,
         AccountSetError,
     > {

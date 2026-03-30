@@ -13,7 +13,7 @@ use crate::{
 
 pub use entity::*;
 use error::*;
-pub use repo::entry_cursor::EntriesByCreatedAtCursor;
+pub use repo::entry_cursor::EntryByCreatedAtCursor;
 use repo::*;
 
 #[derive(Clone)]
@@ -40,9 +40,9 @@ impl Entries {
     pub async fn list_for_account_id(
         &self,
         account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<EntriesByCreatedAtCursor>,
+        query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
         Ok(self
             .repo
             .list_for_account_id_by_created_at(account_id, query, direction)
@@ -53,9 +53,9 @@ impl Entries {
     pub async fn list_for_account_set_id(
         &self,
         account_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<EntriesByCreatedAtCursor>,
+        query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
         self.repo
             .list_for_account_set_id_by_created_at(account_id, query, direction)
             .await
@@ -65,9 +65,9 @@ impl Entries {
     pub async fn list_for_journal_id(
         &self,
         journal_id: JournalId,
-        query: es_entity::PaginatedQueryArgs<EntriesByCreatedAtCursor>,
+        query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntriesByCreatedAtCursor>, EntryError> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
         Ok(self
             .repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
