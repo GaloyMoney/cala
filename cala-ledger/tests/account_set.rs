@@ -358,7 +358,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities[0])),
     };
 
     let ret = cala
@@ -378,7 +378,7 @@ async fn members_pagination() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMembersByCreatedAtCursor::from(&ret.entities[1])),
+        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities[1])),
     };
 
     let ret = cala
@@ -470,7 +470,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,
-        after: Some(AccountSetMembersByExternalIdCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities[0])),
     };
     let ret = cala
         .account_sets()
@@ -480,7 +480,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,
-        after: Some(AccountSetMembersByExternalIdCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities[0])),
     };
     let ret = cala
         .account_sets()

@@ -46,12 +46,10 @@ impl EntryRepo {
     pub(super) async fn list_for_account_set_id_by_created_at(
         &self,
         account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<entry_cursor::EntriesByCreatedAtCursor>,
+        query: es_entity::PaginatedQueryArgs<entry_cursor::EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<Entry, entry_cursor::EntriesByCreatedAtCursor>,
-        EntryError,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>, EntryError>
+    {
         let es_entity::PaginatedQueryArgs { first, after } = query;
         let (id, created_at) = if let Some(after) = after {
             (Some(after.id), Some(after.created_at))
@@ -104,7 +102,7 @@ impl EntryRepo {
 
         let end_cursor = entities
             .last()
-            .map(entry_cursor::EntriesByCreatedAtCursor::from);
+            .map(entry_cursor::EntryByCreatedAtCursor::from);
 
         Ok(es_entity::PaginatedQueryRet {
             entities,

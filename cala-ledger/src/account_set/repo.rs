@@ -21,12 +21,12 @@ pub mod members_cursor {
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMembersByCreatedAtCursor {
+    pub struct AccountSetMemberByCreatedAtCursor {
         pub id: AccountSetMemberId,
         pub member_created_at: chrono::DateTime<chrono::Utc>,
     }
 
-    impl From<&AccountSetMember> for AccountSetMembersByCreatedAtCursor {
+    impl From<&AccountSetMember> for AccountSetMemberByCreatedAtCursor {
         fn from(member: &AccountSetMember) -> Self {
             Self {
                 id: member.id,
@@ -36,7 +36,7 @@ pub mod members_cursor {
     }
 
     #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMembersByCreatedAtCursor {
+    impl async_graphql::connection::CursorType for AccountSetMemberByCreatedAtCursor {
         type Error = String;
 
         fn encode_cursor(&self) -> String {
@@ -56,12 +56,12 @@ pub mod members_cursor {
     }
 
     #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMembersByExternalIdCursor {
+    pub struct AccountSetMemberByExternalIdCursor {
         pub id: AccountSetMemberId,
         pub external_id: Option<String>,
     }
 
-    impl From<&AccountSetMemberByExternalId> for AccountSetMembersByExternalIdCursor {
+    impl From<&AccountSetMemberByExternalId> for AccountSetMemberByExternalIdCursor {
         fn from(member: &AccountSetMemberByExternalId) -> Self {
             Self {
                 id: member.id,
@@ -71,7 +71,7 @@ pub mod members_cursor {
     }
 
     #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMembersByExternalIdCursor {
+    impl async_graphql::connection::CursorType for AccountSetMemberByExternalIdCursor {
         type Error = String;
 
         fn encode_cursor(&self) -> String {
@@ -131,9 +131,9 @@ impl AccountSetRepo {
     pub async fn list_children_by_created_at(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
         self.list_children_by_created_at_in_op(&self.pool, id, args)
@@ -149,9 +149,9 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByCreatedAtCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMembersByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
@@ -223,7 +223,7 @@ impl AccountSetRepo {
                     last.member_account_set_id
                         .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
                 });
-            end_cursor = Some(AccountSetMembersByCreatedAtCursor {
+            end_cursor = Some(AccountSetMemberByCreatedAtCursor {
                 id: id.expect("member_id not set"),
                 member_created_at: last.created_at.expect("created_at not set"),
             });
@@ -257,11 +257,11 @@ impl AccountSetRepo {
     pub async fn list_children_by_external_id(
         &self,
         id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<
             AccountSetMemberByExternalId,
-            AccountSetMembersByExternalIdCursor,
+            AccountSetMemberByExternalIdCursor,
         >,
         AccountSetError,
     > {
@@ -273,11 +273,11 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMembersByExternalIdCursor>,
+        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<
             AccountSetMemberByExternalId,
-            AccountSetMembersByExternalIdCursor,
+            AccountSetMemberByExternalIdCursor,
         >,
         AccountSetError,
     > {
@@ -363,7 +363,7 @@ impl AccountSetRepo {
                     last.member_account_set_id
                         .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
                 });
-            end_cursor = Some(AccountSetMembersByExternalIdCursor {
+            end_cursor = Some(AccountSetMemberByExternalIdCursor {
                 id: id.expect("member_id not set"),
                 external_id: last.external_id.clone(),
             });
@@ -696,8 +696,8 @@ impl AccountSetRepo {
     pub async fn find_where_account_is_member(
         &self,
         account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         self.find_where_account_is_member_in_op(&self.pool, account_id, query)
             .await
@@ -707,8 +707,8 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_id: AccountId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -730,7 +730,7 @@ impl AccountSetRepo {
 
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetsByNameCursor {
+            end_cursor = Some(AccountSetByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });
@@ -745,8 +745,8 @@ impl AccountSetRepo {
     pub async fn find_where_account_set_is_member(
         &self,
         account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         self.find_where_account_set_is_member_in_op(&self.pool, account_set_id, query)
             .await
@@ -756,8 +756,8 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
-        query: es_entity::PaginatedQueryArgs<AccountSetsByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetsByNameCursor>, AccountSetError>
+        query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -778,7 +778,7 @@ impl AccountSetRepo {
         .await?;
         let mut end_cursor = None;
         if let Some(last) = entities.last() {
-            end_cursor = Some(AccountSetsByNameCursor {
+            end_cursor = Some(AccountSetByNameCursor {
                 id: last.values().id,
                 name: last.values().name.clone(),
             });

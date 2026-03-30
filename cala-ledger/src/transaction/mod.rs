@@ -13,7 +13,7 @@ use crate::primitives::{EntryId, TxTemplateId};
 
 pub use entity::*;
 use error::*;
-pub use repo::transaction_cursor::TransactionsByCreatedAtCursor;
+pub use repo::transaction_cursor::TransactionByCreatedAtCursor;
 use repo::*;
 
 #[derive(Clone)]
@@ -76,10 +76,10 @@ impl Transactions {
     pub async fn list_for_template_id(
         &self,
         template_id: TxTemplateId,
-        query: es_entity::PaginatedQueryArgs<TransactionsByCreatedAtCursor>,
+        query: es_entity::PaginatedQueryArgs<TransactionByCreatedAtCursor>,
         direction: es_entity::ListDirection,
     ) -> Result<
-        es_entity::PaginatedQueryRet<Transaction, TransactionsByCreatedAtCursor>,
+        es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>,
         TransactionError,
     > {
         Ok(self
