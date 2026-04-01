@@ -184,7 +184,7 @@ fn post_simple_transaction_with_one_account_set(c: &mut Criterion) {
         simple_transfer::init(&cala).await.unwrap();
         let journal = init_journal(&cala, false).await.unwrap();
         let (sender, recipient, sender_set, recipient_set) =
-            init_accounts_with_account_sets_depth(&cala, &journal, false, 1)
+            init_accounts_with_account_sets_depth(&cala, &journal, false, 1, false)
                 .await
                 .unwrap();
         (cala, journal, sender, recipient, sender_set, recipient_set)
@@ -212,7 +212,7 @@ fn post_simple_transaction_with_five_account_set(c: &mut Criterion) {
         simple_transfer::init(&cala).await.unwrap();
         let journal = init_journal(&cala, false).await.unwrap();
         let (sender, recipient, sender_set, recipient_set) =
-            init_accounts_with_account_sets_depth(&cala, &journal, false, 5)
+            init_accounts_with_account_sets_depth(&cala, &journal, false, 5, false)
                 .await
                 .unwrap();
         (cala, journal, sender, recipient, sender_set, recipient_set)
@@ -232,6 +232,106 @@ fn post_simple_transaction_with_five_account_set(c: &mut Criterion) {
     });
 }
 
+fn post_simple_transaction_with_ec_account_set(c: &mut Criterion) {
+    let rt = create_single_worker_runtime();
+
+    let (cala, journal, sender, recipient, _sender_set, _recipient_set) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala, false).await.unwrap();
+        let (sender, recipient, sender_set, recipient_set) =
+            init_accounts_with_account_sets_depth(&cala, &journal, false, 1, true)
+                .await
+                .unwrap();
+        (cala, journal, sender, recipient, sender_set, recipient_set)
+    });
+
+    c.bench_function("9. post_simple_transaction_with_ec_account_set", |b| {
+        b.to_async(&rt).iter(|| async {
+            simple_transfer::execute(
+                black_box(&cala),
+                black_box(journal.id()),
+                black_box(sender.id()),
+                black_box(recipient.id()),
+            )
+            .await
+            .unwrap()
+        })
+    });
+}
+
+fn post_and_recalculate_ec_account_set(c: &mut Criterion) {
+    let rt = create_single_worker_runtime();
+
+    let (cala, journal, sender, recipient, sender_set, recipient_set) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala, false).await.unwrap();
+        let (sender, recipient, sender_set, recipient_set) =
+            init_accounts_with_account_sets_depth(&cala, &journal, false, 1, true)
+                .await
+                .unwrap();
+        (cala, journal, sender, recipient, sender_set, recipient_set)
+    });
+
+    let sender_set_id = sender_set.id();
+    let recipient_set_id = recipient_set.id();
+
+    c.bench_function("10. post_and_recalculate_ec_account_set", |b| {
+        b.to_async(&rt).iter(|| async {
+            simple_transfer::execute(
+                black_box(&cala),
+                black_box(journal.id()),
+                black_box(sender.id()),
+                black_box(recipient.id()),
+            )
+            .await
+            .unwrap();
+            cala.account_sets()
+                .recalculate_balances_batch(black_box(&[sender_set_id, recipient_set_id]))
+                .await
+                .unwrap();
+        })
+    });
+}
+
+fn post_and_batch_recalculate_ec_account_set(c: &mut Criterion) {
+    let rt = create_single_worker_runtime();
+
+    let (cala, journal, sender, recipient, sender_set, recipient_set) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala, false).await.unwrap();
+        let (sender, recipient, sender_set, recipient_set) =
+            init_accounts_with_account_sets_depth(&cala, &journal, false, 1, true)
+                .await
+                .unwrap();
+        (cala, journal, sender, recipient, sender_set, recipient_set)
+    });
+
+    let sender_set_id = sender_set.id();
+    let recipient_set_id = recipient_set.id();
+
+    c.bench_function("11. post_and_batch_recalculate_ec_account_set", |b| {
+        b.to_async(&rt).iter(|| async {
+            for _ in 0..10 {
+                simple_transfer::execute(
+                    black_box(&cala),
+                    black_box(journal.id()),
+                    black_box(sender.id()),
+                    black_box(recipient.id()),
+                )
+                .await
+                .unwrap();
+            }
+            cala.account_sets()
+                .recalculate_balances_batch(black_box(&[sender_set_id, recipient_set_id]))
+                .await
+                .unwrap();
+        })
+    });
+}
+
 criterion_group!(
     benches,
     post_simple_transaction,
@@ -242,5 +342,8 @@ criterion_group!(
     post_simple_transaction_with_velocity,
     post_simple_transaction_with_skipped_velocity,
     post_simple_transaction_with_hit_velocity,
+    post_simple_transaction_with_ec_account_set,
+    post_and_recalculate_ec_account_set,
+    post_and_batch_recalculate_ec_account_set,
 );
 criterion_main!(benches);
