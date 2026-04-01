@@ -361,7 +361,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
-    ) -> Result<(HashMap<Currency, BalanceSnapshot>, Option<EntryId>), BalanceError> {
+    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
         let rows = sqlx::query!(
             r#"
             SELECT latest_values
@@ -382,13 +382,7 @@ impl BalanceRepo {
             balances.insert(snap.currency, snap);
         }
 
-        let watermark = balances
-            .values()
-            .map(|snap| snap.entry_id)
-            .max_by_key(|id| uuid::Uuid::from(*id))
-            .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
-
-        Ok((balances, watermark))
+        Ok(balances)
     }
 
     #[instrument(
