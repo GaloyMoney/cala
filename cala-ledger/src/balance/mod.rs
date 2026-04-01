@@ -183,14 +183,14 @@ impl Balances {
     ) -> Result<(), BalanceError> {
         let account_id = AccountId::from(&account_set_id);
 
-        let (current_balances, total_processed) = self
+        let (current_balances, watermark) = self
             .repo
             .load_account_set_balances(op, journal_id, account_id)
             .await?;
 
         let new_history = self
             .repo
-            .fetch_incremental_member_history(op, journal_id, account_set_id, total_processed)
+            .fetch_incremental_member_history(op, journal_id, account_set_id, watermark)
             .await?;
 
         if new_history.is_empty() {

@@ -361,12 +361,12 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
-    ) -> Result<(HashMap<Currency, BalanceSnapshot>, i64), BalanceError> {
+    ) -> Result<(HashMap<Currency, BalanceSnapshot>, Option<EntryId>), BalanceError> {
         use sqlx::Row as _;
 
         let rows = sqlx::query(
             r#"
-            SELECT latest_values, latest_version
+            SELECT latest_values
             FROM cala_current_balances
             WHERE account_id = $1 AND journal_id = $2
             FOR UPDATE
@@ -378,17 +378,28 @@ impl BalanceRepo {
         .await?;
 
         let mut balances = HashMap::new();
-        let mut total_processed: i64 = 0;
         for row in rows {
             let latest_values: serde_json::Value = row.try_get("latest_values")?;
-            let latest_version: i32 = row.try_get("latest_version")?;
             let snap: BalanceSnapshot = serde_json::from_value(latest_values)
                 .expect("Failed to deserialize balance snapshot");
-            total_processed += latest_version as i64;
             balances.insert(snap.currency, snap);
         }
 
-        Ok((balances, total_processed))
+        let watermark_row = sqlx::query(
+            r#"
+            SELECT MAX(latest_entry_id) as watermark
+            FROM cala_balance_history
+            WHERE account_id = $1 AND journal_id = $2
+            "#,
+        )
+        .bind(account_id)
+        .bind(journal_id)
+        .fetch_one(op.as_executor())
+        .await?;
+        let watermark: Option<uuid::Uuid> = watermark_row.try_get("watermark")?;
+        let watermark = watermark.filter(|id| !id.is_nil()).map(EntryId::from);
+
+        Ok((balances, watermark))
     }
 
     #[instrument(
@@ -401,17 +412,16 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_set_id: AccountSetId,
-        offset: i64,
+        watermark: Option<EntryId>,
     ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
         use sqlx::Row as _;
 
+        let watermark_uuid: Option<uuid::Uuid> = watermark.map(uuid::Uuid::from);
         let rows = sqlx::query(
             r#"
             WITH all_member_history AS (
                 SELECT h.values, h.account_id, h.currency, h.version,
-                       ROW_NUMBER() OVER (
-                           ORDER BY h.recorded_at, h.account_id, h.version
-                       ) as rn
+                       h.latest_entry_id
                 FROM cala_balance_history h
                 JOIN cala_account_set_member_accounts m
                     ON m.member_account_id = h.account_id
@@ -426,18 +436,19 @@ impl BalanceRepo {
                        LAG(values) OVER (
                            PARTITION BY account_id, currency ORDER BY version
                        ) as prev_values,
-                       rn
+                       latest_entry_id,
+                       account_id
                 FROM all_member_history
             )
             SELECT values, prev_values
             FROM with_prev
-            WHERE rn > $3
-            ORDER BY rn
+            WHERE ($3::uuid IS NULL OR latest_entry_id > $3)
+            ORDER BY latest_entry_id, account_id
             "#,
         )
         .bind(account_set_id)
         .bind(journal_id)
-        .bind(offset)
+        .bind(watermark_uuid)
         .fetch_all(op.as_executor())
         .await?;
 
