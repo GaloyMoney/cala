@@ -307,6 +307,8 @@ impl Balances {
                         entry_id,
                         modified_at: snapshot.modified_at,
                     },
+                    // Starts at 0, matching Snapshots::new_snapshot(). The
+                    // += 1 below produces version 1 for the first persisted row.
                     version: 0,
                     modified_at: snapshot.modified_at,
                     created_at: snapshot.modified_at,
@@ -613,6 +615,211 @@ mod tests {
             let result = Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 2);
+        }
+    }
+
+    mod replay_member_deltas {
+        use super::*;
+
+        use chrono::Utc;
+        use rust_decimal::Decimal;
+        use std::collections::HashMap;
+
+        use cala_types::balance::BalanceAmount;
+
+        use crate::primitives::{Currency, EntryId, JournalId};
+
+        fn zero_balance(
+            journal_id: JournalId,
+            account_id: AccountId,
+            currency: Currency,
+            entry_id: EntryId,
+            version: u32,
+        ) -> BalanceSnapshot {
+            let time = Utc::now();
+            BalanceSnapshot {
+                journal_id,
+                account_id,
+                entry_id,
+                currency,
+                settled: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                pending: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                encumbrance: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                version,
+                modified_at: time,
+                created_at: time,
+            }
+        }
+
+        fn member_snapshot(
+            currency: &str,
+            entry_id: EntryId,
+            settled_dr: Decimal,
+            settled_cr: Decimal,
+        ) -> BalanceSnapshot {
+            let time = Utc::now();
+            let currency: Currency = currency.parse().unwrap();
+            BalanceSnapshot {
+                journal_id: JournalId::new(),
+                account_id: AccountId::new(),
+                entry_id,
+                currency,
+                settled: BalanceAmount {
+                    dr_balance: settled_dr,
+                    cr_balance: settled_cr,
+                    entry_id,
+                    modified_at: time,
+                },
+                pending: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                encumbrance: BalanceAmount {
+                    dr_balance: Decimal::ZERO,
+                    cr_balance: Decimal::ZERO,
+                    entry_id,
+                    modified_at: time,
+                },
+                version: 1,
+                modified_at: time,
+                created_at: time,
+            }
+        }
+
+        #[test]
+        fn first_run_produces_version_1() {
+            let journal_id = JournalId::new();
+            let account_id = AccountId::new();
+            let entry_id = EntryId::new();
+
+            let history = vec![MemberBalanceHistoryRow {
+                snapshot: member_snapshot("USD", entry_id, Decimal::from(100), Decimal::ZERO),
+                prev_snapshot: None,
+            }];
+
+            let result =
+                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].version, 1);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
+            assert_eq!(result[0].account_id, account_id);
+            assert_eq!(result[0].journal_id, journal_id);
+        }
+
+        #[test]
+        fn incremental_applies_delta_to_existing_balance() {
+            let journal_id = JournalId::new();
+            let account_id = AccountId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            let existing_entry = EntryId::new();
+            let mut existing = zero_balance(journal_id, account_id, currency, existing_entry, 2);
+            existing.settled.dr_balance = Decimal::from(200);
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert(currency, existing);
+
+            let prev = member_snapshot("USD", EntryId::new(), Decimal::from(50), Decimal::ZERO);
+            let curr = member_snapshot("USD", EntryId::new(), Decimal::from(80), Decimal::ZERO);
+            // Delta: 80 - 50 = 30 dr
+            let history = vec![MemberBalanceHistoryRow {
+                snapshot: curr,
+                prev_snapshot: Some(prev),
+            }];
+
+            let result =
+                Balances::replay_member_deltas(journal_id, account_id, current_balances, history);
+
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].version, 3);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(230));
+        }
+
+        #[test]
+        fn multiple_deltas_accumulate() {
+            let journal_id = JournalId::new();
+            let account_id = AccountId::new();
+
+            let snap1 = member_snapshot("USD", EntryId::new(), Decimal::from(100), Decimal::ZERO);
+            let snap2 = member_snapshot("USD", EntryId::new(), Decimal::from(250), Decimal::ZERO);
+            let history = vec![
+                MemberBalanceHistoryRow {
+                    snapshot: snap1.clone(),
+                    prev_snapshot: None,
+                },
+                MemberBalanceHistoryRow {
+                    snapshot: snap2,
+                    prev_snapshot: Some(snap1),
+                },
+            ];
+
+            let result =
+                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+
+            assert_eq!(result.len(), 2);
+            assert_eq!(result[0].version, 1);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
+            assert_eq!(result[1].version, 2);
+            assert_eq!(result[1].settled.dr_balance, Decimal::from(250));
+        }
+
+        #[test]
+        fn multi_currency_tracked_independently() {
+            let journal_id = JournalId::new();
+            let account_id = AccountId::new();
+
+            let usd = member_snapshot("USD", EntryId::new(), Decimal::from(100), Decimal::ZERO);
+            let btc = member_snapshot("BTC", EntryId::new(), Decimal::ZERO, Decimal::from(50));
+            let history = vec![
+                MemberBalanceHistoryRow {
+                    snapshot: usd,
+                    prev_snapshot: None,
+                },
+                MemberBalanceHistoryRow {
+                    snapshot: btc,
+                    prev_snapshot: None,
+                },
+            ];
+
+            let result =
+                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+
+            assert_eq!(result.len(), 2);
+            let usd_snap = result.iter().find(|s| s.currency.code() == "USD").unwrap();
+            let btc_snap = result.iter().find(|s| s.currency.code() == "BTC").unwrap();
+            assert_eq!(usd_snap.settled.dr_balance, Decimal::from(100));
+            assert_eq!(btc_snap.settled.cr_balance, Decimal::from(50));
+            assert_eq!(usd_snap.version, 1);
+            assert_eq!(btc_snap.version, 1);
+        }
+
+        #[test]
+        fn empty_history_returns_empty() {
+            let result = Balances::replay_member_deltas(
+                JournalId::new(),
+                AccountId::new(),
+                HashMap::new(),
+                Vec::new(),
+            );
+            assert!(result.is_empty());
         }
     }
 }
