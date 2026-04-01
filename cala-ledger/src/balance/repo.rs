@@ -6,7 +6,9 @@ use std::collections::HashMap;
 use cala_types::{
     balance::BalanceSnapshot,
     outbox::OutboxEventPayload,
-    primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status},
+    primitives::{
+        AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status,
+    },
 };
 
 use super::{account_balance::AccountBalance, error::BalanceError};
@@ -348,4 +350,119 @@ impl BalanceRepo {
             .collect();
         Ok(ret)
     }
+
+    #[instrument(
+        name = "balance.load_account_set_balances",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(crate) async fn load_account_set_balances(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+    ) -> Result<(HashMap<Currency, BalanceSnapshot>, i64), BalanceError> {
+        use sqlx::Row as _;
+
+        let rows = sqlx::query(
+            r#"
+            SELECT latest_values, latest_version
+            FROM cala_current_balances
+            WHERE account_id = $1 AND journal_id = $2
+            FOR UPDATE
+            "#,
+        )
+        .bind(account_id)
+        .bind(journal_id)
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut balances = HashMap::new();
+        let mut total_processed: i64 = 0;
+        for row in rows {
+            let latest_values: serde_json::Value = row.try_get("latest_values")?;
+            let latest_version: i32 = row.try_get("latest_version")?;
+            let snap: BalanceSnapshot = serde_json::from_value(latest_values)
+                .expect("Failed to deserialize balance snapshot");
+            total_processed += latest_version as i64;
+            balances.insert(snap.currency, snap);
+        }
+
+        Ok((balances, total_processed))
+    }
+
+    #[instrument(
+        name = "balance.fetch_incremental_member_history",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(crate) async fn fetch_incremental_member_history(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_set_id: AccountSetId,
+        offset: i64,
+    ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
+        use sqlx::Row as _;
+
+        let rows = sqlx::query(
+            r#"
+            WITH all_member_history AS (
+                SELECT h.values, h.account_id, h.currency, h.version,
+                       ROW_NUMBER() OVER (
+                           ORDER BY h.recorded_at, h.account_id, h.version
+                       ) as rn
+                FROM cala_balance_history h
+                JOIN cala_account_set_member_accounts m
+                    ON m.member_account_id = h.account_id
+                LEFT JOIN cala_account_sets s
+                    ON s.id = h.account_id
+                WHERE m.account_set_id = $1
+                    AND h.journal_id = $2
+                    AND s.id IS NULL
+            ),
+            with_prev AS (
+                SELECT values,
+                       LAG(values) OVER (
+                           PARTITION BY account_id, currency ORDER BY version
+                       ) as prev_values,
+                       rn
+                FROM all_member_history
+            )
+            SELECT values, prev_values
+            FROM with_prev
+            WHERE rn > $3
+            ORDER BY rn
+            "#,
+        )
+        .bind(account_set_id)
+        .bind(journal_id)
+        .bind(offset)
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result = Vec::with_capacity(rows.len());
+        for row in rows {
+            let values: serde_json::Value = row.try_get("values")?;
+            let prev_values: Option<serde_json::Value> = row.try_get("prev_values")?;
+
+            let snapshot: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let prev_snapshot: Option<BalanceSnapshot> = prev_values.map(|v| {
+                serde_json::from_value(v).expect("Failed to deserialize previous balance snapshot")
+            });
+
+            result.push(MemberBalanceHistoryRow {
+                snapshot,
+                prev_snapshot,
+            });
+        }
+
+        Ok(result)
+    }
+}
+
+pub(crate) struct MemberBalanceHistoryRow {
+    pub(crate) snapshot: BalanceSnapshot,
+    pub(crate) prev_snapshot: Option<BalanceSnapshot>,
 }

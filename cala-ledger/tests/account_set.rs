@@ -490,3 +490,220 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn eventually_consistent_balances() -> anyhow::Result<()> {
+    use cala_ledger::balance::BalanceSnapshot;
+    use sqlx::Row as _;
+
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Create inline set for reference comparison
+    let inline_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Inline Set")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let inline_set = cala.account_sets().create(inline_set).await.unwrap();
+
+    // Create eventually_consistent set
+    let ec_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("EC Set")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let ec_set = cala.account_sets().create(ec_set).await.unwrap();
+
+    // Add recipient to both sets (no existing balance → no-op entries)
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_account.id())
+        .await
+        .unwrap();
+
+    // --- First batch: post 2 transactions ---
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // EC set should have NO balance inline
+    assert!(
+        cala.balances()
+            .find(journal.id(), ec_set.id(), btc)
+            .await
+            .is_err(),
+        "EC set should not have inline balance"
+    );
+
+    // First recalculate — processes all member history from scratch
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await
+        .unwrap();
+
+    // Verify EC matches inline after first batch
+    let inline_bal = cala
+        .balances()
+        .find(journal.id(), inline_set.id(), btc)
+        .await?;
+    let ec_bal = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(inline_bal.settled(), ec_bal.settled());
+    assert_eq!(inline_bal.details.version, ec_bal.details.version);
+
+    // --- Second batch: post 2 more transactions ---
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // Second recalculate — incremental, only processes new changes
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await
+        .unwrap();
+
+    // Verify EC matches inline after second batch
+    let inline_bal_2 = cala
+        .balances()
+        .find(journal.id(), inline_set.id(), btc)
+        .await?;
+    let ec_bal_2 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(inline_bal_2.settled(), ec_bal_2.settled());
+    assert_eq!(inline_bal_2.details.version, ec_bal_2.details.version);
+
+    // Verify balance_history counts match across ALL currencies
+    let inline_account_id = AccountId::from(&inline_set.id());
+    let ec_account_id = AccountId::from(&ec_set.id());
+
+    let inline_count: i64 = sqlx::query(
+        "SELECT COUNT(*) as cnt FROM cala_balance_history WHERE account_id = $1 AND journal_id = $2",
+    )
+    .bind(inline_account_id)
+    .bind(journal.id())
+    .fetch_one(&pool)
+    .await?
+    .try_get("cnt")?;
+
+    let ec_count: i64 = sqlx::query(
+        "SELECT COUNT(*) as cnt FROM cala_balance_history WHERE account_id = $1 AND journal_id = $2",
+    )
+    .bind(ec_account_id)
+    .bind(journal.id())
+    .fetch_one(&pool)
+    .await?
+    .try_get("cnt")?;
+
+    assert_eq!(
+        inline_count, ec_count,
+        "EC set should have same number of balance_history rows as inline set"
+    );
+
+    // Verify each BTC snapshot's running balance matches
+    let inline_history = sqlx::query(
+        "SELECT values FROM cala_balance_history WHERE account_id = $1 AND journal_id = $2 AND currency = $3 ORDER BY version",
+    )
+    .bind(inline_account_id)
+    .bind(journal.id())
+    .bind(btc.code())
+    .fetch_all(&pool)
+    .await?;
+
+    let ec_history = sqlx::query(
+        "SELECT values FROM cala_balance_history WHERE account_id = $1 AND journal_id = $2 AND currency = $3 ORDER BY version",
+    )
+    .bind(ec_account_id)
+    .bind(journal.id())
+    .bind(btc.code())
+    .fetch_all(&pool)
+    .await?;
+
+    assert_eq!(
+        inline_history.len(),
+        ec_history.len(),
+        "BTC history count mismatch"
+    );
+    for (inline_row, ec_row) in inline_history.iter().zip(ec_history.iter()) {
+        let i_snap: BalanceSnapshot =
+            serde_json::from_value(inline_row.try_get::<serde_json::Value, _>("values")?)?;
+        let e_snap: BalanceSnapshot =
+            serde_json::from_value(ec_row.try_get::<serde_json::Value, _>("values")?)?;
+        assert_eq!(
+            i_snap.version, e_snap.version,
+            "version mismatch at v{}",
+            i_snap.version
+        );
+        assert_eq!(
+            i_snap.settled.dr_balance, e_snap.settled.dr_balance,
+            "settled dr mismatch at v{}",
+            i_snap.version
+        );
+        assert_eq!(
+            i_snap.settled.cr_balance, e_snap.settled.cr_balance,
+            "settled cr mismatch at v{}",
+            i_snap.version
+        );
+        assert_eq!(
+            i_snap.entry_id, e_snap.entry_id,
+            "entry_id mismatch at v{}",
+            i_snap.version
+        );
+    }
+
+    // Idempotency: calling recalculate again should be a no-op
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await
+        .unwrap();
+    let ec_bal_3 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(
+        ec_bal_2.settled(),
+        ec_bal_3.settled(),
+        "should be idempotent"
+    );
+    assert_eq!(
+        ec_bal_2.details.version, ec_bal_3.details.version,
+        "version should not change on idempotent call"
+    );
+
+    Ok(())
+}

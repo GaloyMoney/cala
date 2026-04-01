@@ -207,6 +207,8 @@ pub struct NewAccountSet {
     pub(super) journal_id: JournalId,
     #[builder(default)]
     pub(super) normal_balance_type: DebitOrCredit,
+    #[builder(default)]
+    pub(super) eventually_consistent: bool,
     #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(custom), default)]

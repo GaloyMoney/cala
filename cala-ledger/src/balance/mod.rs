@@ -170,6 +170,140 @@ impl Balances {
             .await
     }
 
+    #[instrument(
+        name = "cala_ledger.balances.recalculate_account_set_balances_in_op",
+        skip(self, op),
+        fields(account_set_id = %account_set_id)
+    )]
+    pub(crate) async fn recalculate_account_set_balances_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_set_id: AccountSetId,
+    ) -> Result<(), BalanceError> {
+        let account_id = AccountId::from(&account_set_id);
+
+        let (current_balances, total_processed) = self
+            .repo
+            .load_account_set_balances(op, journal_id, account_id)
+            .await?;
+
+        let new_history = self
+            .repo
+            .fetch_incremental_member_history(op, journal_id, account_set_id, total_processed)
+            .await?;
+
+        if new_history.is_empty() {
+            return Ok(());
+        }
+
+        let new_snapshots =
+            Self::replay_member_deltas(journal_id, account_id, current_balances, new_history);
+
+        if !new_snapshots.is_empty() {
+            self.repo
+                .insert_new_snapshots(op, journal_id, new_snapshots)
+                .await?;
+        }
+        Ok(())
+    }
+
+    #[instrument(name = "cala_ledger.balances.replay_member_deltas", skip_all)]
+    fn replay_member_deltas(
+        journal_id: JournalId,
+        account_id: AccountId,
+        mut current_balances: HashMap<Currency, BalanceSnapshot>,
+        history: Vec<MemberBalanceHistoryRow>,
+    ) -> Vec<BalanceSnapshot> {
+        use rust_decimal::Decimal;
+
+        let mut new_snapshots = Vec::with_capacity(history.len());
+
+        for MemberBalanceHistoryRow {
+            snapshot,
+            prev_snapshot,
+        } in history
+        {
+            let (d_settled_dr, d_settled_cr, d_pending_dr, d_pending_cr, d_enc_dr, d_enc_cr) =
+                match prev_snapshot {
+                    Some(ref prev) => (
+                        snapshot.settled.dr_balance - prev.settled.dr_balance,
+                        snapshot.settled.cr_balance - prev.settled.cr_balance,
+                        snapshot.pending.dr_balance - prev.pending.dr_balance,
+                        snapshot.pending.cr_balance - prev.pending.cr_balance,
+                        snapshot.encumbrance.dr_balance - prev.encumbrance.dr_balance,
+                        snapshot.encumbrance.cr_balance - prev.encumbrance.cr_balance,
+                    ),
+                    None => (
+                        snapshot.settled.dr_balance,
+                        snapshot.settled.cr_balance,
+                        snapshot.pending.dr_balance,
+                        snapshot.pending.cr_balance,
+                        snapshot.encumbrance.dr_balance,
+                        snapshot.encumbrance.cr_balance,
+                    ),
+                };
+
+            let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
+            let running = current_balances
+                .entry(snapshot.currency)
+                .or_insert_with(|| BalanceSnapshot {
+                    journal_id,
+                    account_id,
+                    entry_id,
+                    currency: snapshot.currency,
+                    settled: BalanceAmount {
+                        dr_balance: Decimal::ZERO,
+                        cr_balance: Decimal::ZERO,
+                        entry_id,
+                        modified_at: snapshot.modified_at,
+                    },
+                    pending: BalanceAmount {
+                        dr_balance: Decimal::ZERO,
+                        cr_balance: Decimal::ZERO,
+                        entry_id,
+                        modified_at: snapshot.modified_at,
+                    },
+                    encumbrance: BalanceAmount {
+                        dr_balance: Decimal::ZERO,
+                        cr_balance: Decimal::ZERO,
+                        entry_id,
+                        modified_at: snapshot.modified_at,
+                    },
+                    version: 0,
+                    modified_at: snapshot.modified_at,
+                    created_at: snapshot.modified_at,
+                });
+
+            running.settled.dr_balance += d_settled_dr;
+            running.settled.cr_balance += d_settled_cr;
+            running.pending.dr_balance += d_pending_dr;
+            running.pending.cr_balance += d_pending_cr;
+            running.encumbrance.dr_balance += d_enc_dr;
+            running.encumbrance.cr_balance += d_enc_cr;
+            running.version += 1;
+            running.entry_id = snapshot.entry_id;
+            running.modified_at = snapshot.modified_at;
+
+            if d_settled_dr != Decimal::ZERO || d_settled_cr != Decimal::ZERO {
+                running.settled.entry_id = snapshot.settled.entry_id;
+                running.settled.modified_at = snapshot.settled.modified_at;
+            }
+            if d_pending_dr != Decimal::ZERO || d_pending_cr != Decimal::ZERO {
+                running.pending.entry_id = snapshot.pending.entry_id;
+                running.pending.modified_at = snapshot.pending.modified_at;
+            }
+            if d_enc_dr != Decimal::ZERO || d_enc_cr != Decimal::ZERO {
+                running.encumbrance.entry_id = snapshot.encumbrance.entry_id;
+                running.encumbrance.modified_at = snapshot.encumbrance.modified_at;
+            }
+
+            new_snapshots.push(running.clone());
+        }
+
+        new_snapshots
+    }
+
     #[instrument(name = "cala_ledger.balances.new_snapshots", skip_all)]
     fn new_snapshots(
         time: DateTime<Utc>,

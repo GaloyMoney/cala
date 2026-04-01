@@ -71,6 +71,7 @@ impl AccountSets {
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
             .is_account_set(true)
+            .eventually_consistent(new_account_set.eventually_consistent)
             .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
@@ -106,6 +107,7 @@ impl AccountSets {
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
                 .is_account_set(true)
+                .eventually_consistent(new_account_set.eventually_consistent)
                 .velocity_context_values(new_account_set.context_values())
                 .build()
                 .expect("Failed to build account");
@@ -490,6 +492,35 @@ impl AccountSets {
         self.repo
             .list_children_by_external_id_in_op(op, id, args)
             .await
+    }
+
+    #[instrument(name = "cala_ledger.account_sets.recalculate_balances", skip(self))]
+    pub async fn recalculate_balances(
+        &self,
+        account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
+        self.recalculate_balances_in_op(&mut op, account_set_id)
+            .await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.recalculate_balances_in_op",
+        skip(self, op)
+    )]
+    pub async fn recalculate_balances_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        let account_set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
+        let journal_id = account_set.values().journal_id;
+        self.balances
+            .recalculate_account_set_balances_in_op(op, journal_id, account_set_id)
+            .await?;
+        Ok(())
     }
 
     pub(crate) async fn fetch_mappings_in_op(
