@@ -409,7 +409,6 @@ impl BalanceRepo {
         account_set_id: AccountSetId,
         watermark: Option<EntryId>,
     ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
-        let watermark_uuid: Option<uuid::Uuid> = watermark.map(uuid::Uuid::from);
         let rows = sqlx::query!(
             r#"
             WITH all_member_history AS (
@@ -440,7 +439,7 @@ impl BalanceRepo {
             "#,
             account_set_id as AccountSetId,
             journal_id as JournalId,
-            watermark_uuid as Option<uuid::Uuid>
+            watermark as Option<EntryId>,
         )
         .fetch_all(op.as_executor())
         .await?;
