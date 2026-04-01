@@ -888,6 +888,107 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn deep_recalculate_expands_to_descendants() -> anyhow::Result<()> {
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Build: root → child, child has recipient as leaf member
+    let child = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Child")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let child = cala.account_sets().create(child).await.unwrap();
+
+    let root = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Root")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let root = cala.account_sets().create(root).await.unwrap();
+
+    cala.account_sets()
+        .add_member(child.id(), recipient_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(root.id(), child.id())
+        .await
+        .unwrap();
+
+    // Post transactions
+    for _ in 0..3 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // Deep recalculate from root only — child should also be recalculated
+    cala.account_sets()
+        .recalculate_balances_deep(&[root.id()])
+        .await
+        .unwrap();
+
+    let recipient_bal = cala
+        .balances()
+        .find(journal.id(), recipient_account.id(), btc)
+        .await?;
+    let child_bal = cala.balances().find(journal.id(), child.id(), btc).await?;
+    let root_bal = cala.balances().find(journal.id(), root.id(), btc).await?;
+
+    assert_eq!(
+        recipient_bal.settled(),
+        child_bal.settled(),
+        "child should match recipient"
+    );
+    assert_eq!(
+        recipient_bal.settled(),
+        root_bal.settled(),
+        "root should match recipient (same transitive member)"
+    );
+
+    // Idempotency
+    cala.account_sets()
+        .recalculate_balances_deep(&[root.id()])
+        .await
+        .unwrap();
+    let root_bal_2 = cala.balances().find(journal.id(), root.id(), btc).await?;
+    assert_eq!(root_bal.details.version, root_bal_2.details.version);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn eventually_consistent_member_add_with_existing_balance() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 

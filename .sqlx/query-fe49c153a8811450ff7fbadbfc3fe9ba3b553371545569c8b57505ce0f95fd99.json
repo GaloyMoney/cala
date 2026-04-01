@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE descendants AS (\n                SELECT member_account_set_id AS id\n                FROM cala_account_set_member_account_sets\n                WHERE account_set_id = ANY($1)\n                UNION\n                SELECT m.member_account_set_id\n                FROM cala_account_set_member_account_sets m\n                JOIN descendants d ON d.id = m.account_set_id\n            )\n            SELECT id AS \"id!: AccountSetId\" FROM descendants\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "fe49c153a8811450ff7fbadbfc3fe9ba3b553371545569c8b57505ce0f95fd99"
+}

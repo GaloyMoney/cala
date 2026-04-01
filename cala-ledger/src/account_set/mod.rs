@@ -606,6 +606,51 @@ impl AccountSets {
         Ok(())
     }
 
+    /// Recalculate balances for the given account sets **and** all their
+    /// descendant account sets in a single batch.
+    #[instrument(
+        name = "cala_ledger.account_sets.recalculate_balances_deep",
+        skip(self)
+    )]
+    pub async fn recalculate_balances_deep(
+        &self,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<(), AccountSetError> {
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
+        self.recalculate_balances_deep_in_op(&mut op, account_set_ids)
+            .await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.recalculate_balances_deep_in_op",
+        skip(self, op)
+    )]
+    pub async fn recalculate_balances_deep_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<(), AccountSetError> {
+        if account_set_ids.is_empty() {
+            return Ok(());
+        }
+
+        let descendants = self
+            .repo
+            .find_all_descendant_set_ids(&mut *op, account_set_ids)
+            .await?;
+
+        let mut all_ids: Vec<AccountSetId> = account_set_ids.to_vec();
+        for id in descendants {
+            if !all_ids.contains(&id) {
+                all_ids.push(id);
+            }
+        }
+
+        self.recalculate_balances_batch_in_op(op, &all_ids).await
+    }
+
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
