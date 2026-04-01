@@ -387,17 +387,23 @@ impl BalanceRepo {
 
         let watermark_row = sqlx::query(
             r#"
-            SELECT MAX(latest_entry_id) as watermark
+            SELECT latest_entry_id as watermark
             FROM cala_balance_history
             WHERE account_id = $1 AND journal_id = $2
+            ORDER BY latest_entry_id DESC
+            LIMIT 1
             "#,
         )
         .bind(account_id)
         .bind(journal_id)
-        .fetch_one(op.as_executor())
+        .fetch_optional(op.as_executor())
         .await?;
-        let watermark: Option<uuid::Uuid> = watermark_row.try_get("watermark")?;
-        let watermark = watermark.filter(|id| !id.is_nil()).map(EntryId::from);
+        let watermark: Option<EntryId> = watermark_row
+            .map(|row| {
+                let id: uuid::Uuid = row.try_get("watermark").expect("watermark column");
+                EntryId::from(id)
+            })
+            .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
 
         Ok((balances, watermark))
     }
