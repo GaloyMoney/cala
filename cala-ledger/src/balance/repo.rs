@@ -385,6 +385,18 @@ impl BalanceRepo {
         Ok(balances)
     }
 
+    /// Fetch member balance history rows newer than `watermark`.
+    ///
+    /// A single global watermark works across all currencies because EntryId
+    /// uses UUID v7 via `Uuid::now_v7()`, which guarantees strict monotonic
+    /// ordering within a process (a 42-bit counter ensures uniqueness even
+    /// within the same millisecond). The watermark represents the latest
+    /// entry already processed — any member balance_history row created after
+    /// that (for *any* currency) will have a `latest_entry_id > watermark`.
+    ///
+    /// **Invariant**: this relies on `EntryId::new()` producing monotonically
+    /// increasing IDs. If the ID generation strategy ever changes, this must
+    /// be revisited (e.g. per-currency watermarks).
     #[instrument(
         name = "balance.fetch_incremental_member_history",
         skip_all,

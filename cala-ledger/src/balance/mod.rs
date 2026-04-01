@@ -216,6 +216,9 @@ impl Balances {
             .load_account_set_balances(op, journal_id, account_id)
             .await?;
 
+        // Single watermark across all currencies is safe because EntryId is
+        // UUID v7 (globally ordered by creation time). See doc comment on
+        // fetch_incremental_member_history for the full invariant.
         let watermark = current_balances
             .values()
             .map(|snap| snap.entry_id)
