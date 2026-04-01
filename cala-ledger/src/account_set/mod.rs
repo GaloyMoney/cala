@@ -641,9 +641,11 @@ impl AccountSets {
             .find_all_descendant_set_ids(&mut *op, account_set_ids)
             .await?;
 
+        let mut seen: std::collections::HashSet<AccountSetId> =
+            account_set_ids.iter().copied().collect();
         let mut all_ids: Vec<AccountSetId> = account_set_ids.to_vec();
         for id in descendants {
-            if !all_ids.contains(&id) {
+            if seen.insert(id) {
                 all_ids.push(id);
             }
         }
