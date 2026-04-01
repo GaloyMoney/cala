@@ -362,48 +362,41 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
     ) -> Result<(HashMap<Currency, BalanceSnapshot>, Option<EntryId>), BalanceError> {
-        use sqlx::Row as _;
-
-        let rows = sqlx::query(
+        let rows = sqlx::query!(
             r#"
             SELECT latest_values
             FROM cala_current_balances
             WHERE account_id = $1 AND journal_id = $2
             FOR UPDATE
             "#,
+            account_id as AccountId,
+            journal_id as JournalId
         )
-        .bind(account_id)
-        .bind(journal_id)
         .fetch_all(op.as_executor())
         .await?;
 
         let mut balances = HashMap::new();
         for row in rows {
-            let latest_values: serde_json::Value = row.try_get("latest_values")?;
-            let snap: BalanceSnapshot = serde_json::from_value(latest_values)
+            let snap: BalanceSnapshot = serde_json::from_value(row.latest_values)
                 .expect("Failed to deserialize balance snapshot");
             balances.insert(snap.currency, snap);
         }
 
-        let watermark_row = sqlx::query(
+        let watermark = sqlx::query!(
             r#"
-            SELECT latest_entry_id as watermark
+            SELECT latest_entry_id AS "watermark!: EntryId"
             FROM cala_balance_history
             WHERE account_id = $1 AND journal_id = $2
             ORDER BY latest_entry_id DESC
             LIMIT 1
             "#,
+            account_id as AccountId,
+            journal_id as JournalId
         )
-        .bind(account_id)
-        .bind(journal_id)
         .fetch_optional(op.as_executor())
-        .await?;
-        let watermark: Option<EntryId> = watermark_row
-            .map(|row| {
-                let id: uuid::Uuid = row.try_get("watermark").expect("watermark column");
-                EntryId::from(id)
-            })
-            .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
+        .await?
+        .map(|row| row.watermark)
+        .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
 
         Ok((balances, watermark))
     }
@@ -420,10 +413,8 @@ impl BalanceRepo {
         account_set_id: AccountSetId,
         watermark: Option<EntryId>,
     ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
-        use sqlx::Row as _;
-
         let watermark_uuid: Option<uuid::Uuid> = watermark.map(uuid::Uuid::from);
-        let rows = sqlx::query(
+        let rows = sqlx::query!(
             r#"
             WITH all_member_history AS (
                 SELECT h.values, h.account_id, h.currency, h.version,
@@ -451,21 +442,18 @@ impl BalanceRepo {
             WHERE ($3::uuid IS NULL OR latest_entry_id > $3)
             ORDER BY latest_entry_id, account_id
             "#,
+            account_set_id as AccountSetId,
+            journal_id as JournalId,
+            watermark_uuid as Option<uuid::Uuid>
         )
-        .bind(account_set_id)
-        .bind(journal_id)
-        .bind(watermark_uuid)
         .fetch_all(op.as_executor())
         .await?;
 
         let mut result = Vec::with_capacity(rows.len());
         for row in rows {
-            let values: serde_json::Value = row.try_get("values")?;
-            let prev_values: Option<serde_json::Value> = row.try_get("prev_values")?;
-
             let snapshot: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
-            let prev_snapshot: Option<BalanceSnapshot> = prev_values.map(|v| {
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let prev_snapshot: Option<BalanceSnapshot> = row.prev_values.map(|v| {
                 serde_json::from_value(v).expect("Failed to deserialize previous balance snapshot")
             });
 

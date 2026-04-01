@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT latest_entry_id AS \"watermark!: EntryId\"\n            FROM cala_balance_history\n            WHERE account_id = $1 AND journal_id = $2\n            ORDER BY latest_entry_id DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "watermark!: EntryId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "ed4420b956d68e42e669e60771276b0e35d524a5d08979425df1ec283cf54373"
+}

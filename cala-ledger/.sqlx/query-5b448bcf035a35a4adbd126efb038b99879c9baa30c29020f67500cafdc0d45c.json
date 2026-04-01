@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT latest_values\n            FROM cala_current_balances\n            WHERE account_id = $1 AND journal_id = $2\n            FOR UPDATE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "latest_values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5b448bcf035a35a4adbd126efb038b99879c9baa30c29020f67500cafdc0d45c"
+}
