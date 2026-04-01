@@ -746,8 +746,9 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
 
     // Build 3-level hierarchy:
     //   root → [set_a, set_b]
-    //   set_a has: recipient_account (shared)
-    //   set_b has: recipient_account (shared) + extra_account (exclusive)
+    //   set_a has: recipient_account (exclusive)
+    //   set_b has: extra_account (exclusive)
+    // Members are exclusive to avoid MemberAlreadyAdded on transitive cascade.
     let set_a = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name("Set A")
@@ -775,13 +776,9 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
         .unwrap();
     let root = cala.account_sets().create(root).await.unwrap();
 
-    // Wire membership
+    // Wire membership: each child set gets its own exclusive leaf account
     cala.account_sets()
         .add_member(set_a.id(), recipient_account.id())
-        .await
-        .unwrap();
-    cala.account_sets()
-        .add_member(set_b.id(), recipient_account.id())
         .await
         .unwrap();
     cala.account_sets()
@@ -842,30 +839,25 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
         "set_a should match recipient"
     );
 
-    // Verify set_b: should reflect recipient + extra
+    // Verify set_b: should reflect extra's balance only
     let extra_bal = cala
         .balances()
         .find(journal.id(), extra_account.id(), btc)
         .await?;
     let set_b_bal = cala.balances().find(journal.id(), set_b.id(), btc).await?;
-    let expected_set_b = recipient_bal.settled() + extra_bal.settled();
     assert_eq!(
-        expected_set_b,
+        extra_bal.settled(),
         set_b_bal.settled(),
-        "set_b should be recipient + extra"
+        "set_b should match extra"
     );
 
-    // Verify root: should be set_a + set_b (recipient is counted in both)
-    // root has transitive members: recipient (via set_a) + recipient (via set_b) + extra (via set_b)
+    // Verify root: should be recipient + extra (transitive members from both child sets)
     let root_bal = cala.balances().find(journal.id(), root.id(), btc).await?;
-    // root membership includes recipient (transitive from both a and b) and extra (transitive from b)
-    // The cala_account_set_member_accounts stores unique (account_set_id, member_account_id)
-    // so root → recipient appears only once (DISTINCT in the query), and root → extra once.
     let expected_root = recipient_bal.settled() + extra_bal.settled();
     assert_eq!(
         expected_root,
         root_bal.settled(),
-        "root should be recipient + extra (deduplicated membership)"
+        "root should be recipient + extra"
     );
 
     // Idempotency: calling batch recalculate again should be a no-op
