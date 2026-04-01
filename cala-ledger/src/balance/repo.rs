@@ -382,21 +382,11 @@ impl BalanceRepo {
             balances.insert(snap.currency, snap);
         }
 
-        let watermark = sqlx::query!(
-            r#"
-            SELECT latest_entry_id AS "watermark!: EntryId"
-            FROM cala_balance_history
-            WHERE account_id = $1 AND journal_id = $2
-            ORDER BY latest_entry_id DESC
-            LIMIT 1
-            "#,
-            account_id as AccountId,
-            journal_id as JournalId
-        )
-        .fetch_optional(op.as_executor())
-        .await?
-        .map(|row| row.watermark)
-        .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
+        let watermark = balances
+            .values()
+            .map(|snap| snap.entry_id)
+            .max_by_key(|id| uuid::Uuid::from(*id))
+            .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
 
         Ok((balances, watermark))
     }
