@@ -1,3 +1,16 @@
+# [cala release v0.14.4](https://github.com/GaloyMoney/cala/releases/tag/0.14.4)
+
+
+
+### Features
+
+- Add missing indexes for EOD balance query performance (#698)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 8 updates (#695)
+- Bump es-entity 0.10.33, job 0.6.14, obix 0.2.20 (#696)
+
 # [cala release v0.14.3](https://github.com/GaloyMoney/cala/releases/tag/0.14.3)
 
 
