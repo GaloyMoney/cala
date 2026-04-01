@@ -557,6 +557,59 @@ impl AccountSets {
         Ok(())
     }
 
+    #[instrument(
+        name = "cala_ledger.account_sets.recalculate_balances_batch",
+        skip(self)
+    )]
+    pub async fn recalculate_balances_batch(
+        &self,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<(), AccountSetError> {
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
+        self.recalculate_balances_batch_in_op(&mut op, account_set_ids)
+            .await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.recalculate_balances_batch_in_op",
+        skip(self, op)
+    )]
+    pub async fn recalculate_balances_batch_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<(), AccountSetError> {
+        if account_set_ids.is_empty() {
+            return Ok(());
+        }
+
+        let sets = self
+            .repo
+            .find_all_in_op::<AccountSet>(&mut *op, account_set_ids)
+            .await?;
+
+        let mut journal_id: Option<JournalId> = None;
+        for id in account_set_ids {
+            let set = sets.get(id).ok_or(AccountSetError::CouldNotFindById(*id))?;
+            let jid = set.values().journal_id;
+            if let Some(expected) = journal_id {
+                if jid != expected {
+                    return Err(AccountSetError::JournalIdMismatch);
+                }
+            } else {
+                journal_id = Some(jid);
+            }
+        }
+
+        let journal_id = journal_id.expect("account_set_ids is non-empty");
+        self.balances
+            .recalculate_account_set_balances_batch_in_op(op, journal_id, account_set_ids)
+            .await?;
+        Ok(())
+    }
+
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

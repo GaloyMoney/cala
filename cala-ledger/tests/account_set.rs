@@ -709,6 +709,185 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
+    // Create a second leaf account that only belongs to set_b
+    let extra = NewAccount::builder()
+        .id(uuid::Uuid::now_v7())
+        .name("Extra Account")
+        .code(Alphanumeric.sample_string(&mut rand::rng(), 32))
+        .build()
+        .unwrap();
+    let extra_account = cala.accounts().create(extra).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Build 3-level hierarchy:
+    //   root → [set_a, set_b]
+    //   set_a has: recipient_account (shared)
+    //   set_b has: recipient_account (shared) + extra_account (exclusive)
+    let set_a = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Set A")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let set_a = cala.account_sets().create(set_a).await.unwrap();
+
+    let set_b = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Set B")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let set_b = cala.account_sets().create(set_b).await.unwrap();
+
+    let root = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Root")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let root = cala.account_sets().create(root).await.unwrap();
+
+    // Wire membership
+    cala.account_sets()
+        .add_member(set_a.id(), recipient_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_b.id(), recipient_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_b.id(), extra_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(root.id(), set_a.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(root.id(), set_b.id())
+        .await
+        .unwrap();
+
+    // Post transactions: recipient gets BTC credits, sender gets BTC debits
+    for _ in 0..3 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // Also post a transaction where extra_account is sender (BTC debit to extra)
+    let tx_code_extra = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code_extra))
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", extra_account.id());
+        params.insert("recipient", sender_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code_extra, params)
+            .await
+            .unwrap();
+    }
+
+    // Batch recalculate all three sets at once
+    cala.account_sets()
+        .recalculate_balances_batch(&[root.id(), set_a.id(), set_b.id()])
+        .await
+        .unwrap();
+
+    // Verify set_a: should reflect recipient's balance only
+    let recipient_bal = cala
+        .balances()
+        .find(journal.id(), recipient_account.id(), btc)
+        .await?;
+    let set_a_bal = cala.balances().find(journal.id(), set_a.id(), btc).await?;
+    assert_eq!(
+        recipient_bal.settled(),
+        set_a_bal.settled(),
+        "set_a should match recipient"
+    );
+
+    // Verify set_b: should reflect recipient + extra
+    let extra_bal = cala
+        .balances()
+        .find(journal.id(), extra_account.id(), btc)
+        .await?;
+    let set_b_bal = cala.balances().find(journal.id(), set_b.id(), btc).await?;
+    let expected_set_b = recipient_bal.settled() + extra_bal.settled();
+    assert_eq!(
+        expected_set_b,
+        set_b_bal.settled(),
+        "set_b should be recipient + extra"
+    );
+
+    // Verify root: should be set_a + set_b (recipient is counted in both)
+    // root has transitive members: recipient (via set_a) + recipient (via set_b) + extra (via set_b)
+    let root_bal = cala.balances().find(journal.id(), root.id(), btc).await?;
+    // root membership includes recipient (transitive from both a and b) and extra (transitive from b)
+    // The cala_account_set_member_accounts stores unique (account_set_id, member_account_id)
+    // so root → recipient appears only once (DISTINCT in the query), and root → extra once.
+    let expected_root = recipient_bal.settled() + extra_bal.settled();
+    assert_eq!(
+        expected_root,
+        root_bal.settled(),
+        "root should be recipient + extra (deduplicated membership)"
+    );
+
+    // Idempotency: calling batch recalculate again should be a no-op
+    cala.account_sets()
+        .recalculate_balances_batch(&[root.id(), set_a.id(), set_b.id()])
+        .await
+        .unwrap();
+    let root_bal_2 = cala.balances().find(journal.id(), root.id(), btc).await?;
+    assert_eq!(
+        root_bal.settled(),
+        root_bal_2.settled(),
+        "batch recalculate should be idempotent"
+    );
+    assert_eq!(
+        root_bal.details.version, root_bal_2.details.version,
+        "version should not change on idempotent batch recalculate"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn eventually_consistent_member_add_with_existing_balance() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 

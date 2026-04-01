@@ -236,6 +236,181 @@ impl Balances {
         Ok(())
     }
 
+    #[instrument(
+        name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
+        skip(self, op)
+    )]
+    pub(crate) async fn recalculate_account_set_balances_batch_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<(), BalanceError> {
+        let account_ids: Vec<AccountId> = account_set_ids.iter().map(AccountId::from).collect();
+
+        let batch_balances = self
+            .repo
+            .load_account_set_balances_batch(op, journal_id, &account_ids)
+            .await?;
+
+        // Compute min_watermark: minimum across all sets. None if any set has None.
+        let min_watermark = batch_balances
+            .values()
+            .try_fold(None, |acc: Option<i64>, (_, wm)| {
+                let wm = (*wm)?;
+                Some(Some(acc.map_or(wm, |a: i64| a.min(wm))))
+            })
+            .flatten();
+
+        let new_history = self
+            .repo
+            .fetch_batch_member_history(op, journal_id, account_set_ids, min_watermark)
+            .await?;
+
+        if new_history.is_empty() {
+            return Ok(());
+        }
+
+        let memberships = self
+            .repo
+            .fetch_member_account_mappings(op, account_set_ids)
+            .await?;
+
+        // Build per-set state: (account_id, balances, watermark)
+        let mut set_states: HashMap<AccountSetId, SetRecalcState> = HashMap::new();
+        for (set_id, account_id) in account_set_ids.iter().zip(account_ids.iter()) {
+            let (balances, watermark) = batch_balances.get(account_id).cloned().unwrap_or_default();
+            set_states.insert(*set_id, (*account_id, balances, watermark));
+        }
+
+        let new_snapshots =
+            Self::replay_member_deltas_batch(journal_id, set_states, &memberships, new_history);
+
+        if !new_snapshots.is_empty() {
+            self.repo
+                .insert_new_snapshots(op, journal_id, new_snapshots)
+                .await?;
+        }
+        Ok(())
+    }
+
+    #[instrument(name = "cala_ledger.balances.replay_member_deltas_batch", skip_all)]
+    fn replay_member_deltas_batch(
+        journal_id: JournalId,
+        mut set_states: HashMap<AccountSetId, SetRecalcState>,
+        memberships: &HashMap<AccountId, Vec<AccountSetId>>,
+        history: Vec<MemberBalanceHistoryRow>,
+    ) -> Vec<BalanceSnapshot> {
+        use rust_decimal::Decimal;
+
+        let mut new_snapshots = Vec::new();
+
+        for MemberBalanceHistoryRow {
+            snapshot,
+            prev_snapshot,
+            seq,
+        } in history
+        {
+            let (d_settled_dr, d_settled_cr, d_pending_dr, d_pending_cr, d_enc_dr, d_enc_cr) =
+                match prev_snapshot {
+                    Some(ref prev) => (
+                        snapshot.settled.dr_balance - prev.settled.dr_balance,
+                        snapshot.settled.cr_balance - prev.settled.cr_balance,
+                        snapshot.pending.dr_balance - prev.pending.dr_balance,
+                        snapshot.pending.cr_balance - prev.pending.cr_balance,
+                        snapshot.encumbrance.dr_balance - prev.encumbrance.dr_balance,
+                        snapshot.encumbrance.cr_balance - prev.encumbrance.cr_balance,
+                    ),
+                    None => (
+                        snapshot.settled.dr_balance,
+                        snapshot.settled.cr_balance,
+                        snapshot.pending.dr_balance,
+                        snapshot.pending.cr_balance,
+                        snapshot.encumbrance.dr_balance,
+                        snapshot.encumbrance.cr_balance,
+                    ),
+                };
+
+            let empty = Vec::new();
+            let owning_sets = memberships.get(&snapshot.account_id).unwrap_or(&empty);
+
+            for set_id in owning_sets {
+                let Some((_account_id, ref mut balances, ref set_watermark)) =
+                    set_states.get_mut(set_id)
+                else {
+                    continue;
+                };
+
+                // Skip if already processed by this set
+                if let Some(wm) = set_watermark {
+                    if seq <= *wm {
+                        continue;
+                    }
+                }
+
+                let account_id = AccountId::from(set_id);
+                let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
+                let running =
+                    balances
+                        .entry(snapshot.currency)
+                        .or_insert_with(|| BalanceSnapshot {
+                            journal_id,
+                            account_id,
+                            entry_id,
+                            currency: snapshot.currency,
+                            settled: BalanceAmount {
+                                dr_balance: Decimal::ZERO,
+                                cr_balance: Decimal::ZERO,
+                                entry_id,
+                                modified_at: snapshot.modified_at,
+                            },
+                            pending: BalanceAmount {
+                                dr_balance: Decimal::ZERO,
+                                cr_balance: Decimal::ZERO,
+                                entry_id,
+                                modified_at: snapshot.modified_at,
+                            },
+                            encumbrance: BalanceAmount {
+                                dr_balance: Decimal::ZERO,
+                                cr_balance: Decimal::ZERO,
+                                entry_id,
+                                modified_at: snapshot.modified_at,
+                            },
+                            version: 0,
+                            modified_at: snapshot.modified_at,
+                            created_at: snapshot.modified_at,
+                        });
+
+                running.settled.dr_balance += d_settled_dr;
+                running.settled.cr_balance += d_settled_cr;
+                running.pending.dr_balance += d_pending_dr;
+                running.pending.cr_balance += d_pending_cr;
+                running.encumbrance.dr_balance += d_enc_dr;
+                running.encumbrance.cr_balance += d_enc_cr;
+                running.version += 1;
+                running.entry_id = snapshot.entry_id;
+                running.modified_at = snapshot.modified_at;
+
+                if d_settled_dr != Decimal::ZERO || d_settled_cr != Decimal::ZERO {
+                    running.settled.entry_id = snapshot.settled.entry_id;
+                    running.settled.modified_at = snapshot.settled.modified_at;
+                }
+                if d_pending_dr != Decimal::ZERO || d_pending_cr != Decimal::ZERO {
+                    running.pending.entry_id = snapshot.pending.entry_id;
+                    running.pending.modified_at = snapshot.pending.modified_at;
+                }
+                if d_enc_dr != Decimal::ZERO || d_enc_cr != Decimal::ZERO {
+                    running.encumbrance.entry_id = snapshot.encumbrance.entry_id;
+                    running.encumbrance.modified_at = snapshot.encumbrance.modified_at;
+                }
+
+                new_snapshots.push(running.clone());
+            }
+        }
+
+        new_snapshots
+    }
+
     #[instrument(name = "cala_ledger.balances.replay_member_deltas", skip_all)]
     fn replay_member_deltas(
         journal_id: JournalId,
@@ -250,6 +425,7 @@ impl Balances {
         for MemberBalanceHistoryRow {
             snapshot,
             prev_snapshot,
+            ..
         } in history
         {
             let (d_settled_dr, d_settled_cr, d_pending_dr, d_pending_cr, d_enc_dr, d_enc_cr) =
@@ -703,6 +879,7 @@ mod tests {
             let history = vec![MemberBalanceHistoryRow {
                 snapshot: member_snapshot("USD", entry_id, Decimal::from(100), Decimal::ZERO),
                 prev_snapshot: None,
+                seq: 1,
             }];
 
             let result =
@@ -734,6 +911,7 @@ mod tests {
             let history = vec![MemberBalanceHistoryRow {
                 snapshot: curr,
                 prev_snapshot: Some(prev),
+                seq: 1,
             }];
 
             let result =
@@ -755,10 +933,12 @@ mod tests {
                 MemberBalanceHistoryRow {
                     snapshot: snap1.clone(),
                     prev_snapshot: None,
+                    seq: 1,
                 },
                 MemberBalanceHistoryRow {
                     snapshot: snap2,
                     prev_snapshot: Some(snap1),
+                    seq: 2,
                 },
             ];
 
@@ -783,10 +963,12 @@ mod tests {
                 MemberBalanceHistoryRow {
                     snapshot: usd,
                     prev_snapshot: None,
+                    seq: 1,
                 },
                 MemberBalanceHistoryRow {
                     snapshot: btc,
                     prev_snapshot: None,
+                    seq: 2,
                 },
             ];
 

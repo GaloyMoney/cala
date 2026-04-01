@@ -433,7 +433,7 @@ impl BalanceRepo {
                        account_id
                 FROM all_member_history
             )
-            SELECT values, prev_values
+            SELECT values, prev_values, seq
             FROM with_prev
             WHERE ($3::bigint IS NULL OR seq > $3)
             ORDER BY seq, account_id
@@ -456,9 +456,164 @@ impl BalanceRepo {
             result.push(MemberBalanceHistoryRow {
                 snapshot,
                 prev_snapshot,
+                seq: row.seq,
             });
         }
 
+        Ok(result)
+    }
+
+    #[instrument(
+        name = "balance.load_account_set_balances_batch",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(crate) async fn load_account_set_balances_batch(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, AccountSetBalanceState>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT account_id AS "account_id!: AccountId", latest_values, latest_seq
+            FROM cala_current_balances
+            WHERE account_id = ANY($1) AND journal_id = $2
+            ORDER BY account_id
+            FOR UPDATE
+            "#,
+            account_ids as &[AccountId],
+            journal_id as JournalId,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result: HashMap<AccountId, (HashMap<Currency, BalanceSnapshot>, Option<i64>)> =
+            HashMap::new();
+        for row in rows {
+            let snap: BalanceSnapshot = serde_json::from_value(row.latest_values)
+                .expect("Failed to deserialize balance snapshot");
+            let currency = snap.currency;
+            let seq = row.latest_seq;
+
+            let entry = result
+                .entry(row.account_id)
+                .or_insert_with(|| (HashMap::new(), None));
+            entry.0.insert(currency, snap);
+            entry.1 = Some(entry.1.map_or(seq, |cur: i64| cur.max(seq)));
+        }
+
+        // Normalize watermarks: 0 → None
+        for (_, watermark) in result.values_mut() {
+            *watermark = watermark.filter(|&s| s > 0);
+        }
+
+        // Ensure every requested account_id is present in the map
+        for id in account_ids {
+            result.entry(*id).or_insert_with(|| (HashMap::new(), None));
+        }
+
+        Ok(result)
+    }
+
+    #[instrument(
+        name = "balance.fetch_batch_member_history",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(crate) async fn fetch_batch_member_history(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_set_ids: &[AccountSetId],
+        min_watermark: Option<i64>,
+    ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            WITH member_accounts AS (
+                SELECT DISTINCT m.member_account_id
+                FROM cala_account_set_member_accounts m
+                LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
+                WHERE m.account_set_id = ANY($1)
+                  AND s.id IS NULL
+            ),
+            all_history AS (
+                SELECT h.values, h.account_id, h.currency, h.version, h.seq
+                FROM cala_balance_history h
+                JOIN member_accounts ma ON ma.member_account_id = h.account_id
+                WHERE h.journal_id = $2
+            ),
+            with_prev AS (
+                SELECT values,
+                       LAG(values) OVER (
+                           PARTITION BY account_id, currency ORDER BY version
+                       ) as prev_values,
+                       seq,
+                       account_id
+                FROM all_history
+            )
+            SELECT values, prev_values, seq
+            FROM with_prev
+            WHERE ($3::bigint IS NULL OR seq > $3)
+            ORDER BY seq, account_id
+            "#,
+            account_set_ids as &[AccountSetId],
+            journal_id as JournalId,
+            min_watermark,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result = Vec::with_capacity(rows.len());
+        for row in rows {
+            let snapshot: BalanceSnapshot =
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let prev_snapshot: Option<BalanceSnapshot> = row.prev_values.map(|v| {
+                serde_json::from_value(v).expect("Failed to deserialize previous balance snapshot")
+            });
+
+            result.push(MemberBalanceHistoryRow {
+                snapshot,
+                prev_snapshot,
+                seq: row.seq,
+            });
+        }
+
+        Ok(result)
+    }
+
+    #[instrument(
+        name = "balance.fetch_member_account_mappings",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(crate) async fn fetch_member_account_mappings(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                account_set_id AS "account_set_id!: AccountSetId",
+                member_account_id AS "member_account_id!: AccountId"
+            FROM cala_account_set_member_accounts m
+            LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
+            WHERE m.account_set_id = ANY($1)
+              AND s.id IS NULL
+            "#,
+            account_set_ids as &[AccountSetId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+        for row in rows {
+            result
+                .entry(row.member_account_id)
+                .or_default()
+                .push(row.account_set_id);
+        }
         Ok(result)
     }
 }
@@ -466,4 +621,11 @@ impl BalanceRepo {
 pub(crate) struct MemberBalanceHistoryRow {
     pub(crate) snapshot: BalanceSnapshot,
     pub(crate) prev_snapshot: Option<BalanceSnapshot>,
+    pub(crate) seq: i64,
 }
+
+/// Per-account-set balance state: currency balances + watermark.
+pub(crate) type AccountSetBalanceState = (HashMap<Currency, BalanceSnapshot>, Option<i64>);
+
+/// Per-set recalculation state used by `replay_member_deltas_batch`.
+pub(crate) type SetRecalcState = (AccountId, HashMap<Currency, BalanceSnapshot>, Option<i64>);
