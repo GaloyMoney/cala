@@ -72,6 +72,7 @@ CREATE TABLE cala_account_set_member_accounts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_set_id, member_account_id)
 );
+CREATE INDEX idx_cala_account_set_member_accounts_member_id ON cala_account_set_member_accounts (member_account_id);
 
 CREATE TABLE cala_account_set_member_account_sets (
   account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
@@ -233,6 +234,7 @@ CREATE TABLE cala_velocity_account_controls (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, velocity_control_id)
 );
+CREATE INDEX idx_cala_velocity_account_controls_account_id ON cala_velocity_account_controls (account_id);
 
 CREATE TABLE cala_velocity_current_balances (
   journal_id UUID NOT NULL,
