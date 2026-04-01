@@ -257,14 +257,15 @@ impl BalanceRepo {
             RETURNING *
         )
         INSERT INTO cala_current_balances AS c (
-            journal_id, account_id, currency, latest_version, latest_values
+            journal_id, account_id, currency, latest_version, latest_values, latest_seq
         )
         SELECT
             journal_id,
             account_id,
             currency,
             MAX(version) as latest_version,
-            (array_agg(values ORDER BY version DESC))[1] as latest_values
+            (array_agg(values ORDER BY version DESC))[1] as latest_values,
+            MAX(seq) as latest_seq
         FROM new_snapshots
         GROUP BY journal_id, account_id, currency
         ON CONFLICT (account_id, journal_id, currency)
@@ -274,7 +275,8 @@ impl BalanceRepo {
                 WHEN c.latest_version < EXCLUDED.latest_version
                 THEN EXCLUDED.latest_values
                 ELSE c.latest_values
-            END
+            END,
+            latest_seq = GREATEST(c.latest_seq, EXCLUDED.latest_seq)
         "#,
             &journal_ids as &[JournalId],
             &account_ids as &[AccountId],
@@ -361,10 +363,10 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_id: AccountId,
-    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
+    ) -> Result<(HashMap<Currency, BalanceSnapshot>, Option<i64>), BalanceError> {
         let rows = sqlx::query!(
             r#"
-            SELECT latest_values
+            SELECT latest_values, latest_seq
             FROM cala_current_balances
             WHERE account_id = $1 AND journal_id = $2
             FOR UPDATE
@@ -376,27 +378,26 @@ impl BalanceRepo {
         .await?;
 
         let mut balances = HashMap::new();
+        let mut max_seq: Option<i64> = None;
         for row in rows {
             let snap: BalanceSnapshot = serde_json::from_value(row.latest_values)
                 .expect("Failed to deserialize balance snapshot");
             balances.insert(snap.currency, snap);
+            let seq = row.latest_seq;
+            max_seq = Some(max_seq.map_or(seq, |cur| cur.max(seq)));
         }
+        let watermark = max_seq.filter(|&s| s > 0);
 
-        Ok(balances)
+        Ok((balances, watermark))
     }
 
     /// Fetch member balance history rows newer than `watermark`.
     ///
-    /// A single global watermark works across all currencies because EntryId
-    /// uses UUID v7 via `Uuid::now_v7()`, which guarantees strict monotonic
-    /// ordering within a process (a 42-bit counter ensures uniqueness even
-    /// within the same millisecond). The watermark represents the latest
-    /// entry already processed — any member balance_history row created after
-    /// that (for *any* currency) will have a `latest_entry_id > watermark`.
-    ///
-    /// **Invariant**: this relies on `EntryId::new()` producing monotonically
-    /// increasing IDs. If the ID generation strategy ever changes, this must
-    /// be revisited (e.g. per-currency watermarks).
+    /// The watermark is a `BIGSERIAL` sequence number (`seq`) from
+    /// `cala_balance_history`. PostgreSQL sequences are globally ordered
+    /// across all connections, making this safe for multi-writer (HA)
+    /// deployments — unlike UUID v7 which is only monotonic within a
+    /// single process.
     #[instrument(
         name = "balance.fetch_incremental_member_history",
         skip_all,
@@ -407,13 +408,13 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_set_id: AccountSetId,
-        watermark: Option<EntryId>,
+        watermark: Option<i64>,
     ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
         let rows = sqlx::query!(
             r#"
             WITH all_member_history AS (
                 SELECT h.values, h.account_id, h.currency, h.version,
-                       h.latest_entry_id
+                       h.seq
                 FROM cala_balance_history h
                 JOIN cala_account_set_member_accounts m
                     ON m.member_account_id = h.account_id
@@ -428,18 +429,18 @@ impl BalanceRepo {
                        LAG(values) OVER (
                            PARTITION BY account_id, currency ORDER BY version
                        ) as prev_values,
-                       latest_entry_id,
+                       seq,
                        account_id
                 FROM all_member_history
             )
             SELECT values, prev_values
             FROM with_prev
-            WHERE ($3::uuid IS NULL OR latest_entry_id > $3)
-            ORDER BY latest_entry_id, account_id
+            WHERE ($3::bigint IS NULL OR seq > $3)
+            ORDER BY seq, account_id
             "#,
             account_set_id as AccountSetId,
             journal_id as JournalId,
-            watermark as Option<EntryId>,
+            watermark,
         )
         .fetch_all(op.as_executor())
         .await?;

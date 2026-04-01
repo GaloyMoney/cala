@@ -211,19 +211,10 @@ impl Balances {
     ) -> Result<(), BalanceError> {
         let account_id = AccountId::from(&account_set_id);
 
-        let current_balances = self
+        let (current_balances, watermark) = self
             .repo
             .load_account_set_balances(op, journal_id, account_id)
             .await?;
-
-        // Single watermark across all currencies is safe because EntryId is
-        // UUID v7 (globally ordered by creation time). See doc comment on
-        // fetch_incremental_member_history for the full invariant.
-        let watermark = current_balances
-            .values()
-            .map(|snap| snap.entry_id)
-            .max_by_key(|id| uuid::Uuid::from(*id))
-            .filter(|id| uuid::Uuid::from(*id) != uuid::Uuid::nil());
 
         let new_history = self
             .repo

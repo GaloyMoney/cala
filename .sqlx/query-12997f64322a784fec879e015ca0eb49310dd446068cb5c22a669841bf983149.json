@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_accounts (id, name, code, external_id, normal_balance_type, status, eventually_consistent, velocity_context_values, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, NOW()))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "status",
+            "kind": {
+              "Enum": [
+                "active",
+                "locked"
+              ]
+            }
+          }
+        },
+        "Bool",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "12997f64322a784fec879e015ca0eb49310dd446068cb5c22a669841bf983149"
+}
