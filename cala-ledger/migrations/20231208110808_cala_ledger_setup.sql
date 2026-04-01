@@ -129,6 +129,7 @@ CREATE TABLE cala_entries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
+CREATE INDEX idx_cala_entries_account_id ON cala_entries (account_id, created_at DESC, id DESC);
 
 CREATE TABLE cala_entry_events (
   id UUID NOT NULL REFERENCES cala_entries(id),
@@ -176,6 +177,9 @@ CREATE TABLE cala_cumulative_effective_balances (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(journal_id, account_id, currency, effective, version)
 );
+CREATE INDEX idx_cala_cumeff_bal_atv_desc
+ON cala_cumulative_effective_balances
+  (journal_id, account_id, currency, all_time_version DESC);
 
 CREATE TABLE cala_velocity_limits (
   id UUID PRIMARY KEY,
