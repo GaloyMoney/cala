@@ -199,44 +199,6 @@ impl Balances {
     }
 
     #[instrument(
-        name = "cala_ledger.balances.recalculate_account_set_balances_in_op",
-        skip(self, op),
-        fields(account_set_id = %account_set_id)
-    )]
-    pub(crate) async fn recalculate_account_set_balances_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_set_id: AccountSetId,
-    ) -> Result<(), BalanceError> {
-        let account_id = AccountId::from(&account_set_id);
-
-        let (current_balances, watermark) = self
-            .repo
-            .load_account_set_balances(op, journal_id, account_id)
-            .await?;
-
-        let new_history = self
-            .repo
-            .fetch_incremental_member_history(op, journal_id, account_set_id, watermark)
-            .await?;
-
-        if new_history.is_empty() {
-            return Ok(());
-        }
-
-        let new_snapshots =
-            Self::replay_member_deltas(journal_id, account_id, current_balances, new_history);
-
-        if !new_snapshots.is_empty() {
-            self.repo
-                .insert_new_snapshots(op, journal_id, new_snapshots)
-                .await?;
-        }
-        Ok(())
-    }
-
-    #[instrument(
         name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
         skip(self, op)
     )]
@@ -406,105 +368,6 @@ impl Balances {
 
                 new_snapshots.push(running.clone());
             }
-        }
-
-        new_snapshots
-    }
-
-    #[instrument(name = "cala_ledger.balances.replay_member_deltas", skip_all)]
-    fn replay_member_deltas(
-        journal_id: JournalId,
-        account_id: AccountId,
-        mut current_balances: HashMap<Currency, BalanceSnapshot>,
-        history: Vec<MemberBalanceHistoryRow>,
-    ) -> Vec<BalanceSnapshot> {
-        use rust_decimal::Decimal;
-
-        let mut new_snapshots = Vec::with_capacity(history.len());
-
-        for MemberBalanceHistoryRow {
-            snapshot,
-            prev_snapshot,
-            ..
-        } in history
-        {
-            let (d_settled_dr, d_settled_cr, d_pending_dr, d_pending_cr, d_enc_dr, d_enc_cr) =
-                match prev_snapshot {
-                    Some(ref prev) => (
-                        snapshot.settled.dr_balance - prev.settled.dr_balance,
-                        snapshot.settled.cr_balance - prev.settled.cr_balance,
-                        snapshot.pending.dr_balance - prev.pending.dr_balance,
-                        snapshot.pending.cr_balance - prev.pending.cr_balance,
-                        snapshot.encumbrance.dr_balance - prev.encumbrance.dr_balance,
-                        snapshot.encumbrance.cr_balance - prev.encumbrance.cr_balance,
-                    ),
-                    None => (
-                        snapshot.settled.dr_balance,
-                        snapshot.settled.cr_balance,
-                        snapshot.pending.dr_balance,
-                        snapshot.pending.cr_balance,
-                        snapshot.encumbrance.dr_balance,
-                        snapshot.encumbrance.cr_balance,
-                    ),
-                };
-
-            let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
-            let running = current_balances
-                .entry(snapshot.currency)
-                .or_insert_with(|| BalanceSnapshot {
-                    journal_id,
-                    account_id,
-                    entry_id,
-                    currency: snapshot.currency,
-                    settled: BalanceAmount {
-                        dr_balance: Decimal::ZERO,
-                        cr_balance: Decimal::ZERO,
-                        entry_id,
-                        modified_at: snapshot.modified_at,
-                    },
-                    pending: BalanceAmount {
-                        dr_balance: Decimal::ZERO,
-                        cr_balance: Decimal::ZERO,
-                        entry_id,
-                        modified_at: snapshot.modified_at,
-                    },
-                    encumbrance: BalanceAmount {
-                        dr_balance: Decimal::ZERO,
-                        cr_balance: Decimal::ZERO,
-                        entry_id,
-                        modified_at: snapshot.modified_at,
-                    },
-                    // Starts at 0, matching Snapshots::new_snapshot(). The
-                    // += 1 below produces version 1 for the first persisted row.
-                    version: 0,
-                    modified_at: snapshot.modified_at,
-                    created_at: snapshot.modified_at,
-                });
-
-            running.settled.dr_balance += d_settled_dr;
-            running.settled.cr_balance += d_settled_cr;
-            running.pending.dr_balance += d_pending_dr;
-            running.pending.cr_balance += d_pending_cr;
-            running.encumbrance.dr_balance += d_enc_dr;
-            running.encumbrance.cr_balance += d_enc_cr;
-            running.version += 1;
-            running.entry_id = snapshot.entry_id;
-            running.modified_at = snapshot.modified_at;
-
-            if d_settled_dr != Decimal::ZERO || d_settled_cr != Decimal::ZERO {
-                running.settled.entry_id = snapshot.settled.entry_id;
-                running.settled.modified_at = snapshot.settled.modified_at;
-            }
-            if d_pending_dr != Decimal::ZERO || d_pending_cr != Decimal::ZERO {
-                running.pending.entry_id = snapshot.pending.entry_id;
-                running.pending.modified_at = snapshot.pending.modified_at;
-            }
-            if d_enc_dr != Decimal::ZERO || d_enc_cr != Decimal::ZERO {
-                running.encumbrance.entry_id = snapshot.encumbrance.entry_id;
-                running.encumbrance.modified_at = snapshot.encumbrance.modified_at;
-            }
-
-            new_snapshots.push(running.clone());
         }
 
         new_snapshots
@@ -785,7 +648,7 @@ mod tests {
         }
     }
 
-    mod replay_member_deltas {
+    mod replay_member_deltas_batch {
         use super::*;
 
         use chrono::Utc;
@@ -833,7 +696,9 @@ mod tests {
             }
         }
 
+        /// Create a member snapshot whose `account_id` is `member_id`.
         fn member_snapshot(
+            member_id: AccountId,
             currency: &str,
             entry_id: EntryId,
             settled_dr: Decimal,
@@ -843,7 +708,7 @@ mod tests {
             let currency: Currency = currency.parse().unwrap();
             BalanceSnapshot {
                 journal_id: JournalId::new(),
-                account_id: AccountId::new(),
+                account_id: member_id,
                 entry_id,
                 currency,
                 settled: BalanceAmount {
@@ -870,21 +735,49 @@ mod tests {
             }
         }
 
+        /// Build a single-set scenario (equivalent to the old single-set tests).
+        fn single_set_state(
+            journal_id: JournalId,
+            set_id: AccountSetId,
+            member_id: AccountId,
+            balances: HashMap<Currency, BalanceSnapshot>,
+        ) -> (
+            HashMap<AccountSetId, SetRecalcState>,
+            HashMap<AccountId, Vec<AccountSetId>>,
+        ) {
+            let account_id = AccountId::from(&set_id);
+            let set_states = std::iter::once((set_id, (account_id, balances, None))).collect();
+            let memberships = std::iter::once((member_id, vec![set_id])).collect();
+            let _ = journal_id; // only used by callers for consistency
+            (set_states, memberships)
+        }
+
         #[test]
         fn first_run_produces_version_1() {
             let journal_id = JournalId::new();
-            let account_id = AccountId::new();
+            let set_id = AccountSetId::new();
+            let member_id = AccountId::new();
             let entry_id = EntryId::new();
 
             let history = vec![MemberBalanceHistoryRow {
-                snapshot: member_snapshot("USD", entry_id, Decimal::from(100), Decimal::ZERO),
+                snapshot: member_snapshot(
+                    member_id,
+                    "USD",
+                    entry_id,
+                    Decimal::from(100),
+                    Decimal::ZERO,
+                ),
                 prev_snapshot: None,
                 seq: 1,
             }];
 
-            let result =
-                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+            let (set_states, memberships) =
+                single_set_state(journal_id, set_id, member_id, HashMap::new());
 
+            let result =
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+
+            let account_id = AccountId::from(&set_id);
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].version, 1);
             assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
@@ -895,7 +788,9 @@ mod tests {
         #[test]
         fn incremental_applies_delta_to_existing_balance() {
             let journal_id = JournalId::new();
-            let account_id = AccountId::new();
+            let set_id = AccountSetId::new();
+            let account_id = AccountId::from(&set_id);
+            let member_id = AccountId::new();
             let currency: Currency = "USD".parse().unwrap();
 
             let existing_entry = EntryId::new();
@@ -905,8 +800,20 @@ mod tests {
             let mut current_balances = HashMap::new();
             current_balances.insert(currency, existing);
 
-            let prev = member_snapshot("USD", EntryId::new(), Decimal::from(50), Decimal::ZERO);
-            let curr = member_snapshot("USD", EntryId::new(), Decimal::from(80), Decimal::ZERO);
+            let prev = member_snapshot(
+                member_id,
+                "USD",
+                EntryId::new(),
+                Decimal::from(50),
+                Decimal::ZERO,
+            );
+            let curr = member_snapshot(
+                member_id,
+                "USD",
+                EntryId::new(),
+                Decimal::from(80),
+                Decimal::ZERO,
+            );
             // Delta: 80 - 50 = 30 dr
             let history = vec![MemberBalanceHistoryRow {
                 snapshot: curr,
@@ -914,8 +821,11 @@ mod tests {
                 seq: 1,
             }];
 
+            let (set_states, memberships) =
+                single_set_state(journal_id, set_id, member_id, current_balances);
+
             let result =
-                Balances::replay_member_deltas(journal_id, account_id, current_balances, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].version, 3);
@@ -925,10 +835,23 @@ mod tests {
         #[test]
         fn multiple_deltas_accumulate() {
             let journal_id = JournalId::new();
-            let account_id = AccountId::new();
+            let set_id = AccountSetId::new();
+            let member_id = AccountId::new();
 
-            let snap1 = member_snapshot("USD", EntryId::new(), Decimal::from(100), Decimal::ZERO);
-            let snap2 = member_snapshot("USD", EntryId::new(), Decimal::from(250), Decimal::ZERO);
+            let snap1 = member_snapshot(
+                member_id,
+                "USD",
+                EntryId::new(),
+                Decimal::from(100),
+                Decimal::ZERO,
+            );
+            let snap2 = member_snapshot(
+                member_id,
+                "USD",
+                EntryId::new(),
+                Decimal::from(250),
+                Decimal::ZERO,
+            );
             let history = vec![
                 MemberBalanceHistoryRow {
                     snapshot: snap1.clone(),
@@ -942,8 +865,11 @@ mod tests {
                 },
             ];
 
+            let (set_states, memberships) =
+                single_set_state(journal_id, set_id, member_id, HashMap::new());
+
             let result =
-                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
 
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].version, 1);
@@ -955,10 +881,23 @@ mod tests {
         #[test]
         fn multi_currency_tracked_independently() {
             let journal_id = JournalId::new();
-            let account_id = AccountId::new();
+            let set_id = AccountSetId::new();
+            let member_id = AccountId::new();
 
-            let usd = member_snapshot("USD", EntryId::new(), Decimal::from(100), Decimal::ZERO);
-            let btc = member_snapshot("BTC", EntryId::new(), Decimal::ZERO, Decimal::from(50));
+            let usd = member_snapshot(
+                member_id,
+                "USD",
+                EntryId::new(),
+                Decimal::from(100),
+                Decimal::ZERO,
+            );
+            let btc = member_snapshot(
+                member_id,
+                "BTC",
+                EntryId::new(),
+                Decimal::ZERO,
+                Decimal::from(50),
+            );
             let history = vec![
                 MemberBalanceHistoryRow {
                     snapshot: usd,
@@ -972,8 +911,11 @@ mod tests {
                 },
             ];
 
+            let (set_states, memberships) =
+                single_set_state(journal_id, set_id, member_id, HashMap::new());
+
             let result =
-                Balances::replay_member_deltas(journal_id, account_id, HashMap::new(), history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
 
             assert_eq!(result.len(), 2);
             let usd_snap = result.iter().find(|s| s.currency.code() == "USD").unwrap();
@@ -986,13 +928,113 @@ mod tests {
 
         #[test]
         fn empty_history_returns_empty() {
-            let result = Balances::replay_member_deltas(
+            let result = Balances::replay_member_deltas_batch(
                 JournalId::new(),
-                AccountId::new(),
                 HashMap::new(),
+                &HashMap::new(),
                 Vec::new(),
             );
             assert!(result.is_empty());
+        }
+
+        #[test]
+        fn shared_member_dispatches_to_multiple_sets() {
+            let journal_id = JournalId::new();
+            let set_a = AccountSetId::new();
+            let set_b = AccountSetId::new();
+            let member_id = AccountId::new();
+
+            let history = vec![MemberBalanceHistoryRow {
+                snapshot: member_snapshot(
+                    member_id,
+                    "USD",
+                    EntryId::new(),
+                    Decimal::from(100),
+                    Decimal::ZERO,
+                ),
+                prev_snapshot: None,
+                seq: 1,
+            }];
+
+            let set_states: HashMap<AccountSetId, SetRecalcState> = [
+                (set_a, (AccountId::from(&set_a), HashMap::new(), None)),
+                (set_b, (AccountId::from(&set_b), HashMap::new(), None)),
+            ]
+            .into_iter()
+            .collect();
+            let memberships: HashMap<AccountId, Vec<AccountSetId>> =
+                std::iter::once((member_id, vec![set_a, set_b])).collect();
+
+            let result =
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+
+            assert_eq!(result.len(), 2);
+            for snap in &result {
+                assert_eq!(snap.version, 1);
+                assert_eq!(snap.settled.dr_balance, Decimal::from(100));
+            }
+        }
+
+        #[test]
+        fn watermark_skips_already_processed_rows() {
+            let journal_id = JournalId::new();
+            let set_id = AccountSetId::new();
+            let account_id = AccountId::from(&set_id);
+            let member_id = AccountId::new();
+            let currency: Currency = "USD".parse().unwrap();
+
+            // Set already has version 1 balance and watermark at seq=5
+            let mut existing = zero_balance(journal_id, account_id, currency, EntryId::new(), 1);
+            existing.settled.dr_balance = Decimal::from(100);
+            let mut balances = HashMap::new();
+            balances.insert(currency, existing);
+
+            let set_states: HashMap<AccountSetId, SetRecalcState> =
+                std::iter::once((set_id, (account_id, balances, Some(5)))).collect();
+            let memberships: HashMap<AccountId, Vec<AccountSetId>> =
+                std::iter::once((member_id, vec![set_id])).collect();
+
+            let history = vec![
+                // seq=3 should be skipped (below watermark 5)
+                MemberBalanceHistoryRow {
+                    snapshot: member_snapshot(
+                        member_id,
+                        "USD",
+                        EntryId::new(),
+                        Decimal::from(50),
+                        Decimal::ZERO,
+                    ),
+                    prev_snapshot: None,
+                    seq: 3,
+                },
+                // seq=7 should be applied
+                MemberBalanceHistoryRow {
+                    snapshot: member_snapshot(
+                        member_id,
+                        "USD",
+                        EntryId::new(),
+                        Decimal::from(80),
+                        Decimal::ZERO,
+                    ),
+                    prev_snapshot: Some(member_snapshot(
+                        member_id,
+                        "USD",
+                        EntryId::new(),
+                        Decimal::from(50),
+                        Decimal::ZERO,
+                    )),
+                    seq: 7,
+                },
+            ];
+
+            let result =
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+
+            // Only one snapshot produced (seq=3 skipped)
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].version, 2);
+            // 100 (existing) + 30 (delta: 80-50) = 130
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(130));
         }
     }
 }

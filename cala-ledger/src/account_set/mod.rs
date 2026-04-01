@@ -549,12 +549,8 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
-        let account_set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
-        let journal_id = account_set.values().journal_id;
-        self.balances
-            .recalculate_account_set_balances_in_op(op, journal_id, account_set_id)
-            .await?;
-        Ok(())
+        self.recalculate_balances_batch_in_op(op, &[account_set_id])
+            .await
     }
 
     #[instrument(
