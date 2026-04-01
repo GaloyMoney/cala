@@ -2,14 +2,28 @@
 
 set -e
 
+publish_crate() {
+  local crate=$1
+  local output
+  if output=$(cargo publish -p "$crate" --all-features --no-verify 2>&1); then
+    echo "Published $crate"
+  elif echo "$output" | grep -q "already exists"; then
+    echo "Skipping $crate - version already published"
+  else
+    echo "$output"
+    echo "Failed to publish $crate"
+    return 1
+  fi
+}
+
 pushd repo
 
 cat <<EOF | cargo login
 ${CRATES_API_TOKEN}
 EOF
 
-cargo publish -p cala-tracing --all-features --no-verify
-cargo publish -p cala-cel-parser --all-features --no-verify
-cargo publish -p cala-cel-interpreter --all-features --no-verify
-cargo publish -p cala-ledger-core-types --all-features --no-verify
-cargo publish -p cala-ledger --all-features --no-verify
+publish_crate cala-tracing
+publish_crate cala-cel-parser
+publish_crate cala-cel-interpreter
+publish_crate cala-ledger-core-types
+publish_crate cala-ledger
