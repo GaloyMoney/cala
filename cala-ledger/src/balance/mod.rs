@@ -170,6 +170,34 @@ impl Balances {
             .await
     }
 
+    #[instrument(name = "cala_ledger.balance.update_balance_for_account_in_op", skip(self, op, entries), fields(journal_id = %journal_id, account_id = %account_id))]
+    pub(crate) async fn update_balance_for_account_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+        entries: &[EntryValues],
+        created_at: DateTime<Utc>,
+    ) -> Result<(), BalanceError> {
+        let current = self
+            .repo
+            .load_all_for_update(op, journal_id, account_id)
+            .await?;
+        let mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> =
+            HashMap::new();
+        for entry in entries {
+            current_balances
+                .entry((account_id, entry.currency))
+                .or_insert_with(|| current.get(&entry.currency).cloned());
+        }
+        let new_balances =
+            Self::new_snapshots(created_at, current_balances, entries, &HashMap::new());
+        self.repo
+            .insert_new_snapshots(op, journal_id, new_balances)
+            .await?;
+        Ok(())
+    }
+
     #[instrument(
         name = "cala_ledger.balances.recalculate_account_set_balances_in_op",
         skip(self, op),

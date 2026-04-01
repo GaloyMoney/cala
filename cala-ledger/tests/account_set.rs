@@ -707,3 +707,134 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+async fn eventually_consistent_member_add_with_existing_balance() -> anyhow::Result<()> {
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Post transactions so recipient has pre-existing balance
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // Create inline set for reference
+    let inline_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Inline Set")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let inline_set = cala.account_sets().create(inline_set).await.unwrap();
+
+    // Create EC set
+    let ec_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("EC Set")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let ec_set = cala.account_sets().create(ec_set).await.unwrap();
+
+    // Add recipient (with pre-existing balance) to both sets
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_account.id())
+        .await
+        .unwrap();
+
+    // EC set should now have a balance from add_member summary entries
+    let inline_bal = cala
+        .balances()
+        .find(journal.id(), inline_set.id(), btc)
+        .await?;
+    let ec_bal = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(
+        inline_bal.settled(),
+        ec_bal.settled(),
+        "EC set balance should match inline after add_member"
+    );
+
+    // Post more transactions
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
+
+    // Recalculate EC — incremental should correctly skip pre-existing history
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await
+        .unwrap();
+
+    // Verify EC matches inline after recalculate
+    let inline_bal_2 = cala
+        .balances()
+        .find(journal.id(), inline_set.id(), btc)
+        .await?;
+    let ec_bal_2 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(
+        inline_bal_2.settled(),
+        ec_bal_2.settled(),
+        "EC set should match inline after recalculate"
+    );
+    assert_eq!(
+        inline_bal_2.details.version, ec_bal_2.details.version,
+        "version should match after recalculate"
+    );
+
+    // Idempotency: recalculate again is a no-op
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await
+        .unwrap();
+    let ec_bal_3 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
+    assert_eq!(
+        ec_bal_2.settled(),
+        ec_bal_3.settled(),
+        "recalculate should be idempotent"
+    );
+    assert_eq!(
+        ec_bal_2.details.version, ec_bal_3.details.version,
+        "version should not change on idempotent recalculate"
+    );
+
+    Ok(())
+}

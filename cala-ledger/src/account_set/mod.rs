@@ -222,6 +222,11 @@ impl AccountSets {
             return Ok(account_set);
         }
         let entries = self.entries.create_all_in_op(op, entries).await?;
+
+        let target_account = self.accounts.find(target_account_id).await?;
+        let is_ec = target_account.values().config.eventually_consistent;
+        let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
+
         let mappings = std::iter::once((target_account_id, parents)).collect();
         self.balances
             .update_balances_in_op(
@@ -233,6 +238,18 @@ impl AccountSets {
                 mappings,
             )
             .await?;
+
+        if let Some(ec_entries) = entries_for_ec {
+            self.balances
+                .update_balance_for_account_in_op(
+                    op,
+                    account_set.values().journal_id,
+                    target_account_id,
+                    &ec_entries,
+                    time,
+                )
+                .await?;
+        }
 
         Ok(account_set)
     }
@@ -307,6 +324,11 @@ impl AccountSets {
             return Ok(account_set);
         }
         let entries = self.entries.create_all_in_op(op, entries).await?;
+
+        let target_account = self.accounts.find(target_account_id).await?;
+        let is_ec = target_account.values().config.eventually_consistent;
+        let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
+
         let mappings = std::iter::once((target_account_id, parents)).collect();
         self.balances
             .update_balances_in_op(
@@ -318,6 +340,18 @@ impl AccountSets {
                 mappings,
             )
             .await?;
+
+        if let Some(ec_entries) = entries_for_ec {
+            self.balances
+                .update_balance_for_account_in_op(
+                    op,
+                    account_set.values().journal_id,
+                    target_account_id,
+                    &ec_entries,
+                    time,
+                )
+                .await?;
+        }
 
         Ok(account_set)
     }
