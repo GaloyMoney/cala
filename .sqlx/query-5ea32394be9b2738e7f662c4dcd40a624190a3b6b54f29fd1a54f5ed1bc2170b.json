@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH eligible AS (\n            SELECT id, queue_id, execute_at, execution_state_json, attempt_index\n            FROM job_executions\n            WHERE state = 'pending'\n            AND job_type = ANY($4)\n            AND NOT EXISTS (\n                SELECT 1 FROM job_executions AS running\n                WHERE running.state = 'running'\n                AND running.queue_id IS NOT NULL\n                AND running.queue_id = job_executions.queue_id\n            )\n        ),\n        min_wait AS (\n            SELECT MIN(execute_at) - $2::timestamptz AS wait_time\n            FROM eligible\n            WHERE execute_at > $2::timestamptz\n        ),\n        candidates AS (\n            SELECT id, execution_state_json AS data_json, attempt_index,\n                   ROW_NUMBER() OVER (\n                       PARTITION BY COALESCE(queue_id, id::text)\n                       ORDER BY execute_at\n                   ) AS rn\n            FROM eligible\n            WHERE execute_at <= $2::timestamptz\n        ),\n        selected_jobs AS (\n            SELECT je.id, c.data_json, c.attempt_index\n            FROM candidates c\n            JOIN job_executions je ON je.id = c.id\n            WHERE c.rn = 1\n            ORDER BY je.execute_at ASC\n            LIMIT $1\n            FOR UPDATE OF je\n        ),\n        updated AS (\n            UPDATE job_executions AS je\n            SET state = 'running', alive_at = $2, execute_at = NULL, poller_instance_id = $3\n            FROM selected_jobs\n            WHERE je.id = selected_jobs.id\n            RETURNING je.id, selected_jobs.data_json, je.attempt_index\n        )\n        SELECT * FROM (\n            SELECT\n                u.id AS \"id?: JobId\",\n                u.data_json AS \"data_json?: JsonValue\",\n                u.attempt_index AS \"attempt_index?\",\n                NULL::INTERVAL AS \"max_wait?: PgInterval\"\n            FROM updated u\n            UNION ALL\n            SELECT\n                NULL::UUID AS \"id?: JobId\",\n                NULL::JSONB AS \"data_json?: JsonValue\",\n                NULL::INT AS \"attempt_index?\",\n                mw.wait_time AS \"max_wait?: PgInterval\"\n            FROM min_wait mw\n            WHERE NOT EXISTS (SELECT 1 FROM updated)\n        ) AS result\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "data_json?: JsonValue",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_index?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "max_wait?: PgInterval",
+        "type_info": "Interval"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5ea32394be9b2738e7f662c4dcd40a624190a3b6b54f29fd1a54f5ed1bc2170b"
+}

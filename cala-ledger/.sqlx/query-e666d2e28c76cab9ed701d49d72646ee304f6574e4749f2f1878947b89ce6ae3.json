@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          UPDATE job_executions\n          SET execution_state_json = $1\n          WHERE id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e666d2e28c76cab9ed701d49d72646ee304f6574e4749f2f1878947b89ce6ae3"
+}

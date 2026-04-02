@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE job_executions\n                SET state = 'pending', execute_at = $2, attempt_index = $3, poller_instance_id = NULL\n                WHERE id = $1 AND poller_instance_id = $4\n              ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9ab25bea85f68a606013136bf1d70be5173a6b992936215300ad0737c46bfeec"
+}
