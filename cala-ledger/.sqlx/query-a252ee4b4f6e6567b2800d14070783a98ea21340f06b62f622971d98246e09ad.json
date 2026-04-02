@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                ee.event -> 'values' AS \"entry_values!: serde_json::Value\",\n                t.effective AS \"effective_date!: chrono::NaiveDate\"\n            FROM cala_entries e\n            JOIN cala_entry_events ee ON ee.id = e.id AND ee.sequence = 1\n            JOIN cala_transactions t ON e.transaction_id = t.id AND t.journal_id = $1\n            WHERE e.journal_id = $1\n              AND e.account_id IN (\n                  SELECT member_account_id\n                  FROM cala_account_set_member_accounts\n                  WHERE account_set_id = $2\n                  UNION ALL\n                  SELECT $2::uuid\n              )\n              AND ee.event -> 'values' ->> 'currency' = $4\n              AND t.effective >= $3\n            ORDER BY t.effective, t.created_at, e.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entry_values!: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "effective_date!: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "a252ee4b4f6e6567b2800d14070783a98ea21340f06b62f622971d98246e09ad"
+}

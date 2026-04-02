@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM cala_effective_balance_recalc_queue\n            WHERE (journal_id, account_id, currency) IN (\n                SELECT journal_id, account_id, currency\n                FROM cala_effective_balance_recalc_queue\n                ORDER BY created_at\n                LIMIT $1\n                FOR UPDATE SKIP LOCKED\n            )\n            RETURNING\n                journal_id AS \"journal_id: JournalId\",\n                account_id AS \"account_id: AccountId\",\n                currency,\n                earliest_effective_date\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "journal_id: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "earliest_effective_date",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "23f66c4a46ae29b846d0a67aa2458a6936091a4dca02c2e98a1cc4a7fa538b33"
+}

@@ -12,6 +12,7 @@ use crate::primitives::JournalId;
 
 use super::{account_balance::*, error::BalanceError};
 
+use data::*;
 use repo::*;
 
 #[derive(Clone)]
@@ -127,5 +128,100 @@ impl EffectiveBalances {
             .await?;
 
         Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.enqueue_recalculation",
+        skip(self, op)
+    )]
+    pub(crate) async fn enqueue_recalculation_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        effective: NaiveDate,
+        balance_ids: &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<(), BalanceError> {
+        self.repo
+            .enqueue_recalculation(op, journal_id, balance_ids, effective)
+            .await
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.enqueue_ec_recalculation",
+        skip(self, op)
+    )]
+    pub(crate) async fn enqueue_ec_recalculation_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        effective: NaiveDate,
+        balance_ids: &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<(), BalanceError> {
+        self.repo
+            .enqueue_ec_recalculation(op, journal_id, balance_ids, effective)
+            .await
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.process_recalc_queue",
+        skip(self, op)
+    )]
+    pub(crate) async fn process_recalc_queue_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        limit: i32,
+    ) -> Result<u32, BalanceError> {
+        let queue_entries = self.repo.pop_recalc_queue(&mut *op, limit).await?;
+        let count = queue_entries.len() as u32;
+
+        for queue_entry in queue_entries {
+            let (base_snapshot, base_version) = self
+                .repo
+                .delete_and_load_base(
+                    &mut *op,
+                    queue_entry.journal_id,
+                    queue_entry.account_id,
+                    queue_entry.currency.code(),
+                    queue_entry.earliest_effective_date,
+                )
+                .await?;
+
+            let loaded_entries = self
+                .repo
+                .load_entries_for_recalculation(
+                    &mut *op,
+                    queue_entry.journal_id,
+                    queue_entry.account_id,
+                    queue_entry.currency.code(),
+                    queue_entry.earliest_effective_date,
+                )
+                .await?;
+
+            if loaded_entries.is_empty() {
+                continue;
+            }
+
+            let mut data = EffectiveBalanceData::new(
+                queue_entry.account_id,
+                queue_entry.currency,
+                base_snapshot,
+                base_version,
+                Vec::new(),
+            );
+
+            for (effective_date, entry_values) in loaded_entries.iter() {
+                data.push(*effective_date, entry_values);
+            }
+
+            data.re_calculate_snapshots(Utc::now());
+
+            let mut all_data = HashMap::new();
+            all_data.insert((queue_entry.account_id, queue_entry.currency), data);
+            self.repo
+                .insert_new_snapshots(&mut *op, queue_entry.journal_id, all_data)
+                .await?;
+        }
+
+        Ok(count)
     }
 }

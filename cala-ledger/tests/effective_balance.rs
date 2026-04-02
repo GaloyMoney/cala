@@ -38,6 +38,9 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         .await
         .unwrap();
 
+    // Process deferred effective balance recalculation (backdated transactions)
+    cala.process_effective_balance_recalc_queue(100).await?;
+
     let recipient_balance = cala
         .balances()
         .effective()
@@ -63,6 +66,9 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     cala.post_transaction(TransactionId::new(), &tx_code, params)
         .await
         .unwrap();
+
+    // Process deferred effective balance recalculation for the second backdated transaction
+    cala.process_effective_balance_recalc_queue(100).await?;
 
     let recipient_balance = cala
         .balances()

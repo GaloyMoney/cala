@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_effective_balance_recalc_queue\n                (journal_id, account_id, currency, earliest_effective_date)\n            SELECT $1, account_id, currency, $4\n            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            JOIN cala_accounts a ON a.id = account_id\n            WHERE a.eventually_consistent = TRUE\n            ON CONFLICT (journal_id, account_id, currency)\n            DO UPDATE SET\n                earliest_effective_date = LEAST(\n                    cala_effective_balance_recalc_queue.earliest_effective_date,\n                    EXCLUDED.earliest_effective_date\n                )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "67627bf51e91a21cb0dc11f8b4fcd67bdb395f4b966e1ff1743aab62adfa96c7"
+}

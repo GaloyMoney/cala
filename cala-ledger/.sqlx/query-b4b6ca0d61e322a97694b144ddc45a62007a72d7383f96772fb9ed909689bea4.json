@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH deleted AS (\n                DELETE FROM cala_cumulative_effective_balances\n                WHERE journal_id = $1\n                  AND account_id = $2\n                  AND currency = $3\n                  AND effective >= $4\n            )\n            SELECT\n                values AS \"values?: serde_json::Value\",\n                all_time_version AS \"all_time_version?: i32\",\n                effective AS \"effective_date?: chrono::NaiveDate\"\n            FROM cala_cumulative_effective_balances\n            WHERE journal_id = $1\n              AND account_id = $2\n              AND currency = $3\n              AND effective < $4\n            ORDER BY all_time_version DESC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values?: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "all_time_version?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "effective_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4b6ca0d61e322a97694b144ddc45a62007a72d7383f96772fb9ed909689bea4"
+}

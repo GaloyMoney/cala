@@ -9,6 +9,8 @@ use cala_types::{
     primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
+use cala_types::entry::EntryValues;
+
 use super::data::*;
 
 type BalanceRangeResult =
@@ -424,6 +426,233 @@ impl EffectiveBalanceRepo {
             );
         }
         Ok(ret)
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.enqueue_recalculation",
+        skip(self, op)
+    )]
+    pub(super) async fn enqueue_recalculation(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+        effective: NaiveDate,
+    ) -> Result<(), BalanceError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO cala_effective_balance_recalc_queue
+                (journal_id, account_id, currency, earliest_effective_date)
+            SELECT $1, account_id, currency, $4
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = account_id
+            WHERE a.eventually_consistent = FALSE
+            ON CONFLICT (journal_id, account_id, currency)
+            DO UPDATE SET
+                earliest_effective_date = LEAST(
+                    cala_effective_balance_recalc_queue.earliest_effective_date,
+                    EXCLUDED.earliest_effective_date
+                )
+            "#,
+            journal_id as JournalId,
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+            effective,
+        )
+        .execute(op.as_executor())
+        .await?;
+
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.enqueue_ec_recalculation",
+        skip(self, op)
+    )]
+    pub(super) async fn enqueue_ec_recalculation(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+        effective: NaiveDate,
+    ) -> Result<(), BalanceError> {
+        sqlx::query!(
+            r#"
+            INSERT INTO cala_effective_balance_recalc_queue
+                (journal_id, account_id, currency, earliest_effective_date)
+            SELECT $1, account_id, currency, $4
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = account_id
+            WHERE a.eventually_consistent = TRUE
+            ON CONFLICT (journal_id, account_id, currency)
+            DO UPDATE SET
+                earliest_effective_date = LEAST(
+                    cala_effective_balance_recalc_queue.earliest_effective_date,
+                    EXCLUDED.earliest_effective_date
+                )
+            "#,
+            journal_id as JournalId,
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+            effective,
+        )
+        .execute(op.as_executor())
+        .await?;
+
+        Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.pop_recalc_queue",
+        skip(self, op)
+    )]
+    pub(super) async fn pop_recalc_queue(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        limit: i32,
+    ) -> Result<Vec<RecalcQueueEntry>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            DELETE FROM cala_effective_balance_recalc_queue
+            WHERE (journal_id, account_id, currency) IN (
+                SELECT journal_id, account_id, currency
+                FROM cala_effective_balance_recalc_queue
+                ORDER BY created_at
+                LIMIT $1
+                FOR UPDATE SKIP LOCKED
+            )
+            RETURNING
+                journal_id AS "journal_id: JournalId",
+                account_id AS "account_id: AccountId",
+                currency,
+                earliest_effective_date
+            "#,
+            limit as i64,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let entries = rows
+            .into_iter()
+            .map(|row| RecalcQueueEntry {
+                journal_id: row.journal_id,
+                account_id: row.account_id,
+                currency: row.currency.parse().expect("Failed to parse currency"),
+                earliest_effective_date: row.earliest_effective_date,
+            })
+            .collect();
+
+        Ok(entries)
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.delete_and_load_base",
+        skip(self, op)
+    )]
+    pub(super) async fn delete_and_load_base(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: &str,
+        earliest_effective_date: NaiveDate,
+    ) -> Result<(Option<(NaiveDate, BalanceSnapshot)>, u32), BalanceError> {
+        let row = sqlx::query!(
+            r#"
+            WITH deleted AS (
+                DELETE FROM cala_cumulative_effective_balances
+                WHERE journal_id = $1
+                  AND account_id = $2
+                  AND currency = $3
+                  AND effective >= $4
+            )
+            SELECT
+                values AS "values?: serde_json::Value",
+                all_time_version AS "all_time_version?: i32",
+                effective AS "effective_date?: chrono::NaiveDate"
+            FROM cala_cumulative_effective_balances
+            WHERE journal_id = $1
+              AND account_id = $2
+              AND currency = $3
+              AND effective < $4
+            ORDER BY all_time_version DESC
+            LIMIT 1
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency,
+            earliest_effective_date,
+        )
+        .fetch_optional(op.as_executor())
+        .await?;
+
+        match row {
+            Some(row) => {
+                let snapshot = match (row.values, row.effective_date) {
+                    (Some(values), Some(effective_date)) => {
+                        let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
+                            .expect("Failed to deserialize balance snapshot");
+                        Some((effective_date, snapshot))
+                    }
+                    _ => None,
+                };
+                let version = row.all_time_version.map(|v| v as u32).unwrap_or(0);
+                Ok((snapshot, version))
+            }
+            None => Ok((None, 0)),
+        }
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.load_entries_for_recalculation",
+        skip(self, op)
+    )]
+    pub(super) async fn load_entries_for_recalculation(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: &str,
+        earliest_effective_date: NaiveDate,
+    ) -> Result<Vec<(NaiveDate, EntryValues)>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                ee.event -> 'values' AS "entry_values!: serde_json::Value",
+                t.effective AS "effective_date!: chrono::NaiveDate"
+            FROM cala_entries e
+            JOIN cala_entry_events ee ON ee.id = e.id AND ee.sequence = 1
+            JOIN cala_transactions t ON e.transaction_id = t.id AND t.journal_id = $1
+            WHERE e.journal_id = $1
+              AND e.account_id IN (
+                  SELECT member_account_id
+                  FROM cala_account_set_member_accounts
+                  WHERE account_set_id = $2
+                  UNION ALL
+                  SELECT $2::uuid
+              )
+              AND ee.event -> 'values' ->> 'currency' = $4
+              AND t.effective >= $3
+            ORDER BY t.effective, t.created_at, e.id
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            earliest_effective_date,
+            currency,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let entries = rows
+            .into_iter()
+            .map(|row| {
+                let entry_values: EntryValues = serde_json::from_value(row.entry_values)
+                    .expect("Failed to deserialize entry values");
+                (row.effective_date, entry_values)
+            })
+            .collect();
+
+        Ok(entries)
     }
 
     #[instrument(

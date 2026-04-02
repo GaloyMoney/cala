@@ -142,20 +142,46 @@ impl Balances {
             .await?;
 
         if journal.insert_effective_balances() {
+            let is_backdated = effective < created_at.date_naive();
+            if is_backdated {
+                self.effective
+                    .enqueue_recalculation_in_op(op, journal_id, effective, &all_involved_balances)
+                    .await?;
+            } else {
+                self.effective
+                    .update_cumulative_balances_in_op(
+                        op,
+                        journal_id,
+                        entries,
+                        effective,
+                        created_at,
+                        account_set_mappings,
+                        all_involved_balances.clone(),
+                    )
+                    .await?;
+            }
+            // Always enqueue EC account sets for background effective balance
+            // recalculation. EC account sets skip inline effective balance updates
+            // (filtered by eventually_consistent = FALSE in find_for_update), so their
+            // snapshots must be rebuilt in the background.
             self.effective
-                .update_cumulative_balances_in_op(
-                    op,
-                    journal_id,
-                    entries,
-                    effective,
-                    created_at,
-                    account_set_mappings,
-                    all_involved_balances,
-                )
+                .enqueue_ec_recalculation_in_op(op, journal_id, effective, &all_involved_balances)
                 .await?;
         }
 
         Ok(())
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.process_effective_balance_recalc_queue",
+        skip(self, op)
+    )]
+    pub async fn process_effective_balance_recalc_queue_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        limit: i32,
+    ) -> Result<u32, BalanceError> {
+        self.effective.process_recalc_queue_in_op(op, limit).await
     }
 
     #[instrument(name = "cala_ledger.balance.find_balances_for_update", skip(self, db), fields(journal_id = %journal_id, account_id = %account_id))]

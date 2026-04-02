@@ -7,7 +7,7 @@ use std::cmp::Ordering;
 use cala_types::{
     balance::{BalanceAmount, BalanceSnapshot},
     entry::EntryValues,
-    primitives::{AccountId, Currency, EntryId},
+    primitives::{AccountId, Currency, EntryId, JournalId},
 };
 
 use crate::balance::snapshot::Snapshots;
@@ -259,6 +259,13 @@ impl Ord for SnapshotOrEntry<'_> {
             }
         }
     }
+}
+
+pub(super) struct RecalcQueueEntry {
+    pub journal_id: JournalId,
+    pub account_id: AccountId,
+    pub currency: Currency,
+    pub earliest_effective_date: NaiveDate,
 }
 
 #[cfg(test)]

@@ -299,6 +299,23 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    #[instrument(
+        name = "cala_ledger.process_effective_balance_recalc_queue",
+        skip(self)
+    )]
+    pub async fn process_effective_balance_recalc_queue(
+        &self,
+        limit: i32,
+    ) -> Result<u32, LedgerError> {
+        let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
+        let count = self
+            .balances
+            .process_effective_balance_recalc_queue_in_op(&mut db, limit)
+            .await?;
+        db.commit().await?;
+        Ok(count)
+    }
+
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
         self.publisher.inner()
     }
