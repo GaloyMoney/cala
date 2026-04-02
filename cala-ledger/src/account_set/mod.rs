@@ -223,7 +223,12 @@ impl AccountSets {
         }
         let entries = self.entries.create_all_in_op(op, entries).await?;
 
-        let target_account = self.accounts.find(target_account_id).await?;
+        let target_account = self
+            .accounts
+            .find_all_in_op::<Account>(&mut *op, &[target_account_id])
+            .await?
+            .remove(&target_account_id)
+            .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
         let is_ec = target_account.values().config.eventually_consistent;
         let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
 
@@ -325,7 +330,12 @@ impl AccountSets {
         }
         let entries = self.entries.create_all_in_op(op, entries).await?;
 
-        let target_account = self.accounts.find(target_account_id).await?;
+        let target_account = self
+            .accounts
+            .find_all_in_op::<Account>(&mut *op, &[target_account_id])
+            .await?
+            .remove(&target_account_id)
+            .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
         let is_ec = target_account.values().config.eventually_consistent;
         let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
 
