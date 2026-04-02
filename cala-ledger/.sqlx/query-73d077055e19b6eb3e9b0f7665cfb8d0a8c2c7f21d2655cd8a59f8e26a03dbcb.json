@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (account_id, currency)\n                account_id AS \"account_id!: AccountId\",\n                currency AS \"currency!\",\n                all_time_version,\n                values\n            FROM cala_cumulative_effective_balances\n            WHERE journal_id = $1\n              AND account_id = ANY($2)\n              AND effective < $3\n            ORDER BY account_id, currency, all_time_version DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "all_time_version",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "73d077055e19b6eb3e9b0f7665cfb8d0a8c2c7f21d2655cd8a59f8e26a03dbcb"
+}

@@ -253,6 +253,20 @@ impl Balances {
                 .insert_new_snapshots(op, journal_id, new_snapshots)
                 .await?;
         }
+
+        let journal = self.journals.find(journal_id).await?;
+        if journal.insert_effective_balances() {
+            self.effective
+                .recalculate_for_account_sets_in_op(
+                    op,
+                    journal_id,
+                    account_set_ids,
+                    &memberships,
+                    min_watermark,
+                )
+                .await?;
+        }
+
         Ok(())
     }
 
