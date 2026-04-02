@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH member_accounts AS (\n              SELECT\n                member_account_id AS member_id,\n                member_account_id,\n                NULL::uuid AS member_account_set_id,\n                a.external_id\n              FROM cala_account_set_member_accounts m\n              LEFT JOIN cala_accounts a ON m.member_account_id = a.id\n              WHERE\n                transitive IS FALSE\n                AND m.account_set_id = $4\n                AND (\n                  ($3::varchar IS NULL) OR\n                  (a.external_id IS NULL AND $3::varchar IS NOT NULL) OR\n                  (a.external_id > $3::varchar) OR\n                  (a.external_id = $3::varchar AND member_account_id > $2)\n                )\n              ORDER BY a.external_id ASC NULLS LAST, member_account_id ASC\n              LIMIT $1\n            ), member_sets AS (\n              SELECT\n                member_account_set_id AS member_id,\n                NULL::uuid AS member_account_id,\n                member_account_set_id,\n                s.external_id\n              FROM cala_account_set_member_account_sets m\n              LEFT JOIN cala_account_sets s ON m.member_account_set_id = s.id\n              WHERE\n                m.account_set_id = $4\n                AND (\n                  ($3::varchar IS NULL) OR\n                  (s.external_id IS NULL AND $3::varchar IS NOT NULL) OR\n                  (s.external_id > $3::varchar) OR\n                  (s.external_id = $3::varchar AND member_account_set_id > $2)\n                )\n              ORDER BY s.external_id ASC NULLS LAST, member_account_set_id ASC\n              LIMIT $1\n            ), all_members AS (\n              SELECT * FROM member_accounts\n              UNION ALL\n              SELECT * FROM member_sets\n            )\n            SELECT * FROM all_members\n            ORDER BY external_id ASC NULLS LAST, member_id ASC\n            LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "member_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "member_account_set_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "external_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ea8cfd4ad3988a601ba0adda0385e78194a42e8223a8bfa36e0dbad61d3ad74b"
+}

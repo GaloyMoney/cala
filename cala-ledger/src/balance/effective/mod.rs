@@ -105,16 +105,18 @@ impl EffectiveBalances {
         memberships: &HashMap<AccountId, Vec<AccountSetId>>,
         min_watermark: Option<i64>,
     ) -> Result<(), BalanceError> {
-        let history = self
+        // Phase 1: Use watermark-filtered query to discover the earliest effective
+        // date that has new (unprocessed) member history.
+        let new_history = self
             .repo
             .fetch_member_effective_history(&mut *op, journal_id, account_set_ids, min_watermark)
             .await?;
 
-        if history.is_empty() {
+        if new_history.is_empty() {
             return Ok(());
         }
 
-        let min_effective_date = history
+        let min_effective_date = new_history
             .iter()
             .map(|r| r.effective_date)
             .min()
@@ -131,11 +133,24 @@ impl EffectiveBalances {
             .load_latest_before(&mut *op, journal_id, &set_account_ids, min_effective_date)
             .await?;
 
+        // Phase 2: Fetch ALL member history from min_effective_date onward
+        // (regardless of watermark). This ensures we rebuild effective balances
+        // for later dates that may have been deleted above.
+        let full_history = self
+            .repo
+            .fetch_effective_history_from_date(
+                &mut *op,
+                journal_id,
+                account_set_ids,
+                min_effective_date,
+            )
+            .await?;
+
         let snapshots = Self::replay_effective_deltas(
             journal_id,
             account_set_ids,
             memberships,
-            history,
+            full_history,
             base_snapshots,
         );
 
