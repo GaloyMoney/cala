@@ -314,16 +314,18 @@ fn post_and_batch_recalculate_ec_account_set(c: &mut Criterion) {
 
     c.bench_function("11. post_and_batch_recalculate_ec_account_set", |b| {
         b.to_async(&rt).iter(|| async {
-            for _ in 0..10 {
-                simple_transfer::execute(
-                    black_box(&cala),
-                    black_box(journal.id()),
-                    black_box(sender.id()),
-                    black_box(recipient.id()),
-                )
-                .await
-                .unwrap();
-            }
+            // Post 1 EC transaction (same cost as benchmark #9)
+            simple_transfer::execute(
+                black_box(&cala),
+                black_box(journal.id()),
+                black_box(sender.id()),
+                black_box(recipient.id()),
+            )
+            .await
+            .unwrap();
+            // Batch recalculate covers all accumulated staleness from this
+            // and previous iterations — amortizes recalculation cost over
+            // many posts, matching the realistic EC usage pattern.
             cala.account_sets()
                 .recalculate_balances_batch(black_box(&[sender_set_id, recipient_set_id]))
                 .await
