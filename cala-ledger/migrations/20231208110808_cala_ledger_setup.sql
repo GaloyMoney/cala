@@ -146,9 +146,12 @@ CREATE TABLE cala_current_balances (
   currency VARCHAR NOT NULL,
   latest_version INT NOT NULL,
   latest_values JSONB NOT NULL,
+  latest_seq BIGINT NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency)
 );
+
+CREATE SEQUENCE cala_balance_history_seq_seq AS BIGINT;
 
 CREATE TABLE cala_balance_history (
   journal_id UUID NOT NULL,
@@ -156,12 +159,15 @@ CREATE TABLE cala_balance_history (
   latest_entry_id UUID NOT NULL,
   currency VARCHAR NOT NULL,
   version INT NOT NULL,
+  seq BIGINT NOT NULL DEFAULT nextval('cala_balance_history_seq_seq'),
   values JSONB NOT NULL,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency, version),
   FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
+ALTER SEQUENCE cala_balance_history_seq_seq OWNED BY cala_balance_history.seq;
 CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
+CREATE INDEX idx_cala_balance_history_seq ON cala_balance_history (seq);
 
 CREATE TABLE cala_cumulative_effective_balances (
   journal_id UUID NOT NULL,
