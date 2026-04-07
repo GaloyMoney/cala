@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.id AS \"id!: AccountSetId\"\n            FROM cala_account_sets s\n            JOIN cala_accounts a ON s.id = a.id\n            WHERE a.eventually_consistent = TRUE\n              AND ($2::uuid IS NULL OR s.id > $2)\n            ORDER BY s.id ASC\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8b5f5d9e9d9c4637ae16b446181cb0b9e53b730fb0e7f522357f91a4339a7f90"
+}

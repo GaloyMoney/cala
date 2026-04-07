@@ -675,8 +675,10 @@ impl AccountSets {
     )]
     pub async fn list_eventually_consistent_ids(
         &self,
-    ) -> Result<Vec<AccountSetId>, AccountSetError> {
-        self.repo.list_eventually_consistent_ids().await
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        self.repo.list_eventually_consistent_ids(args).await
     }
 
     #[instrument(
@@ -686,8 +688,12 @@ impl AccountSets {
     pub async fn list_eventually_consistent_ids_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-    ) -> Result<Vec<AccountSetId>, AccountSetError> {
-        self.repo.list_eventually_consistent_ids_in_op(op).await
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        self.repo
+            .list_eventually_consistent_ids_in_op(op, args)
+            .await
     }
 
     pub(crate) async fn fetch_mappings_in_op(

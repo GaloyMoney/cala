@@ -1134,36 +1134,59 @@ async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
         .unwrap();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
 
-    let ec_set_one = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("EC Set One")
-        .journal_id(journal.id())
-        .eventually_consistent(true)
-        .build()
-        .unwrap();
-    let ec_set_one = cala.account_sets().create(ec_set_one).await.unwrap();
+    let mut expected_ec_ids = Vec::new();
+    for i in 0..3 {
+        let ec_set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("EC Set {i}"))
+            .journal_id(journal.id())
+            .eventually_consistent(true)
+            .build()
+            .unwrap();
+        let ec_set = cala.account_sets().create(ec_set).await.unwrap();
+        expected_ec_ids.push(ec_set.id());
+    }
 
-    let ec_set_two = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("EC Set Two")
-        .journal_id(journal.id())
-        .eventually_consistent(true)
-        .build()
-        .unwrap();
-    let ec_set_two = cala.account_sets().create(ec_set_two).await.unwrap();
+    // Walk the full list in pages of 2 and collect all returned ids in order.
+    let mut collected = Vec::new();
+    let mut after: Option<AccountSetByIdCursor> = None;
+    loop {
+        let ret = cala
+            .account_sets()
+            .list_eventually_consistent_ids(es_entity::PaginatedQueryArgs {
+                first: 2,
+                after: after.take(),
+            })
+            .await?;
+        assert!(ret.entities.len() <= 2, "page should respect `first` limit");
+        collected.extend(ret.entities);
+        if !ret.has_next_page {
+            break;
+        }
+        after = ret.end_cursor;
+        assert!(
+            after.is_some(),
+            "next page requires an end cursor when has_next_page is true"
+        );
+    }
 
-    let ids = cala.account_sets().list_eventually_consistent_ids().await?;
+    // EC ids should come out sorted by id ascending across pages.
+    let mut prev: Option<AccountSetId> = None;
+    for id in &collected {
+        if let Some(p) = prev {
+            assert!(p < *id, "ids must be strictly ascending across pages");
+        }
+        prev = Some(*id);
+    }
 
+    for id in &expected_ec_ids {
+        assert!(
+            collected.contains(id),
+            "eventually consistent set {id} should be listed across pages"
+        );
+    }
     assert!(
-        ids.contains(&ec_set_one.id()),
-        "eventually consistent set should be listed"
-    );
-    assert!(
-        ids.contains(&ec_set_two.id()),
-        "eventually consistent set should be listed"
-    );
-    assert!(
-        !ids.contains(&inline_set.id()),
+        !collected.contains(&inline_set.id()),
         "inline set should not be listed as eventually consistent"
     );
 

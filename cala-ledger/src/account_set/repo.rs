@@ -825,10 +825,16 @@ impl AccountSetRepo {
 
     pub async fn list_eventually_consistent_ids(
         &self,
-    ) -> Result<Vec<AccountSetId>, AccountSetError> {
-        self.list_eventually_consistent_ids_in_op(&self.pool).await
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        self.list_eventually_consistent_ids_in_op(&self.pool, args)
+            .await
     }
 
+    // Uses raw `sqlx::query!` (rather than `es_query!`) because it only needs
+    // account-set ids — not fully hydrated `AccountSet` entities — which keeps
+    // periodic reconciliation jobs cheap as the number of EC account sets grows.
     #[instrument(
         name = "account_set.list_eventually_consistent_ids_in_op",
         skip_all,
@@ -837,7 +843,11 @@ impl AccountSetRepo {
     pub async fn list_eventually_consistent_ids_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
-    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
@@ -846,11 +856,24 @@ impl AccountSetRepo {
             FROM cala_account_sets s
             JOIN cala_accounts a ON s.id = a.id
             WHERE a.eventually_consistent = TRUE
-            ORDER BY s.id
+              AND ($2::uuid IS NULL OR s.id > $2)
+            ORDER BY s.id ASC
+            LIMIT $1
             "#,
+                (first + 1) as i64,
+                after.map(|c| uuid::Uuid::from(c.id)),
             ))
             .await?;
-        Ok(rows.into_iter().map(|r| r.id).collect())
+
+        let has_next_page = rows.len() > first;
+        let entities: Vec<AccountSetId> = rows.into_iter().take(first).map(|r| r.id).collect();
+        let end_cursor = entities.last().map(|id| AccountSetByIdCursor { id: *id });
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     #[instrument(
