@@ -1110,3 +1110,62 @@ async fn eventually_consistent_member_add_with_existing_balance() -> anyhow::Res
 
     Ok(())
 }
+
+#[tokio::test]
+async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let inline_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("Inline Set")
+        .journal_id(journal.id())
+        .build()
+        .unwrap();
+    let inline_set = cala.account_sets().create(inline_set).await.unwrap();
+
+    let ec_set_one = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("EC Set One")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let ec_set_one = cala.account_sets().create(ec_set_one).await.unwrap();
+
+    let ec_set_two = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("EC Set Two")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let ec_set_two = cala.account_sets().create(ec_set_two).await.unwrap();
+
+    let ids = cala.account_sets().list_eventually_consistent_ids().await?;
+
+    assert!(
+        ids.contains(&ec_set_one.id()),
+        "eventually consistent set should be listed"
+    );
+    assert!(
+        ids.contains(&ec_set_two.id()),
+        "eventually consistent set should be listed"
+    );
+    assert!(
+        !ids.contains(&inline_set.id()),
+        "inline set should not be listed as eventually consistent"
+    );
+
+    Ok(())
+}

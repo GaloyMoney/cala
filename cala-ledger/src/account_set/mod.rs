@@ -663,6 +663,33 @@ impl AccountSets {
         self.recalculate_balances_batch_in_op(op, &all_ids).await
     }
 
+    /// List the ids of all account sets that are marked as
+    /// `eventually_consistent`.
+    ///
+    /// Intended as a building block for periodic reconciliation jobs that need
+    /// to batch-recalculate balances for EC account sets (e.g. via
+    /// [`Self::recalculate_balances_deep`]).
+    #[instrument(
+        name = "cala_ledger.account_sets.list_eventually_consistent_ids",
+        skip(self)
+    )]
+    pub async fn list_eventually_consistent_ids(
+        &self,
+    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        self.repo.list_eventually_consistent_ids().await
+    }
+
+    #[instrument(
+        name = "cala_ledger.account_sets.list_eventually_consistent_ids_in_op",
+        skip(self, op)
+    )]
+    pub async fn list_eventually_consistent_ids_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        self.repo.list_eventually_consistent_ids_in_op(op).await
+    }
+
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

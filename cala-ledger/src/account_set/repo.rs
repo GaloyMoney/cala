@@ -823,6 +823,36 @@ impl AccountSetRepo {
         Ok(mappings)
     }
 
+    pub async fn list_eventually_consistent_ids(
+        &self,
+    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        self.list_eventually_consistent_ids_in_op(&self.pool).await
+    }
+
+    #[instrument(
+        name = "account_set.list_eventually_consistent_ids_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub async fn list_eventually_consistent_ids_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+            SELECT s.id AS "id!: AccountSetId"
+            FROM cala_account_sets s
+            JOIN cala_accounts a ON s.id = a.id
+            WHERE a.eventually_consistent = TRUE
+            ORDER BY s.id
+            "#,
+            ))
+            .await?;
+        Ok(rows.into_iter().map(|r| r.id).collect())
+    }
+
     #[instrument(
         name = "account_set.find_all_descendant_set_ids",
         skip_all,
