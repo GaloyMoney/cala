@@ -172,7 +172,7 @@ impl EffectiveBalances {
         account_set_ids: &[AccountSetId],
         memberships: &HashMap<AccountId, Vec<AccountSetId>>,
         history: Vec<EffectiveMemberHistoryRow>,
-        base_snapshots: HashMap<(AccountId, Currency), (BalanceSnapshot, i32)>,
+        base_snapshots: HashMap<(AccountId, Currency), LatestBeforeEntry>,
     ) -> Vec<RecalcEffectiveSnapshot> {
         use rust_decimal::Decimal;
 
@@ -186,13 +186,13 @@ impl EffectiveBalances {
 
         let mut states: HashMap<(AccountId, Currency), RunningState> = base_snapshots
             .into_iter()
-            .map(|((account_id, currency), (snapshot, atv))| {
+            .map(|((account_id, currency), entry)| {
                 (
                     (account_id, currency),
                     RunningState {
-                        snapshot,
+                        snapshot: entry.snapshot,
                         last_date: None,
-                        all_time_version: atv,
+                        all_time_version: entry.all_time_version,
                     },
                 )
             })

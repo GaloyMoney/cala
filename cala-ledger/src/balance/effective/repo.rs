@@ -14,6 +14,12 @@ use super::data::*;
 type BalanceRangeResult =
     HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
 
+#[derive(Debug)]
+pub(super) struct LatestBeforeEntry {
+    pub snapshot: BalanceSnapshot,
+    pub all_time_version: i32,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
@@ -591,7 +597,6 @@ impl EffectiveBalanceRepo {
         Ok(())
     }
 
-    #[allow(clippy::type_complexity)]
     #[instrument(
         name = "effective_balance.load_latest_before",
         skip_all,
@@ -603,7 +608,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         min_effective_date: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), (BalanceSnapshot, i32)>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), LatestBeforeEntry>, BalanceError> {
         let rows = sqlx::query!(
             r#"
             SELECT DISTINCT ON (account_id, currency)
@@ -629,7 +634,13 @@ impl EffectiveBalanceRepo {
             let snapshot: BalanceSnapshot =
                 serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
             let currency: Currency = row.currency.parse().expect("Failed to parse currency");
-            result.insert((row.account_id, currency), (snapshot, row.all_time_version));
+            result.insert(
+                (row.account_id, currency),
+                LatestBeforeEntry {
+                    snapshot,
+                    all_time_version: row.all_time_version,
+                },
+            );
         }
 
         Ok(result)
