@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -13,6 +13,8 @@ use cala_types::{
 
 use super::{account_balance::AccountBalance, error::BalanceError};
 use crate::outbox::OutboxPublisher;
+
+const EC_SET_LOCK_CLASS: i32 = 1;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -142,6 +144,41 @@ impl BalanceRepo {
         Ok(ret)
     }
 
+    /// Take the poster's per-row locks for a batch of
+    /// `(account_id, currency)` pairs and load the current balance
+    /// snapshots in two SQL statements (one combined lock query plus a
+    /// pure data fetch).
+    ///
+    /// Two locks are taken per input row:
+    ///
+    /// - SHARED lock (2-arg `pg_advisory_xact_lock_shared`, classid
+    ///   `EC_SET_LOCK_CLASS`) keyed on `account_id`, taken on *every*
+    ///   row — leaves and ancestors, EC and non-EC alike. This is the
+    ///   lock that recalcs take EXCLUSIVE on for whichever set they
+    ///   are recalculating; holding SHARED on every ancestor while
+    ///   the poster runs ensures any concurrent recalc on any of them
+    ///   waits for the poster to commit before reading history. That
+    ///   in turn lets the watermark be maintained as a side-effect of
+    ///   `insert_new_snapshots` (rather than via an explicit advance
+    ///   from a "max input seq" computation), because there can be no
+    ///   uncommitted-then-committed rows whose seqs sit between the
+    ///   recalc's input max and its output max.
+    /// - FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`) keyed on
+    ///   `(journal_id, account_id, currency)`, taken only on non-EC
+    ///   rows via `CASE WHEN`. Serializes concurrent posters that
+    ///   touch the same balance row. Skipped on EC rows because
+    ///   posters never write `cala_current_balances` rows for EC
+    ///   accounts at all (`find_for_update`'s data fetch filters
+    ///   them out), so the lock would always be uncontended there.
+    ///
+    /// The 2-arg and 1-arg `pg_advisory_xact_lock` namespaces are
+    /// disjoint in PostgreSQL, so the two locks cannot collide with
+    /// each other. Lock acquisition order across transactions is
+    /// canonical because the caller pre-sorts the input via a BTreeSet
+    /// in `Balances::update_balances_in_op` and the planner picks a
+    /// nested-loop join with `v` as the outer side for the tiny inputs
+    /// this query receives, preserving UNNEST scan order through to
+    /// the function calls in the SELECT list.
     #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op))]
     pub(super) async fn find_for_update(
         &self,
@@ -151,18 +188,23 @@ impl BalanceRepo {
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
         sqlx::query!(
             r#"
-            SELECT pg_advisory_xact_lock(hashtext(concat($1::text, account_id::text, currency)))
-            FROM (
-            SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-            ) AS v
-            JOIN cala_accounts a
-            ON account_id = a.id
-            WHERE eventually_consistent = FALSE
-            ORDER BY account_id, currency
+            SELECT
+                pg_advisory_xact_lock_shared(
+                    $1::int4, hashtext(v.account_id::text)
+                ),
+                CASE WHEN NOT a.eventually_consistent THEN
+                    pg_advisory_xact_lock(
+                        hashtext(concat($2::text, v.account_id::text, v.currency))
+                    )
+                END
+            FROM UNNEST($3::uuid[], $4::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = v.account_id
+            ORDER BY v.account_id, v.currency
             "#,
+            EC_SET_LOCK_CLASS,
             journal_id as JournalId,
-            &account_ids as &[AccountId],
-            &currencies as &[&str],
+            account_ids as &[AccountId],
+            currencies as &[&str],
         )
         .execute(op.as_executor())
         .await?;
@@ -181,8 +223,8 @@ impl BalanceRepo {
                 AND b.currency = v.currency
         "#,
             journal_id as JournalId,
-            &account_ids as &[AccountId],
-            &currencies as &[&str]
+            account_ids as &[AccountId],
+            currencies as &[&str]
         )
         .fetch_all(op.as_executor())
         .await?;
@@ -205,6 +247,30 @@ impl BalanceRepo {
             );
         }
         Ok(ret)
+    }
+
+    #[instrument(name = "cala_ledger.balances.lock_accounts_exclusive_in_op", skip_all)]
+    pub(super) async fn lock_accounts_exclusive_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &HashSet<AccountId>,
+    ) -> Result<(), BalanceError> {
+        if account_ids.is_empty() {
+            return Ok(());
+        }
+        let account_ids: Vec<AccountId> = account_ids.iter().copied().collect();
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock($1::int4, hashtext(account_id::text))
+            FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY account_id
+            "#,
+            EC_SET_LOCK_CLASS,
+            &account_ids as &[AccountId],
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
     }
 
     #[instrument(

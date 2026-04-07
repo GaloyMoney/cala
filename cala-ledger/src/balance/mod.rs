@@ -1,3 +1,28 @@
+//! # EC recalc <-> poster ordering invariant
+//!
+//! `cala_current_balances.latest_seq` is a watermark meaning
+//! *"member-history up to this seq has been folded into the set
+//! balance"*. It is maintained as a side-effect of `insert_new_snapshots`
+//! (the `ON CONFLICT DO UPDATE` bumps `latest_seq` to `MAX(seq)` of the
+//! rows just inserted), so every poster's write to a non-EC ancestor
+//! advances the ancestor's watermark synchronously, and every recalc on
+//! an EC set advances that set's watermark to the max seq of the
+//! synthesized snapshots it just wrote.
+//!
+//! Posters take a shared advisory lock on every account they write
+//! (leaves and ancestors, EC and non-EC alike), and recalcs take an
+//! exclusive lock on every set they recalculate (same key space).
+//! Shared/shared does not block, so concurrent posters proceed in
+//! parallel; exclusive blocks until all in-flight posters touching the
+//! locked set's members have committed. Under that exclusive lock there
+//! can be no uncommitted poster row whose seq sits between the recalc's
+//! input max and its output max — every such poster is either committed
+//! before the recalc reads (and folded in), or blocked at the SHARED
+//! acquisition until the recalc commits (and gets a fresh seq strictly
+//! greater than every seq the recalc consumed). So `MAX(seq)` of the
+//! recalc's output rows is a safe watermark, and the next recalc's
+//! `seq > latest_seq` filter cannot drop a real row.
+
 mod account_balance;
 mod effective;
 pub mod error;
@@ -6,7 +31,7 @@ mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use tracing::instrument;
 
 pub use cala_types::{
@@ -170,7 +195,11 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.update_balance_for_account_in_op", skip(self, op, entries), fields(journal_id = %journal_id, account_id = %account_id))]
+    #[instrument(
+        name = "cala_ledger.balance.update_balance_for_account_in_op",
+        skip(self, op, entries),
+        fields(journal_id = %journal_id, account_id = %account_id)
+    )]
     pub(crate) async fn update_balance_for_account_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -209,6 +238,11 @@ impl Balances {
         account_set_ids: &[AccountSetId],
     ) -> Result<(), BalanceError> {
         let account_ids: Vec<AccountId> = account_set_ids.iter().map(AccountId::from).collect();
+        let lock_targets: HashSet<AccountId> = account_ids.iter().copied().collect();
+
+        self.repo
+            .lock_accounts_exclusive_in_op(op, &lock_targets)
+            .await?;
 
         let batch_balances = self
             .repo
