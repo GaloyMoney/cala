@@ -287,8 +287,14 @@ fn post_and_recalculate_ec_account_set(c: &mut Criterion) {
             )
             .await
             .unwrap();
+            // Recalculate each set individually — baseline for benchmark #11
+            // which exercises the batched form over the same set of ids.
             cala.account_sets()
-                .recalculate_balances_batch(black_box(&[sender_set_id, recipient_set_id]))
+                .recalculate_balances(black_box(sender_set_id))
+                .await
+                .unwrap();
+            cala.account_sets()
+                .recalculate_balances(black_box(recipient_set_id))
                 .await
                 .unwrap();
         })
