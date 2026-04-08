@@ -11,10 +11,8 @@ jobs:
     steps:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v16
-      - uses: cachix/cachix-action@v15
-        with:
-          name: lana-ci
-          authToken: ${{ env.CACHIX_AUTH_TOKEN }}
+      - name: Run the Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
       - uses: actions/checkout@v3
       - name: Run integration tests
         run: nix run .#nextest
