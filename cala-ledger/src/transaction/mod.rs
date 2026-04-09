@@ -88,6 +88,20 @@ impl Transactions {
             .await?)
     }
 
+    #[instrument(name = "cala_ledger.transactions.count_for_template_id", skip(self))]
+    pub async fn count_for_template_id(
+        &self,
+        template_id: TxTemplateId,
+    ) -> Result<i64, TransactionError> {
+        Ok(self
+            .repo
+            .count_for_filters(TransactionFilters {
+                tx_template_id: Some(template_id),
+                ..Default::default()
+            })
+            .await?)
+    }
+
     #[instrument(name = "cala_ledger.transactions.find_all", skip(self))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
