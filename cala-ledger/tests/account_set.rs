@@ -2,7 +2,9 @@ mod helpers;
 
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account::*, account_set::*, tx_template::*, *};
+use cala_ledger::{
+    account::*, account_set::error::AccountSetError, account_set::*, tx_template::*, *,
+};
 
 #[tokio::test]
 async fn errors_on_collision() -> anyhow::Result<()> {
@@ -104,31 +106,59 @@ async fn balances() -> anyhow::Result<()> {
     let new_template = helpers::currency_conversion_template(&tx_code);
     cala.tx_templates().create(new_template).await.unwrap();
 
-    let before_account_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("Before")
-        .journal_id(journal.id())
-        .build()
-        .unwrap();
-    let before_set = cala
+    let recipient_set = cala
         .account_sets()
-        .create(before_account_set)
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Recipient Set")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
         .await
         .unwrap();
-    let parent_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("Parent")
-        .journal_id(journal.id())
-        .build()
+    let sender_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Sender Set")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
         .unwrap();
-    let parent_set = cala.account_sets().create(parent_set).await.unwrap();
+    let parent_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Parent")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
+    // Wire the hierarchy up *before* any posts so the no-history rule
+    // is satisfied for every membership change.
     cala.account_sets()
-        .add_member(before_set.id(), recipient_account.id())
+        .add_member(recipient_set.id(), recipient_account.id())
         .await
         .unwrap();
     cala.account_sets()
-        .add_member(parent_set.id(), before_set.id())
+        .add_member(sender_set.id(), sender_account.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(parent_set.id(), recipient_set.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(parent_set.id(), sender_set.id())
         .await
         .unwrap();
 
@@ -140,86 +170,37 @@ async fn balances() -> anyhow::Result<()> {
         .await
         .unwrap();
 
+    // Each direct parent fold-up matches its single member exactly.
     let recipient_balance = cala
         .balances()
         .find(journal.id(), recipient_account.id(), btc)
         .await?;
-    let set_balance = cala
+    let recipient_set_balance = cala
         .balances()
-        .find(journal.id(), before_set.id(), btc)
+        .find(journal.id(), recipient_set.id(), btc)
         .await?;
-    let parent_balance = cala
-        .balances()
-        .find(journal.id(), parent_set.id(), btc)
-        .await?;
-    assert_eq!(recipient_balance.settled(), set_balance.settled());
-    assert_eq!(
-        recipient_balance.details.version,
-        set_balance.details.version
-    );
+    assert_eq!(recipient_balance.settled(), recipient_set_balance.settled());
     assert_eq!(
         recipient_balance.details.entry_id,
-        set_balance.details.entry_id
-    );
-    assert_eq!(recipient_balance.settled(), parent_balance.settled());
-    assert_eq!(
-        recipient_balance.details.version,
-        parent_balance.details.version
-    );
-    assert_eq!(
-        recipient_balance.details.entry_id,
-        parent_balance.details.entry_id
+        recipient_set_balance.details.entry_id
     );
 
-    let after_account_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("After")
-        .journal_id(journal.id())
-        .build()
-        .unwrap();
-    let after_set = cala.account_sets().create(after_account_set).await.unwrap();
-
-    cala.account_sets()
-        .add_member(after_set.id(), sender_account.id())
-        .await
-        .unwrap();
-    let set_balance = cala
-        .balances()
-        .find(journal.id(), after_set.id(), btc)
-        .await?;
     let sender_balance = cala
         .balances()
         .find(journal.id(), sender_account.id(), btc)
         .await?;
-    assert_eq!(sender_balance.settled(), set_balance.settled());
-    assert_eq!(sender_balance.details.version, set_balance.details.version);
-
-    cala.account_sets()
-        .add_member(parent_set.id(), after_set.id())
-        .await
-        .unwrap();
-    let parent_balance = cala
+    let sender_set_balance = cala
         .balances()
-        .find(journal.id(), parent_set.id(), btc)
+        .find(journal.id(), sender_set.id(), btc)
         .await?;
+    assert_eq!(sender_balance.settled(), sender_set_balance.settled());
+    assert_eq!(
+        sender_balance.details.entry_id,
+        sender_set_balance.details.entry_id
+    );
 
-    assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
-    assert_eq!(parent_balance.details.version, 2);
-
-    cala.account_sets()
-        .remove_member(parent_set.id(), before_set.id())
-        .await
-        .unwrap();
-    let parent_balance = cala
-        .balances()
-        .find(journal.id(), parent_set.id(), btc)
-        .await?;
-    assert_eq!(parent_balance.settled(), sender_balance.settled());
-
-    cala.account_sets()
-        .remove_member(after_set.id(), sender_account.id())
-        .await
-        .unwrap();
+    // The grandparent receives both sides of the same transaction, so
+    // its settled balance is zero.
     let parent_balance = cala
         .balances()
         .find(journal.id(), parent_set.id(), btc)
@@ -233,7 +214,7 @@ async fn balances() -> anyhow::Result<()> {
     let ret = cala
         .entries()
         .list_for_account_set_id(
-            before_set.id(),
+            recipient_set.id(),
             query_args,
             es_entity::ListDirection::Ascending,
         )
@@ -981,137 +962,6 @@ async fn deep_recalculate_expands_to_descendants() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn eventually_consistent_member_add_with_existing_balance() -> anyhow::Result<()> {
-    let btc: Currency = "BTC".parse().unwrap();
-
-    let pool = helpers::init_pool().await?;
-    let cala_config = CalaLedgerConfig::builder()
-        .pool(pool)
-        .exec_migrations(false)
-        .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
-
-    let journal = cala
-        .journals()
-        .create(helpers::test_journal())
-        .await
-        .unwrap();
-
-    let (sender, receiver) = helpers::test_accounts();
-    let sender_account = cala.accounts().create(sender).await.unwrap();
-    let recipient_account = cala.accounts().create(receiver).await.unwrap();
-
-    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
-    cala.tx_templates()
-        .create(helpers::currency_conversion_template(&tx_code))
-        .await
-        .unwrap();
-
-    // Post transactions so recipient has pre-existing balance
-    for _ in 0..2 {
-        let mut params = Params::new();
-        params.insert("journal_id", journal.id().to_string());
-        params.insert("sender", sender_account.id());
-        params.insert("recipient", recipient_account.id());
-        cala.post_transaction(TransactionId::new(), &tx_code, params)
-            .await
-            .unwrap();
-    }
-
-    // Create inline set for reference
-    let inline_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("Inline Set")
-        .journal_id(journal.id())
-        .build()
-        .unwrap();
-    let inline_set = cala.account_sets().create(inline_set).await.unwrap();
-
-    // Create EC set
-    let ec_set = NewAccountSet::builder()
-        .id(AccountSetId::new())
-        .name("EC Set")
-        .journal_id(journal.id())
-        .eventually_consistent(true)
-        .build()
-        .unwrap();
-    let ec_set = cala.account_sets().create(ec_set).await.unwrap();
-
-    // Add recipient (with pre-existing balance) to both sets
-    cala.account_sets()
-        .add_member(inline_set.id(), recipient_account.id())
-        .await
-        .unwrap();
-    cala.account_sets()
-        .add_member(ec_set.id(), recipient_account.id())
-        .await
-        .unwrap();
-
-    // EC set should now have a balance from add_member summary entries
-    let inline_bal = cala
-        .balances()
-        .find(journal.id(), inline_set.id(), btc)
-        .await?;
-    let ec_bal = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
-    assert_eq!(
-        inline_bal.settled(),
-        ec_bal.settled(),
-        "EC set balance should match inline after add_member"
-    );
-
-    // Post more transactions
-    for _ in 0..2 {
-        let mut params = Params::new();
-        params.insert("journal_id", journal.id().to_string());
-        params.insert("sender", sender_account.id());
-        params.insert("recipient", recipient_account.id());
-        cala.post_transaction(TransactionId::new(), &tx_code, params)
-            .await
-            .unwrap();
-    }
-
-    // Recalculate EC — incremental should correctly skip pre-existing history
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
-        .await
-        .unwrap();
-
-    // Verify EC matches inline after recalculate
-    let inline_bal_2 = cala
-        .balances()
-        .find(journal.id(), inline_set.id(), btc)
-        .await?;
-    let ec_bal_2 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
-    assert_eq!(
-        inline_bal_2.settled(),
-        ec_bal_2.settled(),
-        "EC set should match inline after recalculate"
-    );
-    assert_eq!(
-        inline_bal_2.details.version, ec_bal_2.details.version,
-        "version should match after recalculate"
-    );
-
-    // Idempotency: recalculate again is a no-op
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
-        .await
-        .unwrap();
-    let ec_bal_3 = cala.balances().find(journal.id(), ec_set.id(), btc).await?;
-    assert_eq!(
-        ec_bal_2.settled(),
-        ec_bal_3.settled(),
-        "recalculate should be idempotent"
-    );
-    assert_eq!(
-        ec_bal_2.details.version, ec_bal_3.details.version,
-        "version should not change on idempotent recalculate"
-    );
-
-    Ok(())
-}
-
-#[tokio::test]
 async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
@@ -1189,6 +1039,174 @@ async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
         !collected.contains(&inline_set.id()),
         "inline set should not be listed as eventually consistent"
     );
+
+    Ok(())
+}
+
+/// `add_member` must reject candidates that already have any
+/// `cala_balance_history` rows in the journal: the only way to honour
+/// pre-existing balance would be to fold it synchronously, but that fold
+/// races with concurrent posters of *other* members for EC sets and has
+/// no race-free analogue we want to maintain for non-EC sets either.
+#[tokio::test]
+async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, recipient) = helpers::test_accounts();
+    let sender = cala.accounts().create(sender).await.unwrap();
+    let recipient = cala.accounts().create(recipient).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Post once so the recipient has history before any membership change.
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender.id());
+    params.insert("recipient", recipient.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+
+    let target = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Target")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let err = cala
+        .account_sets()
+        .add_member(target.id(), recipient.id())
+        .await
+        .err()
+        .expect("add_member should fail when the member has balance history");
+
+    match err {
+        AccountSetError::MemberHasBalanceHistory {
+            account_set_id,
+            member_id,
+        } => {
+            assert_eq!(account_set_id, target.id());
+            assert_eq!(member_id, recipient.id());
+        }
+        other => panic!("expected MemberHasBalanceHistory, got {other}"),
+    }
+
+    // Adding a fresh account with no history is still allowed.
+    let fresh = cala
+        .accounts()
+        .create(
+            NewAccount::builder()
+                .id(uuid::Uuid::now_v7())
+                .name("Fresh")
+                .code(Alphanumeric.sample_string(&mut rand::rng(), 32))
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(target.id(), fresh.id())
+        .await
+        .unwrap();
+
+    Ok(())
+}
+
+/// `remove_member` must reject members that have any
+/// `cala_balance_history` rows: there is no safe way to back the member's
+/// past contribution out of the parent set's running balance.
+#[tokio::test]
+async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, recipient) = helpers::test_accounts();
+    let sender = cala.accounts().create(sender).await.unwrap();
+    let recipient = cala.accounts().create(recipient).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    let target = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Target")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Add the recipient *before* it has any history (allowed) — then post
+    // to it so that subsequent removal becomes a forbidden operation.
+    cala.account_sets()
+        .add_member(target.id(), recipient.id())
+        .await
+        .unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender.id());
+    params.insert("recipient", recipient.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+
+    let err = cala
+        .account_sets()
+        .remove_member(target.id(), recipient.id())
+        .await
+        .err()
+        .expect("remove_member should fail when the member has balance history");
+
+    match err {
+        AccountSetError::MemberHasBalanceHistory {
+            account_set_id,
+            member_id,
+        } => {
+            assert_eq!(account_set_id, target.id());
+            assert_eq!(member_id, recipient.id());
+        }
+        other => panic!("expected MemberHasBalanceHistory, got {other}"),
+    }
 
     Ok(())
 }

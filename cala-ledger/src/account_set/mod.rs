@@ -7,26 +7,17 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{
-    account::*,
-    balance::*,
-    entry::*,
-    outbox::*,
-    primitives::{DebitOrCredit, JournalId, Layer},
-};
+use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
 
 pub use entity::*;
 use error::*;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
-const UNASSIGNED_TRANSACTION_ID: uuid::Uuid = uuid::Uuid::nil();
-
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
-    entries: Entries,
     balances: Balances,
     clock: ClockHandle,
 }
@@ -36,14 +27,12 @@ impl AccountSets {
         pool: &PgPool,
         publisher: &OutboxPublisher,
         accounts: &Accounts,
-        entries: &Entries,
         balances: &Balances,
         clock: &ClockHandle,
     ) -> Self {
         Self {
             repo: AccountSetRepo::new(pool, publisher),
             accounts: accounts.clone(),
-            entries: entries.clone(),
             balances: balances.clone(),
             clock: clock.clone(),
         }
@@ -168,95 +157,96 @@ impl AccountSets {
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
-        let (time, parents, account_set, member_id) = match member {
+
+        // Resolve the target set (and, for set-member, verify the journal
+        // matches) without writing the membership row, so we can run the
+        // no-history check first.
+        let (account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
                 tracing::Span::current().record("is_account", true);
                 tracing::Span::current().record("is_account_set", false);
                 tracing::Span::current().record("member_id", tracing::field::display(&id));
                 let set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
-                let (time, parents) = self
-                    .repo
-                    .add_member_account_and_return_parents(&mut *op, account_set_id, id)
-                    .await?;
-                (time, parents, set, id)
+                (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
                 tracing::Span::current().record("is_account", false);
                 tracing::Span::current().record("is_account_set", true);
                 tracing::Span::current().record("member_id", tracing::field::display(&id));
-                let mut accounts = self
+                let mut sets = self
                     .repo
                     .find_all_in_op::<AccountSet>(&mut *op, &[account_set_id, id])
                     .await?;
-                let target = accounts
+                let target = sets
                     .remove(&account_set_id)
                     .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
-                let member = accounts
+                let member_set = sets
                     .remove(&id)
                     .ok_or(AccountSetError::CouldNotFindById(id))?;
 
-                if target.values().journal_id != member.values().journal_id {
+                if target.values().journal_id != member_set.values().journal_id {
                     return Err(AccountSetError::JournalIdMismatch);
                 }
 
-                let (time, parents) = self
-                    .repo
-                    .add_member_set_and_return_parents(op, account_set_id, id)
-                    .await?;
-                (time, parents, target, AccountId::from(id))
+                (target, AccountId::from(id))
             }
         };
 
-        let balances = self
-            .balances
-            .find_balances_for_update(op, account_set.values().journal_id, member_id)
-            .await?;
+        self.assert_member_history_empty_in_op(
+            op,
+            account_set_id,
+            account_set.values().journal_id,
+            AccountId::from(&account_set.id()),
+            member_id,
+        )
+        .await?;
 
-        let target_account_id = AccountId::from(&account_set.id());
-        let mut entries = Vec::new();
-        for balance in balances.into_values() {
-            entries_for_add_balance(&mut entries, target_account_id, balance);
-        }
-
-        if entries.is_empty() {
-            return Ok(account_set);
-        }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-
-        let target_account = self
-            .accounts
-            .find_all_in_op::<Account>(&mut *op, &[target_account_id])
-            .await?
-            .remove(&target_account_id)
-            .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
-        let is_ec = target_account.values().config.eventually_consistent;
-        let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
-
-        let mappings = std::iter::once((target_account_id, parents)).collect();
-        self.balances
-            .update_balances_in_op(
-                op,
-                account_set.values().journal_id,
-                entries,
-                time.date_naive(),
-                time,
-                mappings,
-            )
-            .await?;
-
-        if let Some(ec_entries) = entries_for_ec {
-            self.balances
-                .update_balance_for_account_in_op(
-                    op,
-                    account_set.values().journal_id,
-                    target_account_id,
-                    &ec_entries,
-                    time,
-                )
-                .await?;
+        match member {
+            AccountSetMemberId::Account(id) => {
+                self.repo
+                    .add_member_account_and_return_parents(&mut *op, account_set_id, id)
+                    .await?;
+            }
+            AccountSetMemberId::AccountSet(id) => {
+                self.repo
+                    .add_member_set_and_return_parents(op, account_set_id, id)
+                    .await?;
+            }
         }
 
         Ok(account_set)
+    }
+
+    /// Refuse the membership change if `member_id` already has any
+    /// `cala_balance_history` row in `journal_id`. Folding existing
+    /// balance into a parent set after the fact is unsafe under
+    /// concurrent posters and EC recalcs (the watermark advance can leap
+    /// past unprocessed history of *other* members), and the symmetric
+    /// remove case has no safe unfold path either, so we forbid both.
+    ///
+    /// The check itself is run under exclusive locks on the parent set
+    /// and the candidate member in the EC-set lock namespace, so the
+    /// existence query reflects committed state even with concurrent
+    /// posters in flight.
+    async fn assert_member_history_empty_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_id: AccountSetId,
+        journal_id: JournalId,
+        target_account_id: AccountId,
+        member_id: AccountId,
+    ) -> Result<(), AccountSetError> {
+        if self
+            .balances
+            .member_has_balance_history_in_op(op, journal_id, target_account_id, member_id)
+            .await?
+        {
+            return Err(AccountSetError::MemberHasBalanceHistory {
+                account_set_id,
+                member_id,
+            });
+        }
+        Ok(())
     }
 
     #[instrument(name = "cala_ledger.account_sets.remove_member", skip(self, member), fields(account_set_id = %account_set_id))]
@@ -281,86 +271,52 @@ impl AccountSets {
         member: impl Into<AccountSetMemberId>,
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
-        let (time, parents, account_set, member_id) = match member {
+
+        let (account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
                 let set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
-                let (time, parents) = self
-                    .repo
-                    .remove_member_account_and_return_parents(op, account_set_id, id)
-                    .await?;
-                (time, parents, set, id)
+                (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
-                let mut accounts = self
+                let mut sets = self
                     .repo
                     .find_all_in_op::<AccountSet>(&mut *op, &[account_set_id, id])
                     .await?;
-                let target = accounts
+                let target = sets
                     .remove(&account_set_id)
                     .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
-                let member = accounts
+                let member_set = sets
                     .remove(&id)
                     .ok_or(AccountSetError::CouldNotFindById(id))?;
 
-                if target.values().journal_id != member.values().journal_id {
+                if target.values().journal_id != member_set.values().journal_id {
                     return Err(AccountSetError::JournalIdMismatch);
                 }
 
-                let (time, parents) = self
-                    .repo
-                    .remove_member_set_and_return_parents(op, account_set_id, id)
-                    .await?;
-                (time, parents, target, AccountId::from(id))
+                (target, AccountId::from(id))
             }
         };
 
-        let balances = self
-            .balances
-            .find_balances_for_update(op, account_set.values().journal_id, member_id)
-            .await?;
+        self.assert_member_history_empty_in_op(
+            op,
+            account_set_id,
+            account_set.values().journal_id,
+            AccountId::from(&account_set.id()),
+            member_id,
+        )
+        .await?;
 
-        let target_account_id = AccountId::from(&account_set.id());
-        let mut entries = Vec::new();
-        for balance in balances.into_values() {
-            entries_for_remove_balance(&mut entries, target_account_id, balance);
-        }
-
-        if entries.is_empty() {
-            return Ok(account_set);
-        }
-        let entries = self.entries.create_all_in_op(op, entries).await?;
-
-        let target_account = self
-            .accounts
-            .find_all_in_op::<Account>(&mut *op, &[target_account_id])
-            .await?
-            .remove(&target_account_id)
-            .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
-        let is_ec = target_account.values().config.eventually_consistent;
-        let entries_for_ec = if is_ec { Some(entries.clone()) } else { None };
-
-        let mappings = std::iter::once((target_account_id, parents)).collect();
-        self.balances
-            .update_balances_in_op(
-                op,
-                account_set.values().journal_id,
-                entries,
-                time.date_naive(),
-                time,
-                mappings,
-            )
-            .await?;
-
-        if let Some(ec_entries) = entries_for_ec {
-            self.balances
-                .update_balance_for_account_in_op(
-                    op,
-                    account_set.values().journal_id,
-                    target_account_id,
-                    &ec_entries,
-                    time,
-                )
-                .await?;
+        match member {
+            AccountSetMemberId::Account(id) => {
+                self.repo
+                    .remove_member_account_and_return_parents(op, account_set_id, id)
+                    .await?;
+            }
+            AccountSetMemberId::AccountSet(id) => {
+                self.repo
+                    .remove_member_set_and_return_parents(op, account_set_id, id)
+                    .await?;
+            }
         }
 
         Ok(account_set)
@@ -705,216 +661,6 @@ impl AccountSets {
         self.repo
             .fetch_mappings_in_op(op, journal_id, account_ids)
             .await
-    }
-}
-
-fn entries_for_add_balance(
-    entries: &mut Vec<NewEntry>,
-    target_account_id: AccountId,
-    balance: BalanceSnapshot,
-) {
-    use rust_decimal::Decimal;
-
-    if balance.settled.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Settled)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.settled.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.settled.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Settled)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_SETTLED_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.settled.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.pending.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Pending)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.pending.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.pending.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Pending)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_PENDING_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.pending.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.encumbrance.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Encumbrance)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.encumbrance.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.encumbrance.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Encumbrance)
-            .entry_type("ACCOUNT_SET_ADD_MEMBER_ENCUMBRANCE_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.encumbrance.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-}
-
-fn entries_for_remove_balance(
-    entries: &mut Vec<NewEntry>,
-    target_account_id: AccountId,
-    balance: BalanceSnapshot,
-) {
-    use rust_decimal::Decimal;
-
-    if balance.settled.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Settled)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_SETTLED_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.settled.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.settled.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Settled)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_SETTLED_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.settled.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.pending.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Pending)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_PENDING_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.pending.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.pending.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Pending)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_PENDING_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.pending.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.encumbrance.cr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Encumbrance)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_ENCUMBRANCE_DR")
-            .direction(DebitOrCredit::Debit)
-            .units(balance.encumbrance.cr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
-    }
-    if balance.encumbrance.dr_balance != Decimal::ZERO {
-        let entry = NewEntry::builder()
-            .id(EntryId::new())
-            .journal_id(balance.journal_id)
-            .account_id(target_account_id)
-            .currency(balance.currency)
-            .sequence(1u32)
-            .layer(Layer::Encumbrance)
-            .entry_type("ACCOUNT_SET_REMOVE_MEMBER_ENCUMBRANCE_CR")
-            .direction(DebitOrCredit::Credit)
-            .units(balance.encumbrance.dr_balance)
-            .transaction_id(UNASSIGNED_TRANSACTION_ID)
-            .build()
-            .expect("Couldn't build entry");
-        entries.push(entry);
     }
 }
 

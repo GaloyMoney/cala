@@ -183,48 +183,37 @@ impl Balances {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.balance.find_balances_for_update", skip(self, db), fields(journal_id = %journal_id, account_id = %account_id))]
-    pub(crate) async fn find_balances_for_update(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_id: AccountId,
-    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
-        self.repo
-            .load_all_for_update(db, journal_id, account_id)
-            .await
-    }
-
+    /// Take exclusive locks on `parent_account_id` and `member_id` (in
+    /// the EC-set lock namespace), then return `true` iff `member_id`
+    /// has any row in `cala_balance_history` for `journal_id`.
+    ///
+    /// The exclusive lock on the member serializes against any in-flight
+    /// poster on it, so the result is a stable snapshot of committed
+    /// state. Used by add/remove member to enforce that account sets
+    /// only admit members with no balance history.
     #[instrument(
-        name = "cala_ledger.balance.update_balance_for_account_in_op",
-        skip(self, op, entries),
-        fields(journal_id = %journal_id, account_id = %account_id)
+        name = "cala_ledger.balance.member_has_balance_history_in_op",
+        skip(self, op),
+        fields(
+            journal_id = %journal_id,
+            parent_account_id = %parent_account_id,
+            member_id = %member_id,
+        )
     )]
-    pub(crate) async fn update_balance_for_account_in_op(
+    pub(crate) async fn member_has_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_id: AccountId,
-        entries: &[EntryValues],
-        created_at: DateTime<Utc>,
-    ) -> Result<(), BalanceError> {
-        let current = self
-            .repo
-            .load_all_for_update(op, journal_id, account_id)
-            .await?;
-        let mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> =
-            HashMap::new();
-        for entry in entries {
-            current_balances
-                .entry((account_id, entry.currency))
-                .or_insert_with(|| current.get(&entry.currency).cloned());
-        }
-        let new_balances =
-            Self::new_snapshots(created_at, current_balances, entries, &HashMap::new());
+        parent_account_id: AccountId,
+        member_id: AccountId,
+    ) -> Result<bool, BalanceError> {
+        let lock_targets: HashSet<AccountId> = [parent_account_id, member_id].into_iter().collect();
         self.repo
-            .insert_new_snapshots(op, journal_id, new_balances)
+            .lock_accounts_exclusive_in_op(op, &lock_targets)
             .await?;
-        Ok(())
+        self.repo
+            .account_has_any_balance_history_in_op(op, journal_id, member_id)
+            .await
     }
 
     #[instrument(

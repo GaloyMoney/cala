@@ -4,7 +4,7 @@ use super::repo::{
     AccountSetColumn, AccountSetCreateError, AccountSetFindError, AccountSetModifyError,
     AccountSetQueryError,
 };
-use crate::primitives::AccountSetId;
+use crate::primitives::{AccountId, AccountSetId};
 
 #[derive(Error, Debug)]
 pub enum AccountSetError {
@@ -34,6 +34,15 @@ pub enum AccountSetError {
     JournalIdMismatch,
     #[error("AccountSetError - Member already added to account set")]
     MemberAlreadyAdded,
+    #[error(
+        "AccountSetError - Cannot add or remove member '{member_id}' to/from \
+         account set '{account_set_id}': member already has balance history \
+         in this journal"
+    )]
+    MemberHasBalanceHistory {
+        account_set_id: AccountSetId,
+        member_id: AccountId,
+    },
 }
 
 impl From<AccountSetFindError> for AccountSetError {

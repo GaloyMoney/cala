@@ -274,6 +274,32 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        name = "cala_ledger.balances.account_has_any_balance_history_in_op",
+        skip_all
+    )]
+    pub(super) async fn account_has_any_balance_history_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+    ) -> Result<bool, BalanceError> {
+        let row = sqlx::query!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM cala_balance_history
+                WHERE journal_id = $1 AND account_id = $2
+            ) AS "exists!"
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+        )
+        .fetch_one(op.as_executor())
+        .await?;
+        Ok(row.exists)
+    }
+
+    #[instrument(
     name = "cala_ledger.balances.insert_new_snapshots",
     skip(self, op, new_balances)
     fields(n_new_balances)
@@ -368,55 +394,6 @@ impl BalanceRepo {
             .await?;
 
         Ok(())
-    }
-
-    #[instrument(
-        name = "balance.load_all_for_update",
-        skip(self, op),
-        err(level = "warn")
-    )]
-    pub(crate) async fn load_all_for_update(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_id: AccountId,
-    ) -> Result<HashMap<Currency, BalanceSnapshot>, BalanceError> {
-        let rows = sqlx::query!(
-            r#"
-            WITH locked_accounts AS (
-              SELECT 1
-              FROM cala_accounts a
-              WHERE a.id = $1
-              FOR UPDATE
-            ), locked_balances AS (
-              SELECT journal_id, account_id, currency, latest_version
-              FROM cala_current_balances
-              WHERE journal_id = $2
-              AND account_id = $1
-              FOR UPDATE
-            )
-            SELECT h.values
-            FROM cala_balance_history h
-            JOIN locked_balances b
-            ON b.journal_id = h.journal_id
-              AND b.account_id = h.account_id
-              AND b.currency = h.currency
-              AND b.latest_version = h.version
-        "#,
-            account_id as AccountId,
-            journal_id as JournalId
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-        let ret = rows
-            .into_iter()
-            .map(|row| {
-                let snapshot: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                (snapshot.currency, snapshot)
-            })
-            .collect();
-        Ok(ret)
     }
 
     #[instrument(
