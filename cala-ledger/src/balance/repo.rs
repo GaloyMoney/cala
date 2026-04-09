@@ -262,12 +262,20 @@ impl BalanceRepo {
         if account_ids.is_empty() {
             return Ok(());
         }
-        let account_ids: Vec<AccountId> = account_ids.iter().copied().collect();
+        // Sort at the Rust level so every caller acquires the
+        // `pg_advisory_xact_lock` locks in canonical `AccountId`
+        // order, which is what lets concurrent callers with
+        // overlapping inputs serialize without deadlock. Ordering
+        // has to be enforced on the input array — the planner is
+        // free to evaluate the per-row projection (the lock
+        // function call) before any SQL-level sort node, so an
+        // `ORDER BY` on the query is not a reliable substitute.
+        let mut account_ids: Vec<AccountId> = account_ids.iter().copied().collect();
+        account_ids.sort();
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock($1::int4, hashtext(account_id::text))
             FROM UNNEST($2::uuid[]) AS v(account_id)
-            ORDER BY account_id
             "#,
             EC_SET_LOCK_CLASS,
             &account_ids as &[AccountId],
