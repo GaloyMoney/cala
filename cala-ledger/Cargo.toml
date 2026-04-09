@@ -8,6 +8,7 @@ version = "0.14.6-dev"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["finance"]
+include = ["src/", "build.rs", "migrations/", "schemas/", "tests/", ".sqlx/**"]
 
 [features]
 
