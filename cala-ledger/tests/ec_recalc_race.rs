@@ -412,3 +412,202 @@ async fn ec_recalc_hierarchy_race_under_concurrency() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Concurrent multi-call `add_member_in_op` transactions on a shared
+/// pool of EC parent sets, interleaved with posters on leaves that
+/// those parents contain, must not deadlock.
+///
+/// Shape: `N_TASKS` tokio tasks each open a transaction and do
+/// `ADDS_PER_TASK` `add_member_in_op` calls against the parents in
+/// a randomised order (so different transactions accumulate
+/// membership writes against the same parents in different orders).
+/// `N_POSTERS` poster tasks concurrently post to a single hot leaf
+/// that is a direct member of every parent, so each poster's
+/// `find_for_update` call takes SHARED on every parent in one go.
+#[tokio::test]
+async fn add_member_multi_call_no_deadlock_with_posters() -> anyhow::Result<()> {
+    const N_TASKS: usize = 6;
+    const ADDS_PER_TASK: usize = 4;
+    const N_POSTERS: usize = 4;
+    const POSTS_PER_POSTER: usize = 8;
+    const N_ITERATIONS: usize = 3;
+
+    let usd: Currency = "USD".parse().unwrap();
+
+    let pool = helpers::init_pool_with(
+        sqlx::postgres::PgPoolOptions::new()
+            .max_connections(40)
+            .acquire_timeout(std::time::Duration::from_secs(60)),
+    )
+    .await?;
+
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::simple_template_with_date_default(&tx_code))
+        .await
+        .unwrap();
+
+    let sender_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let sender = NewAccount::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("Deadlock repro sender {sender_code}"))
+        .code(sender_code)
+        .build()
+        .unwrap();
+    let sender = cala.accounts().create(sender).await.unwrap();
+
+    // Fewer parents than tasks, so concurrent add_member tasks
+    // reliably overlap on the same parent sets.
+    const N_PARENTS: usize = 3;
+    let mut parents: Vec<AccountSet> = Vec::with_capacity(N_PARENTS);
+    for i in 0..N_PARENTS {
+        let set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("Deadlock repro parent {i}"))
+            .journal_id(journal.id())
+            .eventually_consistent(true)
+            .build()
+            .unwrap();
+        parents.push(cala.account_sets().create(set).await.unwrap());
+    }
+
+    // Pre-existing leaves that belong to every parent. The poster
+    // One hot leaf that is a direct member of every parent set, so
+    // a single poster's `find_for_update` call takes SHARED on every
+    // parent at once.
+    let hot_leaf_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let hot_leaf = NewAccount::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("Deadlock repro hot leaf {hot_leaf_code}"))
+        .code(hot_leaf_code)
+        .build()
+        .unwrap();
+    let hot_leaf = cala.accounts().create(hot_leaf).await.unwrap();
+    for parent in &parents {
+        cala.account_sets()
+            .add_member(parent.id(), hot_leaf.id())
+            .await
+            .unwrap();
+    }
+
+    let parent_ids: Arc<Vec<AccountSetId>> = Arc::new(parents.iter().map(|s| s.id()).collect());
+    let hot_leaf_id = hot_leaf.id();
+
+    for iteration in 0..N_ITERATIONS {
+        let mut handles = Vec::with_capacity(N_TASKS + N_POSTERS);
+
+        // Add_member tasks: each opens a transaction and does several
+        // `add_member_in_op` calls against the shared parent pool in
+        // a randomised order. The random ordering models real
+        // application callers that pick parents in their own order
+        // (not canonical UUID order), so concurrent transactions
+        // accumulate membership writes against the same parents in
+        // different orders.
+        for task_idx in 0..N_TASKS {
+            let cala = cala.clone();
+            let parent_ids = parent_ids.clone();
+            handles.push(tokio::spawn(async move {
+                let mut ordering: Vec<AccountSetId> = parent_ids.iter().copied().collect();
+                {
+                    use rand::seq::SliceRandom as _;
+                    let mut rng = rand::rng();
+                    ordering.shuffle(&mut rng);
+                }
+                let mut db = cala
+                    .begin_operation()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("begin_operation: {e}"))?;
+                for add_idx in 0..ADDS_PER_TASK {
+                    let parent_id = ordering[add_idx % ordering.len()];
+                    let code = format!(
+                        "dl-{}-{}-{}-{}",
+                        iteration,
+                        task_idx,
+                        add_idx,
+                        Alphanumeric.sample_string(&mut rand::rng(), 16)
+                    );
+                    let new_leaf = NewAccount::builder()
+                        .id(uuid::Uuid::now_v7())
+                        .name(format!("deadlock leaf {code}"))
+                        .code(code)
+                        .build()
+                        .unwrap();
+                    let leaf = cala
+                        .accounts()
+                        .create_in_op(&mut db, new_leaf)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("create_in_op: {e}"))?;
+                    cala.account_sets()
+                        .add_member_in_op(&mut db, parent_id, leaf.id())
+                        .await
+                        .map_err(|e| anyhow::anyhow!("add_member_in_op: {e}"))?;
+                }
+                db.commit()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("commit: {e}"))?;
+                Ok::<_, anyhow::Error>(())
+            }));
+        }
+
+        // Poster tasks: post to the hot leaf, exercising the
+        // poster-side lock pair (SHARED on every ancestor +
+        // FOR_UPDATE on the leaf's balance row) against the same
+        // parents the add_member tasks are touching.
+        for _ in 0..N_POSTERS {
+            let cala = cala.clone();
+            let tx_code = tx_code.clone();
+            let sender_id = sender.id();
+            let journal_id = journal.id();
+            handles.push(tokio::spawn(async move {
+                for _ in 0..POSTS_PER_POSTER {
+                    let mut params = Params::new();
+                    params.insert("journal_id", journal_id.to_string());
+                    params.insert("sender", sender_id);
+                    params.insert("recipient", hot_leaf_id);
+                    params.insert("amount", POST_AMOUNT);
+                    cala.post_transaction(TransactionId::new(), &tx_code, params)
+                        .await
+                        .map_err(|e| anyhow::anyhow!("post_transaction: {e}"))?;
+                }
+                Ok::<_, anyhow::Error>(())
+            }));
+        }
+
+        for h in handles {
+            h.await??;
+        }
+    }
+
+    // After a recalc, every parent's balance should equal the hot
+    // leaf's balance (the hot leaf is the only direct leaf with any
+    // history under each parent).
+    cala.account_sets()
+        .recalculate_balances_batch(&parent_ids)
+        .await
+        .unwrap();
+
+    let leaf_bal = cala.balances().find(journal.id(), hot_leaf_id, usd).await?;
+    for parent in &parents {
+        let parent_bal = cala.balances().find(journal.id(), parent.id(), usd).await?;
+        assert_eq!(
+            parent_bal.settled(),
+            leaf_bal.settled(),
+            "parent {} balance should match the hot leaf after recalc",
+            parent.id(),
+        );
+    }
+
+    Ok(())
+}

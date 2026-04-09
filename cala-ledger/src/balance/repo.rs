@@ -249,7 +249,11 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(name = "cala_ledger.balances.lock_accounts_exclusive_in_op", skip_all)]
+    #[instrument(
+        name = "cala_ledger.balances.lock_accounts_exclusive_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn lock_accounts_exclusive_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -273,16 +277,55 @@ impl BalanceRepo {
         Ok(())
     }
 
+    /// Under a SHARED lock on `parent_account_id` and an EXCLUSIVE
+    /// lock on `member_id` (both in the 2-arg EC-set lock namespace,
+    /// acquired in a single canonically-ordered SQL statement), return
+    /// `true` iff `member_id` has any row in `cala_balance_history`
+    /// for `journal_id`.
+    ///
+    /// The EXCLUSIVE on the member is what makes the existence check
+    /// stable: any in-flight poster on `member_id` takes SHARED on it
+    /// via `find_for_update`'s combined lock query and blocks against
+    /// our EXCLUSIVE, so committed state is fully visible by the time
+    /// the `EXISTS` runs.
+    ///
+    /// The parent lock is SHARED because the only thing it needs to
+    /// coordinate is add-vs-recalc on the same set: recalc takes
+    /// EXCLUSIVE on the parent, so SHARED/EXCLUSIVE still serializes
+    /// those two. SHARED/SHARED is compatible with concurrent
+    /// posters on the same parent, which is what keeps multi-call
+    /// `add_member_in_op` transactions from contending with posters
+    /// on hot parent sets.
     #[instrument(
-        name = "cala_ledger.balances.account_has_any_balance_history_in_op",
-        skip_all
+        name = "cala_ledger.balances.member_has_balance_history_in_op",
+        skip_all,
+        err(level = "warn")
     )]
-    pub(super) async fn account_has_any_balance_history_in_op(
+    pub(super) async fn member_has_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_id: AccountId,
+        parent_account_id: AccountId,
+        member_id: AccountId,
     ) -> Result<bool, BalanceError> {
+        sqlx::query!(
+            r#"
+            SELECT
+                CASE WHEN v.account_id = $2 THEN
+                    pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
+                ELSE
+                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
+                END
+            FROM UNNEST($3::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
+            "#,
+            EC_SET_LOCK_CLASS,
+            member_id as AccountId,
+            &[parent_account_id, member_id] as &[AccountId],
+        )
+        .execute(op.as_executor())
+        .await?;
+
         let row = sqlx::query!(
             r#"
             SELECT EXISTS (
@@ -292,7 +335,7 @@ impl BalanceRepo {
             ) AS "exists!"
             "#,
             journal_id as JournalId,
-            account_id as AccountId,
+            member_id as AccountId,
         )
         .fetch_one(op.as_executor())
         .await?;

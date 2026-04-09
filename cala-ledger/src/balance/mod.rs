@@ -112,7 +112,12 @@ impl Balances {
         self.repo.find_all_in_op(op, ids).await
     }
 
-    #[instrument(name = "cala_ledger.balance.update_balances_in_op", skip(self, op, entries, account_set_mappings), fields(journal_id = %journal_id, entries_count = entries.len()))]
+    #[instrument(
+        name = "cala_ledger.balance.update_balances_in_op",
+        skip(self, op, entries, account_set_mappings),
+        fields(journal_id = %journal_id, entries_count = entries.len()),
+        err(level = "warn")
+    )]
     pub(crate) async fn update_balances_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -183,14 +188,9 @@ impl Balances {
         Ok(())
     }
 
-    /// Take exclusive locks on `parent_account_id` and `member_id` (in
-    /// the EC-set lock namespace), then return `true` iff `member_id`
-    /// has any row in `cala_balance_history` for `journal_id`.
-    ///
-    /// The exclusive lock on the member serializes against any in-flight
-    /// poster on it, so the result is a stable snapshot of committed
-    /// state. Used by add/remove member to enforce that account sets
-    /// only admit members with no balance history.
+    /// Return `true` iff `member_id` has any row in
+    /// `cala_balance_history` for `journal_id`, under the lock prelude
+    /// described on `BalanceRepo::member_has_balance_history_in_op`.
     #[instrument(
         name = "cala_ledger.balance.member_has_balance_history_in_op",
         skip(self, op),
@@ -198,7 +198,8 @@ impl Balances {
             journal_id = %journal_id,
             parent_account_id = %parent_account_id,
             member_id = %member_id,
-        )
+        ),
+        err(level = "warn")
     )]
     pub(crate) async fn member_has_balance_history_in_op(
         &self,
@@ -207,18 +208,15 @@ impl Balances {
         parent_account_id: AccountId,
         member_id: AccountId,
     ) -> Result<bool, BalanceError> {
-        let lock_targets: HashSet<AccountId> = [parent_account_id, member_id].into_iter().collect();
         self.repo
-            .lock_accounts_exclusive_in_op(op, &lock_targets)
-            .await?;
-        self.repo
-            .account_has_any_balance_history_in_op(op, journal_id, member_id)
+            .member_has_balance_history_in_op(op, journal_id, parent_account_id, member_id)
             .await
     }
 
     #[instrument(
         name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
-        skip(self, op)
+        skip(self, op),
+        err(level = "warn")
     )]
     pub(crate) async fn recalculate_account_set_balances_batch_in_op(
         &self,

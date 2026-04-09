@@ -471,6 +471,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.remove_member_account_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn remove_member_account_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -538,6 +543,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.add_member_set_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn add_member_set_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -618,6 +628,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.remove_member_set_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn remove_member_set_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,

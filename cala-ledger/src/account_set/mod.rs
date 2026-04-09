@@ -149,7 +149,17 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.add_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id, is_account = tracing::field::Empty, is_account_set = tracing::field::Empty, member_id = tracing::field::Empty))]
+    #[instrument(
+        name = "cala_ledger.account_sets.add_member_in_op",
+        skip(self, op, member),
+        fields(
+            account_set_id = %account_set_id,
+            is_account = tracing::field::Empty,
+            is_account_set = tracing::field::Empty,
+            member_id = tracing::field::Empty,
+        ),
+        err(level = "warn")
+    )]
     pub async fn add_member_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -263,7 +273,12 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.remove_member_in_op", skip(self, op, member), fields(account_set_id = %account_set_id))]
+    #[instrument(
+        name = "cala_ledger.account_sets.remove_member_in_op",
+        skip(self, op, member),
+        fields(account_set_id = %account_set_id),
+        err(level = "warn")
+    )]
     pub async fn remove_member_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
