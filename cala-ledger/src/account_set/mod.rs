@@ -552,6 +552,17 @@ impl AccountSets {
             .find_all_in_op::<AccountSet>(&mut *op, account_set_ids)
             .await?;
 
+        // Recalc is only meaningful for eventually-consistent account sets
+        // (non-EC sets are maintained inline by posters and recalculating
+        // them would race with within-batch `nextval` ordering on the
+        // watermark). Reject any non-EC input up front so callers fail
+        // loudly instead of silently risking a double-count.
+        let account_ids: Vec<AccountId> = account_set_ids.iter().map(AccountId::from).collect();
+        let accounts = self
+            .accounts
+            .find_all_in_op::<Account>(&mut *op, &account_ids)
+            .await?;
+
         let mut journal_id: Option<JournalId> = None;
         for id in account_set_ids {
             let set = sets.get(id).ok_or(AccountSetError::CouldNotFindById(*id))?;
@@ -562,6 +573,15 @@ impl AccountSets {
                 }
             } else {
                 journal_id = Some(jid);
+            }
+
+            let account = accounts
+                .get(&AccountId::from(id))
+                .ok_or(AccountSetError::CouldNotFindById(*id))?;
+            if !account.values().config.eventually_consistent {
+                return Err(AccountSetError::CannotRecalculateNonEcSet {
+                    account_set_id: *id,
+                });
             }
         }
 
@@ -602,9 +622,14 @@ impl AccountSets {
             return Ok(());
         }
 
+        // Only walk EC descendants — non-EC descendants are maintained
+        // inline by posters and recalc on them is rejected by
+        // `recalculate_balances_batch_in_op`. Filtering them out here
+        // means a deep walk on a hierarchy that mixes EC and non-EC sets
+        // simply skips the non-EC nodes, instead of erroring.
         let descendants = self
             .repo
-            .find_all_descendant_set_ids(&mut *op, account_set_ids)
+            .find_all_ec_descendant_set_ids(&mut *op, account_set_ids)
             .await?;
 
         let mut seen: std::collections::HashSet<AccountSetId> =

@@ -43,6 +43,11 @@ pub enum AccountSetError {
         account_set_id: AccountSetId,
         member_id: AccountId,
     },
+    #[error(
+        "AccountSetError - Cannot recalculate account set '{account_set_id}': \
+         only eventually-consistent sets support recalculation"
+    )]
+    CannotRecalculateNonEcSet { account_set_id: AccountSetId },
 }
 
 impl From<AccountSetFindError> for AccountSetError {

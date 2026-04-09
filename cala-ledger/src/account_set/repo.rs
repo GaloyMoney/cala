@@ -876,12 +876,17 @@ impl AccountSetRepo {
         })
     }
 
+    /// Walk the descendant account sets of `account_set_ids` transitively
+    /// and return the ones whose underlying account is
+    /// `eventually_consistent = TRUE`. Non-EC descendants are filtered
+    /// out at the SQL level so callers (the recalc deep walk) don't try
+    /// to recalc them.
     #[instrument(
-        name = "account_set.find_all_descendant_set_ids",
+        name = "account_set.find_all_ec_descendant_set_ids",
         skip_all,
         err(level = "warn")
     )]
-    pub async fn find_all_descendant_set_ids(
+    pub async fn find_all_ec_descendant_set_ids(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_set_ids: &[AccountSetId],
@@ -897,7 +902,10 @@ impl AccountSetRepo {
                 FROM cala_account_set_member_account_sets m
                 JOIN descendants d ON d.id = m.account_set_id
             )
-            SELECT id AS "id!: AccountSetId" FROM descendants
+            SELECT d.id AS "id!: AccountSetId"
+            FROM descendants d
+            JOIN cala_accounts a ON a.id = d.id
+            WHERE a.eventually_consistent = TRUE
             "#,
             account_set_ids as &[AccountSetId],
         )

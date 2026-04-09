@@ -1210,3 +1210,254 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// `recalculate_balances` (and the batch / deep variants that funnel
+/// through `recalculate_balances_batch_in_op`) must reject non-EC
+/// account sets up front. Non-EC sets are maintained inline by posters
+/// and recalculating them is unsupported (it would race with the
+/// within-batch `nextval` ordering on the watermark and risk
+/// double-counting member-history rows that the original poster's
+/// fold-up already accounted for).
+#[tokio::test]
+async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let inline_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Inline Set")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let err = cala
+        .account_sets()
+        .recalculate_balances(inline_set.id())
+        .await
+        .err()
+        .expect("recalculate_balances should fail on a non-EC set");
+
+    match err {
+        AccountSetError::CannotRecalculateNonEcSet { account_set_id } => {
+            assert_eq!(account_set_id, inline_set.id());
+        }
+        other => panic!("expected CannotRecalculateNonEcSet, got {other}"),
+    }
+
+    // The same rejection applies to `recalculate_balances_batch`.
+    let err = cala
+        .account_sets()
+        .recalculate_balances_batch(&[inline_set.id()])
+        .await
+        .err()
+        .expect("recalculate_balances_batch should fail on a non-EC set");
+    assert!(matches!(
+        err,
+        AccountSetError::CannotRecalculateNonEcSet { .. }
+    ));
+
+    Ok(())
+}
+
+/// `recalculate_balances_deep` walks the descendant tree of its inputs
+/// but should silently skip non-EC descendants — only the EC ones get
+/// recalculated. The non-EC descendant's balance is left untouched.
+#[tokio::test]
+async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<()> {
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, leaf_a) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let leaf_a = cala.accounts().create(leaf_a).await.unwrap();
+
+    // Second leaf account, exclusive to the non-EC subtree, so the
+    // transitive-member closure under the EC root has distinct entries
+    // for the two children (the unique constraint on
+    // `cala_account_set_member_accounts` would otherwise reject adding
+    // both children to the root with the same shared leaf).
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let leaf_b = NewAccount::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("Leaf B {code}"))
+        .code(code)
+        .build()
+        .unwrap();
+    let leaf_b = cala.accounts().create(leaf_b).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Hierarchy:
+    //   ec_root (EC)
+    //     ├── ec_child     (EC,     contains leaf_a)
+    //     └── inline_child (non-EC, contains leaf_b)
+    let ec_root = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("EC Root")
+                .journal_id(journal.id())
+                .eventually_consistent(true)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let ec_child = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("EC Child")
+                .journal_id(journal.id())
+                .eventually_consistent(true)
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let inline_child = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Inline Child")
+                .journal_id(journal.id())
+                .build()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    cala.account_sets()
+        .add_member(ec_child.id(), leaf_a.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(inline_child.id(), leaf_b.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(ec_root.id(), ec_child.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(ec_root.id(), inline_child.id())
+        .await
+        .unwrap();
+
+    // Post to leaf_a — propagates up through the EC chain (ec_child,
+    // ec_root) only as membership; posters do not write
+    // `cala_current_balances` rows for EC ancestors, so neither
+    // ec_child nor ec_root has a balance until we recalc.
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", leaf_a.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+
+    // Post to leaf_b — propagates up through the non-EC inline_child
+    // synchronously (its `cala_current_balances` row is updated by the
+    // poster's fold-up). The EC ec_root ancestor is filtered out of
+    // the poster fold and stays at zero.
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", leaf_b.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+
+    // Snapshot inline_child's balance before the deep recalc, so we
+    // can prove the deep recalc leaves it untouched.
+    let inline_before = cala
+        .balances()
+        .find(journal.id(), inline_child.id(), btc)
+        .await?;
+
+    cala.account_sets()
+        .recalculate_balances_deep(&[ec_root.id()])
+        .await
+        .unwrap();
+
+    let leaf_a_bal = cala.balances().find(journal.id(), leaf_a.id(), btc).await?;
+    let leaf_b_bal = cala.balances().find(journal.id(), leaf_b.id(), btc).await?;
+    let ec_child_bal = cala
+        .balances()
+        .find(journal.id(), ec_child.id(), btc)
+        .await?;
+    let ec_root_bal = cala
+        .balances()
+        .find(journal.id(), ec_root.id(), btc)
+        .await?;
+    let inline_after = cala
+        .balances()
+        .find(journal.id(), inline_child.id(), btc)
+        .await?;
+
+    // The EC descendant got recalculated and now reflects its own
+    // exclusive leaf member.
+    assert_eq!(
+        leaf_a_bal.settled(),
+        ec_child_bal.settled(),
+        "ec_child should match leaf_a after deep recalc"
+    );
+
+    // The EC root sees both transitive leaves (leaf_a via ec_child and
+    // leaf_b via inline_child), regardless of whether the path runs
+    // through an EC or non-EC intermediate set.
+    assert_eq!(
+        leaf_a_bal.settled() + leaf_b_bal.settled(),
+        ec_root_bal.settled(),
+        "ec_root should equal leaf_a + leaf_b after deep recalc"
+    );
+
+    // The non-EC descendant must be left exactly as it was before the
+    // deep recalc — no version bump, no balance change.
+    assert_eq!(
+        inline_before.settled(),
+        inline_after.settled(),
+        "non-EC descendant settled balance should be untouched by deep recalc"
+    );
+    assert_eq!(
+        inline_before.details.version, inline_after.details.version,
+        "non-EC descendant version should not change"
+    );
+
+    Ok(())
+}
