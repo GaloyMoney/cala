@@ -11,6 +11,7 @@ use super::entity::*;
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "Transaction",
+    count,
     columns(
         external_id(ty = "Option<String>", update(persist = false)),
         correlation_id(ty = "String", update(persist = false)),

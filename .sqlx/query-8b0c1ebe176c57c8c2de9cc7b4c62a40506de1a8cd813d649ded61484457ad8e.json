@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH new_snapshots AS (\n            INSERT INTO cala_balance_history (\n                journal_id, account_id, currency, version, latest_entry_id, values\n            )\n            SELECT * FROM UNNEST (\n                $1::uuid[],\n                $2::uuid[],\n                $3::text[],\n                $4::int4[],\n                $5::uuid[],\n                $6::jsonb[]\n            )\n            RETURNING *\n        )\n        INSERT INTO cala_current_balances AS c (\n            journal_id, account_id, currency, latest_version, latest_values\n        )\n        SELECT\n            journal_id,\n            account_id,\n            currency,\n            MAX(version) as latest_version,\n            (array_agg(values ORDER BY version DESC))[1] as latest_values\n        FROM new_snapshots\n        GROUP BY journal_id, account_id, currency\n        ON CONFLICT (account_id, journal_id, currency)\n        DO UPDATE SET\n            latest_version = GREATEST(c.latest_version, EXCLUDED.latest_version),\n            latest_values = CASE\n                WHEN c.latest_version < EXCLUDED.latest_version\n                THEN EXCLUDED.latest_values\n                ELSE c.latest_values\n            END\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "Int4Array",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b0c1ebe176c57c8c2de9cc7b4c62a40506de1a8cd813d649ded61484457ad8e"
+}

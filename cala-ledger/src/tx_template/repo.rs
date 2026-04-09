@@ -13,6 +13,7 @@ use super::{entity::*, error::TxTemplateError};
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "TxTemplate",
+    count,
     columns(code(
         ty = "String",
         update(accessor = "values().code", persist = false),

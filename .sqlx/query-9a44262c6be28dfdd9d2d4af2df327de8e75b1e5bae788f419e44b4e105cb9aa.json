@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_cumulative_effective_balances (\n              journal_id, account_id, currency, effective, version, all_time_version, latest_entry_id, updated_at, created_at, values\n            )\n            SELECT * FROM UNNEST(\n                $1::uuid[],\n                $2::uuid[],\n                $3::text[],\n                $4::date[],\n                $5::integer[],\n                $6::integer[],\n                $7::uuid[],\n                $8::timestamptz[],\n                $9::timestamptz[],\n                $10::jsonb[]\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "DateArray",
+        "Int4Array",
+        "Int4Array",
+        "UuidArray",
+        "TimestamptzArray",
+        "TimestamptzArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9a44262c6be28dfdd9d2d4af2df327de8e75b1e5bae788f419e44b4e105cb9aa"
+}

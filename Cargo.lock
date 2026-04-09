@@ -949,9 +949,8 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.33"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453a8768e97e3363d74a307e466a1a437765088bad5b5a49bdba3f72c64ae854"
+version = "0.10.34"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#240bde9c1e3760f795362442114aca5721bd9059"
 dependencies = [
  "async-graphql",
  "base64",
@@ -976,9 +975,8 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.33"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31b7f9832d1cb8219f8df5a5d5f24b19b8df68985d3f32667e4d9bbfe9f29a33"
+version = "0.10.34"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#240bde9c1e3760f795362442114aca5721bd9059"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1857,7 +1855,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3343,7 +3341,7 @@ version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8c27177b12a6399ffc08b98f76f7c9a1f4fe9fc967c784c5a071fa8d93cf7e1"
 dependencies = [
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4046,7 +4044,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
