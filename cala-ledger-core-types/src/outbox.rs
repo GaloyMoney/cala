@@ -58,4 +58,10 @@ pub enum OutboxEventPayload {
     BalanceUpdated {
         balance: BalanceSnapshot,
     },
+    EffectiveBalanceCreated {
+        balance: EffectiveBalanceSnapshot,
+    },
+    EffectiveBalanceUpdated {
+        balance: EffectiveBalanceSnapshot,
+    },
 }

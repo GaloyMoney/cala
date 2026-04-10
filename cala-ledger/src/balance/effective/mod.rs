@@ -7,12 +7,14 @@ use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 use cala_types::{
-    balance::{BalanceAmount, BalanceSnapshot},
+    balance::{BalanceAmount, BalanceSnapshot, EffectiveBalanceSnapshot},
     entry::EntryValues,
     primitives::*,
 };
 
-use crate::primitives::JournalId;
+use crate::{outbox::OutboxPublisher, primitives::JournalId};
+
+use data::EffectiveBalanceData;
 
 use super::{account_balance::*, error::BalanceError, snapshot::UNASSIGNED_ENTRY_ID};
 
@@ -24,9 +26,9 @@ pub struct EffectiveBalances {
     _pool: PgPool,
 }
 impl EffectiveBalances {
-    pub(crate) fn new(pool: &PgPool) -> Self {
+    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
-            repo: EffectiveBalanceRepo::new(pool),
+            repo: EffectiveBalanceRepo::new(pool, publisher),
             _pool: pool.clone(),
         }
     }
@@ -343,10 +345,38 @@ impl EffectiveBalances {
             data.re_calculate_snapshots(created_at);
         }
 
+        let new_balances = Self::new_effective_snapshots(journal_id, all_data);
         self.repo
-            .insert_new_snapshots(op, journal_id, all_data)
+            .insert_new_snapshots(op, journal_id, new_balances)
             .await?;
 
         Ok(())
+    }
+
+    fn new_effective_snapshots(
+        journal_id: JournalId,
+        data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
+    ) -> Vec<EffectiveBalanceSnapshot> {
+        data.into_values()
+            .flat_map(|d| d.into_updates())
+            .map(
+                |(account_id, currency, effective, snapshot, all_time_version)| {
+                    EffectiveBalanceSnapshot {
+                        journal_id,
+                        account_id,
+                        currency,
+                        effective,
+                        version: snapshot.version,
+                        all_time_version,
+                        created_at: snapshot.created_at,
+                        modified_at: snapshot.modified_at,
+                        entry_id: snapshot.entry_id,
+                        settled: snapshot.settled,
+                        pending: snapshot.pending,
+                        encumbrance: snapshot.encumbrance,
+                    }
+                },
+            )
+            .collect()
     }
 }

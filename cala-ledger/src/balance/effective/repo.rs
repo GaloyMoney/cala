@@ -3,10 +3,11 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::balance::{account_balance::AccountBalance, error::BalanceError};
+use crate::{balance::{account_balance::AccountBalance, error::BalanceError}, outbox::OutboxPublisher};
 use cala_types::{
-    balance::BalanceSnapshot,
-    primitives::{AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
+    balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
+    outbox::OutboxEventPayload,
+    primitives::{AccountId, AccountSetId,BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
 use super::data::*;
@@ -23,11 +24,12 @@ pub(super) struct LatestBeforeEntry {
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
+    publisher: OutboxPublisher
 }
 
 impl EffectiveBalanceRepo {
-    pub fn new(pool: &PgPool) -> Self {
-        Self { pool: pool.clone() }
+    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+        Self { pool: pool.clone(), publisher: publisher.clone() }
     }
 
     pub async fn find(
@@ -720,39 +722,37 @@ impl EffectiveBalanceRepo {
 
     #[instrument(
         name = "cala_ledger.balances.effective.insert_new_snapshots",
-        skip(self, op, data)
+        skip(self, op, new_balances)
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
+        new_balances: Vec<EffectiveBalanceSnapshot>,
     ) -> Result<(), BalanceError> {
-        let mut journal_ids = Vec::with_capacity(data.len());
-        let mut account_ids = Vec::with_capacity(data.len());
-        let mut currencies = Vec::with_capacity(data.len());
-        let mut effectives = Vec::with_capacity(data.len());
-        let mut versions = Vec::with_capacity(data.len());
-        let mut all_time_versions = Vec::with_capacity(data.len());
-        let mut entry_ids = Vec::with_capacity(data.len());
-        let mut modified_timestamps = Vec::with_capacity(data.len());
-        let mut created_timestamps = Vec::with_capacity(data.len());
-        let mut values = Vec::with_capacity(data.len());
+        let mut journal_ids = Vec::with_capacity(new_balances.len());
+        let mut account_ids = Vec::with_capacity(new_balances.len());
+        let mut currencies = Vec::with_capacity(new_balances.len());
+        let mut effectives = Vec::with_capacity(new_balances.len());
+        let mut versions = Vec::with_capacity(new_balances.len());
+        let mut all_time_versions = Vec::with_capacity(new_balances.len());
+        let mut entry_ids = Vec::with_capacity(new_balances.len());
+        let mut modified_timestamps = Vec::with_capacity(new_balances.len());
+        let mut created_timestamps = Vec::with_capacity(new_balances.len());
+        let mut values = Vec::with_capacity(new_balances.len());
 
-        for (account_id, currency, effective, snapshot, all_time_version) in
-            data.into_values().flat_map(|d| d.into_updates())
-        {
+        for balance in new_balances.iter() {
             journal_ids.push(journal_id);
-            account_ids.push(account_id);
-            currencies.push(currency.code());
-            effectives.push(effective);
-            versions.push(snapshot.version as i32);
-            all_time_versions.push(all_time_version as i32);
-            entry_ids.push(snapshot.entry_id);
-            modified_timestamps.push(snapshot.modified_at);
-            created_timestamps.push(snapshot.created_at);
+            account_ids.push(balance.account_id);
+            currencies.push(balance.currency.code());
+            effectives.push(balance.effective);
+            versions.push(balance.version as i32);
+            all_time_versions.push(balance.all_time_version as i32);
+            entry_ids.push(balance.entry_id);
+            modified_timestamps.push(balance.modified_at);
+            created_timestamps.push(balance.created_at);
             values.push(
-                serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
+                serde_json::to_value(balance).expect("Failed to serialize balance snapshot"),
             );
         }
 
@@ -787,6 +787,19 @@ impl EffectiveBalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+
+        self.publisher
+            .publish_all(
+                op,
+                new_balances.into_iter().map(|balance| {
+                    if balance.all_time_version == 1 {
+                        OutboxEventPayload::EffectiveBalanceCreated { balance }
+                    } else {
+                        OutboxEventPayload::EffectiveBalanceUpdated { balance }
+                    }
+                }),
+            )
+            .await?;
 
         Ok(())
     }
