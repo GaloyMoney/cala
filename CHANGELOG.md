@@ -1,3 +1,12 @@
+# [cala release v0.15.0](https://github.com/GaloyMoney/cala/releases/tag/0.15.0)
+
+
+
+### Bug Fixes
+
+- [**breaking**] Activate eventually_consistent flag for async balance rollup (#697)
+- Replace cachix with magic-nix-cache-action (#702)
+
 # [cala release v0.14.5](https://github.com/GaloyMoney/cala/releases/tag/0.14.5)
 
 
