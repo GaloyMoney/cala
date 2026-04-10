@@ -10,7 +10,7 @@ use crate::{
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
     outbox::OutboxEventPayload,
-    primitives::{AccountId, AccountSetId,BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
+    primitives::{AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
 use super::data::*;
