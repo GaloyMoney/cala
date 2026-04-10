@@ -3,7 +3,10 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{balance::{account_balance::AccountBalance, error::BalanceError}, outbox::OutboxPublisher};
+use crate::{
+    balance::{account_balance::AccountBalance, error::BalanceError},
+    outbox::OutboxPublisher,
+};
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
     outbox::OutboxEventPayload,
@@ -24,12 +27,15 @@ pub(super) struct LatestBeforeEntry {
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
-    publisher: OutboxPublisher
+    publisher: OutboxPublisher,
 }
 
 impl EffectiveBalanceRepo {
     pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
-        Self { pool: pool.clone(), publisher: publisher.clone() }
+        Self {
+            pool: pool.clone(),
+            publisher: publisher.clone(),
+        }
     }
 
     pub async fn find(
@@ -751,9 +757,8 @@ impl EffectiveBalanceRepo {
             entry_ids.push(balance.entry_id);
             modified_timestamps.push(balance.modified_at);
             created_timestamps.push(balance.created_at);
-            values.push(
-                serde_json::to_value(balance).expect("Failed to serialize balance snapshot"),
-            );
+            values
+                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
         }
 
         sqlx::query!(
