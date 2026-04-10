@@ -243,7 +243,7 @@ impl NewAccount {
             metadata: self.metadata,
             config: AccountConfig {
                 is_account_set: self.is_account_set,
-                eventually_consistent: false,
+                eventually_consistent: self.eventually_consistent,
             },
         }
     }
@@ -275,12 +275,11 @@ impl NewAccountBuilder {
 
     pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {
         self.is_account_set = Some(is_account_set);
-        self.eventually_consistent(is_account_set)
+        self
     }
 
-    // dummy fn since its not fully supported yet
-    fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
-        self.is_account_set = Some(eventually_consistent);
+    pub(crate) fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
+        self.eventually_consistent = Some(eventually_consistent);
         self
     }
 }

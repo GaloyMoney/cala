@@ -471,6 +471,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.remove_member_account_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn remove_member_account_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -538,6 +543,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.add_member_set_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn add_member_set_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -618,6 +628,11 @@ impl AccountSetRepo {
         Ok((time.expect("time not set"), ret))
     }
 
+    #[instrument(
+        name = "account_set.remove_member_set_and_return_parents",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn remove_member_set_and_return_parents(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -821,6 +836,98 @@ impl AccountSetRepo {
                 .push(row.set_id);
         }
         Ok(mappings)
+    }
+
+    pub async fn list_eventually_consistent_ids(
+        &self,
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        self.list_eventually_consistent_ids_in_op(&self.pool, args)
+            .await
+    }
+
+    // Uses raw `sqlx::query!` (rather than `es_query!`) because it only needs
+    // account-set ids — not fully hydrated `AccountSet` entities — which keeps
+    // periodic reconciliation jobs cheap as the number of EC account sets grows.
+    #[instrument(
+        name = "account_set.list_eventually_consistent_ids_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub async fn list_eventually_consistent_ids_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        args: es_entity::PaginatedQueryArgs<AccountSetByIdCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSetId, AccountSetByIdCursor>, AccountSetError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+            SELECT s.id AS "id!: AccountSetId"
+            FROM cala_account_sets s
+            JOIN cala_accounts a ON s.id = a.id
+            WHERE a.eventually_consistent = TRUE
+              AND ($2::uuid IS NULL OR s.id > $2)
+            ORDER BY s.id ASC
+            LIMIT $1
+            "#,
+                (first + 1) as i64,
+                after.map(|c| uuid::Uuid::from(c.id)),
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities: Vec<AccountSetId> = rows.into_iter().take(first).map(|r| r.id).collect();
+        let end_cursor = entities.last().map(|id| AccountSetByIdCursor { id: *id });
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    /// Walk the descendant account sets of `account_set_ids` transitively
+    /// and return the ones whose underlying account is
+    /// `eventually_consistent = TRUE`. Non-EC descendants are filtered
+    /// out at the SQL level so callers (the recalc deep walk) don't try
+    /// to recalc them.
+    #[instrument(
+        name = "account_set.find_all_ec_descendant_set_ids",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub async fn find_all_ec_descendant_set_ids(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+    ) -> Result<Vec<AccountSetId>, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE descendants AS (
+                SELECT member_account_set_id AS id
+                FROM cala_account_set_member_account_sets
+                WHERE account_set_id = ANY($1)
+                UNION
+                SELECT m.member_account_set_id
+                FROM cala_account_set_member_account_sets m
+                JOIN descendants d ON d.id = m.account_set_id
+            )
+            SELECT d.id AS "id!: AccountSetId"
+            FROM descendants d
+            JOIN cala_accounts a ON a.id = d.id
+            WHERE a.eventually_consistent = TRUE
+            "#,
+            account_set_ids as &[AccountSetId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        Ok(rows.into_iter().map(|r| r.id).collect())
     }
 
     async fn publish(

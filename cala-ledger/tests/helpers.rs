@@ -4,9 +4,17 @@ use rand::distr::{Alphanumeric, SampleString};
 use cala_ledger::{account::*, account_set::NewAccountSet, journal::*, tx_template::*};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
+    init_pool_with(sqlx::postgres::PgPoolOptions::new()).await
+}
+
+/// Same as `init_pool`, but lets the caller pre-configure the pool (max
+/// connections, acquire timeout, etc.) for tests that need more headroom.
+pub async fn init_pool_with(
+    options: sqlx::postgres::PgPoolOptions,
+) -> anyhow::Result<sqlx::PgPool> {
     let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
     let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
-    let pool = sqlx::PgPool::connect(&pg_con).await?;
+    let pool = options.connect(&pg_con).await?;
     use job::IncludeMigrations;
     sqlx::migrate!().include_job_migrations().run(&pool).await?;
     Ok(pool)

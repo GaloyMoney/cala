@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                CASE WHEN v.account_id = $2 THEN\n                    pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))\n                ELSE\n                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))\n                END\n            FROM UNNEST($3::uuid[]) AS v(account_id)\n            ORDER BY v.account_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock_shared",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cb8c198d7fd34e8d97724a3f90777816fa72dcb5e9215c3c30bed5a826d75d8f"
+}

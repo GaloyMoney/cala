@@ -71,8 +71,7 @@ impl CalaLedger {
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, &clock);
-        let account_sets =
-            AccountSets::new(&pool, &publisher, &accounts, &entries, &balances, &clock);
+        let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
         Ok(Self {
             accounts,
             account_sets,

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pg_advisory_xact_lock($1::int4, hashtext(account_id::text))\n            FROM UNNEST($2::uuid[]) AS v(account_id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "1dbaf26c4f348aa16fddddf3a6010929beb384f1d9cab6eb6620a13fe7745690"
+}
