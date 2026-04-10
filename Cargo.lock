@@ -950,7 +950,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 [[package]]
 name = "es-entity"
 version = "0.10.34"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#240bde9c1e3760f795362442114aca5721bd9059"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#529e72a8a5893f59e7ef27f981b094c0fb688cf3"
 dependencies = [
  "async-graphql",
  "base64",
@@ -976,7 +976,7 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.10.34"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#240bde9c1e3760f795362442114aca5721bd9059"
+source = "git+https://github.com/GaloyMoney/es-entity?branch=feat%2Fcount-for-filters-v2#529e72a8a5893f59e7ef27f981b094c0fb688cf3"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
