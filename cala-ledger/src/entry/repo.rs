@@ -59,7 +59,14 @@ impl EntryRepo {
 
         let executor = &self.pool;
 
-        let (entities, has_next_page) = match direction {
+        let eventually_consistent: bool =
+            sqlx::query_scalar("SELECT eventually_consistent FROM cala_accounts WHERE id = $1")
+                .bind(account_set_id as AccountSetId)
+                .fetch_one(&self.pool)
+                .await?;
+
+        let (entities, has_next_page) = if eventually_consistent {
+            match direction {
                     es_entity::ListDirection::Ascending => {
                         es_entity::es_query!(
                             entity = Entry,
@@ -106,7 +113,49 @@ impl EntryRepo {
                             .fetch_n(executor, first)
                             .await?
                     },
-                };
+                }
+        } else {
+            match direction {
+                    es_entity::ListDirection::Ascending => {
+                        es_entity::es_query!(
+                            entity = Entry,
+                            r#"
+                            SELECT created_at, id
+                            FROM cala_entries
+                            JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
+                            WHERE cala_balance_history.account_id = $4
+                              AND (COALESCE((created_at, id) > ($3, $2), $2 IS NULL))
+                            ORDER BY created_at ASC, id ASC
+                            LIMIT $1"#,
+                            (first + 1) as i64,
+                            id as Option<EntryId>,
+                            created_at as Option<chrono::DateTime<chrono::Utc>>,
+                            account_set_id as AccountSetId,
+                        )
+                            .fetch_n(executor, first)
+                            .await?
+                    },
+                    es_entity::ListDirection::Descending => {
+                        es_entity::es_query!(
+                            entity = Entry,
+                            r#"
+                            SELECT created_at, id
+                            FROM cala_entries
+                            JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
+                            WHERE cala_balance_history.account_id = $4
+                              AND (COALESCE((created_at, id) < ($3, $2), $2 IS NULL))
+                            ORDER BY created_at DESC, id DESC
+                            LIMIT $1"#,
+                            (first + 1) as i64,
+                            id as Option<EntryId>,
+                            created_at as Option<chrono::DateTime<chrono::Utc>>,
+                            account_set_id as AccountSetId,
+                        )
+                            .fetch_n(executor, first)
+                            .await?
+                    },
+                }
+        };
 
         let end_cursor = entities
             .last()

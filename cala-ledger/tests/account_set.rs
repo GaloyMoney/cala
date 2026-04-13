@@ -1529,7 +1529,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
         !ret.entities.is_empty(),
         "EC account set entry listing should return entries"
     );
-    let first_tx_entries = ret.entities.clone();
+    let first_tx_entry_count = ret.entities.len();
 
     // Post second transaction
     let mut params2 = Params::new();
@@ -1542,7 +1542,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
 
     // Paginated query: first page with limit 1
     let page1_args = es_entity::PaginatedQueryArgs {
-        first: first_tx_entries.len(),
+        first: first_tx_entry_count,
         after: None,
     };
     let page1 = cala
