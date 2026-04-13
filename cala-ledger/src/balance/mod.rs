@@ -60,7 +60,7 @@ impl Balances {
     pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, journals: &Journals) -> Self {
         Self {
             repo: BalanceRepo::new(pool, publisher),
-            effective: EffectiveBalances::new(pool),
+            effective: EffectiveBalances::new(pool, publisher),
             journals: journals.clone(),
             _pool: pool.clone(),
         }

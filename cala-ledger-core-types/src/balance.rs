@@ -1,4 +1,4 @@
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -51,4 +51,20 @@ impl BalanceAmount {
             modified_at,
         }
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct EffectiveBalanceSnapshot {
+    pub journal_id: JournalId,
+    pub account_id: AccountId,
+    pub currency: Currency,
+    pub effective: NaiveDate,
+    pub version: u32,
+    pub all_time_version: u32,
+    pub created_at: DateTime<Utc>,
+    pub modified_at: DateTime<Utc>,
+    pub entry_id: EntryId,
+    pub settled: BalanceAmount,
+    pub pending: BalanceAmount,
+    pub encumbrance: BalanceAmount,
 }
