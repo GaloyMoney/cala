@@ -67,10 +67,10 @@ impl EntryRepo {
 
         let (entities, has_next_page) = if eventually_consistent {
             match direction {
-                    es_entity::ListDirection::Ascending => {
-                        es_entity::es_query!(
-                            entity = Entry,
-                            r#"
+                es_entity::ListDirection::Ascending => {
+                    es_entity::es_query!(
+                        entity = Entry,
+                        r#"
                             SELECT e.created_at, e.id
                             FROM cala_entries e
                             JOIN cala_account_set_member_accounts m
@@ -82,18 +82,18 @@ impl EntryRepo {
                               AND (COALESCE((e.created_at, e.id) > ($3, $2), $2 IS NULL))
                             ORDER BY e.created_at ASC, e.id ASC
                             LIMIT $1"#,
-                            (first + 1) as i64,
-                            id as Option<EntryId>,
-                            created_at as Option<chrono::DateTime<chrono::Utc>>,
-                            account_set_id as AccountSetId,
-                        )
-                            .fetch_n(executor, first)
-                            .await?
-                    },
-                    es_entity::ListDirection::Descending => {
-                        es_entity::es_query!(
-                            entity = Entry,
-                            r#"
+                        (first + 1) as i64,
+                        id as Option<EntryId>,
+                        created_at as Option<chrono::DateTime<chrono::Utc>>,
+                        account_set_id as AccountSetId,
+                    )
+                    .fetch_n(executor, first)
+                    .await?
+                }
+                es_entity::ListDirection::Descending => {
+                    es_entity::es_query!(
+                        entity = Entry,
+                        r#"
                             SELECT e.created_at, e.id
                             FROM cala_entries e
                             JOIN cala_account_set_member_accounts m
@@ -105,15 +105,15 @@ impl EntryRepo {
                               AND (COALESCE((e.created_at, e.id) < ($3, $2), $2 IS NULL))
                             ORDER BY e.created_at DESC, e.id DESC
                             LIMIT $1"#,
-                            (first + 1) as i64,
-                            id as Option<EntryId>,
-                            created_at as Option<chrono::DateTime<chrono::Utc>>,
-                            account_set_id as AccountSetId,
-                        )
-                            .fetch_n(executor, first)
-                            .await?
-                    },
+                        (first + 1) as i64,
+                        id as Option<EntryId>,
+                        created_at as Option<chrono::DateTime<chrono::Utc>>,
+                        account_set_id as AccountSetId,
+                    )
+                    .fetch_n(executor, first)
+                    .await?
                 }
+            }
         } else {
             match direction {
                     es_entity::ListDirection::Ascending => {

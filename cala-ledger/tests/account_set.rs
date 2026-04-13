@@ -1519,11 +1519,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
     };
     let ret = cala
         .entries()
-        .list_for_account_set_id(
-            ec_set.id(),
-            query_args,
-            es_entity::ListDirection::Ascending,
-        )
+        .list_for_account_set_id(ec_set.id(), query_args, es_entity::ListDirection::Ascending)
         .await?;
     assert!(
         !ret.entities.is_empty(),
@@ -1547,11 +1543,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
     };
     let page1 = cala
         .entries()
-        .list_for_account_set_id(
-            ec_set.id(),
-            page1_args,
-            es_entity::ListDirection::Ascending,
-        )
+        .list_for_account_set_id(ec_set.id(), page1_args, es_entity::ListDirection::Ascending)
         .await?;
     assert!(page1.has_next_page, "should have a second page");
     assert!(page1.end_cursor.is_some(), "should have an end cursor");
@@ -1563,11 +1555,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
     };
     let page2 = cala
         .entries()
-        .list_for_account_set_id(
-            ec_set.id(),
-            page2_args,
-            es_entity::ListDirection::Ascending,
-        )
+        .list_for_account_set_id(ec_set.id(), page2_args, es_entity::ListDirection::Ascending)
         .await?;
     assert!(
         !page2.entities.is_empty(),
@@ -1581,11 +1569,7 @@ async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
     };
     let desc_ret = cala
         .entries()
-        .list_for_account_set_id(
-            ec_set.id(),
-            desc_args,
-            es_entity::ListDirection::Descending,
-        )
+        .list_for_account_set_id(ec_set.id(), desc_args, es_entity::ListDirection::Descending)
         .await?;
     assert!(
         !desc_ret.entities.is_empty(),
