@@ -59,11 +59,13 @@ impl EntryRepo {
 
         let executor = &self.pool;
 
-        let eventually_consistent: bool =
-            sqlx::query_scalar("SELECT eventually_consistent FROM cala_accounts WHERE id = $1")
-                .bind(account_set_id as AccountSetId)
-                .fetch_one(&self.pool)
-                .await?;
+        let row = sqlx::query_as::<_, (bool, JournalId)>(
+            "SELECT a.eventually_consistent, s.journal_id FROM cala_accounts a JOIN cala_account_sets s ON s.id = a.id WHERE a.id = $1",
+        )
+        .bind(account_set_id as AccountSetId)
+        .fetch_one(&self.pool)
+        .await?;
+        let (eventually_consistent, journal_id) = row;
 
         let (entities, has_next_page) = if eventually_consistent {
             match direction {
@@ -79,6 +81,7 @@ impl EntryRepo {
                               ON s.id = m.member_account_id
                             WHERE m.account_set_id = $4
                               AND s.id IS NULL
+                              AND e.journal_id = $5
                               AND (COALESCE((e.created_at, e.id) > ($3, $2), $2 IS NULL))
                             ORDER BY e.created_at ASC, e.id ASC
                             LIMIT $1"#,
@@ -86,6 +89,7 @@ impl EntryRepo {
                         id as Option<EntryId>,
                         created_at as Option<chrono::DateTime<chrono::Utc>>,
                         account_set_id as AccountSetId,
+                        journal_id as JournalId,
                     )
                     .fetch_n(executor, first)
                     .await?
@@ -102,6 +106,7 @@ impl EntryRepo {
                               ON s.id = m.member_account_id
                             WHERE m.account_set_id = $4
                               AND s.id IS NULL
+                              AND e.journal_id = $5
                               AND (COALESCE((e.created_at, e.id) < ($3, $2), $2 IS NULL))
                             ORDER BY e.created_at DESC, e.id DESC
                             LIMIT $1"#,
@@ -109,6 +114,7 @@ impl EntryRepo {
                         id as Option<EntryId>,
                         created_at as Option<chrono::DateTime<chrono::Utc>>,
                         account_set_id as AccountSetId,
+                        journal_id as JournalId,
                     )
                     .fetch_n(executor, first)
                     .await?
