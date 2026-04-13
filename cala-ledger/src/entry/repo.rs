@@ -59,15 +59,18 @@ impl EntryRepo {
 
         let executor = &self.pool;
 
-        let row = sqlx::query_as::<_, (bool, JournalId)>(
-            "SELECT a.eventually_consistent, s.journal_id FROM cala_accounts a JOIN cala_account_sets s ON s.id = a.id WHERE a.id = $1",
-        )
-        .bind(account_set_id as AccountSetId)
-        .fetch_one(&self.pool)
-        .await?;
-        let (eventually_consistent, journal_id) = row;
+        let eventually_consistent: bool =
+            sqlx::query_scalar("SELECT eventually_consistent FROM cala_accounts WHERE id = $1")
+                .bind(account_set_id as AccountSetId)
+                .fetch_one(&self.pool)
+                .await?;
 
         let (entities, has_next_page) = if eventually_consistent {
+            let journal_id: JournalId =
+                sqlx::query_scalar("SELECT journal_id FROM cala_account_sets WHERE id = $1")
+                    .bind(account_set_id as AccountSetId)
+                    .fetch_one(&self.pool)
+                    .await?;
             match direction {
                 es_entity::ListDirection::Ascending => {
                     es_entity::es_query!(
