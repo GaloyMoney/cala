@@ -64,12 +64,16 @@ impl EntryRepo {
                         es_entity::es_query!(
                             entity = Entry,
                             r#"
-                            SELECT created_at, id
-                            FROM cala_entries
-                            JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
-                            WHERE cala_balance_history.account_id = $4
-                              AND (COALESCE((created_at, id) > ($3, $2), $2 IS NULL))
-                            ORDER BY created_at ASC, id ASC
+                            SELECT DISTINCT e.created_at, e.id
+                            FROM cala_entries e
+                            JOIN cala_account_set_member_accounts m
+                              ON m.member_account_id = e.account_id
+                            LEFT JOIN cala_account_sets s
+                              ON s.id = m.member_account_id
+                            WHERE m.account_set_id = $4
+                              AND s.id IS NULL
+                              AND (COALESCE((e.created_at, e.id) > ($3, $2), $2 IS NULL))
+                            ORDER BY e.created_at ASC, e.id ASC
                             LIMIT $1"#,
                             (first + 1) as i64,
                             id as Option<EntryId>,
@@ -83,12 +87,16 @@ impl EntryRepo {
                         es_entity::es_query!(
                             entity = Entry,
                             r#"
-                            SELECT created_at, id
-                            FROM cala_entries
-                            JOIN cala_balance_history ON cala_entries.id = cala_balance_history.latest_entry_id
-                            WHERE cala_balance_history.account_id = $4
-                              AND (COALESCE((created_at, id) < ($3, $2), $2 IS NULL))
-                            ORDER BY created_at DESC, id DESC
+                            SELECT DISTINCT e.created_at, e.id
+                            FROM cala_entries e
+                            JOIN cala_account_set_member_accounts m
+                              ON m.member_account_id = e.account_id
+                            LEFT JOIN cala_account_sets s
+                              ON s.id = m.member_account_id
+                            WHERE m.account_set_id = $4
+                              AND s.id IS NULL
+                              AND (COALESCE((e.created_at, e.id) < ($3, $2), $2 IS NULL))
+                            ORDER BY e.created_at DESC, e.id DESC
                             LIMIT $1"#,
                             (first + 1) as i64,
                             id as Option<EntryId>,

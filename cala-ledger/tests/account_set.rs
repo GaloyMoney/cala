@@ -1461,3 +1461,146 @@ async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<
 
     Ok(())
 }
+
+#[tokio::test]
+async fn ec_account_set_entry_listing() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(receiver).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+
+    // Create an eventually_consistent account set
+    let ec_set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("EC Entry Listing Set")
+        .journal_id(journal.id())
+        .eventually_consistent(true)
+        .build()
+        .unwrap();
+    let ec_set = cala.account_sets().create(ec_set).await.unwrap();
+
+    // Add recipient as a member
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_account.id())
+        .await
+        .unwrap();
+
+    // Post first transaction
+    let mut params1 = Params::new();
+    params1.insert("journal_id", journal.id().to_string());
+    params1.insert("sender", sender_account.id());
+    params1.insert("recipient", recipient_account.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params1)
+        .await
+        .unwrap();
+
+    // Query entries for the EC set — should be non-empty
+    let query_args = es_entity::PaginatedQueryArgs {
+        first: 10,
+        after: None,
+    };
+    let ret = cala
+        .entries()
+        .list_for_account_set_id(
+            ec_set.id(),
+            query_args,
+            es_entity::ListDirection::Ascending,
+        )
+        .await?;
+    assert!(
+        !ret.entities.is_empty(),
+        "EC account set entry listing should return entries"
+    );
+    let first_tx_entries = ret.entities.clone();
+
+    // Post second transaction
+    let mut params2 = Params::new();
+    params2.insert("journal_id", journal.id().to_string());
+    params2.insert("sender", sender_account.id());
+    params2.insert("recipient", recipient_account.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params2)
+        .await
+        .unwrap();
+
+    // Paginated query: first page with limit 1
+    let page1_args = es_entity::PaginatedQueryArgs {
+        first: first_tx_entries.len(),
+        after: None,
+    };
+    let page1 = cala
+        .entries()
+        .list_for_account_set_id(
+            ec_set.id(),
+            page1_args,
+            es_entity::ListDirection::Ascending,
+        )
+        .await?;
+    assert!(page1.has_next_page, "should have a second page");
+    assert!(page1.end_cursor.is_some(), "should have an end cursor");
+
+    // Second page using cursor
+    let page2_args = es_entity::PaginatedQueryArgs {
+        first: 10,
+        after: page1.end_cursor,
+    };
+    let page2 = cala
+        .entries()
+        .list_for_account_set_id(
+            ec_set.id(),
+            page2_args,
+            es_entity::ListDirection::Ascending,
+        )
+        .await?;
+    assert!(
+        !page2.entities.is_empty(),
+        "second page should have entries"
+    );
+
+    // Descending order should return entries in reverse
+    let desc_args = es_entity::PaginatedQueryArgs {
+        first: 20,
+        after: None,
+    };
+    let desc_ret = cala
+        .entries()
+        .list_for_account_set_id(
+            ec_set.id(),
+            desc_args,
+            es_entity::ListDirection::Descending,
+        )
+        .await?;
+    assert!(
+        !desc_ret.entities.is_empty(),
+        "descending listing should return entries"
+    );
+
+    // Verify descending order: first entry should have created_at >= last entry
+    if desc_ret.entities.len() > 1 {
+        let first = &desc_ret.entities[0];
+        let last = &desc_ret.entities[desc_ret.entities.len() - 1];
+        assert!(
+            first.created_at() >= last.created_at(),
+            "descending order should have newest first"
+        );
+    }
+
+    Ok(())
+}
