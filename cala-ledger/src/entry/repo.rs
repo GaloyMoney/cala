@@ -71,7 +71,7 @@ impl EntryRepo {
                         es_entity::es_query!(
                             entity = Entry,
                             r#"
-                            SELECT DISTINCT e.created_at, e.id
+                            SELECT e.created_at, e.id
                             FROM cala_entries e
                             JOIN cala_account_set_member_accounts m
                               ON m.member_account_id = e.account_id
@@ -94,7 +94,7 @@ impl EntryRepo {
                         es_entity::es_query!(
                             entity = Entry,
                             r#"
-                            SELECT DISTINCT e.created_at, e.id
+                            SELECT e.created_at, e.id
                             FROM cala_entries e
                             JOIN cala_account_set_member_accounts m
                               ON m.member_account_id = e.account_id
