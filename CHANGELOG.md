@@ -1,3 +1,15 @@
+# [cala release v0.15.1](https://github.com/GaloyMoney/cala/releases/tag/0.15.1)
+
+
+
+### Features
+
+- Publish effective balance events to outbox (#704)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group with 2 updates (#703)
+
 # [cala release v0.15.0](https://github.com/GaloyMoney/cala/releases/tag/0.15.0)
 
 
