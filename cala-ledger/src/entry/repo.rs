@@ -59,11 +59,19 @@ impl EntryRepo {
 
         let executor = &self.pool;
 
-        let eventually_consistent: bool =
+        let eventually_consistent: Option<bool> =
             sqlx::query_scalar("SELECT eventually_consistent FROM cala_accounts WHERE id = $1")
                 .bind(account_set_id as AccountSetId)
-                .fetch_one(&self.pool)
+                .fetch_optional(&self.pool)
                 .await?;
+
+        let Some(eventually_consistent) = eventually_consistent else {
+            return Ok(es_entity::PaginatedQueryRet {
+                entities: vec![],
+                has_next_page: false,
+                end_cursor: None,
+            });
+        };
 
         let (entities, has_next_page) = if eventually_consistent {
             let journal_id: JournalId =
