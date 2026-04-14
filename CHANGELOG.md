@@ -1,3 +1,12 @@
+# [cala release v0.15.2](https://github.com/GaloyMoney/cala/releases/tag/0.15.2)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job 0.6.18, obix 0.2.21 (#708)
+- Bump rand from 0.10.0 to 0.10.1 (#707)
+
 # [cala release v0.15.1](https://github.com/GaloyMoney/cala/releases/tag/0.15.1)
 
 
