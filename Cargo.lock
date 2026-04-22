@@ -949,9 +949,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.33"
+version = "0.10.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "453a8768e97e3363d74a307e466a1a437765088bad5b5a49bdba3f72c64ae854"
+checksum = "5ca19d4f588d8ef9c5edd15949e4d3016ad088be74cabdc150a55798557c612d"
 dependencies = [
  "async-graphql",
  "base64",
@@ -976,9 +976,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.33"
+version = "0.10.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31b7f9832d1cb8219f8df5a5d5f24b19b8df68985d3f32667e4d9bbfe9f29a33"
+checksum = "ae40a2cf617a4e1a4d41c1c6ffb07b317908176692b33235a4593588f3fcac61"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1637,9 +1637,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.18"
+version = "0.6.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28f0117de3cc478e2f23e69a0becfc58b010e814fe446d7a75b28f86c53b18b9"
+checksum = "318fa357d6fe3d9820642caa57e940dd8e31ccd8f82b248aeed059e4dcc1cd4b"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1914,9 +1914,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.21"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16915fdb44aaa971683402192a3a489490f62976269df6280f7a0e7f1d1a2e83"
+checksum = "9a648626fe5b5ea81b57cfc609304f20dbc1dc521bd34eb6e13cca7d2fc78df4"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1932,13 +1932,14 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
 name = "obix-macros"
-version = "0.2.21"
+version = "0.2.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dbb868cb9eda87c282b664953e5faad9d5852350d154868121ba01c528db7921"
+checksum = "4967967f98d84dccfed3a60735e11eca0e8b8e7c7559b84390184b581dc47d05"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -3444,9 +3445,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.51.1"
+version = "1.52.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f66bf9585cda4b724d3e78ab34b73fb2bbaba9011b9bfdf69dc836382ea13b8c"
+checksum = "b67dee974fe86fd92cc45b7a95fdd2f99a36a6d7b0d431a231178d3d670bbcc6"
 dependencies = [
  "bytes",
  "libc",
