@@ -77,7 +77,7 @@ impl TxTemplates {
         Ok(self.repo.list_by_code(cursor, direction).await?)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err)]
+    #[instrument(name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err(level = tracing::Level::WARN))]
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
         Ok(self.repo.find_by_code(code.as_ref().to_string()).await?)
     }

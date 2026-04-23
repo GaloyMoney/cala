@@ -232,13 +232,13 @@ impl NewBalanceLimitBuilder {
     }
 }
 
-#[instrument(name = "velocity_limit.validate_expression", skip(expr), fields(expression = %expr), err)]
+#[instrument(name = "velocity_limit.validate_expression", skip(expr), fields(expression = %expr), err(level = tracing::Level::WARN))]
 fn validate_expression(expr: &str) -> Result<(), String> {
     CelExpression::try_from(expr).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[instrument(name = "velocity_limit.validate_optional_expression", skip(expr), err)]
+#[instrument(name = "velocity_limit.validate_optional_expression", skip(expr), err(level = tracing::Level::WARN))]
 fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
     if let Some(Some(expr)) = expr.as_ref() {
         CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;

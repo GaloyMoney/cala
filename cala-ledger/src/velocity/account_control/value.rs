@@ -45,7 +45,7 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
-    #[instrument(name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id), err)]
+    #[instrument(name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id), err(level = tracing::Level::WARN))]
     pub fn window_for_enforcement(
         &self,
         ctx: &CelContext,
@@ -73,7 +73,7 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
-    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err)]
+    #[instrument(name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err(level = tracing::Level::WARN))]
     pub fn enforce(
         &self,
         ctx: &CelContext,

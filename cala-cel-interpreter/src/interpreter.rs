@@ -29,7 +29,7 @@ impl CelExpression {
         })?)
     }
 
-    #[instrument(name = "cel.evaluate", skip_all, fields(expression = %self.source, context = tracing::field::Empty, result = tracing::field::Empty), err)]
+    #[instrument(name = "cel.evaluate", skip_all, fields(expression = %self.source, context = tracing::field::Empty, result = tracing::field::Empty), err(level = tracing::Level::WARN))]
     pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelError> {
         // Record context with actual values for debugging
         let context_debug = ctx.debug_context();
@@ -102,7 +102,7 @@ impl EvalType<'_> {
     }
 }
 
-#[instrument(name = "cel.evaluate_expression", skip_all, level = "debug", err)]
+#[instrument(name = "cel.evaluate_expression", skip_all, level = "debug", err(level = tracing::Level::WARN))]
 fn evaluate_expression<'a>(
     expr: &Expression,
     ctx: &'a CelContext,
@@ -113,7 +113,7 @@ fn evaluate_expression<'a>(
     }
 }
 
-#[instrument(name = "cel.evaluate_expr", skip_all, level = "debug", err)]
+#[instrument(name = "cel.evaluate_expr", skip_all, level = "debug", err(level = tracing::Level::WARN))]
 fn evaluate_expression_inner<'a>(
     expr: &Expression,
     ctx: &'a CelContext,
@@ -217,7 +217,7 @@ fn evaluate_expression_inner<'a>(
     }
 }
 
-#[instrument(name = "cel.evaluate_member", skip_all, level = "debug", err)]
+#[instrument(name = "cel.evaluate_member", skip_all, level = "debug", err(level = tracing::Level::WARN))]
 fn evaluate_member<'a>(
     target: EvalType<'a>,
     member: &ast::Member,
@@ -264,7 +264,7 @@ fn evaluate_member<'a>(
     }
 }
 
-#[instrument(name = "cel.evaluate_arithmetic", skip_all, level = "debug", err)]
+#[instrument(name = "cel.evaluate_arithmetic", skip_all, level = "debug", err(level = tracing::Level::WARN))]
 fn evaluate_arithmetic(
     op: ArithmeticOp,
     left: CelValue,
@@ -309,7 +309,7 @@ fn evaluate_arithmetic(
     }
 }
 
-#[instrument(name = "cel.evaluate_relation", skip_all, level = "debug", err)]
+#[instrument(name = "cel.evaluate_relation", skip_all, level = "debug", err(level = tracing::Level::WARN))]
 fn evaluate_relation(
     op: RelationOp,
     left: CelValue,

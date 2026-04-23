@@ -154,7 +154,7 @@ impl NewTxTemplateEntry {
     }
 }
 impl NewTxTemplateEntryBuilder {
-    #[instrument(name = "tx_template_entry.validate", skip(self), err)]
+    #[instrument(name = "tx_template_entry.validate", skip(self), err(level = tracing::Level::WARN))]
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.entry_type
@@ -237,7 +237,7 @@ impl NewTxTemplateTransaction {
 }
 
 impl NewTxTemplateTransactionBuilder {
-    #[instrument(name = "tx_template_transaction.validate", skip(self), err)]
+    #[instrument(name = "tx_template_transaction.validate", skip(self), err(level = tracing::Level::WARN))]
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.effective
@@ -282,13 +282,13 @@ impl From<NewTxTemplateTransaction> for cala_types::tx_template::TxTemplateTrans
     }
 }
 
-#[instrument(name = "tx_template.validate_expression", skip(expr), fields(expression = %expr), err)]
+#[instrument(name = "tx_template.validate_expression", skip(expr), fields(expression = %expr), err(level = tracing::Level::WARN))]
 fn validate_expression(expr: &str) -> Result<(), String> {
     CelExpression::try_from(expr).map_err(|e| e.to_string())?;
     Ok(())
 }
 
-#[instrument(name = "tx_template.validate_optional_expression", skip(expr), err)]
+#[instrument(name = "tx_template.validate_optional_expression", skip(expr), err(level = tracing::Level::WARN))]
 fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
     if let Some(Some(expr)) = expr.as_ref() {
         CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
