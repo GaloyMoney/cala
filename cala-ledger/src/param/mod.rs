@@ -26,7 +26,7 @@ impl Params {
         self.values.insert(k.into(), v.into());
     }
 
-    #[instrument(name = "params.into_context", skip(self, clock, defs), fields(params_count = self.values.len()), err)]
+    #[instrument(name = "params.into_context", skip(self, clock, defs), fields(params_count = self.values.len()), err(level = tracing::Level::WARN))]
     pub(crate) fn into_context(
         mut self,
         clock: &ClockHandle,

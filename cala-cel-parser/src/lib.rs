@@ -34,7 +34,7 @@ impl std::error::Error for ParseErrors {}
 /// LALRPOP-generated parser internally. Parsing results are cached
 /// to avoid re-parsing the same expression multiple times.
 #[cached(size = 10000)]
-#[instrument(name = "cel.parse", skip(source), fields(expression = %source), err)]
+#[instrument(name = "cel.parse", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
 pub fn parse_expression(source: String) -> Result<Expression, String> {
     parser::ExpressionParser::new()
         .parse(&source)
