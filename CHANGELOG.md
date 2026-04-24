@@ -1,3 +1,16 @@
+# [cala release v0.15.4](https://github.com/GaloyMoney/cala/releases/tag/0.15.4)
+
+
+
+### Bug Fixes
+
+- Downgrade library err instrumentation from ERROR to WARN (#712)
+
+### Miscellaneous Tasks
+
+- Bump uuid in the all-dependencies group (#711)
+- Bump rustls-webpki from 0.103.10 to 0.103.13 (#710)
+
 # [cala release v0.15.3](https://github.com/GaloyMoney/cala/releases/tag/0.15.3)
 
 
