@@ -1,0 +1,51 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entities AS (SELECT created_at, id FROM jobs WHERE (NOT $1 OR parent_job_id IS NOT DISTINCT FROM $2) AND (COALESCE((created_at, id) > ($5, $4), $4 IS NULL)) ORDER BY created_at ASC, id ASC LIMIT $3) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $6 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.created_at asc, i.id asc, i.id, e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id: Repo__Id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "context: es_entity::ContextData",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Int8",
+        "Uuid",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "45ab37aaf850388208241c52947f927653550a0093a56f189f0ca2f524e0e7e2"
+}

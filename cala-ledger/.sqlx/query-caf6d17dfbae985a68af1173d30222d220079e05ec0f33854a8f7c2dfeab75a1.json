@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT\n                            job_type,\n                            COUNT(*)::INT4 AS \"count!: i32\",\n                            EXTRACT(EPOCH FROM ($1::timestamptz - MIN(execute_at)))::FLOAT8\n                                AS \"max_pending_duration_secs!: f64\"\n                        FROM job_executions\n                        WHERE state = 'pending'\n                        AND execute_at <= $1::timestamptz\n                        AND job_type = ANY($2)\n                        GROUP BY job_type\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "count!: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_pending_duration_secs!: f64",
+        "type_info": "Float8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "caf6d17dfbae985a68af1173d30222d220079e05ec0f33854a8f7c2dfeab75a1"
+}

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT id FROM cala_transactions WHERE external_id = $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN cala_transaction_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM jobs WHERE (NOT $1 OR parent_job_id IS NOT DISTINCT FROM $2) AND (COALESCE(id > $4, true)) ORDER BY id ASC LIMIT $3) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $5 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id asc, i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -31,7 +31,10 @@
     ],
     "parameters": {
       "Left": [
-        "Text",
+        "Bool",
+        "Uuid",
+        "Int8",
+        "Uuid",
         "Bool"
       ]
     },
@@ -43,5 +46,5 @@
       false
     ]
   },
-  "hash": "1a89af7f191c350a04fb38d19ce9c1fdd5c2147babd34bd150ce20095d921e8a"
+  "hash": "6c430bf212e5798b04acd38dc841d6a33a829dbacb73d8608572f365d246f08a"
 }
