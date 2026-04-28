@@ -19,8 +19,8 @@ cala-tracing = { path = "cala-tracing", version = "0.15.5-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.15.5-dev" }
 
 es-entity = "0.10.34"
-job = { version = "0.6.19", features = ["es-entity"] }
-obix = { version = "0.2.25", default-features = false }
+job = { version = "0.6.22", features = ["es-entity"] }
+obix = { version = "0.2.26", default-features = false }
 
 anyhow = "1.0.99"
 async-graphql = { version = "8.0.0-rc.4", default-features = false, features = ["dataloader", "tracing", "chrono", "tokio"] }
