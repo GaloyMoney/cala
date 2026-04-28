@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE job_executions\n                        SET state = 'pending', execute_at = $1, attempt_index = attempt_index + 1, poller_instance_id = NULL\n                        WHERE state = 'running' AND alive_at < $1::timestamptz\n                        AND job_type = ANY($2)\n                        AND poller_instance_id IS DISTINCT FROM $3\n                        RETURNING id as id\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8dfaa15816547fecb125c30444481590b22abd0ed2199ecf0a099991850db17a"
+}
