@@ -188,13 +188,7 @@ impl Velocities {
             .collect();
 
         self.account_controls
-            .attach_control_in_op(
-                db,
-                control.values(),
-                account_id,
-                limits,
-                params,
-            )
+            .attach_control_in_op(db, control.values(), account_id, limits, params)
             .await?;
         Ok(control)
     }

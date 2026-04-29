@@ -1,7 +1,6 @@
 mod repo;
 mod value;
 
-
 use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
