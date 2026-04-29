@@ -88,6 +88,7 @@ async fn create_velocity_control(
                     .layer("SETTLED")
                     .amount("params.transfer_limit")
                     .enforcement_direction("DEBIT")
+                    .start("timestamp('1970-01-01T00:00:00Z')")
                     .build()
                     .unwrap()])
                 .build()

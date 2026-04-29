@@ -46,21 +46,15 @@
           "$ref": "#/$defs/BalanceLimitType"
         },
         "start": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CelExpression"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/$defs/CelExpression"
         }
       },
       "required": [
         "limit_type",
         "layer",
         "amount",
-        "enforcement_direction"
+        "enforcement_direction",
+        "start"
       ]
     },
     "BalanceLimitType": {

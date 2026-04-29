@@ -1,7 +1,7 @@
 mod repo;
 mod value;
 
-use chrono::{DateTime, Utc};
+
 use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -41,7 +41,6 @@ impl AccountControls {
     pub async fn attach_control_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        created_at: DateTime<Utc>,
         control: &VelocityControlValues,
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
@@ -59,11 +58,7 @@ impl AccountControls {
                 let amount: Decimal = limit.amount.try_evaluate(&ctx)?;
                 let enforcement_direction: DebitOrCredit =
                     limit.enforcement_direction.try_evaluate(&ctx)?;
-                let start = if let Some(start) = limit.start {
-                    start.try_evaluate(&ctx)?
-                } else {
-                    created_at
-                };
+                let start = limit.start.try_evaluate(&ctx)?;
                 let end = if let Some(end) = limit.end {
                     Some(end.try_evaluate(&ctx)?)
                 } else {

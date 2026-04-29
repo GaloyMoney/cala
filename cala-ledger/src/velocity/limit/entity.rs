@@ -124,9 +124,8 @@ impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {
                                     input.enforcement_direction,
                                 )
                                 .expect("already validated"),
-                                start: input.start.map(|expr| {
-                                    CelExpression::try_from(expr).expect("already validated")
-                                }),
+                                start: CelExpression::try_from(input.start)
+                                    .expect("already validated"),
                                 end: input.end.map(|expr| {
                                     CelExpression::try_from(expr).expect("already validated")
                                 }),
@@ -199,8 +198,8 @@ pub struct NewBalanceLimit {
     amount: String,
     #[builder(setter(into))]
     enforcement_direction: String,
-    #[builder(setter(into, strip_option), default)]
-    start: Option<String>,
+    #[builder(setter(into))]
+    start: String,
     #[builder(setter(into, strip_option), default)]
     end: Option<String>,
 }
@@ -226,7 +225,11 @@ impl NewBalanceLimitBuilder {
                 .as_ref()
                 .expect("Mandatory field 'enforcement_direction' not set"),
         )?;
-        validate_optional_expression(&self.start)?;
+        validate_expression(
+            self.start
+                .as_ref()
+                .expect("Mandatory field 'start' not set"),
+        )?;
         validate_optional_expression(&self.end)?;
         Ok(())
     }
