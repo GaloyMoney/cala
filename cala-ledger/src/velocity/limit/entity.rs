@@ -209,6 +209,10 @@ impl NewBalanceLimit {
     }
 }
 impl NewBalanceLimitBuilder {
+    pub fn always_active(self) -> Self {
+        self.start("timestamp('1970-01-01T00:00:00Z')")
+    }
+
     fn validate(&self) -> Result<(), String> {
         validate_expression(
             self.layer
