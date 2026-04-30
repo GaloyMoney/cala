@@ -1,3 +1,11 @@
+# [cala release v0.15.6](https://github.com/GaloyMoney/cala/releases/tag/0.15.6)
+
+
+
+### Bug Fixes
+
+- Make balance limit start field mandatory (#714)
+
 # [cala release v0.15.5](https://github.com/GaloyMoney/cala/releases/tag/0.15.5)
 
 
