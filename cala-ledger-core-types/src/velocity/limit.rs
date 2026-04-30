@@ -38,7 +38,7 @@ pub struct BalanceLimit {
     pub layer: CelExpression,
     pub amount: CelExpression,
     pub enforcement_direction: CelExpression,
-    pub start: Option<CelExpression>,
+    pub start: CelExpression,
     pub end: Option<CelExpression>,
 }
 

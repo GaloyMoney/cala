@@ -88,6 +88,7 @@ async fn create_velocity_control(
                     .layer("SETTLED")
                     .amount("params.transfer_limit")
                     .enforcement_direction("DEBIT")
+                    .always_active()
                     .build()
                     .unwrap()])
                 .build()
