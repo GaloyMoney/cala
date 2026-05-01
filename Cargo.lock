@@ -291,7 +291,7 @@ checksum = "ade8366b8bd5ba243f0a58f036cc0ca8a2f069cff1a2351ef1cac6b083e16fc0"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "cached",
  "lalrpop",
@@ -318,7 +318,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "anyhow",
  "cached",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -381,7 +381,7 @@ dependencies = [
 
 [[package]]
 name = "cala-perf"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -399,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "cala-tracing"
-version = "0.15.8-dev"
+version = "0.15.8"
 dependencies = [
  "anyhow",
  "opentelemetry",
