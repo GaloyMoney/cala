@@ -152,7 +152,6 @@ impl TxTemplates {
             journal_id = %journal_id,
             entries_count = tmpl.entries.len()
         ),
-        err
     )]
     fn prep_entries(
         &self,
