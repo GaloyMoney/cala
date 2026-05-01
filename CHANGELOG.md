@@ -1,3 +1,11 @@
+# [cala release v0.15.7](https://github.com/GaloyMoney/cala/releases/tag/0.15.7)
+
+
+
+### Miscellaneous Tasks
+
+- Remove err from instrument on tx_template.prep_entries (#716)
+
 # [cala release v0.15.6](https://github.com/GaloyMoney/cala/releases/tag/0.15.6)
 
 
