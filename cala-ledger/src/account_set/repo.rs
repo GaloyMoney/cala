@@ -35,26 +35,6 @@ pub mod members_cursor {
         }
     }
 
-    #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMemberByCreatedAtCursor {
-        type Error = String;
-
-        fn encode_cursor(&self) -> String {
-            use base64::{engine::general_purpose, Engine as _};
-            let json = serde_json::to_string(&self).expect("could not serialize token");
-            general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-        }
-
-        fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-            use base64::{engine::general_purpose, Engine as _};
-            let bytes = general_purpose::STANDARD_NO_PAD
-                .decode(s.as_bytes())
-                .map_err(|e| e.to_string())?;
-            let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-            serde_json::from_str(&json).map_err(|e| e.to_string())
-        }
-    }
-
     #[derive(Debug, Serialize, Deserialize)]
     pub struct AccountSetMemberByExternalIdCursor {
         pub id: AccountSetMemberId,
@@ -67,26 +47,6 @@ pub mod members_cursor {
                 id: member.id,
                 external_id: member.external_id.clone(),
             }
-        }
-    }
-
-    #[cfg(feature = "graphql")]
-    impl async_graphql::connection::CursorType for AccountSetMemberByExternalIdCursor {
-        type Error = String;
-
-        fn encode_cursor(&self) -> String {
-            use base64::{engine::general_purpose, Engine as _};
-            let json = serde_json::to_string(&self).expect("could not serialize token");
-            general_purpose::STANDARD_NO_PAD.encode(json.as_bytes())
-        }
-
-        fn decode_cursor(s: &str) -> Result<Self, Self::Error> {
-            use base64::{engine::general_purpose, Engine as _};
-            let bytes = general_purpose::STANDARD_NO_PAD
-                .decode(s.as_bytes())
-                .map_err(|e| e.to_string())?;
-            let json = String::from_utf8(bytes).map_err(|e| e.to_string())?;
-            serde_json::from_str(&json).map_err(|e| e.to_string())
         }
     }
 }

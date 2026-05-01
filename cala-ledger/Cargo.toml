@@ -12,7 +12,6 @@ categories = ["finance"]
 [features]
 
 fail-on-warnings = []
-graphql = ["es-entity/graphql", "dep:async-graphql", "dep:base64", "cala-types/graphql"]
 json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
 
 [[bin]]
@@ -27,9 +26,6 @@ cala-tracing = { workspace = true }
 es-entity = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
-
-async-graphql = { workspace = true, optional = true }
-base64 = { workspace = true, optional = true }
 
 cached = { workspace = true }
 chrono = { workspace = true }
