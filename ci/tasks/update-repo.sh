@@ -23,7 +23,6 @@ for file in $(find . -mindepth 2 -name Cargo.toml); do
   sed -i'' "s/^version.*/version = \"${VERSION}\"/" ${file}
 done
 
-sed -i'' "s/cel-parser\", version = .*/cel-parser\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" ./Cargo.toml

@@ -13,7 +13,7 @@ fail-on-warnings = []
 json-schema = ["dep:schemars"]
 
 [dependencies]
-cel-parser = { workspace = true }
+cel = { workspace = true }
 es-entity = { workspace = true }
 
 chrono = { workspace = true }
