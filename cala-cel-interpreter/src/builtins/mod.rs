@@ -1,40 +1,118 @@
-pub(crate) mod decimal;
-pub(crate) mod timestamp;
-
-use chrono::NaiveDate;
-use tracing::instrument;
-
 use std::sync::Arc;
 
-use super::value::*;
-use crate::context::CelContext;
-use crate::error::*;
+use cel::{
+    extractors::{Arguments, This},
+    objects::Value,
+    ExecutionError,
+};
+use chrono::{FixedOffset, NaiveDate, TimeZone, Utc};
+use es_entity::clock::ClockHandle;
 
-#[instrument(name = "cel.builtin.date", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-pub(crate) fn date(ctx: &CelContext, args: Vec<CelValue>) -> Result<CelValue, CelError> {
-    if args.is_empty() {
-        return Ok(CelValue::Date(ctx.clock().now().date_naive()));
-    }
+use crate::value::{CelDecimal, CelUuid};
 
-    let s: Arc<String> = assert_arg(args.first())?;
-    Ok(CelValue::Date(NaiveDate::parse_from_str(&s, "%Y-%m-%d")?))
-}
+type Result<T> = std::result::Result<T, ExecutionError>;
 
-#[instrument(name = "cel.builtin.uuid", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-pub(crate) fn uuid(args: Vec<CelValue>) -> Result<CelValue, CelError> {
-    let s: Arc<String> = assert_arg(args.first())?;
-    Ok(CelValue::Uuid(
-        s.parse()
-            .map_err(|e| CelError::UuidError(format!("{e:?}")))?,
+pub(crate) fn date(clock: ClockHandle, Arguments(args): Arguments) -> Result<Value> {
+    let date = match args.as_slice() {
+        [] => clock.now().date_naive(),
+        [Value::String(s)] => NaiveDate::parse_from_str(s, "%Y-%m-%d")
+            .map_err(|e| ExecutionError::function_error("date", e))?,
+        [Value::Timestamp(ts)] => ts.date_naive(),
+        [v] => {
+            return Err(ExecutionError::function_error(
+                "date",
+                format!("cannot convert {v:?} to date"),
+            ))
+        }
+        values => {
+            return Err(ExecutionError::invalid_argument_count(1, values.len()));
+        }
+    };
+
+    let dt = date.and_hms_opt(0, 0, 0).expect("midnight is valid");
+    Ok(Value::Timestamp(
+        FixedOffset::east_opt(0)
+            .expect("UTC offset is valid")
+            .from_utc_datetime(&dt),
     ))
 }
 
-fn assert_arg<'a, T: TryFrom<&'a CelValue, Error = CelError>>(
-    arg: Option<&'a CelValue>,
-) -> Result<T, CelError> {
-    if let Some(v) = arg {
-        T::try_from(v)
-    } else {
-        Err(CelError::MissingArgument)
+pub(crate) fn uuid(Arguments(args): Arguments) -> Result<Value> {
+    match args.as_slice() {
+        [Value::String(s)] => {
+            let id = s
+                .parse()
+                .map_err(|e| ExecutionError::function_error("uuid", format!("{e:?}")))?;
+            Ok(Value::Opaque(Arc::new(CelUuid(id))))
+        }
+        [v] => Err(ExecutionError::function_error(
+            "uuid",
+            format!("cannot convert {v:?} to uuid"),
+        )),
+        values => Err(ExecutionError::invalid_argument_count(1, values.len())),
+    }
+}
+
+pub(crate) fn decimal(Arguments(args): Arguments) -> Result<Value> {
+    match args.as_slice() {
+        [Value::Opaque(o)] if o.runtime_type_name() == "cala.Decimal" => {
+            Ok(Value::Opaque(o.clone()))
+        }
+        [Value::String(s)] => {
+            let decimal = s
+                .parse()
+                .map_err(|e| ExecutionError::function_error("decimal", format!("{e:?}")))?;
+            Ok(Value::Opaque(Arc::new(CelDecimal(decimal))))
+        }
+        [Value::Int(i)] => Ok(Value::Opaque(Arc::new(CelDecimal((*i).into())))),
+        [Value::UInt(u)] => Ok(Value::Opaque(Arc::new(CelDecimal((*u).into())))),
+        [v] => Err(ExecutionError::function_error(
+            "decimal",
+            format!("cannot convert {v:?} to decimal"),
+        )),
+        values => Err(ExecutionError::invalid_argument_count(1, values.len())),
+    }
+}
+
+pub(crate) fn decimal_add(Arguments(args): Arguments) -> Result<Value> {
+    match args.as_slice() {
+        [left, right] => {
+            let left = decimal_from_value(left)?;
+            let right = decimal_from_value(right)?;
+            Ok(Value::Opaque(Arc::new(CelDecimal(left + right))))
+        }
+        values => Err(ExecutionError::invalid_argument_count(2, values.len())),
+    }
+}
+
+pub(crate) fn timestamp_format(This(this): This<Value>, format: Arc<String>) -> Result<Value> {
+    match this {
+        Value::Timestamp(ts) => Ok(Value::String(
+            ts.with_timezone(&Utc).format(&format).to_string().into(),
+        )),
+        v => Err(ExecutionError::function_error(
+            "format",
+            format!("cannot format {v:?} as timestamp"),
+        )),
+    }
+}
+
+fn decimal_from_value(value: &Value) -> Result<rust_decimal::Decimal> {
+    match value {
+        Value::Opaque(o) if o.runtime_type_name() == "cala.Decimal" => {
+            let decimal = o.downcast_ref::<CelDecimal>().ok_or_else(|| {
+                ExecutionError::function_error("decimal", "failed to downcast decimal")
+            })?;
+            Ok(decimal.0)
+        }
+        Value::String(s) => s
+            .parse()
+            .map_err(|e| ExecutionError::function_error("decimal", format!("{e:?}"))),
+        Value::Int(i) => Ok((*i).into()),
+        Value::UInt(u) => Ok((*u).into()),
+        v => Err(ExecutionError::function_error(
+            "decimal",
+            format!("cannot convert {v:?} to decimal"),
+        )),
     }
 }

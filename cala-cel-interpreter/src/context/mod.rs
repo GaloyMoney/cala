@@ -1,107 +1,64 @@
-mod decimal;
-mod package;
-mod timestamp;
+use std::borrow::Cow;
 
-use std::{borrow::Cow, collections::HashMap};
-
+use cel::Context;
 use es_entity::clock::{Clock, ClockHandle};
 
-use crate::{builtins, cel_type::CelType, error::*, value::*};
-
-use package::CelPackage;
-
-const SELF_PACKAGE_NAME: Cow<'static, str> = Cow::Borrowed("self");
-
-type CelFunction =
-    Box<dyn Fn(&CelContext, Vec<CelValue>) -> Result<CelValue, CelError> + Send + Sync>;
-pub(crate) type CelMemberFunction =
-    Box<dyn Fn(&CelValue, Vec<CelValue>) -> Result<CelValue, CelError> + Send + Sync>;
+use crate::{builtins, value::CelValue};
 
 pub struct CelContext {
-    idents: HashMap<Cow<'static, str>, ContextItem>,
+    inner: Context<'static>,
     clock: ClockHandle,
+    debug_vars: Vec<(String, CelValue)>,
 }
 
 impl CelContext {
     pub fn add_variable(&mut self, name: impl Into<Cow<'static, str>>, value: impl Into<CelValue>) {
-        self.idents
-            .insert(name.into(), ContextItem::Value(value.into()));
+        let name = name.into();
+        let name_string = name.to_string();
+        let value = value.into();
+        self.inner
+            .add_variable_from_value(name_string.clone(), value.clone().into_cel_value());
+        self.debug_vars.push((name_string, value));
     }
 
-    /// Returns a reference to the clock used by this context.
-    pub(crate) fn clock(&self) -> &ClockHandle {
-        &self.clock
+    pub(crate) fn inner(&self) -> &Context<'static> {
+        &self.inner
     }
 
-    /// Returns a debug representation of all context variables with their values
-    /// Useful for tracing/debugging - excludes built-in functions and packages
     pub fn debug_context(&self) -> String {
-        let vars: Vec<_> = self
-            .idents
-            .iter()
-            .filter_map(|(name, item)| match item {
-                ContextItem::Value(val) => Some(format!("{}={:?}", name, val)),
-                _ => None,
-            })
-            .collect();
-
-        if vars.is_empty() {
+        if self.debug_vars.is_empty() {
             String::new()
         } else {
-            vars.join(", ")
+            self.debug_vars
+                .iter()
+                .map(|(name, value)| format!("{name}={value:?}"))
+                .collect::<Vec<_>>()
+                .join(", ")
         }
     }
 
-    /// Creates a new context using the global clock.
     pub fn new() -> Self {
         Self::new_with_clock(Clock::handle().clone())
     }
 
-    /// Creates a new context with the specified clock.
     pub fn new_with_clock(clock: ClockHandle) -> Self {
-        let mut idents = HashMap::new();
-        idents.insert(
-            Cow::Borrowed("date"),
-            ContextItem::Function(Box::new(builtins::date)),
-        );
-        idents.insert(
-            Cow::Borrowed("uuid"),
-            ContextItem::Function(Box::new(|_ctx, args| builtins::uuid(args))),
-        );
-        idents.insert(
-            Cow::Borrowed("decimal"),
-            ContextItem::Package(&decimal::CEL_PACKAGE),
-        );
+        let mut inner = Context::default();
 
-        idents.insert(
-            Cow::Borrowed("timestamp"),
-            ContextItem::Package(&timestamp::CEL_PACKAGE),
-        );
+        let date_clock = clock.clone();
+        inner.add_function("date", move |args| builtins::date(date_clock.clone(), args));
+        inner.add_function("uuid", builtins::uuid);
+        inner.add_function("decimal", builtins::decimal);
+        inner.add_function("decimal.Add", builtins::decimal_add);
+        inner.add_function("format", builtins::timestamp_format);
 
-        Self { idents, clock }
-    }
-
-    pub(crate) fn lookup_ident(&self, name: &str) -> Result<&ContextItem, CelError> {
-        self.idents
-            .get(name)
-            .ok_or_else(|| CelError::UnknownIdent(name.to_string()))
-    }
-
-    pub(crate) fn lookup_member_fn(
-        &self,
-        value: &CelValue,
-        name: &str,
-    ) -> Result<&CelMemberFunction, CelError> {
-        let package_name = CelType::from(value).package_name();
-        let package = if let Some(ContextItem::Package(package)) = self.idents.get(package_name) {
-            package
-        } else {
-            return Err(CelError::UnknownPackage(package_name));
-        };
-
-        package.lookup_member(value, name)
+        Self {
+            inner,
+            clock,
+            debug_vars: Vec::new(),
+        }
     }
 }
+
 impl Default for CelContext {
     fn default() -> Self {
         Self::new()
@@ -111,24 +68,8 @@ impl Default for CelContext {
 impl std::fmt::Debug for CelContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("CelContext")
-            .field("idents", &self.idents)
+            .field("debug_vars", &self.debug_vars)
             .field("clock", &self.clock)
             .finish()
-    }
-}
-
-pub(crate) enum ContextItem {
-    Value(CelValue),
-    Function(CelFunction),
-    Package(&'static CelPackage),
-}
-
-impl std::fmt::Debug for ContextItem {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContextItem::Value(val) => write!(f, "Value({val:?})"),
-            ContextItem::Function(_) => write!(f, "Function"),
-            ContextItem::Package(_) => write!(f, "Package"),
-        }
     }
 }

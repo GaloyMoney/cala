@@ -23,7 +23,6 @@ ${CRATES_API_TOKEN}
 EOF
 
 publish_crate cala-tracing
-publish_crate cala-cel-parser
 publish_crate cala-cel-interpreter
 publish_crate cala-ledger-core-types
 publish_crate cala-ledger

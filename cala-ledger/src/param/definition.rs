@@ -33,17 +33,17 @@ impl NewParamDefinitionBuilder {
         use es_entity::clock::Clock;
         if let Some(Some(expr)) = self.default.as_ref() {
             let expr = CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
-            let param_type = ParamDataType::try_from(
-                &expr
-                    .evaluate(&crate::cel_context::initialize(Clock::handle().clone()))
-                    .map_err(|e| format!("{e}"))?,
-            )?;
             let specified_type = self.r#type.as_ref().unwrap();
-            if &param_type != specified_type {
-                return Err(format!(
-                    "Default expression type {param_type:?} does not match parameter type {specified_type:?}"
-                ));
-            }
+            specified_type
+                .coerce_value(
+                    expr.evaluate(&crate::cel_context::initialize(Clock::handle().clone()))
+                        .map_err(|e| format!("{e}"))?,
+                )
+                .map_err(|e| {
+                    format!(
+                        "Default expression does not match parameter type {specified_type:?}: {e}"
+                    )
+                })?;
         }
         Ok(())
     }
@@ -73,5 +73,16 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(definition.name, "name");
+    }
+
+    #[test]
+    fn build_date_param_definition_with_default() {
+        let definition = NewParamDefinition::builder()
+            .name("effective")
+            .r#type(ParamDataType::Date)
+            .default_expr("date()")
+            .build()
+            .unwrap();
+        assert_eq!(definition.name, "effective");
     }
 }

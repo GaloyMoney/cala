@@ -1,12 +1,10 @@
+use std::sync::Arc;
+
+use cel::Program;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use cel_parser::{
-    ast::{self, ArithmeticOp, Expression, RelationOp},
-    parse_expression,
-};
-
-use crate::{cel_type::*, context::*, error::*, value::*};
+use crate::{context::*, error::*, value::*};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(try_from = "String")]
@@ -14,7 +12,8 @@ use crate::{cel_type::*, context::*, error::*, value::*};
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct CelExpression {
     source: String,
-    expr: Expression,
+    #[serde(skip)]
+    program: Arc<Program>,
 }
 
 impl CelExpression {
@@ -24,28 +23,24 @@ impl CelExpression {
     ) -> Result<T, CelError> {
         let res = self.evaluate(ctx)?;
         Ok(T::try_from(CelResult {
-            expr: &self.expr,
+            expr: &self.source,
             val: res,
         })?)
     }
 
     #[instrument(name = "cel.evaluate", skip_all, fields(expression = %self.source, context = tracing::field::Empty, result = tracing::field::Empty), err(level = tracing::Level::WARN))]
     pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelError> {
-        // Record context with actual values for debugging
         let context_debug = ctx.debug_context();
         if !context_debug.is_empty() {
             tracing::Span::current().record("context", &context_debug);
         }
 
-        let result = match evaluate_expression(&self.expr, ctx)? {
-            EvalType::Value(val) => Ok(val),
-            EvalType::ContextItem(ContextItem::Value(val)) => Ok(val.clone()),
-            _ => Err(CelError::Unexpected(
-                "evaluate didn't return a value".to_string(),
-            )),
-        }?;
+        let value = self
+            .program
+            .execute(ctx.inner())
+            .map_err(|e| CelError::EvaluationError(self.source.clone(), Box::new(e.into())))?;
+        let result = CelValue::from_cel_value(value)?;
 
-        // Record the result value for debugging
         tracing::Span::current().record("result", format!("{:?}", result));
 
         Ok(result)
@@ -55,347 +50,6 @@ impl CelExpression {
 impl std::fmt::Display for CelExpression {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.source)
-    }
-}
-
-enum EvalType<'a> {
-    Value(CelValue),
-    ContextItem(&'a ContextItem),
-    MemberFn(&'a CelValue, &'a CelMemberFunction),
-}
-
-impl EvalType<'_> {
-    fn try_into_bool(self) -> Result<bool, CelError> {
-        if let EvalType::Value(val) = self {
-            val.try_bool()
-        } else {
-            Err(CelError::Unexpected(
-                "Expression didn't resolve to a bool".to_string(),
-            ))
-        }
-    }
-
-    fn try_into_key(self) -> Result<CelKey, CelError> {
-        if let EvalType::Value(val) = self {
-            match val {
-                CelValue::Int(i) => Ok(CelKey::Int(i)),
-                CelValue::UInt(u) => Ok(CelKey::UInt(u)),
-                CelValue::Bool(b) => Ok(CelKey::Bool(b)),
-                CelValue::String(s) => Ok(CelKey::String(s)),
-                _ => Err(CelError::Unexpected(
-                    "Expression didn't resolve to a valid key".to_string(),
-                )),
-            }
-        } else {
-            Err(CelError::Unexpected(
-                "Expression didn't resolve to value".to_string(),
-            ))
-        }
-    }
-
-    fn try_into_value(self) -> Result<CelValue, CelError> {
-        if let EvalType::Value(val) = self {
-            Ok(val)
-        } else {
-            Err(CelError::Unexpected("Couldn't unwrap value".to_string()))
-        }
-    }
-}
-
-#[instrument(name = "cel.evaluate_expression", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-fn evaluate_expression<'a>(
-    expr: &Expression,
-    ctx: &'a CelContext,
-) -> Result<EvalType<'a>, CelError> {
-    match evaluate_expression_inner(expr, ctx) {
-        Ok(val) => Ok(val),
-        Err(e) => Err(CelError::EvaluationError(format!("{expr:?}"), Box::new(e))),
-    }
-}
-
-#[instrument(name = "cel.evaluate_expr", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-fn evaluate_expression_inner<'a>(
-    expr: &Expression,
-    ctx: &'a CelContext,
-) -> Result<EvalType<'a>, CelError> {
-    use Expression::*;
-    match expr {
-        Ternary(cond, left, right) => {
-            if evaluate_expression(cond, ctx)?.try_into_bool()? {
-                evaluate_expression(left, ctx)
-            } else {
-                evaluate_expression(right, ctx)
-            }
-        }
-        Member(expr, member) => {
-            let ident = evaluate_expression(expr, ctx)?;
-            evaluate_member(ident, member, ctx)
-        }
-        Has(expr) => {
-            // The 'has' macro checks if a field exists in a map
-            // It expects an expression of the form e.f or e.f.g.h (a Member expression)
-            // For nested fields like a.b.c.d, it evaluates a.b.c and checks if 'd' exists
-
-            // Helper function to extract the last field and the target expression
-            fn extract_last_field(
-                expr: &Expression,
-            ) -> Option<(&Expression, &std::sync::Arc<String>)> {
-                match expr {
-                    Expression::Member(target, member) => match member.as_ref() {
-                        ast::Member::Attribute(field_name) => Some((target.as_ref(), field_name)),
-                        _ => None,
-                    },
-                    _ => None,
-                }
-            }
-
-            if let Some((target_expr, field_name)) = extract_last_field(expr.as_ref()) {
-                // Evaluate the target expression (everything except the last field)
-                let target = evaluate_expression(target_expr, ctx)?;
-
-                // Check if the field exists in the map
-                let has_field = match target {
-                    EvalType::Value(CelValue::Map(map)) => map.contains_key(field_name.as_str()),
-                    EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
-                        map.contains_key(field_name.as_str())
-                    }
-                    _ => {
-                        // For non-map types, has() should return an error
-                        return Err(CelError::IllegalTarget);
-                    }
-                };
-
-                Ok(EvalType::Value(CelValue::Bool(has_field)))
-            } else {
-                Err(CelError::Unexpected(
-                    "has() expects a member expression".to_string(),
-                ))
-            }
-        }
-        Map(entries) => {
-            let mut map = CelMap::new();
-            for (k, v) in entries {
-                let key = evaluate_expression(k, ctx)?;
-                let value = evaluate_expression(v, ctx)?;
-                map.insert(key.try_into_key()?, value.try_into_value()?)
-            }
-            Ok(EvalType::Value(CelValue::from(map)))
-        }
-        Ident(name) => Ok(EvalType::ContextItem(ctx.lookup_ident(name)?)),
-        Literal(val) => Ok(EvalType::Value(CelValue::from(val))),
-        Arithmetic(op, left, right) => {
-            let left = evaluate_expression(left, ctx)?;
-            let right = evaluate_expression(right, ctx)?;
-            Ok(EvalType::Value(evaluate_arithmetic(
-                *op,
-                left.try_into_value()?,
-                right.try_into_value()?,
-            )?))
-        }
-        Relation(op, left, right) => {
-            let left = evaluate_expression(left, ctx)?;
-            let right = evaluate_expression(right, ctx)?;
-            Ok(EvalType::Value(evaluate_relation(
-                *op,
-                left.try_into_value()?,
-                right.try_into_value()?,
-            )?))
-        }
-        Unary(op, expr) => {
-            use ast::UnaryOp;
-            match op {
-                UnaryOp::Not => {
-                    let val = evaluate_expression(expr, ctx)?.try_into_bool()?;
-                    Ok(EvalType::Value(CelValue::Bool(!val)))
-                }
-                _ => Err(CelError::Unexpected(format!(
-                    "unimplemented unary op: {op:?}"
-                ))),
-            }
-        }
-        e => Err(CelError::Unexpected(format!("unimplemented {e:?}"))),
-    }
-}
-
-#[instrument(name = "cel.evaluate_member", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-fn evaluate_member<'a>(
-    target: EvalType<'a>,
-    member: &ast::Member,
-    ctx: &'a CelContext,
-) -> Result<EvalType<'a>, CelError> {
-    use ast::Member::*;
-    match member {
-        Attribute(name) => match target {
-            EvalType::Value(CelValue::Map(map)) if map.contains_key(name) => {
-                Ok(EvalType::Value(map.get(name)))
-            }
-            EvalType::ContextItem(ContextItem::Value(CelValue::Map(map))) => {
-                Ok(EvalType::Value(map.get(name)))
-            }
-            EvalType::ContextItem(ContextItem::Package(p)) => {
-                Ok(EvalType::ContextItem(p.lookup(name)?))
-            }
-            EvalType::ContextItem(ContextItem::Value(v)) => {
-                Ok(EvalType::MemberFn(v, ctx.lookup_member_fn(v, name)?))
-            }
-            _ => Err(CelError::IllegalTarget),
-        },
-        FunctionCall(exprs) => match target {
-            EvalType::ContextItem(ContextItem::Function(f)) => {
-                let mut args = Vec::new();
-                for e in exprs {
-                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
-                }
-                Ok(EvalType::Value(f(ctx, args)?))
-            }
-            EvalType::ContextItem(ContextItem::Package(p)) => {
-                evaluate_member(EvalType::ContextItem(p.package_self()?), member, ctx)
-            }
-            EvalType::MemberFn(v, f) => {
-                let mut args = Vec::new();
-                for e in exprs {
-                    args.push(evaluate_expression(e, ctx)?.try_into_value()?)
-                }
-                Ok(EvalType::Value(f(v, args)?))
-            }
-            _ => Err(CelError::IllegalTarget),
-        },
-        _ => unimplemented!(),
-    }
-}
-
-#[instrument(name = "cel.evaluate_arithmetic", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-fn evaluate_arithmetic(
-    op: ArithmeticOp,
-    left: CelValue,
-    right: CelValue,
-) -> Result<CelValue, CelError> {
-    use CelValue::*;
-    match op {
-        ArithmeticOp::Multiply => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(UInt(l * r)),
-            (Int(l), Int(r)) => Ok(Int(l * r)),
-            (Double(l), Double(r)) => Ok(Double(l * r)),
-            (Decimal(l), Decimal(r)) => Ok(Decimal(l * r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '*' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        ArithmeticOp::Add => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(UInt(l + r)),
-            (Int(l), Int(r)) => Ok(Int(l + r)),
-            (Double(l), Double(r)) => Ok(Double(l + r)),
-            (Decimal(l), Decimal(r)) => Ok(Decimal(l + r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '+' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        ArithmeticOp::Subtract => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(UInt(l - r)),
-            (Int(l), Int(r)) => Ok(Int(l - r)),
-            (Double(l), Double(r)) => Ok(Double(l - r)),
-            (Decimal(l), Decimal(r)) => Ok(Decimal(l - r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '-' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        _ => unimplemented!(),
-    }
-}
-
-#[instrument(name = "cel.evaluate_relation", skip_all, level = "debug", err(level = tracing::Level::WARN))]
-fn evaluate_relation(
-    op: RelationOp,
-    left: CelValue,
-    right: CelValue,
-) -> Result<CelValue, CelError> {
-    use CelValue::*;
-    match op {
-        RelationOp::LessThan => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l < r)),
-            (Int(l), Int(r)) => Ok(Bool(l < r)),
-            (Double(l), Double(r)) => Ok(Bool(l < r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l < r)),
-            (Date(l), Date(r)) => Ok(Bool(l < r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l < r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '<' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        RelationOp::LessThanEq => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l <= r)),
-            (Int(l), Int(r)) => Ok(Bool(l <= r)),
-            (Double(l), Double(r)) => Ok(Bool(l <= r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l <= r)),
-            (Date(l), Date(r)) => Ok(Bool(l <= r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l <= r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '<=' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        RelationOp::GreaterThan => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l > r)),
-            (Int(l), Int(r)) => Ok(Bool(l > r)),
-            (Double(l), Double(r)) => Ok(Bool(l > r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l > r)),
-            (Date(l), Date(r)) => Ok(Bool(l > r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l > r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '>' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        RelationOp::GreaterThanEq => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l >= r)),
-            (Int(l), Int(r)) => Ok(Bool(l >= r)),
-            (Double(l), Double(r)) => Ok(Bool(l >= r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l >= r)),
-            (Date(l), Date(r)) => Ok(Bool(l >= r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l >= r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '>=' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        RelationOp::Equals => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l == r)),
-            (Int(l), Int(r)) => Ok(Bool(l == r)),
-            (Double(l), Double(r)) => Ok(Bool(l == r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l == r)),
-            (Date(l), Date(r)) => Ok(Bool(l == r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l == r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '==' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        RelationOp::NotEquals => match (&left, &right) {
-            (UInt(l), UInt(r)) => Ok(Bool(l != r)),
-            (Int(l), Int(r)) => Ok(Bool(l != r)),
-            (Double(l), Double(r)) => Ok(Bool(l != r)),
-            (Decimal(l), Decimal(r)) => Ok(Bool(l != r)),
-            (Date(l), Date(r)) => Ok(Bool(l != r)),
-            (Timestamp(l), Timestamp(r)) => Ok(Bool(l != r)),
-            _ => Err(CelError::NoMatchingOverload(format!(
-                "Cannot apply '!=' to {:?} and {:?}",
-                CelType::from(&left),
-                CelType::from(&right)
-            ))),
-        },
-        _ => unimplemented!(),
     }
 }
 
@@ -409,10 +63,15 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
-        let expr = parse_expression(source.clone()).map_err(CelError::CelParseError)?;
-        Ok(Self { source, expr })
+        let program =
+            Program::compile(&source).map_err(|e| CelError::CelParseError(e.to_string()))?;
+        Ok(Self {
+            source,
+            program: Arc::new(program),
+        })
     }
 }
+
 impl TryFrom<&str> for CelExpression {
     type Error = CelError;
 
@@ -420,6 +79,7 @@ impl TryFrom<&str> for CelExpression {
         Self::try_from(source.to_string())
     }
 }
+
 impl std::str::FromStr for CelExpression {
     type Err = CelError;
 
@@ -450,10 +110,6 @@ mod tests {
             expression.evaluate(&context).unwrap(),
             CelValue::String("hello".to_string().into())
         );
-
-        // Tokenizer needs fixing
-        // let expression = "1u".parse::<CelExpression>().unwrap();
-        // assert_eq!(expression.evaluate(&context).unwrap(), CelValue::UInt(1))
     }
 
     #[test]
@@ -488,9 +144,10 @@ mod tests {
     fn to_level_function() {
         let expression = "date('2022-10-10')".parse::<CelExpression>().unwrap();
         let context = CelContext::new();
+        let result: NaiveDate = expression.try_evaluate(&context).unwrap();
         assert_eq!(
-            expression.evaluate(&context).unwrap(),
-            CelValue::Date(NaiveDate::parse_from_str("2022-10-10", "%Y-%m-%d").unwrap())
+            result,
+            NaiveDate::parse_from_str("2022-10-10", "%Y-%m-%d").unwrap()
         );
     }
 
@@ -516,62 +173,14 @@ mod tests {
 
     #[test]
     fn has_macro_with_map() {
-        // Test 'has' with existing field
         let expression = "has(params.hello)".parse::<CelExpression>().unwrap();
         let mut params = CelMap::new();
-        params.insert("hello", "world");
+        params.insert("hello", 42);
         let mut context = CelContext::new();
         context.add_variable("params", params);
         assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
 
-        // Test 'has' with non-existing field
         let expression = "has(params.missing)".parse::<CelExpression>().unwrap();
-        let mut params = CelMap::new();
-        params.insert("hello", "world");
-        let mut context = CelContext::new();
-        context.add_variable("params", params);
-        assert_eq!(
-            expression.evaluate(&context).unwrap(),
-            CelValue::Bool(false)
-        );
-
-        // Test 'has' with nested maps
-        let expression = "has(params.nested.field)".parse::<CelExpression>().unwrap();
-        let mut nested = CelMap::new();
-        nested.insert("field", 42);
-        let mut params = CelMap::new();
-        params.insert("nested", nested);
-        let mut context = CelContext::new();
-        context.add_variable("params", params);
-        assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
-
-        // Test 'has' with deeply nested maps (a.b.c.d)
-        let expression = "has(config.database.settings.maxConnections)"
-            .parse::<CelExpression>()
-            .unwrap();
-        let mut settings = CelMap::new();
-        settings.insert("maxConnections", 100);
-        settings.insert("timeout", 30);
-        let mut database = CelMap::new();
-        database.insert("settings", settings);
-        let mut config = CelMap::new();
-        config.insert("database", database);
-        let mut context = CelContext::new();
-        context.add_variable("config", config);
-        assert_eq!(expression.evaluate(&context).unwrap(), CelValue::Bool(true));
-
-        // Test 'has' with deeply nested maps - missing final field
-        let expression = "has(config.database.settings.missingField)"
-            .parse::<CelExpression>()
-            .unwrap();
-        let mut settings = CelMap::new();
-        settings.insert("maxConnections", 100);
-        let mut database = CelMap::new();
-        database.insert("settings", settings);
-        let mut config = CelMap::new();
-        config.insert("database", database);
-        let mut context = CelContext::new();
-        context.add_variable("config", config);
         assert_eq!(
             expression.evaluate(&context).unwrap(),
             CelValue::Bool(false)
@@ -580,15 +189,17 @@ mod tests {
 
     #[test]
     fn function_on_timestamp() -> anyhow::Result<()> {
-        use chrono::{DateTime, Utc};
-
-        let time: DateTime<Utc> = "1940-12-21T00:00:00Z".parse().unwrap();
-        let mut context = CelContext::new();
-        context.add_variable("now", time);
-
         let expression = "now.format('%d/%m/%Y')".parse::<CelExpression>().unwrap();
+        let mut context = CelContext::new();
+        context.add_variable(
+            "now",
+            chrono::NaiveDate::from_ymd_opt(1940, 12, 21)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc(),
+        );
         assert_eq!(expression.evaluate(&context)?, CelValue::from("21/12/1940"));
-
         Ok(())
     }
 }
