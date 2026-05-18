@@ -50,5 +50,6 @@ anyhow = { workspace = true }
 rand = { workspace = true }
 tokio-test = "0.4"
 rust_decimal_macros = { workspace = true }
+proptest = { workspace = true }
 
 [build-dependencies]
