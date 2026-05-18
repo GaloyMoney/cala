@@ -41,7 +41,7 @@ opentelemetry-otlp = { version = "0.31.1", default-features = false, features = 
   "reqwest-client",
 ] }
 opentelemetry-semantic-conventions = { version = "0.31.0", features = ["semconv_experimental"] }
-tokio = { version = "1.48", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1.52", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -50,7 +50,7 @@ futures = "0.3.29"
 lalrpop-util = { version = "0.23", features = ["lexer"] }
 lalrpop = { version = "0.23", features = ["lexer"] }
 rust_decimal_macros = "1.39"
-rust_decimal = "1.41"
+rust_decimal = "1.42"
 rusty-money = { version = "0.5", features = ["iso", "crypto"] }
 schemars = { version = "1.0", features = ["uuid1"] }
 rand = "0.10"
