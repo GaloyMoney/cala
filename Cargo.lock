@@ -847,9 +847,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.35"
+version = "0.10.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07f523e4cd9b354b57b458aee369eadba8da68fbfb2af636c7a429c7942160d3"
+checksum = "bffb4c045095c29c481e97358b072497865b0c45ff5ff23fdf57eaa069e59971"
 dependencies = [
  "chrono",
  "derive_builder",
@@ -872,9 +872,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.35"
+version = "0.10.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e48186330c95462026a942f3f1d95beb99e95da0bc4fdcae76a6cf55afee9cae"
+checksum = "2c1bb41f0f8f49452fa1ffd0377ddb180df35a8fcee7024a3d2a2974cd6c2d7e"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1533,9 +1533,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.22"
+version = "0.6.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1f5984583408d25de1b4a0b4a60d4292bbfc7daf9504ea2b8daad4d266f65400"
+checksum = "ed95a4bbfcfc29d8510c696220a20b5af2fea040c0b9e75ffc2258b32dfa8e09"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1778,9 +1778,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e962274bd197f8cab9f1efa045fec54a70010b00720ebd13274150d19362fb2a"
+checksum = "b1cedafa4dfbba968aacdc5a84e99c27fb63511cd6c84dfb08db4db1a728935a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1801,9 +1801,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3847e27014116cd3c22b33693571fb4ebe6c4ee46e6687a98b5ffdf4b8867e0"
+checksum = "e0596a13903fad13efce719601251491337f1ce2b834e1920acd1c87c6591225"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
