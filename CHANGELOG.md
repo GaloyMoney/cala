@@ -1,3 +1,12 @@
+# [cala release v0.15.9](https://github.com/GaloyMoney/cala/releases/tag/0.15.9)
+
+
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.10.36, job to 0.6.25, obix to 0.2.27 (#721)
+- Bump the all-dependencies group with 2 updates (#720)
+
 # [cala release v0.15.8](https://github.com/GaloyMoney/cala/releases/tag/0.15.8)
 
 
