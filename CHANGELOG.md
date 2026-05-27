@@ -1,3 +1,15 @@
+# [cala release v0.15.10](https://github.com/GaloyMoney/cala/releases/tag/0.15.10)
+
+
+
+### Bug Fixes
+
+- Sync Cargo.lock after version bump (#722)
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.10.37 (#724)
+
 # [cala release v0.15.9](https://github.com/GaloyMoney/cala/releases/tag/0.15.9)
 
 
