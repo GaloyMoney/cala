@@ -18,7 +18,7 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-tracing = { path = "cala-tracing", version = "0.15.11-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.15.11-dev" }
 
-es-entity = "0.10.37"
+es-entity = "0.10.38"
 job = { version = "0.6.25", features = ["es-entity"] }
 obix = { version = "0.2.27", default-features = false }
 
