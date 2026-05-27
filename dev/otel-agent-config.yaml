@@ -12,8 +12,8 @@ receivers:
 
 
 exporters:
-  logging:
-    loglevel: debug
+  debug:
+    verbosity: detailed
   otlp:
     endpoint: "api.honeycomb.io:443"
     headers:
@@ -30,4 +30,4 @@ service:
   pipelines:
     traces:
       receivers: [jaeger, otlp]
-      exporters: [otlp, logging]
+      exporters: [otlp, debug]

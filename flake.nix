@@ -15,6 +15,7 @@
       flake = false;
     };
     crane.url = "github:ipetkov/crane";
+    process-compose-flake.url = "github:Platonic-Systems/process-compose-flake";
   };
   outputs = {
     self,
@@ -23,6 +24,7 @@
     rust-overlay,
     advisory-db,
     crane,
+    process-compose-flake,
   }:
     flake-utils.lib.eachDefaultSystem
     (system: let
@@ -66,26 +68,178 @@
         samply
         bacon
         postgresql
-        docker-compose
-        wait4x
+        process-compose
+        opentelemetry-collector-contrib
         bc
         jq
-        podman
-        podman-compose
       ];
+
+      pgPort = 5432;
+      otelGrpcPort = 4317;
+      otelHttpPort = 4318;
+      otelHealthPort = 13133;
+      pgUser = "user";
+      pgPassword = "password";
+      pgDatabase = "pg";
+
       devEnvVars = rec {
-        OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
-        DATABASE_URL = "postgres://user:password@127.0.0.1:5432/pg?sslmode=disable";
+        OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:${toString otelGrpcPort}";
+        DATABASE_URL = "postgres://${pgUser}:${pgPassword}@127.0.0.1:${toString pgPort}/${pgDatabase}?sslmode=disable";
         PG_CON = "${DATABASE_URL}";
       };
-      podman-runner = pkgs.callPackage ./nix/podman-runner.nix {};
+
+      # ── Postgres start helper ──────────────────────────────────────────
+      pg-start = pkgs.writeShellApplication {
+        name = "pg-start";
+        runtimeInputs = [pkgs.postgresql pkgs.coreutils];
+        text = ''
+          # Usage: pg-start <name> <port> <user> <db>
+          NAME="$1" PORT="$2" PGUSER="$3" DB="$4"
+          PGDATA="$PWD/.nix-deps/$NAME"
+
+          mkdir -p "$PWD/.nix-deps"
+
+          if [ ! -f "$PGDATA/PG_VERSION" ]; then
+            echo "[$NAME] Initializing data directory at $PGDATA..."
+            mkdir -p "$PGDATA"
+            initdb -D "$PGDATA" --username="$PGUSER" --auth=trust --no-locale -E UTF8
+            {
+              echo "port = $PORT"
+              echo "unix_socket_directories = '/tmp'"
+              echo "listen_addresses = '127.0.0.1'"
+              echo "shared_preload_libraries = 'pg_stat_statements'"
+              echo "pg_stat_statements.track = 'all'"
+            } >> "$PGDATA/postgresql.conf"
+          fi
+
+          if [ -f "$PGDATA/postmaster.pid" ]; then
+            pg_ctl -D "$PGDATA" stop -m immediate 2>/dev/null || rm -f "$PGDATA/postmaster.pid"
+          fi
+
+          postgres -D "$PGDATA" -p "$PORT" -k /tmp &
+          PG_PID=$!
+          trap 'kill $PG_PID 2>/dev/null; wait $PG_PID 2>/dev/null' EXIT
+
+          while ! pg_isready -p "$PORT" -U "$PGUSER" -h 127.0.0.1 -q 2>/dev/null; do
+            sleep 0.1
+          done
+
+          if [ "$DB" != "$PGUSER" ]; then
+            createdb -p "$PORT" -U "$PGUSER" -h 127.0.0.1 "$DB" 2>/dev/null || {
+              if psql -p "$PORT" -U "$PGUSER" -h 127.0.0.1 -lqt | cut -d \| -f 1 | grep -qw "$DB"; then
+                echo "[$NAME] Database '$DB' already exists"
+              else
+                echo "[$NAME] ERROR: Failed to create database '$DB'" >&2
+                exit 1
+              fi
+            }
+          fi
+
+          echo "[$NAME] Ready on port $PORT (database: $DB)"
+          wait $PG_PID
+        '';
+      };
+
+      setupDbDev = pkgs.writeShellApplication {
+        name = "setup-db-dev";
+        runtimeInputs = [pkgs.sqlx-cli];
+        text = ''
+          export DATABASE_URL="${devEnvVars.DATABASE_URL}"
+          cd cala-ledger
+          exec sqlx migrate run
+        '';
+      };
+
+      startOtel = pkgs.writeShellApplication {
+        name = "start-otel-dev";
+        runtimeInputs = [pkgs.opentelemetry-collector-contrib];
+        text = ''
+          export HONEYCOMB_API_KEY="''${HONEYCOMB_API_KEY:-local-disabled}"
+          export HONEYCOMB_DATASET="''${HONEYCOMB_DATASET:-local}"
+          exec otelcol-contrib --config ${./dev/otel-agent-config.yaml}
+        '';
+      };
+
+      # ── process-compose ───────────────────────────────────────────────
+      pcLib = import process-compose-flake.lib {inherit pkgs;};
+
+      mkPg = {
+        name,
+        port,
+        user,
+        db,
+      }: {
+        command = "${
+          pkgs.writeShellApplication {
+            name = "start-${name}";
+            runtimeInputs = [pg-start];
+            text = ''
+              exec pg-start ${name} ${toString port} ${user} ${db}
+            '';
+          }
+        }/bin/start-${name}";
+        readiness_probe = {
+          exec.command = "${
+            pkgs.writeShellApplication {
+              name = "ready-${name}";
+              runtimeInputs = [pkgs.postgresql];
+              text = ''
+                exec psql -p ${toString port} -U ${user} -h 127.0.0.1 -d ${db} -c 'SELECT 1' -t -q
+              '';
+            }
+          }/bin/ready-${name}";
+          initial_delay_seconds = 1;
+          period_seconds = 1;
+          failure_threshold = 60;
+        };
+        shutdown = {
+          signal = 2;
+          timeout_seconds = 10;
+        };
+      };
+
+      baseProcesses = {
+        server-pg = mkPg {
+          name = "server-pg";
+          port = pgPort;
+          user = pgUser;
+          db = pgDatabase;
+        };
+        setup-db = {
+          command = "${setupDbDev}/bin/setup-db-dev";
+          depends_on.server-pg.condition = "process_healthy";
+          availability.exit_on_end = false;
+          shutdown = {
+            signal = 2;
+            timeout_seconds = 10;
+          };
+        };
+        otel-agent = {
+          command = "${startOtel}/bin/start-otel-dev";
+          shutdown = {
+            signal = 2;
+            timeout_seconds = 10;
+          };
+        };
+      };
+
+      nix-deps-base = pcLib.makeProcessCompose {
+        name = "nix-deps-base";
+        modules = [
+          {
+            settings = {
+              log_level = "info";
+              log_location = ".nix-deps/process-compose.log";
+              processes = baseProcesses;
+            };
+          }
+        ];
+      };
 
       perf-runner = pkgs.writeShellScriptBin "perf-runner" ''
         set -e
 
         export PATH="${pkgs.lib.makeBinPath [
-          podman-runner.podman-compose-runner
-          pkgs.wait4x
           pkgs.sqlx-cli
           pkgs.coreutils
           pkgs.gnumake
@@ -112,29 +266,15 @@
 
         cleanup() {
           echo "Stopping deps..."
-          ${podman-runner.podman-compose-runner}/bin/podman-compose-runner down || true
+          ${nix-deps-base}/bin/nix-deps-base down 2>/dev/null || true
         }
         trap cleanup EXIT
 
-        echo "Starting dependencies..."
-        ${podman-runner.podman-compose-runner}/bin/podman-compose-runner up -d integration-deps
+        mkdir -p .nix-deps
 
-        echo "Waiting for PostgreSQL to be ready..."
-        ${pkgs.wait4x}/bin/wait4x postgresql "$DATABASE_URL" --timeout 120s
-
-        echo "Running database migrations..."
-        for i in $(seq 1 30); do
-          if (cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run 2>/dev/null); then
-            echo "Migrations complete"
-            break
-          fi
-          echo "Attempt $i: Database not ready, waiting..."
-          sleep 1
-          if [ "$i" -eq 30 ]; then
-            echo "Database failed to become ready after 30 attempts"
-            cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run
-          fi
-        done
+        echo "Starting dependencies via process-compose..."
+        ${nix-deps-base}/bin/nix-deps-base up -D
+        ${nix-deps-base}/bin/nix-deps-base project is-ready --wait
 
         echo "Running perf DB setup..."
         ${pkgs.postgresql}/bin/psql "$DATABASE_URL" -f ./cala-perf/pg-tools/setup.sql
@@ -194,8 +334,6 @@
         set -e
 
         export PATH="${pkgs.lib.makeBinPath [
-          podman-runner.podman-compose-runner
-          pkgs.wait4x
           pkgs.sqlx-cli
           pkgs.cargo-nextest
           pkgs.coreutils
@@ -210,30 +348,16 @@
 
         cleanup() {
           echo "Stopping deps..."
-          ${podman-runner.podman-compose-runner}/bin/podman-compose-runner down || true
+          ${nix-deps-base}/bin/nix-deps-base down 2>/dev/null || true
         }
 
         trap cleanup EXIT
 
-        echo "Starting dependencies..."
-        ${podman-runner.podman-compose-runner}/bin/podman-compose-runner up -d integration-deps
+        mkdir -p .nix-deps
 
-        echo "Waiting for PostgreSQL to be ready..."
-        ${pkgs.wait4x}/bin/wait4x postgresql "$DATABASE_URL" --timeout 120s
-
-        echo "Running database migrations..."
-        for i in $(seq 1 30); do
-          if (cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run 2>/dev/null); then
-            echo "Migrations complete"
-            break
-          fi
-          echo "Attempt $i: Database not ready, waiting..."
-          sleep 1
-          if [ "$i" -eq 30 ]; then
-            echo "Database failed to become ready after 30 attempts"
-            cd cala-ledger && ${pkgs.sqlx-cli}/bin/sqlx migrate run
-          fi
-        done
+        echo "Starting dependencies via process-compose..."
+        ${nix-deps-base}/bin/nix-deps-base up -D
+        ${nix-deps-base}/bin/nix-deps-base project is-ready --wait
 
         echo "Running nextest..."
         cargo nextest run --verbose --locked --workspace
@@ -251,6 +375,13 @@
         packages = {
           nextest = nextest-runner;
           perf = perf-runner;
+          setup-db-dev = setupDbDev;
+          inherit nix-deps-base;
+        };
+
+        apps.setup-db-dev = flake-utils.lib.mkApp {
+          drv = setupDbDev;
+          name = "setup-db-dev";
         };
 
         checks = {
