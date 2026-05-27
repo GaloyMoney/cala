@@ -216,6 +216,20 @@
         };
         otel-agent = {
           command = "${startOtel}/bin/start-otel-dev";
+          readiness_probe = {
+            exec.command = "${
+              pkgs.writeShellApplication {
+                name = "ready-otel";
+                runtimeInputs = [pkgs.curl];
+                text = ''
+                  exec curl -fsS "http://127.0.0.1:${toString otelHealthPort}/"
+                '';
+              }
+            }/bin/ready-otel";
+            initial_delay_seconds = 2;
+            period_seconds = 2;
+            failure_threshold = 30;
+          };
           shutdown = {
             signal = 2;
             timeout_seconds = 10;
