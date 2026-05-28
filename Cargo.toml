@@ -23,7 +23,7 @@ job = { version = "0.6.25", features = ["es-entity"] }
 obix = { version = "0.2.27", default-features = false }
 
 anyhow = "1.0.99"
-cached = { version = "0.59", features = ["async"] }
+cached = { version = "1.0", features = ["async"] }
 chrono = { version = "0.4.44", features = ["clock", "serde"], default-features = false }
 derive_builder = "0.20.1"
 sqlx = { version = "0.8.3", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
