@@ -22,7 +22,6 @@ required-features = ["json-schema"]
 [dependencies]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
-cala-tracing = { workspace = true }
 es-entity = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
@@ -39,8 +38,6 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-opentelemetry = { workspace = true }
-tracing-opentelemetry = { workspace = true }
 futures = { workspace = true }
 rust_decimal = { workspace = true }
 schemars = { workspace = true, optional = true }

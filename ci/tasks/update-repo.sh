@@ -26,7 +26,6 @@ done
 sed -i'' "s/cel-parser\", version = .*/cel-parser\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cel-interpreter\", version = .*/cel-interpreter\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/core-types\", version = .*/core-types\", version = \"${VERSION}\" }/" ./Cargo.toml
-sed -i'' "s/cala-tracing\", version = .*/cala-tracing\", version = \"${VERSION}\" }/" ./Cargo.toml
 sed -i'' "s/cala-ledger\", version = .*/cala-ledger\", version = \"${VERSION}\" }/" ./Cargo.toml
 
 cargo update --workspace
