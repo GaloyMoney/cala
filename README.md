@@ -38,10 +38,6 @@ Cala is a robust ledger system developed by Galoy, designed to handle complex fi
   source ~/.bashrc
   ```
 
-#### Docker
-
-- Choose the install method for your system https://docs.docker.com/desktop/
-
 ### Testing
 
 Run unit tests with:
