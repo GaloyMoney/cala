@@ -45,17 +45,3 @@ Run unit tests with:
 ```bash
 make reset-deps next-watch
 ```
-
-Run end-to-end tests with:
-
-```bash
-make e2e
-```
-
-### Running the Server
-
-To run the server:
-
-```bash
-make run-server
-```
