@@ -18,8 +18,10 @@
 //! use uuid::uuid;
 //!
 //! async fn init_cala(journal_id: JournalId) -> anyhow::Result<CalaLedger, anyhow::Error> {
+//!     let pg_con = std::env::var("PG_CON")
+//!         .unwrap_or_else(|_| "postgres://user:password@localhost:5432/pg".to_string());
 //!     let cala_config = CalaLedgerConfig::builder()
-//!         .pg_con("postgres://user:password@localhost:5432/pg")
+//!         .pg_con(&pg_con)
 //!         // .exec_migrations(true) # commented out for execution in CI
 //!         .build()?;
 //!     let cala = CalaLedger::init(cala_config).await?;
