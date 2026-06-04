@@ -5,7 +5,6 @@ members = [
 
   "cala-ledger",
   "cala-ledger-core-types",
-  "cala-tracing",
   "cala-cel-parser",
   "cala-cel-interpreter",
   "cala-perf",
@@ -15,7 +14,6 @@ members = [
 cel-parser = { path = "cala-cel-parser", package = "cala-cel-parser", version = "0.15.11-dev" }
 cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.15.11-dev" }
 cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.15.11-dev" }
-cala-tracing = { path = "cala-tracing", version = "0.15.11-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.15.11-dev" }
 
 es-entity = "0.10.38"
@@ -31,16 +29,6 @@ thiserror = "2.0.18"
 uuid = { version = "1.23", features = ["serde", "v7"] }
 regex = "1.11.2"
 tracing = "0.1.41"
-tracing-opentelemetry = "0.33.0"
-tracing-subscriber = { version = "0.3.23", features = ["env-filter", "json"] }
-opentelemetry = { version = "0.32.0" }
-opentelemetry_sdk = { version = "0.32.0", features = ["rt-tokio"] }
-opentelemetry-otlp = { version = "0.32.0", default-features = false, features = [
-  "http-proto",
-  "grpc-tonic",
-  "reqwest-client",
-] }
-opentelemetry-semantic-conventions = { version = "0.32.0", features = ["semconv_experimental"] }
 tokio = { version = "1.52", features = ["rt-multi-thread", "macros"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 serde = { version = "1.0", features = ["derive"] }

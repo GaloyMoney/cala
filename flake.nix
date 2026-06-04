@@ -74,7 +74,6 @@
         podman-compose
       ];
       devEnvVars = rec {
-        OTEL_EXPORTER_OTLP_ENDPOINT = http://localhost:4317;
         DATABASE_URL = "postgres://user:password@127.0.0.1:5432/pg?sslmode=disable";
         PG_CON = "${DATABASE_URL}";
       };
