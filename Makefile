@@ -1,25 +1,37 @@
+NIX_DEPS_DIR := .nix-deps
+
+.PHONY: next-watch start-deps clean-deps setup-db reset-deps reset-deps-perf rust-example check-code build sqlx-prepare test-in-ci event-schemas check-event-schemas
+
 next-watch:
 	cargo watch -s 'cargo nextest run'
 
-clean-deps:
-	./dev/bin/clean-deps.sh
-
 start-deps:
-	./dev/bin/docker-compose-up.sh integration-deps
+	@mkdir -p $(NIX_DEPS_DIR)
+	@eval "$$(nix run .#dev-env)"; \
+	  nix run .#nix-deps-base -- up -D; \
+	  for i in $$(seq 1 60); do \
+	    if nix run .#nix-deps-base -- project is-ready 2>/dev/null; then break; fi; \
+	    if [ "$$i" = "60" ]; then \
+	      echo "ERROR: deps not ready after 5 minutes" >&2; \
+	      nix run .#nix-deps-base -- process list || true; \
+	      exit 1; \
+	    fi; \
+	    sleep 5; \
+	  done; \
+	  nix run .#setup-db-dev
+
+clean-deps:
+	-@eval "$$(nix run .#dev-env)"; nix run .#nix-deps-base -- down
+	chmod -R u+w $(NIX_DEPS_DIR) 2>/dev/null || true
+	rm -rf $(NIX_DEPS_DIR)
 
 setup-db:
-	@echo "Waiting for PostgreSQL and running migrations..."
-	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30; do \
-		(cd cala-ledger && cargo sqlx migrate run 2>/dev/null) && echo "Migrations complete" && exit 0; \
-		echo "Attempt $$i: Database not ready, waiting..."; \
-		sleep 1; \
-	done; \
-	echo "Database failed to become ready after 30 attempts"; \
-	cd cala-ledger && cargo sqlx migrate run
+	nix run .#setup-db-dev
 
-reset-deps: clean-deps start-deps setup-db
-reset-deps-perf: clean-deps start-deps setup-db
-	psql postgres://user:password@localhost:5432/pg -f ./cala-perf/pg-tools/setup.sql
+reset-deps: clean-deps start-deps
+
+reset-deps-perf: clean-deps start-deps
+	@eval "$$(nix run .#dev-env)"; psql "$$DATABASE_URL" -f ./cala-perf/pg-tools/setup.sql
 
 rust-example:
 	cargo run --bin cala-ledger-example-rust

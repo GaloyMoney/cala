@@ -54,7 +54,6 @@ jobs:
       trigger: true
     - { get: pipeline-tasks }
   - task: integration-test
-    privileged: true
     attempts: 2
     config:
       platform: linux

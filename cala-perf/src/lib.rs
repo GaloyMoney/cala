@@ -5,8 +5,7 @@ use rand::distr::{Alphanumeric, SampleString};
 use cala_ledger::{account::*, account_set::*, journal::*, velocity::*, *};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
-    let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
+    let pg_con = std::env::var("PG_CON").unwrap();
 
     // Configure pool for high-concurrency performance testing
     let pool = sqlx::postgres::PgPoolOptions::new()
