@@ -310,7 +310,6 @@
           pkgs.stdenv.cc
         ]}:$PATH"
 
-        export SQLX_OFFLINE="true"
         eval "$(${devEnv}/bin/cala-dev-env)"
 
         if [ $# -eq 0 ]; then
@@ -393,7 +392,6 @@
           pkgs.stdenv.cc
         ]}:$PATH"
 
-        export SQLX_OFFLINE="true"
         eval "$(${devEnv}/bin/cala-dev-env)"
 
         cleanup() {
