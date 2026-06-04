@@ -90,7 +90,7 @@
 
           PGPORT="''${PGPORT:-$base_port}"
           PC_PORT_NUM="''${PC_PORT_NUM:-$((base_port + 1))}"
-          DATABASE_URL="''${DATABASE_URL:-postgres://${pgUser}:${pgPassword}@127.0.0.1:$PGPORT/${pgDatabase}?sslmode=disable}"
+          DATABASE_URL="postgres://${pgUser}:${pgPassword}@127.0.0.1:$PGPORT/${pgDatabase}?sslmode=disable"
 
           emit() { printf 'export %s=%q\n' "$1" "$2"; }
           emit PGPORT "$PGPORT"
