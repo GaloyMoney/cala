@@ -1,6 +1,6 @@
 NIX_DEPS_DIR := .nix-deps
 
-.PHONY: next-watch start-deps clean-deps setup-db reset-deps reset-deps-perf rust-example check-code build sqlx-prepare test-in-ci event-schemas check-event-schemas
+.PHONY: next-watch start-deps clean-deps setup-db reset-deps reset-deps-perf rust-example check-code build sqlx-prepare event-schemas check-event-schemas
 
 next-watch:
 	cargo watch -s 'cargo nextest run'
@@ -44,10 +44,6 @@ build:
 
 sqlx-prepare:
 	cd cala-ledger && cargo sqlx prepare -- --all-features
-
-test-in-ci:
-	SQLX_OFFLINE=true cargo nextest run --verbose --locked
-	SQLX_OFFLINE=true cargo test --doc
 	SQLX_OFFLINE=true cargo doc --no-deps
 
 event-schemas:
