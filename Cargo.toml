@@ -16,7 +16,7 @@ cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpret
 cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.15.11-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.15.11-dev" }
 
-es-entity = "0.10.38"
+es-entity = "0.10.39"
 job = { version = "0.6.25", features = ["es-entity"] }
 obix = { version = "0.2.27", default-features = false }
 

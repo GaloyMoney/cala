@@ -1,7 +1,6 @@
 #@ load("@ytt:data", "data")
 
 #@ load("vendor/pipeline-fragments.lib.yml",
-#@   "public_docker_registry",
 #@   "repo_resource",
 #@   "version_resource",
 #@   "gh_release_resource",
@@ -54,7 +53,6 @@ jobs:
       trigger: true
     - { get: pipeline-tasks }
   - task: integration-test
-    privileged: true
     attempts: 2
     config:
       platform: linux

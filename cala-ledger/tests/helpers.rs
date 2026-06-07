@@ -12,8 +12,7 @@ pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
 pub async fn init_pool_with(
     options: sqlx::postgres::PgPoolOptions,
 ) -> anyhow::Result<sqlx::PgPool> {
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
-    let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
+    let pg_con = std::env::var("PG_CON").unwrap();
     let pool = options.connect(&pg_con).await?;
     use job::IncludeMigrations;
     sqlx::migrate!().include_job_migrations().run(&pool).await?;
