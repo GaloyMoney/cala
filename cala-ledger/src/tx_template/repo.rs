@@ -1,4 +1,4 @@
-use cached::proc_macro::cached;
+use cached::macros::cached;
 
 use es_entity::*;
 use sqlx::PgPool;
