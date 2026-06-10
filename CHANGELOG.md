@@ -1,3 +1,15 @@
+# [cala release v0.15.11](https://github.com/GaloyMoney/cala/releases/tag/0.15.11)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job from 0.6.25 to 0.6.26 (#732)
+- Bump the all-dependencies group across 1 directory with 2 updates (#728)
+- Migrate dev deps to nix process-compose (#729)
+- Remove cala-tracing crate and otel collector (#727)
+- Bump the all-dependencies group with 4 updates (#723)
+
 # [cala release v0.15.10](https://github.com/GaloyMoney/cala/releases/tag/0.15.10)
 
 
