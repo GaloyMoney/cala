@@ -80,7 +80,6 @@ impl TxTemplateRepo {
 #[cached(
     key = "(TxTemplateId, i32)",
     convert = "{ (id, version) }",
-    result = true,
     sync_writes = "default"
 )]
 #[instrument(
