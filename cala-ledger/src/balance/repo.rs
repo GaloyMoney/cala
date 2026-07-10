@@ -16,6 +16,13 @@ use crate::outbox::OutboxPublisher;
 
 const EC_SET_LOCK_CLASS: i32 = 1;
 
+/// Maximum balance snapshots written per `INSERT` + outbox publish in
+/// [`BalanceRepo::insert_new_snapshots`]. A deep account-set recalc can produce
+/// one history row per member event; flushing in bounded sub-batches (within
+/// the same transaction) keeps any single statement's working set small so it
+/// cannot OOM-crash a Postgres backend.
+const INSERT_SNAPSHOT_BATCH_SIZE: usize = 5_000;
+
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
     pool: PgPool,
@@ -366,25 +373,34 @@ impl BalanceRepo {
             tracing::field::display(new_balances.len()),
         );
 
-        let mut journal_ids = Vec::with_capacity(new_balances.len());
-        let mut account_ids = Vec::with_capacity(new_balances.len());
-        let mut entry_ids = Vec::with_capacity(new_balances.len());
-        let mut currencies = Vec::with_capacity(new_balances.len());
-        let mut versions = Vec::with_capacity(new_balances.len());
-        let mut values = Vec::with_capacity(new_balances.len());
+        // Flush in bounded sub-batches within the caller's transaction so a
+        // single set's recalc (which can emit one history row per member event)
+        // never becomes one multi-million-row INSERT + outbox publish large
+        // enough to OOM-crash a Postgres backend. Each sub-batch is a
+        // self-contained statement (history insert + current_balances upsert),
+        // so the balance-history FK is satisfied per sub-batch; the whole set
+        // still commits atomically as one transaction.
+        for chunk in new_balances.chunks(INSERT_SNAPSHOT_BATCH_SIZE) {
+            let mut journal_ids = Vec::with_capacity(chunk.len());
+            let mut account_ids = Vec::with_capacity(chunk.len());
+            let mut entry_ids = Vec::with_capacity(chunk.len());
+            let mut currencies = Vec::with_capacity(chunk.len());
+            let mut versions = Vec::with_capacity(chunk.len());
+            let mut values = Vec::with_capacity(chunk.len());
 
-        for balance in new_balances.iter() {
-            journal_ids.push(balance.journal_id);
-            account_ids.push(balance.account_id);
-            entry_ids.push(balance.entry_id);
-            currencies.push(balance.currency.code());
-            versions.push(balance.version as i32);
-            values
-                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
-        }
+            for balance in chunk.iter() {
+                journal_ids.push(balance.journal_id);
+                account_ids.push(balance.account_id);
+                entry_ids.push(balance.entry_id);
+                currencies.push(balance.currency.code());
+                versions.push(balance.version as i32);
+                values.push(
+                    serde_json::to_value(balance).expect("Failed to serialize balance snapshot"),
+                );
+            }
 
-        sqlx::query!(
-            r#"
+            sqlx::query!(
+                r#"
         WITH new_snapshots AS (
             INSERT INTO cala_balance_history (
                 journal_id, account_id, currency, version, latest_entry_id, values
@@ -421,28 +437,33 @@ impl BalanceRepo {
             END,
             latest_seq = GREATEST(c.latest_seq, EXCLUDED.latest_seq)
         "#,
-            &journal_ids as &[JournalId],
-            &account_ids as &[AccountId],
-            &currencies as &[&str],
-            &versions as &[i32],
-            &entry_ids as &[EntryId],
-            &values
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                new_balances.into_iter().map(|balance| {
-                    if balance.version == 1 {
-                        OutboxEventPayload::BalanceCreated { balance }
-                    } else {
-                        OutboxEventPayload::BalanceUpdated { balance }
-                    }
-                }),
+                &journal_ids as &[JournalId],
+                &account_ids as &[AccountId],
+                &currencies as &[&str],
+                &versions as &[i32],
+                &entry_ids as &[EntryId],
+                &values
             )
+            .execute(op.as_executor())
             .await?;
+
+            self.publisher
+                .publish_all(
+                    op,
+                    chunk.iter().map(|balance| {
+                        if balance.version == 1 {
+                            OutboxEventPayload::BalanceCreated {
+                                balance: balance.clone(),
+                            }
+                        } else {
+                            OutboxEventPayload::BalanceUpdated {
+                                balance: balance.clone(),
+                            }
+                        }
+                    }),
+                )
+                .await?;
+        }
 
         Ok(())
     }
