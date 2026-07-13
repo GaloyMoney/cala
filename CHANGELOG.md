@@ -1,3 +1,20 @@
+# [cala release v0.15.12](https://github.com/GaloyMoney/cala/releases/tag/0.15.12)
+
+
+
+### Bug Fixes
+
+- Batch snapshot inserts to avoid deep-recalc OOM (#740)
+
+### Miscellaneous Tasks
+
+- Bump job to 0.6.28 and obix to 0.2.29 (#743)
+- Bump job to 0.6.27 (#738)
+- Bump the all-dependencies group across 1 directory with 2 updates (#739)
+- Bump the all-dependencies group across 1 directory with 4 updates (#736)
+- Bump es-entity to 0.10.40 (#734)
+- Bump uuid in the all-dependencies group (#733)
+
 # [cala release v0.15.11](https://github.com/GaloyMoney/cala/releases/tag/0.15.11)
 
 
