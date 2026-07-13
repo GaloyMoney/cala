@@ -143,7 +143,9 @@ async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
     clock_ctrl.advance(advance_duration).await;
 
     let voiding_tx_id = TransactionId::new();
-    let voided_tx = cala.void_transaction(voiding_tx_id, original_tx_id).await?;
+    let voided_tx = cala
+        .void_transaction(voiding_tx_id, original_tx_id, void_time.date_naive())
+        .await?;
 
     assert_eq!(original_tx.created_at(), original_time);
     assert_eq!(voided_tx.created_at(), void_time);

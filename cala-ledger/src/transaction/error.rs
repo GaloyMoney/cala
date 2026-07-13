@@ -28,6 +28,13 @@ pub enum TransactionError {
     DuplicateId(String),
     #[error("TransactionError - AlreadyVoided: transaction '{0}' is already voided")]
     AlreadyVoided(TransactionId),
+    #[error(
+        "TransactionError - VoidEffectiveBeforeOriginal: effective date '{effective}' is before the original transaction's effective date '{original_effective}'"
+    )]
+    VoidEffectiveBeforeOriginal {
+        effective: chrono::NaiveDate,
+        original_effective: chrono::NaiveDate,
+    },
 }
 
 impl TransactionError {

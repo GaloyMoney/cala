@@ -45,10 +45,16 @@ impl Transactions {
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
         entry_ids: impl IntoIterator<Item = EntryId>,
+        effective: chrono::NaiveDate,
     ) -> Result<Transaction, TransactionError> {
         let mut existing_tx = self.repo.find_by_id_in_op(&mut *db, existing_tx_id).await?;
 
-        let new_tx = existing_tx.void(voiding_tx_id, entry_ids.into_iter().collect(), db.now())?;
+        let new_tx = existing_tx.void(
+            voiding_tx_id,
+            entry_ids.into_iter().collect(),
+            db.now(),
+            effective,
+        )?;
 
         self.repo.update_in_op(db, &mut existing_tx).await?;
         let voided_tx = self.repo.create_in_op(db, new_tx).await?;

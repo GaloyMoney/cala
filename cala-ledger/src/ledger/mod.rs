@@ -219,15 +219,20 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    /// Voids a transaction by posting a new transaction with reversed entries on the
+    /// given effective date — typically the original transaction's effective date while
+    /// the accounting period is still open, or the current date once it is closed. The
+    /// date may not precede the original transaction's effective date.
     #[instrument(name = "cala_ledger.void_transaction", skip(self))]
     pub async fn void_transaction(
         &self,
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
+        effective: chrono::NaiveDate,
     ) -> Result<Transaction, LedgerError> {
         let mut db = self.begin_operation().await?;
         let transaction = self
-            .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id)
+            .void_transaction_in_op(&mut db, voiding_tx_id, existing_tx_id, effective)
             .await?;
         db.commit().await?;
         Ok(transaction)
@@ -243,6 +248,7 @@ impl CalaLedger {
         db: &mut impl es_entity::AtomicOperationWithTime,
         voiding_tx_id: TransactionId,
         existing_tx_id: TransactionId,
+        effective: chrono::NaiveDate,
     ) -> Result<Transaction, LedgerError> {
         let new_entries = self
             .entries
@@ -256,6 +262,7 @@ impl CalaLedger {
                 voiding_tx_id,
                 existing_tx_id,
                 new_entries.iter().map(|entry| entry.id),
+                effective,
             )
             .await?;
 

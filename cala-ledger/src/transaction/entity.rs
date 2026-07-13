@@ -79,9 +79,17 @@ impl Transaction {
         new_tx_id: TransactionId,
         entry_ids: Vec<EntryId>,
         created_at: chrono::DateTime<chrono::Utc>,
+        effective: chrono::NaiveDate,
     ) -> Result<NewTransaction, TransactionError> {
         if self.is_voided() {
             return Err(TransactionError::AlreadyVoided(self.id));
+        }
+
+        if effective < self.values.effective {
+            return Err(TransactionError::VoidEffectiveBeforeOriginal {
+                effective,
+                original_effective: self.values.effective,
+            });
         }
 
         self.values.voided_by = Some(new_tx_id);
@@ -100,7 +108,7 @@ impl Transaction {
             .tx_template_id(values.tx_template_id)
             .void_of(values.id)
             .entry_ids(entry_ids.into_iter().collect())
-            .effective(created_at.date_naive())
+            .effective(effective)
             .journal_id(values.journal_id)
             .correlation_id(values.correlation_id.clone())
             .created_at(created_at);
@@ -278,15 +286,51 @@ mod tests {
         let new_tx_id = TransactionId::new();
         let entry_ids = vec![EntryId::new()];
         let created_at = chrono::Utc::now();
+        let effective = transaction.effective();
 
-        let new_tx = transaction.void(new_tx_id, entry_ids.clone(), created_at);
+        let new_tx = transaction.void(new_tx_id, entry_ids.clone(), created_at, effective);
         assert!(new_tx.is_ok());
         assert!(transaction.is_voided());
 
         let new_tx = new_tx.unwrap();
         assert_eq!(new_tx.void_of, Some(transaction.id));
+        assert_eq!(new_tx.effective, effective);
 
-        let new_tx = transaction.void(new_tx_id, entry_ids, created_at);
+        let new_tx = transaction.void(new_tx_id, entry_ids, created_at, effective);
         assert!(matches!(new_tx, Err(TransactionError::AlreadyVoided(_))));
+    }
+
+    #[test]
+    fn void_transaction_accepts_effective_after_original() {
+        let mut transaction = transaction();
+        let effective = transaction.effective() + chrono::Days::new(3);
+
+        let new_tx = transaction
+            .void(
+                TransactionId::new(),
+                vec![EntryId::new()],
+                chrono::Utc::now(),
+                effective,
+            )
+            .unwrap();
+        assert_eq!(new_tx.effective, effective);
+    }
+
+    #[test]
+    fn void_transaction_rejects_effective_before_original() {
+        let mut transaction = transaction();
+        let effective = transaction.effective() - chrono::Days::new(1);
+
+        let new_tx = transaction.void(
+            TransactionId::new(),
+            vec![EntryId::new()],
+            chrono::Utc::now(),
+            effective,
+        );
+        assert!(matches!(
+            new_tx,
+            Err(TransactionError::VoidEffectiveBeforeOriginal { .. })
+        ));
+        assert!(!transaction.is_voided());
     }
 }
