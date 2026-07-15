@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT CASE\n              WHEN $1 THEN pg_advisory_xact_lock($2, v.lock_key)\n              ELSE pg_advisory_xact_lock_shared($2, v.lock_key)\n            END\n            FROM UNNEST($3::int4[]) AS v(lock_key)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock_shared",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Int4",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "560691fb005e383aa976c373f991ec2f07fe95719a433a50ddcd278b7ff549ea"
+}

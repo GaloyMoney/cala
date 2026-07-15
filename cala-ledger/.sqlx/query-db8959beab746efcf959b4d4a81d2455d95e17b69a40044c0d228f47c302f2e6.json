@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE parents AS (\n              SELECT m.account_set_id\n              FROM cala_account_set_member_account_sets m\n              WHERE m.member_account_set_id = ANY($1)\n\n              UNION\n              SELECT m.account_set_id\n              FROM parents p\n              JOIN cala_account_set_member_account_sets m\n                ON m.member_account_set_id = p.account_set_id\n            )\n            SELECT DISTINCT hashtext(node_id::text) AS \"lock_key!\"\n            FROM (\n              SELECT account_set_id AS node_id FROM parents\n              UNION\n              SELECT UNNEST($1::uuid[])\n            ) nodes\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "lock_key!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "db8959beab746efcf959b4d4a81d2455d95e17b69a40044c0d228f47c302f2e6"
+}

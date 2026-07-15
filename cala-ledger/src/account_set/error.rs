@@ -48,6 +48,11 @@ pub enum AccountSetError {
          only eventually-consistent sets support recalculation"
     )]
     CannotRecalculateNonEcSet { account_set_id: AccountSetId },
+    #[error(
+        "AccountSetError - Gave up locking the account-set hierarchy: \
+         concurrent structure mutations kept growing the ancestor chain"
+    )]
+    HierarchyLockContention,
 }
 
 impl From<AccountSetFindError> for AccountSetError {
