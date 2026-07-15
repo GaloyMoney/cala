@@ -103,6 +103,28 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
+    #[instrument(name = "cala_ledger.balance.find_all_for_account", skip(self))]
+    pub async fn find_all_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+    ) -> Result<HashMap<Currency, AccountBalance>, BalanceError> {
+        let account_id = account_id.into();
+        let balances = self
+            .repo
+            .find_all_for_accounts(&[(journal_id, account_id)])
+            .await?;
+        Ok(Self::index_by_currency(balances))
+    }
+
+    #[instrument(name = "cala_ledger.balance.find_all_for_accounts", skip(self))]
+    pub async fn find_all_for_accounts(
+        &self,
+        ids: &[AccountBalancesId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all_for_accounts(ids).await
+    }
+
     #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
     pub async fn find_all_in_op(
         &self,
@@ -110,6 +132,45 @@ impl Balances {
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all_in_op(op, ids).await
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.find_all_for_account_in_op",
+        skip(self, op)
+    )]
+    pub async fn find_all_for_account_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+    ) -> Result<HashMap<Currency, AccountBalance>, BalanceError> {
+        let account_id = account_id.into();
+        let balances = self
+            .repo
+            .find_all_for_accounts_in_op(op, &[(journal_id, account_id)])
+            .await?;
+        Ok(Self::index_by_currency(balances))
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.find_all_for_accounts_in_op",
+        skip(self, op)
+    )]
+    pub async fn find_all_for_accounts_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        ids: &[AccountBalancesId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all_for_accounts_in_op(op, ids).await
+    }
+
+    fn index_by_currency(
+        balances: HashMap<BalanceId, AccountBalance>,
+    ) -> HashMap<Currency, AccountBalance> {
+        balances
+            .into_iter()
+            .map(|((_, _, currency), balance)| (currency, balance))
+            .collect()
     }
 
     #[instrument(

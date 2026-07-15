@@ -7,7 +7,8 @@ use cala_types::{
     balance::BalanceSnapshot,
     outbox::OutboxEventPayload,
     primitives::{
-        AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status,
+        AccountBalancesId, AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId,
+        JournalId, Status,
     },
 };
 
@@ -95,6 +96,14 @@ impl BalanceRepo {
         self.find_all_in_op(&self.pool, ids).await
     }
 
+    #[instrument(name = "balance.find_all_for_accounts", skip_all, err(level = "warn"))]
+    pub(super) async fn find_all_for_accounts(
+        &self,
+        ids: &[AccountBalancesId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.find_all_for_accounts_in_op(&self.pool, ids).await
+    }
+
     #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
     pub(super) async fn find_all_in_op(
         &self,
@@ -136,6 +145,57 @@ impl BalanceRepo {
                 &journal_ids[..],
                 &account_ids[..],
                 &currencies[..]
+            ))
+            .await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let details: BalanceSnapshot =
+                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            ret.insert(
+                (details.journal_id, details.account_id, details.currency),
+                AccountBalance::new(row.normal_balance_type, details),
+            );
+        }
+        Ok(ret)
+    }
+
+    #[instrument(
+        name = "balance.find_all_for_accounts_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn find_all_for_accounts_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[AccountBalancesId],
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        for (journal_id, account_id) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+        }
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                WITH account_balance_ids AS (
+                    SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+                    AS v(journal_id, account_id)
+                )
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM cala_current_balances c
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                JOIN account_balance_ids b
+                    ON c.journal_id = b.journal_id
+                    AND c.account_id = b.account_id"#,
+                &journal_ids[..],
+                &account_ids[..],
             ))
             .await?;
 
