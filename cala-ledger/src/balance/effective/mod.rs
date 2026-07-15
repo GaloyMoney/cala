@@ -74,6 +74,36 @@ impl EffectiveBalances {
         self.repo.find_all(ids, date).await
     }
 
+    #[instrument(
+        name = "cala_ledger.balance.effective.find_all_cumulative_for_account",
+        skip(self)
+    )]
+    pub async fn find_all_cumulative_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        date: NaiveDate,
+    ) -> Result<HashMap<Currency, AccountBalance>, BalanceError> {
+        let account_id = account_id.into();
+        let balances = self
+            .repo
+            .find_all_for_accounts(&[(journal_id, account_id)], date)
+            .await?;
+        Ok(Self::index_by_currency(balances))
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.find_all_cumulative_for_accounts",
+        skip(self)
+    )]
+    pub async fn find_all_cumulative_for_accounts(
+        &self,
+        ids: &[AccountBalancesId],
+        date: NaiveDate,
+    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        self.repo.find_all_for_accounts(ids, date).await
+    }
+
     #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
     pub async fn find_all_in_range(
         &self,
@@ -93,6 +123,15 @@ impl EffectiveBalances {
             }
         }
         Ok(res)
+    }
+
+    fn index_by_currency(
+        balances: HashMap<BalanceId, AccountBalance>,
+    ) -> HashMap<Currency, AccountBalance> {
+        balances
+            .into_iter()
+            .map(|((_, _, currency), balance)| (currency, balance))
+            .collect()
     }
 
     #[instrument(

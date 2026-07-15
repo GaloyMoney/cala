@@ -3,8 +3,28 @@ mod helpers;
 use chrono::NaiveDate;
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
+use std::collections::HashSet;
 
-use cala_ledger::{account_set::NewAccountSet, tx_template::*, *};
+use cala_ledger::{account_set::NewAccountSet, balance::AccountBalance, tx_template::*, *};
+
+fn assert_balance_amounts_eq(actual: &AccountBalance, expected: &AccountBalance) {
+    assert_eq!(actual.settled(), expected.settled());
+    assert_eq!(actual.pending(), expected.pending());
+    assert_eq!(actual.encumbrance(), expected.encumbrance());
+}
+
+fn assert_balance_amounts_sum(
+    actual: &AccountBalance,
+    first: &AccountBalance,
+    second: &AccountBalance,
+) {
+    assert_eq!(actual.settled(), first.settled() + second.settled());
+    assert_eq!(actual.pending(), first.pending() + second.pending());
+    assert_eq!(
+        actual.encumbrance(),
+        first.encumbrance() + second.encumbrance()
+    );
+}
 
 #[tokio::test]
 async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
@@ -122,6 +142,305 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     assert_eq!(balances.period.details.version, 4);
     assert_eq!(balances.period.settled(), dec!(200));
     assert_eq!(balances.period.pending(), dec!(200));
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_cumulative_balances_for_account() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 6, 10).unwrap();
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let balances = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_account(journal.id(), recipient_account.id(), date)
+        .await?;
+    let currencies: HashSet<_> = balances.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    let btc = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date)
+        .await?;
+    assert_eq!(balances[&Currency::BTC].balance_type, btc.balance_type);
+    assert_eq!(balances[&Currency::BTC].details, btc.details);
+
+    let usd = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date)
+        .await?;
+    assert_eq!(balances[&Currency::USD].balance_type, usd.balance_type);
+    assert_eq!(balances[&Currency::USD].details, usd.details);
+
+    let fresh = cala.accounts().create(helpers::test_accounts().0).await?;
+    let empty = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_account(journal.id(), fresh.id(), date)
+        .await?;
+    assert!(empty.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_cumulative_balances_for_accounts() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 6, 11).unwrap();
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let expected_ids = [
+        (journal.id(), recipient_account.id(), Currency::BTC),
+        (journal.id(), recipient_account.id(), Currency::USD),
+        (journal.id(), sender_account.id(), Currency::BTC),
+        (journal.id(), sender_account.id(), Currency::USD),
+    ];
+    let expected = cala
+        .balances()
+        .effective()
+        .find_all_cumulative(&expected_ids, date)
+        .await?;
+
+    let actual = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_accounts(
+            &[
+                (journal.id(), recipient_account.id()),
+                (journal.id(), sender_account.id()),
+            ],
+            date,
+        )
+        .await?;
+
+    assert_eq!(
+        actual.keys().copied().collect::<HashSet<_>>(),
+        expected.keys().copied().collect::<HashSet<_>>()
+    );
+    for id in expected.keys() {
+        assert_eq!(actual[id].balance_type, expected[id].balance_type);
+        assert_eq!(actual[id].details, expected[id].details);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_one = cala.accounts().create(receiver).await?;
+    let (_, receiver_two) = helpers::test_accounts();
+    let recipient_two = cala.accounts().create(receiver_two).await?;
+
+    let inline_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Inline Set")
+                .journal_id(journal.id())
+                .build()?,
+        )
+        .await?;
+    let ec_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("EC Set")
+                .journal_id(journal.id())
+                .eventually_consistent(true)
+                .build()?,
+        )
+        .await?;
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_one.id())
+        .await?;
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_two.id())
+        .await?;
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_one.id())
+        .await?;
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_two.id())
+        .await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 6, 12).unwrap();
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_one.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_two.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let inline_balances = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_account(journal.id(), inline_set.id(), date)
+        .await?;
+    let currencies: HashSet<_> = inline_balances.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    let inline_btc = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date)
+        .await?;
+    assert_eq!(
+        inline_balances[&Currency::BTC].balance_type,
+        inline_btc.balance_type
+    );
+    assert_eq!(inline_balances[&Currency::BTC].details, inline_btc.details);
+
+    let inline_usd = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), inline_set.id(), Currency::USD, date)
+        .await?;
+    assert_eq!(
+        inline_balances[&Currency::USD].balance_type,
+        inline_usd.balance_type
+    );
+    assert_eq!(inline_balances[&Currency::USD].details, inline_usd.details);
+
+    let recipient_one_btc = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_one.id(), Currency::BTC, date)
+        .await?;
+    let recipient_two_btc = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_two.id(), Currency::BTC, date)
+        .await?;
+    assert_balance_amounts_sum(
+        &inline_balances[&Currency::BTC],
+        &recipient_one_btc,
+        &recipient_two_btc,
+    );
+
+    let recipient_one_usd = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_one.id(), Currency::USD, date)
+        .await?;
+    let recipient_two_usd = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_two.id(), Currency::USD, date)
+        .await?;
+    assert_balance_amounts_sum(
+        &inline_balances[&Currency::USD],
+        &recipient_one_usd,
+        &recipient_two_usd,
+    );
+
+    let ec_before_recalc = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_account(journal.id(), ec_set.id(), date)
+        .await?;
+    assert!(ec_before_recalc.is_empty());
+
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await?;
+
+    let ec_balances = cala
+        .balances()
+        .effective()
+        .find_all_cumulative_for_account(journal.id(), ec_set.id(), date)
+        .await?;
+    let currencies: HashSet<_> = ec_balances.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    for currency in [Currency::BTC, Currency::USD] {
+        assert_balance_amounts_eq(&ec_balances[&currency], &inline_balances[&currency]);
+    }
 
     Ok(())
 }
