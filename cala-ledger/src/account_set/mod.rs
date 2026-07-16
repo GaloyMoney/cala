@@ -60,7 +60,7 @@ impl AccountSets {
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
             .is_account_set(true)
-            .eventually_consistent(new_account_set.eventually_consistent)
+            .eventually_consistent(new_account_set.is_eventually_consistent())
             .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
@@ -96,7 +96,7 @@ impl AccountSets {
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
                 .is_account_set(true)
-                .eventually_consistent(new_account_set.eventually_consistent)
+                .eventually_consistent(new_account_set.is_eventually_consistent())
                 .velocity_context_values(new_account_set.context_values())
                 .build()
                 .expect("Failed to build account");

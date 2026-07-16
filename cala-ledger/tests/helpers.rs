@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account::*, account_set::NewAccountSet, journal::*, tx_template::*};
+use cala_ledger::{
+    account::*, account_set::NewAccountSet, journal::*, primitives::BalanceRollup, tx_template::*,
+};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     init_pool_with(sqlx::postgres::PgPoolOptions::new()).await
@@ -63,6 +65,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Sender Account Set {code}"))
         .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
 
@@ -71,6 +74,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Recipient Account Set {code}"))
         .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
 
