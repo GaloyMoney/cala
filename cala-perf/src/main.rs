@@ -1,4 +1,6 @@
-use cala_ledger::{account::AccountId, account_set::*, journal::JournalId, CalaLedger};
+use cala_ledger::{
+    account::AccountId, account_set::*, journal::JournalId, primitives::BalanceRollup, CalaLedger,
+};
 use cala_perf::{init_accounts, init_cala, init_journal, templates::simple_transfer};
 use rand::RngExt;
 
@@ -200,6 +202,7 @@ async fn transactions_with_contention(
                 .id(AccountSetId::new())
                 .name(format!("Contention Set {}", i))
                 .journal_id(journal_id)
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap();
             let created_set = cala.account_sets().create(account_set).await?;

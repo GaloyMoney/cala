@@ -152,7 +152,11 @@ pub async fn init_accounts_with_account_sets_depth(
             .id(AccountSetId::new())
             .name(format!("Sender Account Set L{}", i + 1))
             .journal_id(journal.id())
-            .eventually_consistent(eventually_consistent)
+            .balance_rollup(if eventually_consistent {
+                BalanceRollup::EventuallyConsistent
+            } else {
+                BalanceRollup::Synchronous
+            })
             .build()
             .unwrap();
         let sender_set = cala.account_sets().create(sender_set).await?;
@@ -166,7 +170,11 @@ pub async fn init_accounts_with_account_sets_depth(
             .id(AccountSetId::new())
             .name(format!("Recipient Account Set L{}", i + 1))
             .journal_id(journal.id())
-            .eventually_consistent(eventually_consistent)
+            .balance_rollup(if eventually_consistent {
+                BalanceRollup::EventuallyConsistent
+            } else {
+                BalanceRollup::Synchronous
+            })
             .build()
             .unwrap();
         let recipient_set = cala.account_sets().create(recipient_set).await?;

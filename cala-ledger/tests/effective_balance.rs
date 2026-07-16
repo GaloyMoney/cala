@@ -156,6 +156,7 @@ async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> 
         .id(AccountSetId::new())
         .name("Inline Set")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
@@ -165,7 +166,7 @@ async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> 
         .id(AccountSetId::new())
         .name("EC Set")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let ec_set = cala.account_sets().create(ec_set).await.unwrap();

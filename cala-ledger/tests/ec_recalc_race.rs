@@ -83,7 +83,7 @@ async fn ec_recalc_race_under_concurrency() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("EC race set")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let ec_set = cala.account_sets().create(ec_set).await.unwrap();
@@ -295,7 +295,7 @@ async fn ec_recalc_hierarchy_race_under_concurrency() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("EC hierarchy inner set")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let ec_set = cala.account_sets().create(ec_set).await.unwrap();
@@ -306,6 +306,7 @@ async fn ec_recalc_hierarchy_race_under_concurrency() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("EC hierarchy parent set")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let parent_set = cala.account_sets().create(parent_set).await.unwrap();
@@ -477,7 +478,7 @@ async fn add_member_multi_call_no_deadlock_with_posters() -> anyhow::Result<()> 
             .id(AccountSetId::new())
             .name(format!("Deadlock repro parent {i}"))
             .journal_id(journal.id())
-            .eventually_consistent(true)
+            .balance_rollup(BalanceRollup::EventuallyConsistent)
             .build()
             .unwrap();
         parents.push(cala.account_sets().create(set).await.unwrap());
