@@ -101,6 +101,16 @@ impl From<DebitOrCredit> for CelValue {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BalanceRollup {
+    /// Rolled up inside every posting to a member account, under an
+    /// exclusive lock per (journal, set, currency).
+    Synchronous,
+    /// Skipped at posting time; refreshed by recalculating the sets
+    /// returned from `list_eventually_consistent_ids`.
+    EventuallyConsistent,
+}
+
 #[derive(Default, Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, sqlx::Type)]
 #[sqlx(type_name = "Status", rename_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
