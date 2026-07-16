@@ -411,6 +411,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Inline Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()?,
         )
         .await?;
@@ -421,7 +422,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("EC Set")
                 .journal_id(journal.id())
-                .eventually_consistent(true)
+                .balance_rollup(BalanceRollup::EventuallyConsistent)
                 .build()?,
         )
         .await?;
@@ -769,6 +770,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Inline Range Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()?,
         )
         .await?;
@@ -779,7 +781,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("EC Range Set")
                 .journal_id(journal.id())
-                .eventually_consistent(true)
+                .balance_rollup(BalanceRollup::EventuallyConsistent)
                 .build()?,
         )
         .await?;

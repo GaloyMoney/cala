@@ -204,6 +204,7 @@ async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Recipient Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()?,
         )
         .await?;
@@ -334,6 +335,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
                 .id(AccountSetId::new())
                 .name("Inline Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()?,
         )
         .await?;
@@ -344,7 +346,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
                 .id(AccountSetId::new())
                 .name("EC Set")
                 .journal_id(journal.id())
-                .eventually_consistent(true)
+                .balance_rollup(BalanceRollup::EventuallyConsistent)
                 .build()?,
         )
         .await?;
