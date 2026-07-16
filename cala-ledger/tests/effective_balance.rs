@@ -5,7 +5,12 @@ use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
 use std::collections::HashSet;
 
-use cala_ledger::{account_set::NewAccountSet, balance::AccountBalance, tx_template::*, *};
+use cala_ledger::{
+    account_set::NewAccountSet,
+    balance::{AccountBalance, BalanceRange},
+    tx_template::*,
+    *,
+};
 
 fn assert_balance_amounts_eq(actual: &AccountBalance, expected: &AccountBalance) {
     assert_eq!(actual.settled(), expected.settled());
@@ -24,6 +29,31 @@ fn assert_balance_amounts_sum(
         actual.encumbrance(),
         first.encumbrance() + second.encumbrance()
     );
+}
+
+fn assert_balance_range_details_eq(actual: &BalanceRange, expected: &BalanceRange) {
+    assert_eq!(actual.open.balance_type, expected.open.balance_type);
+    assert_eq!(actual.open.details, expected.open.details);
+    assert_eq!(actual.period.balance_type, expected.period.balance_type);
+    assert_eq!(actual.period.details, expected.period.details);
+    assert_eq!(actual.close.balance_type, expected.close.balance_type);
+    assert_eq!(actual.close.details, expected.close.details);
+}
+
+fn assert_balance_range_amounts_eq(actual: &BalanceRange, expected: &BalanceRange) {
+    assert_balance_amounts_eq(&actual.open, &expected.open);
+    assert_balance_amounts_eq(&actual.period, &expected.period);
+    assert_balance_amounts_eq(&actual.close, &expected.close);
+}
+
+fn assert_balance_range_amounts_sum(
+    actual: &BalanceRange,
+    first: &BalanceRange,
+    second: &BalanceRange,
+) {
+    assert_balance_amounts_sum(&actual.open, &first.open, &second.open);
+    assert_balance_amounts_sum(&actual.period, &first.period, &second.period);
+    assert_balance_amounts_sum(&actual.close, &first.close, &second.close);
 }
 
 #[tokio::test]
@@ -440,6 +470,364 @@ async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
 
     for currency in [Currency::BTC, Currency::USD] {
         assert_balance_amounts_eq(&ec_balances[&currency], &inline_balances[&currency]);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_range_balances_for_account() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let from = NaiveDate::from_ymd_opt(2025, 6, 20).unwrap();
+    let before_from = NaiveDate::from_ymd_opt(2025, 6, 19).unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", before_from);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", from);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let ranges = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_account(journal.id(), recipient_account.id(), from, Some(from))
+        .await?;
+    let currencies: HashSet<_> = ranges.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    let btc = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            Currency::BTC,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_details_eq(&ranges[&Currency::BTC], &btc);
+
+    let usd = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_account.id(),
+            Currency::USD,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_details_eq(&ranges[&Currency::USD], &usd);
+
+    let fresh = cala.accounts().create(helpers::test_accounts().0).await?;
+    let empty = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_account(journal.id(), fresh.id(), from, Some(from))
+        .await?;
+    assert!(empty.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_range_balances_for_accounts() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let from = NaiveDate::from_ymd_opt(2025, 6, 21).unwrap();
+    let before_from = NaiveDate::from_ymd_opt(2025, 6, 20).unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", before_from);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", from);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let expected_ids = [
+        (journal.id(), recipient_account.id(), Currency::BTC),
+        (journal.id(), recipient_account.id(), Currency::USD),
+        (journal.id(), sender_account.id(), Currency::BTC),
+        (journal.id(), sender_account.id(), Currency::USD),
+    ];
+    let expected = cala
+        .balances()
+        .effective()
+        .find_all_in_range(&expected_ids, from, Some(from))
+        .await?;
+
+    let actual = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_accounts(
+            &[
+                (journal.id(), recipient_account.id()),
+                (journal.id(), sender_account.id()),
+            ],
+            from,
+            Some(from),
+        )
+        .await?;
+
+    assert_eq!(
+        actual.keys().copied().collect::<HashSet<_>>(),
+        expected.keys().copied().collect::<HashSet<_>>()
+    );
+    for id in expected.keys() {
+        assert_balance_range_details_eq(&actual[id], &expected[id]);
+    }
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn find_all_range_balances_for_account_sets() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_one = cala.accounts().create(receiver).await?;
+    let (_, receiver_two) = helpers::test_accounts();
+    let recipient_two = cala.accounts().create(receiver_two).await?;
+
+    let inline_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("Inline Range Set")
+                .journal_id(journal.id())
+                .build()?,
+        )
+        .await?;
+    let ec_set = cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("EC Range Set")
+                .journal_id(journal.id())
+                .eventually_consistent(true)
+                .build()?,
+        )
+        .await?;
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_one.id())
+        .await?;
+    cala.account_sets()
+        .add_member(inline_set.id(), recipient_two.id())
+        .await?;
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_one.id())
+        .await?;
+    cala.account_sets()
+        .add_member(ec_set.id(), recipient_two.id())
+        .await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let from = NaiveDate::from_ymd_opt(2025, 6, 22).unwrap();
+    let before_from = NaiveDate::from_ymd_opt(2025, 6, 21).unwrap();
+
+    for (recipient, effective) in [
+        (recipient_one.id(), before_from),
+        (recipient_two.id(), before_from),
+        (recipient_one.id(), from),
+        (recipient_two.id(), from),
+    ] {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient);
+        params.insert("effective", effective);
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await?;
+    }
+
+    let inline_ranges = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_account(journal.id(), inline_set.id(), from, Some(from))
+        .await?;
+    let currencies: HashSet<_> = inline_ranges.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    let inline_btc = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            inline_set.id().into(),
+            Currency::BTC,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_details_eq(&inline_ranges[&Currency::BTC], &inline_btc);
+
+    let inline_usd = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            inline_set.id().into(),
+            Currency::USD,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_details_eq(&inline_ranges[&Currency::USD], &inline_usd);
+
+    let recipient_one_btc = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_one.id(),
+            Currency::BTC,
+            from,
+            Some(from),
+        )
+        .await?;
+    let recipient_two_btc = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_two.id(),
+            Currency::BTC,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_amounts_sum(
+        &inline_ranges[&Currency::BTC],
+        &recipient_one_btc,
+        &recipient_two_btc,
+    );
+
+    let recipient_one_usd = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_one.id(),
+            Currency::USD,
+            from,
+            Some(from),
+        )
+        .await?;
+    let recipient_two_usd = cala
+        .balances()
+        .effective()
+        .find_in_range(
+            journal.id(),
+            recipient_two.id(),
+            Currency::USD,
+            from,
+            Some(from),
+        )
+        .await?;
+    assert_balance_range_amounts_sum(
+        &inline_ranges[&Currency::USD],
+        &recipient_one_usd,
+        &recipient_two_usd,
+    );
+
+    let ec_before_recalc = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_account(journal.id(), ec_set.id(), from, Some(from))
+        .await?;
+    assert!(ec_before_recalc.is_empty());
+
+    cala.account_sets()
+        .recalculate_balances(ec_set.id())
+        .await?;
+
+    let ec_ranges = cala
+        .balances()
+        .effective()
+        .find_all_in_range_for_account(journal.id(), ec_set.id(), from, Some(from))
+        .await?;
+    let currencies: HashSet<_> = ec_ranges.keys().copied().collect();
+    assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
+
+    for currency in [Currency::BTC, Currency::USD] {
+        assert_balance_range_amounts_eq(&ec_ranges[&currency], &inline_ranges[&currency]);
     }
 
     Ok(())

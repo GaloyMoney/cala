@@ -112,7 +112,50 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
+        Ok(Self::balance_ranges_from_snapshots(ranges))
+    }
 
+    #[instrument(
+        name = "cala_ledger.balance.effective.find_all_in_range_for_account",
+        skip(self)
+    )]
+    pub async fn find_all_in_range_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<HashMap<Currency, BalanceRange>, BalanceError> {
+        let account_id = account_id.into();
+        let ranges = self
+            .repo
+            .find_range_all_for_accounts(&[(journal_id, account_id)], from, until)
+            .await?;
+        Ok(Self::index_ranges_by_currency(
+            Self::balance_ranges_from_snapshots(ranges),
+        ))
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.find_all_in_range_for_accounts",
+        skip(self)
+    )]
+    pub async fn find_all_in_range_for_accounts(
+        &self,
+        ids: &[AccountBalancesId],
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+        let ranges = self
+            .repo
+            .find_range_all_for_accounts(ids, from, until)
+            .await?;
+        Ok(Self::balance_ranges_from_snapshots(ranges))
+    }
+
+    fn balance_ranges_from_snapshots(
+        ranges: HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
+    ) -> HashMap<BalanceId, BalanceRange> {
         let mut res = HashMap::new();
         for (id, (start, start_version, end, end_version)) in ranges {
             if let Some(end) = end {
@@ -122,7 +165,7 @@ impl EffectiveBalances {
                 );
             }
         }
-        Ok(res)
+        res
     }
 
     fn index_by_currency(
@@ -131,6 +174,15 @@ impl EffectiveBalances {
         balances
             .into_iter()
             .map(|((_, _, currency), balance)| (currency, balance))
+            .collect()
+    }
+
+    fn index_ranges_by_currency(
+        ranges: HashMap<BalanceId, BalanceRange>,
+    ) -> HashMap<Currency, BalanceRange> {
+        ranges
+            .into_iter()
+            .map(|((_, _, currency), range)| (currency, range))
             .collect()
     }
 

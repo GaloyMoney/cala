@@ -400,6 +400,112 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        name = "cala_ledger.balances.effective.find_range_all_for_accounts",
+        skip_all
+    )]
+    pub(super) async fn find_range_all_for_accounts(
+        &self,
+        ids: &[AccountBalancesId],
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+    ) -> Result<BalanceRangeResult, BalanceError> {
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        for (journal_id, account_id) in ids {
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+        }
+
+        let rows = sqlx::query!(
+            r#"
+            WITH account_balance_ids AS (
+              SELECT journal_id, account_id, normal_balance_type
+              FROM (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+                AS v(journal_id, account_id)
+              ) AS v
+              JOIN cala_accounts a
+              ON account_id = a.id
+            ),
+            first AS (
+              SELECT
+                true AS first, false AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM account_balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = account_balance_ids.journal_id
+                      AND account_id = account_balance_ids.account_id
+                      AND effective < $3
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            ),
+            last AS (
+              SELECT
+                false AS first, true AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM account_balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = account_balance_ids.journal_id
+                      AND account_id = account_balance_ids.account_id
+                      AND effective <= COALESCE($4, NOW()::DATE)
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            )
+            SELECT
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM first
+            UNION ALL
+            SELECT
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM last"#,
+            &journal_ids[..],
+            &account_ids[..],
+            from,
+            until,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            let values: serde_json::Value = row.values.expect("values is not null");
+            let details: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let balance_id = (details.journal_id, details.account_id, details.currency);
+            let balance = AccountBalance::new(row.normal_balance_type, details);
+            let entry = ret.entry(balance_id).or_insert((None, 0, None, 0));
+            if row.first.expect("first is not null") {
+                entry.0 = Some(balance);
+                entry.1 = row.all_time_version.expect("all_time_version") as u32;
+            } else {
+                entry.2 = Some(balance);
+                entry.3 = row.all_time_version.expect("all_time_version") as u32;
+            }
+        }
+        Ok(ret)
+    }
+
+    #[instrument(
         name = "cala_ledger.balances.effective.find_for_update",
         skip(self, op)
     )]
