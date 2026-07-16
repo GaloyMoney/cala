@@ -1,3 +1,11 @@
+# [cala release v0.16.0](https://github.com/GaloyMoney/cala/releases/tag/0.16.0)
+
+
+
+### Features
+
+- [**breaking**] Make account set balance rollup explicit (#752)
+
 # [cala release v0.15.12](https://github.com/GaloyMoney/cala/releases/tag/0.15.12)
 
 
