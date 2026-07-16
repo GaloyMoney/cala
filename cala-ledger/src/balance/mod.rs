@@ -291,6 +291,13 @@ impl Balances {
         Ok(())
     }
 
+    /// Folds member balance-history deltas into each owning set's running
+    /// snapshot and returns one snapshot per touched `(set, currency)` —
+    /// the final coalesced state — rather than one snapshot per replayed
+    /// delta. `version` still advances once per folded delta, so version
+    /// gaps in `cala_balance_history` are expected for EC sets and the
+    /// version of a set's balance keeps counting the member deltas it
+    /// has absorbed.
     #[instrument(name = "cala_ledger.balances.replay_member_deltas_batch", skip_all)]
     fn replay_member_deltas_batch(
         journal_id: JournalId,
@@ -300,7 +307,8 @@ impl Balances {
     ) -> Vec<BalanceSnapshot> {
         use rust_decimal::Decimal;
 
-        let mut new_snapshots = Vec::new();
+        let mut touched: Vec<(AccountSetId, Currency)> = Vec::new();
+        let mut touched_seen: HashSet<(AccountSetId, Currency)> = HashSet::new();
 
         for MemberBalanceHistoryRow {
             snapshot,
@@ -401,7 +409,18 @@ impl Balances {
                     running.encumbrance.modified_at = snapshot.encumbrance.modified_at;
                 }
 
-                new_snapshots.push(running.clone());
+                if touched_seen.insert((*set_id, snapshot.currency)) {
+                    touched.push((*set_id, snapshot.currency));
+                }
+            }
+        }
+
+        let mut new_snapshots = Vec::with_capacity(touched.len());
+        for (set_id, currency) in touched {
+            if let Some((_, balances, _)) = set_states.get(&set_id) {
+                if let Some(snapshot) = balances.get(&currency) {
+                    new_snapshots.push(snapshot.clone());
+                }
             }
         }
 
@@ -906,11 +925,11 @@ mod tests {
             let result =
                 Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
 
-            assert_eq!(result.len(), 2);
-            assert_eq!(result[0].version, 1);
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
-            assert_eq!(result[1].version, 2);
-            assert_eq!(result[1].settled.dr_balance, Decimal::from(250));
+            // Both deltas coalesce into a single emitted snapshot carrying
+            // the final accumulated state; version counts the folded deltas.
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].version, 2);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(250));
         }
 
         #[test]
