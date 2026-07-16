@@ -12,7 +12,154 @@ use crate::{
 
 use super::{entity::*, error::*};
 
-const ADDVISORY_LOCK_ID: i64 = 123456;
+/// `classid` namespace for the per-set hierarchy advisory locks (2-arg
+/// form), keyed on `hashtext(<account set id>)`. Must stay disjoint
+/// from `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
+///
+/// Membership maintenance is a read-then-write over an ancestor chain:
+/// each mutation walks the set-to-set edges upward (the recursive
+/// `parents` CTE) and then writes the transitive-closure rows the walk
+/// justifies. Two concurrent mutations that each miss the other's
+/// uncommitted writes would leave the closure table inconsistent
+/// (write-skew), so every mutation locks its whole scope — the target
+/// set(s) plus all their ancestors — before walking, and the locks are
+/// transaction-scoped so the walk's snapshot stays valid until the
+/// writes commit.
+///
+/// Lock modes:
+///
+/// - Set-structure mutations (`add_member_set` / `remove_member_set`)
+///   take EXCLUSIVE locks on their scope. They mutate the edges that
+///   every walk reads, and read the member rows that account-member
+///   mutations write, so they must exclude everything whose scope
+///   overlaps theirs.
+/// - Account-member mutations (`add_member_account` /
+///   `remove_member_account`) take SHARED locks on their scope plus an
+///   EXCLUSIVE per-member lock ([`MEMBER_LOCK_CLASS`]). Account-member
+///   mutations only read the edges, and their closure writes for
+///   different members are disjoint rows, so they can share a scope;
+///   the per-member lock serializes mutations touching the *same*
+///   member (e.g. an add and a remove in overlapping hierarchies),
+///   whose interleaved inserts/deletes on shared ancestors would
+///   otherwise tear the closure.
+///
+/// Mutations on disjoint hierarchies take disjoint locks and no longer
+/// contend at all (previously a single global advisory lock serialized
+/// every membership mutation ledger-wide).
+const SET_HIERARCHY_LOCK_CLASS: i32 = 2;
+
+/// `classid` namespace for the per-member advisory locks (2-arg form),
+/// keyed on `hashtext(<member account id>)`. See
+/// [`SET_HIERARCHY_LOCK_CLASS`].
+const MEMBER_LOCK_CLASS: i32 = 3;
+
+/// Bound on lock/re-walk rounds in [`lock_membership_scope`]. Each
+/// extra round requires a concurrent structure mutation to have grown
+/// the ancestor chain mid-acquisition, so in practice one verification
+/// round suffices; the bound only guards against livelock under
+/// pathological structure churn.
+const MAX_LOCK_ROUNDS: usize = 5;
+
+/// Locks the membership-mutation scope: `seed_ids` plus all their
+/// ancestors (via [`SET_HIERARCHY_LOCK_CLASS`] locks, SHARED unless
+/// `exclusive`), then `member_account_id` if given (EXCLUSIVE
+/// [`MEMBER_LOCK_CLASS`] lock).
+///
+/// The chain is discovered by walking the edges, but the walk itself
+/// needs the locks to be stable — so acquisition loops: walk, lock the
+/// newly discovered nodes (in canonical lock-key order), re-walk, and
+/// finish once a walk discovers nothing unlocked. A re-walk can only
+/// differ if a concurrent structure mutation committed an edge into the
+/// chain between our walk and our lock acquisition; once every node of
+/// the current chain is locked, further structure mutations touching it
+/// block on us and the chain can no longer change.
+///
+/// Locks acquired in later rounds (and across multiple membership calls
+/// in one transaction) do not follow the canonical order, so conflicting
+/// acquisitions can in rare cases deadlock instead of queueing; Postgres
+/// detects and aborts one transaction (SQLSTATE 40P01), which callers
+/// should treat as retryable. The per-member lock is acquired last —
+/// never wait on chain locks while holding a member lock other
+/// transactions may queue on.
+async fn lock_membership_scope(
+    db: &mut impl es_entity::AtomicOperation,
+    seed_ids: &[AccountSetId],
+    member_account_id: Option<AccountId>,
+    exclusive: bool,
+) -> Result<(), AccountSetError> {
+    let mut held: std::collections::HashSet<i32> = std::collections::HashSet::new();
+    let mut stable = false;
+    for _ in 0..MAX_LOCK_ROUNDS {
+        let chain = sqlx::query!(
+            r#"
+            WITH RECURSIVE parents AS (
+              SELECT m.account_set_id
+              FROM cala_account_set_member_account_sets m
+              WHERE m.member_account_set_id = ANY($1)
+
+              UNION
+              SELECT m.account_set_id
+              FROM parents p
+              JOIN cala_account_set_member_account_sets m
+                ON m.member_account_set_id = p.account_set_id
+            )
+            SELECT DISTINCT hashtext(node_id::text) AS "lock_key!"
+            FROM (
+              SELECT account_set_id AS node_id FROM parents
+              UNION
+              SELECT UNNEST($1::uuid[])
+            ) nodes
+            "#,
+            seed_ids as &[AccountSetId],
+        )
+        .fetch_all(db.as_executor())
+        .await?;
+
+        let mut missing: Vec<i32> = chain
+            .into_iter()
+            .map(|row| row.lock_key)
+            .filter(|key| !held.contains(key))
+            .collect();
+        if missing.is_empty() {
+            stable = true;
+            break;
+        }
+        // Canonical order within the batch so concurrent overlapping
+        // acquisitions queue instead of deadlocking. Sorting has to
+        // happen on the input array: the planner is free to evaluate
+        // the lock calls before any SQL-level sort node.
+        missing.sort_unstable();
+        sqlx::query!(
+            r#"
+            SELECT CASE
+              WHEN $1 THEN pg_advisory_xact_lock($2, v.lock_key)
+              ELSE pg_advisory_xact_lock_shared($2, v.lock_key)
+            END
+            FROM UNNEST($3::int4[]) AS v(lock_key)
+            "#,
+            exclusive,
+            SET_HIERARCHY_LOCK_CLASS,
+            &missing as &[i32],
+        )
+        .execute(db.as_executor())
+        .await?;
+        held.extend(missing);
+    }
+    if !stable {
+        return Err(AccountSetError::HierarchyLockContention);
+    }
+
+    if let Some(account_id) = member_account_id {
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+            MEMBER_LOCK_CLASS,
+            account_id.to_string(),
+        )
+        .execute(db.as_executor())
+        .await?;
+    }
+    Ok(())
+}
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -367,9 +514,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_membership_scope(db, &[account_set_id], Some(account_id), false).await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
@@ -442,9 +587,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_membership_scope(db, &[account_set_id], Some(account_id), false).await?;
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
@@ -514,9 +657,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_membership_scope(db, &[account_set_id, member_account_set_id], None, true).await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
@@ -599,9 +740,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_membership_scope(db, &[account_set_id, member_account_set_id], None, true).await?;
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
