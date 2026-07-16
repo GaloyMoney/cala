@@ -1,6 +1,6 @@
 mod helpers;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use rand::distr::{Alphanumeric, SampleString};
 
@@ -25,8 +25,44 @@ fn assert_balance_amounts_sum(
     );
 }
 
+fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> {
+    es_entity::PaginatedQueryArgs {
+        first: 100,
+        after: None,
+    }
+}
+
+fn balances_by_currency<C>(
+    balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
+) -> HashMap<Currency, AccountBalance> {
+    balances
+        .entities
+        .into_iter()
+        .map(|balance| (balance.details.currency, balance))
+        .collect()
+}
+
+fn balances_by_id<C>(
+    balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
+) -> HashMap<BalanceId, AccountBalance> {
+    balances
+        .entities
+        .into_iter()
+        .map(|balance| {
+            (
+                (
+                    balance.details.journal_id,
+                    balance.details.account_id,
+                    balance.details.currency,
+                ),
+                balance,
+            )
+        })
+        .collect()
+}
+
 #[tokio::test]
-async fn find_all_current_balances_for_account() -> anyhow::Result<()> {
+async fn list_current_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -54,8 +90,9 @@ async fn find_all_current_balances_for_account() -> anyhow::Result<()> {
 
     let balances = cala
         .balances()
-        .find_all_for_account(journal.id(), recipient_account.id())
+        .list_for_account((journal.id(), recipient_account.id()), all_balances_query())
         .await?;
+    let balances = balances_by_currency(balances);
     let currencies: HashSet<_> = balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -76,15 +113,16 @@ async fn find_all_current_balances_for_account() -> anyhow::Result<()> {
     let fresh = cala.accounts().create(helpers::test_accounts().0).await?;
     let empty = cala
         .balances()
-        .find_all_for_account(journal.id(), fresh.id())
+        .list_for_account((journal.id(), fresh.id()), all_balances_query())
         .await?;
+    let empty = balances_by_currency(empty);
     assert!(empty.is_empty());
 
     Ok(())
 }
 
 #[tokio::test]
-async fn find_all_current_balances_for_accounts() -> anyhow::Result<()> {
+async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -120,11 +158,15 @@ async fn find_all_current_balances_for_accounts() -> anyhow::Result<()> {
 
     let actual = cala
         .balances()
-        .find_all_for_accounts(&[
-            (journal.id(), recipient_account.id()),
-            (journal.id(), sender_account.id()),
-        ])
+        .list_for_accounts(
+            &[
+                (journal.id(), recipient_account.id()),
+                (journal.id(), sender_account.id()),
+            ],
+            all_balances_query(),
+        )
         .await?;
+    let actual = balances_by_id(actual);
 
     assert_eq!(
         actual.keys().copied().collect::<HashSet<_>>(),
@@ -139,7 +181,7 @@ async fn find_all_current_balances_for_accounts() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_current_balances_for_account_set() -> anyhow::Result<()> {
+async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -193,8 +235,12 @@ async fn find_all_current_balances_for_account_set() -> anyhow::Result<()> {
 
     let balances = cala
         .balances()
-        .find_all_for_account(journal.id(), account_set.id())
+        .list_for_account(
+            (journal.id(), AccountId::from(account_set.id())),
+            all_balances_query(),
+        )
         .await?;
+    let balances = balances_by_currency(balances);
     let currencies: HashSet<_> = balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -248,8 +294,9 @@ async fn find_all_current_balances_for_account_set() -> anyhow::Result<()> {
     let expected = cala.balances().find_all(&expected_ids).await?;
     let actual = cala
         .balances()
-        .find_all_for_accounts(&[(journal.id(), account_set_id)])
+        .list_for_accounts(&[(journal.id(), account_set_id)], all_balances_query())
         .await?;
+    let actual = balances_by_id(actual);
 
     assert_eq!(
         actual.keys().copied().collect::<HashSet<_>>(),
@@ -264,7 +311,7 @@ async fn find_all_current_balances_for_account_set() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_current_balances_for_eventually_consistent_account_set() -> anyhow::Result<()> {
+async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -335,8 +382,12 @@ async fn find_all_current_balances_for_eventually_consistent_account_set() -> an
 
     let ec_before_recalc = cala
         .balances()
-        .find_all_for_account(journal.id(), ec_set.id())
+        .list_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            all_balances_query(),
+        )
         .await?;
+    let ec_before_recalc = balances_by_currency(ec_before_recalc);
     assert!(ec_before_recalc.is_empty());
 
     cala.account_sets()
@@ -345,8 +396,12 @@ async fn find_all_current_balances_for_eventually_consistent_account_set() -> an
 
     let ec_balances = cala
         .balances()
-        .find_all_for_account(journal.id(), ec_set.id())
+        .list_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            all_balances_query(),
+        )
         .await?;
+    let ec_balances = balances_by_currency(ec_balances);
     let currencies: HashSet<_> = ec_balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -372,8 +427,12 @@ async fn find_all_current_balances_for_eventually_consistent_account_set() -> an
 
     let inline_balances = cala
         .balances()
-        .find_all_for_account(journal.id(), inline_set.id())
+        .list_for_account(
+            (journal.id(), AccountId::from(inline_set.id())),
+            all_balances_query(),
+        )
         .await?;
+    let inline_balances = balances_by_currency(inline_balances);
     for currency in [Currency::BTC, Currency::USD] {
         assert_balance_amounts_eq(&ec_balances[&currency], &inline_balances[&currency]);
     }

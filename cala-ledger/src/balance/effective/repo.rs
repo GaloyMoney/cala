@@ -4,7 +4,11 @@ use std::collections::HashMap;
 use tracing::instrument;
 
 use crate::{
-    balance::{account_balance::AccountBalance, error::BalanceError},
+    balance::{
+        account_balance::{AccountBalance, BalanceRange},
+        cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+        error::BalanceError,
+    },
     outbox::OutboxPublisher,
 };
 use cala_types::{
@@ -229,15 +233,91 @@ impl EffectiveBalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(
-        name = "cala_ledger.balances.effective.find_all_for_accounts",
-        skip_all
-    )]
-    pub(super) async fn find_all_for_accounts(
+    #[instrument(name = "cala_ledger.balances.effective.list_for_account", skip_all)]
+    pub(super) async fn list_for_account(
+        &self,
+        id: AccountBalancesId,
+        date: NaiveDate,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let after_currency = after.map(|cursor| cursor.currency.code().to_string());
+        let (journal_id, account_id) = id;
+
+        let rows = sqlx::query!(
+            r#"
+            WITH account_balance_id AS (
+              SELECT $2::uuid AS journal_id, $3::uuid AS account_id, a.normal_balance_type
+              FROM cala_accounts a
+              WHERE a.id = $3
+            )
+            SELECT
+                h.values,
+                account_balance_id.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+            FROM account_balance_id
+            JOIN LATERAL (
+                SELECT DISTINCT ON (journal_id, account_id, currency)
+                    journal_id, account_id, currency, values
+                FROM cala_cumulative_effective_balances
+                WHERE journal_id = account_balance_id.journal_id
+                  AND account_id = account_balance_id.account_id
+                  AND effective <= $4
+                ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+            ) h ON TRUE
+            WHERE ($5::text IS NULL OR h.currency > $5)
+            ORDER BY h.currency ASC
+            LIMIT $1
+            "#,
+            (first + 1) as i64,
+            journal_id as JournalId,
+            account_id as AccountId,
+            date,
+            after_currency.as_deref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    #[instrument(name = "cala_ledger.balances.effective.list_for_accounts", skip_all)]
+    pub(super) async fn list_for_accounts(
         &self,
         ids: &[AccountBalancesId],
         date: NaiveDate,
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.journal_id)),
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+            )
+        } else {
+            (None, None, None)
+        };
+
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         for (journal_id, account_id) in ids {
@@ -250,45 +330,73 @@ impl EffectiveBalanceRepo {
             WITH account_balance_ids AS (
               SELECT journal_id, account_id, normal_balance_type
               FROM (
-                SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+                SELECT DISTINCT journal_id, account_id
+                FROM UNNEST($1::uuid[], $2::uuid[])
                 AS v(journal_id, account_id)
               ) AS v
               JOIN cala_accounts a
               ON account_id = a.id
+            ),
+            balances AS (
+              SELECT
+                  values,
+                  normal_balance_type,
+                  h.journal_id,
+                  h.account_id,
+                  h.currency
+              FROM account_balance_ids
+              JOIN LATERAL (
+                  SELECT DISTINCT ON (journal_id, account_id, currency)
+                      journal_id, account_id, currency, values
+                  FROM cala_cumulative_effective_balances
+                  WHERE journal_id = account_balance_ids.journal_id
+                    AND account_id = account_balance_ids.account_id
+                    AND effective <= $3
+                  ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+              ) h ON TRUE
             )
             SELECT
                 values,
                 normal_balance_type as "normal_balance_type!: DebitOrCredit",
-                h.journal_id as "journal_id: JournalId",
-                h.account_id as "account_id: AccountId",
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
                 h.currency
-            FROM account_balance_ids
-            JOIN LATERAL (
-                SELECT DISTINCT ON (journal_id, account_id, currency)
-                    journal_id, account_id, currency, values
-                FROM cala_cumulative_effective_balances
-                WHERE journal_id = account_balance_ids.journal_id
-                  AND account_id = account_balance_ids.account_id
-                  AND effective <= $3
-                ORDER BY journal_id, account_id, currency, effective DESC, version DESC
-            ) h ON TRUE
+            FROM balances h
+            WHERE (
+                $4::uuid IS NULL
+                OR (journal_id, account_id, currency) > ($4::uuid, $5::uuid, $6::text)
+            )
+            ORDER BY journal_id ASC, account_id ASC, currency ASC
+            LIMIT $7
             "#,
             &journal_ids[..],
             &account_ids[..],
             date,
+            after_journal_id,
+            after_account_id,
+            after_currency.as_deref(),
+            (first + 1) as i64,
         )
         .fetch_all(&self.pool)
         .await?;
 
-        let mut ret = HashMap::new();
-        for row in rows {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            let balance_id = (details.journal_id, details.account_id, details.currency);
-            let balance = AccountBalance::new(row.normal_balance_type, details);
-            ret.insert(balance_id, balance);
-        }
-        Ok(ret)
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     #[instrument(name = "cala_ledger.balances.effective.find_range_all", skip_all)]
@@ -400,15 +508,161 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
-        name = "cala_ledger.balances.effective.find_range_all_for_accounts",
+        name = "cala_ledger.balances.effective.list_range_for_account",
         skip_all
     )]
-    pub(super) async fn find_range_all_for_accounts(
+    pub(super) async fn list_range_for_account(
+        &self,
+        id: AccountBalancesId,
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let after_currency = after.map(|cursor| cursor.currency.code().to_string());
+        let (journal_id, account_id) = id;
+
+        let rows = sqlx::query!(
+            r#"
+            WITH account_balance_id AS (
+              SELECT $2::uuid AS journal_id, $3::uuid AS account_id, a.normal_balance_type
+              FROM cala_accounts a
+              WHERE a.id = $3
+            ),
+            balance_ids AS (
+              SELECT h.journal_id, h.account_id, h.currency, account_balance_id.normal_balance_type
+              FROM account_balance_id
+              JOIN LATERAL (
+                SELECT DISTINCT ON (journal_id, account_id, currency)
+                    journal_id, account_id, currency
+                FROM cala_cumulative_effective_balances
+                WHERE journal_id = account_balance_id.journal_id
+                  AND account_id = account_balance_id.account_id
+                  AND effective <= COALESCE($5, NOW()::DATE)
+                ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+              ) h ON TRUE
+              WHERE ($6::text IS NULL OR h.currency > $6)
+              ORDER BY h.currency ASC
+              LIMIT $1
+            ),
+            first AS (
+              SELECT
+                true AS first, false AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
+                      AND effective < $4
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            ),
+            last AS (
+              SELECT
+                false AS first, true AS last, values,
+                normal_balance_type,
+                all_time_version,
+                h.journal_id, h.account_id, h.currency
+                FROM balance_ids
+                JOIN LATERAL (
+                    SELECT DISTINCT ON (journal_id, account_id, currency)
+                        journal_id, account_id, currency, values, all_time_version
+                    FROM cala_cumulative_effective_balances
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
+                      AND effective <= COALESCE($5, NOW()::DATE)
+                    ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+                ) h ON TRUE
+            )
+            SELECT
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM first
+            UNION ALL
+            SELECT
+                first, last, values,
+                normal_balance_type as "normal_balance_type!: DebitOrCredit",
+                all_time_version,
+                journal_id as "journal_id: JournalId",
+                account_id as "account_id: AccountId",
+                currency
+            FROM last"#,
+            (first + 1) as i64,
+            journal_id as JournalId,
+            account_id as AccountId,
+            from,
+            until,
+            after_currency.as_deref(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut ranges = HashMap::new();
+        for row in rows {
+            let values: serde_json::Value = row.values.expect("values is not null");
+            let details: BalanceSnapshot =
+                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let balance_id = (details.journal_id, details.account_id, details.currency);
+            let balance = AccountBalance::new(row.normal_balance_type, details);
+            let entry = ranges.entry(balance_id).or_insert((None, 0, None, 0));
+            if row.first.expect("first is not null") {
+                entry.0 = Some(balance);
+                entry.1 = row.all_time_version.expect("all_time_version") as u32;
+            } else {
+                entry.2 = Some(balance);
+                entry.3 = row.all_time_version.expect("all_time_version") as u32;
+            }
+        }
+
+        let mut entities = Self::balance_ranges_from_snapshots(ranges);
+        let has_next_page = entities.len() > first;
+        entities.truncate(first);
+        let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    #[instrument(
+        name = "cala_ledger.balances.effective.list_range_for_accounts",
+        skip_all
+    )]
+    pub(super) async fn list_range_for_accounts(
         &self,
         ids: &[AccountBalancesId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRangeResult, BalanceError> {
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.journal_id)),
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+            )
+        } else {
+            (None, None, None)
+        };
+
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         for (journal_id, account_id) in ids {
@@ -421,11 +675,31 @@ impl EffectiveBalanceRepo {
             WITH account_balance_ids AS (
               SELECT journal_id, account_id, normal_balance_type
               FROM (
-                SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+                SELECT DISTINCT journal_id, account_id
+                FROM UNNEST($1::uuid[], $2::uuid[])
                 AS v(journal_id, account_id)
               ) AS v
               JOIN cala_accounts a
               ON account_id = a.id
+            ),
+            balance_ids AS (
+              SELECT h.journal_id, h.account_id, h.currency, account_balance_ids.normal_balance_type
+              FROM account_balance_ids
+              JOIN LATERAL (
+                SELECT DISTINCT ON (journal_id, account_id, currency)
+                    journal_id, account_id, currency
+                FROM cala_cumulative_effective_balances
+                WHERE journal_id = account_balance_ids.journal_id
+                  AND account_id = account_balance_ids.account_id
+                  AND effective <= COALESCE($4, NOW()::DATE)
+                ORDER BY journal_id, account_id, currency, effective DESC, version DESC
+              ) h ON TRUE
+              WHERE (
+                $5::uuid IS NULL
+                OR (h.journal_id, h.account_id, h.currency) > ($5::uuid, $6::uuid, $7::text)
+              )
+              ORDER BY h.journal_id ASC, h.account_id ASC, h.currency ASC
+              LIMIT $8
             ),
             first AS (
               SELECT
@@ -433,13 +707,14 @@ impl EffectiveBalanceRepo {
                 normal_balance_type,
                 all_time_version,
                 h.journal_id, h.account_id, h.currency
-                FROM account_balance_ids
+                FROM balance_ids
                 JOIN LATERAL (
                     SELECT DISTINCT ON (journal_id, account_id, currency)
                         journal_id, account_id, currency, values, all_time_version
                     FROM cala_cumulative_effective_balances
-                    WHERE journal_id = account_balance_ids.journal_id
-                      AND account_id = account_balance_ids.account_id
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
                       AND effective < $3
                     ORDER BY journal_id, account_id, currency, effective DESC, version DESC
                 ) h ON TRUE
@@ -450,13 +725,14 @@ impl EffectiveBalanceRepo {
                 normal_balance_type,
                 all_time_version,
                 h.journal_id, h.account_id, h.currency
-                FROM account_balance_ids
+                FROM balance_ids
                 JOIN LATERAL (
                     SELECT DISTINCT ON (journal_id, account_id, currency)
                         journal_id, account_id, currency, values, all_time_version
                     FROM cala_cumulative_effective_balances
-                    WHERE journal_id = account_balance_ids.journal_id
-                      AND account_id = account_balance_ids.account_id
+                    WHERE journal_id = balance_ids.journal_id
+                      AND account_id = balance_ids.account_id
+                      AND currency = balance_ids.currency
                       AND effective <= COALESCE($4, NOW()::DATE)
                     ORDER BY journal_id, account_id, currency, effective DESC, version DESC
                 ) h ON TRUE
@@ -482,6 +758,10 @@ impl EffectiveBalanceRepo {
             &account_ids[..],
             from,
             until,
+            after_journal_id,
+            after_account_id,
+            after_currency.as_deref(),
+            (first + 1) as i64,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -502,7 +782,35 @@ impl EffectiveBalanceRepo {
                 entry.3 = row.all_time_version.expect("all_time_version") as u32;
             }
         }
-        Ok(ret)
+        let mut entities = Self::balance_ranges_from_snapshots(ret);
+        let has_next_page = entities.len() > first;
+        entities.truncate(first);
+        let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    fn balance_ranges_from_snapshots(ranges: BalanceRangeResult) -> Vec<BalanceRange> {
+        let mut ranges = ranges
+            .into_iter()
+            .filter_map(|(_, (start, start_version, end, end_version))| {
+                end.map(|end| BalanceRange::new(start, end, end_version - start_version))
+            })
+            .collect::<Vec<_>>();
+
+        ranges.sort_by_key(|range| {
+            (
+                range.close.details.journal_id,
+                range.close.details.account_id,
+                range.close.details.currency,
+            )
+        });
+
+        ranges
     }
 
     #[instrument(

@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH account_balance_ids AS (\n              SELECT journal_id, account_id, normal_balance_type\n              FROM (\n                SELECT DISTINCT journal_id, account_id\n                FROM UNNEST($1::uuid[], $2::uuid[])\n                AS v(journal_id, account_id)\n              ) AS v\n              JOIN cala_accounts a\n              ON account_id = a.id\n            ),\n            balances AS (\n              SELECT\n                  values,\n                  normal_balance_type,\n                  h.journal_id,\n                  h.account_id,\n                  h.currency\n              FROM account_balance_ids\n              JOIN LATERAL (\n                  SELECT DISTINCT ON (journal_id, account_id, currency)\n                      journal_id, account_id, currency, values\n                  FROM cala_cumulative_effective_balances\n                  WHERE journal_id = account_balance_ids.journal_id\n                    AND account_id = account_balance_ids.account_id\n                    AND effective <= $3\n                  ORDER BY journal_id, account_id, currency, effective DESC, version DESC\n              ) h ON TRUE\n            )\n            SELECT\n                values,\n                normal_balance_type as \"normal_balance_type!: DebitOrCredit\",\n                journal_id as \"journal_id: JournalId\",\n                account_id as \"account_id: AccountId\",\n                h.currency\n            FROM balances h\n            WHERE (\n                $4::uuid IS NULL\n                OR (journal_id, account_id, currency) > ($4::uuid, $5::uuid, $6::text)\n            )\n            ORDER BY journal_id ASC, account_id ASC, currency ASC\n            LIMIT $7\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "journal_id: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "currency",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Date",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0cb350169e249358a46dea50bbeda0cbaedaa191dd9944ff2f8c271643ef21e5"
+}

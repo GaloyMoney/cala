@@ -12,7 +12,11 @@ use cala_types::{
     },
 };
 
-use super::{account_balance::AccountBalance, error::BalanceError};
+use super::{
+    account_balance::AccountBalance,
+    cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+    error::BalanceError,
+};
 use crate::outbox::OutboxPublisher;
 
 const EC_SET_LOCK_CLASS: i32 = 1;
@@ -96,12 +100,26 @@ impl BalanceRepo {
         self.find_all_in_op(&self.pool, ids).await
     }
 
-    #[instrument(name = "balance.find_all_for_accounts", skip_all, err(level = "warn"))]
-    pub(super) async fn find_all_for_accounts(
+    #[instrument(name = "balance.list_for_account", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_account(
+        &self,
+        id: AccountBalancesId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.list_for_account_in_op(&self.pool, id, args).await
+    }
+
+    #[instrument(name = "balance.list_for_accounts", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_accounts(
         &self,
         ids: &[AccountBalancesId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
-        self.find_all_for_accounts_in_op(&self.pool, ids).await
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.list_for_accounts_in_op(&self.pool, ids, args).await
     }
 
     #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
@@ -160,16 +178,84 @@ impl BalanceRepo {
         Ok(ret)
     }
 
+    #[instrument(name = "balance.list_for_account_in_op", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_account_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        id: AccountBalancesId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let after_currency = after.map(|cursor| cursor.currency.code().to_string());
+        let (journal_id, account_id) = id;
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM cala_current_balances c
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                WHERE c.journal_id = $2
+                  AND c.account_id = $3
+                  AND ($4::text IS NULL OR c.currency > $4)
+                ORDER BY c.currency ASC
+                LIMIT $1"#,
+                (first + 1) as i64,
+                journal_id as JournalId,
+                account_id as AccountId,
+                after_currency.as_deref(),
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
     #[instrument(
-        name = "balance.find_all_for_accounts_in_op",
+        name = "balance.list_for_accounts_in_op",
         skip_all,
         err(level = "warn")
     )]
-    pub(super) async fn find_all_for_accounts_in_op(
+    pub(super) async fn list_for_accounts_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[AccountBalancesId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.journal_id)),
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+            )
+        } else {
+            (None, None, None)
+        };
+
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         for (journal_id, account_id) in ids {
@@ -182,7 +268,8 @@ impl BalanceRepo {
             .fetch_all(sqlx::query!(
                 r#"
                 WITH account_balance_ids AS (
-                    SELECT * FROM UNNEST($1::uuid[], $2::uuid[])
+                    SELECT DISTINCT journal_id, account_id
+                    FROM UNNEST($1::uuid[], $2::uuid[])
                     AS v(journal_id, account_id)
                 )
                 SELECT
@@ -193,22 +280,39 @@ impl BalanceRepo {
                     ON c.account_id = a.id
                 JOIN account_balance_ids b
                     ON c.journal_id = b.journal_id
-                    AND c.account_id = b.account_id"#,
+                    AND c.account_id = b.account_id
+                WHERE (
+                    $3::uuid IS NULL
+                    OR (c.journal_id, c.account_id, c.currency) > ($3::uuid, $4::uuid, $5::text)
+                )
+                ORDER BY c.journal_id ASC, c.account_id ASC, c.currency ASC
+                LIMIT $6"#,
                 &journal_ids[..],
                 &account_ids[..],
+                after_journal_id,
+                after_account_id,
+                after_currency.as_deref(),
+                (first + 1) as i64,
             ))
             .await?;
 
-        let mut ret = HashMap::new();
-        for row in rows {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            ret.insert(
-                (details.journal_id, details.account_id, details.currency),
-                AccountBalance::new(row.normal_balance_type, details),
-            );
-        }
-        Ok(ret)
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     /// Take the poster's per-row locks for a batch of

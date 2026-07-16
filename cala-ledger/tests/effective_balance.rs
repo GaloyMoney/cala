@@ -3,7 +3,7 @@ mod helpers;
 use chrono::NaiveDate;
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use cala_ledger::{
     account_set::NewAccountSet,
@@ -54,6 +54,71 @@ fn assert_balance_range_amounts_sum(
     assert_balance_amounts_sum(&actual.open, &first.open, &second.open);
     assert_balance_amounts_sum(&actual.period, &first.period, &second.period);
     assert_balance_amounts_sum(&actual.close, &first.close, &second.close);
+}
+
+fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> {
+    es_entity::PaginatedQueryArgs {
+        first: 100,
+        after: None,
+    }
+}
+
+fn balances_by_currency<C>(
+    balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
+) -> HashMap<Currency, AccountBalance> {
+    balances
+        .entities
+        .into_iter()
+        .map(|balance| (balance.details.currency, balance))
+        .collect()
+}
+
+fn balances_by_id<C>(
+    balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
+) -> HashMap<BalanceId, AccountBalance> {
+    balances
+        .entities
+        .into_iter()
+        .map(|balance| {
+            (
+                (
+                    balance.details.journal_id,
+                    balance.details.account_id,
+                    balance.details.currency,
+                ),
+                balance,
+            )
+        })
+        .collect()
+}
+
+fn ranges_by_currency<C>(
+    ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
+) -> HashMap<Currency, BalanceRange> {
+    ranges
+        .entities
+        .into_iter()
+        .map(|range| (range.close.details.currency, range))
+        .collect()
+}
+
+fn ranges_by_id<C>(
+    ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
+) -> HashMap<BalanceId, BalanceRange> {
+    ranges
+        .entities
+        .into_iter()
+        .map(|range| {
+            (
+                (
+                    range.close.details.journal_id,
+                    range.close.details.account_id,
+                    range.close.details.currency,
+                ),
+                range,
+            )
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -177,7 +242,7 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_cumulative_balances_for_account() -> anyhow::Result<()> {
+async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -211,8 +276,13 @@ async fn find_all_cumulative_balances_for_account() -> anyhow::Result<()> {
     let balances = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_account(journal.id(), recipient_account.id(), date)
+        .list_cumulative_for_account(
+            (journal.id(), recipient_account.id()),
+            date,
+            all_balances_query(),
+        )
         .await?;
+    let balances = balances_by_currency(balances);
     let currencies: HashSet<_> = balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -236,15 +306,16 @@ async fn find_all_cumulative_balances_for_account() -> anyhow::Result<()> {
     let empty = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_account(journal.id(), fresh.id(), date)
+        .list_cumulative_for_account((journal.id(), fresh.id()), date, all_balances_query())
         .await?;
+    let empty = balances_by_currency(empty);
     assert!(empty.is_empty());
 
     Ok(())
 }
 
 #[tokio::test]
-async fn find_all_cumulative_balances_for_accounts() -> anyhow::Result<()> {
+async fn list_cumulative_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -290,14 +361,16 @@ async fn find_all_cumulative_balances_for_accounts() -> anyhow::Result<()> {
     let actual = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_accounts(
+        .list_cumulative_for_accounts(
             &[
                 (journal.id(), recipient_account.id()),
                 (journal.id(), sender_account.id()),
             ],
             date,
+            all_balances_query(),
         )
         .await?;
+    let actual = balances_by_id(actual);
 
     assert_eq!(
         actual.keys().copied().collect::<HashSet<_>>(),
@@ -312,7 +385,7 @@ async fn find_all_cumulative_balances_for_accounts() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
+async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -390,8 +463,13 @@ async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
     let inline_balances = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_account(journal.id(), inline_set.id(), date)
+        .list_cumulative_for_account(
+            (journal.id(), AccountId::from(inline_set.id())),
+            date,
+            all_balances_query(),
+        )
         .await?;
+    let inline_balances = balances_by_currency(inline_balances);
     let currencies: HashSet<_> = inline_balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -452,8 +530,13 @@ async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
     let ec_before_recalc = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_account(journal.id(), ec_set.id(), date)
+        .list_cumulative_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            date,
+            all_balances_query(),
+        )
         .await?;
+    let ec_before_recalc = balances_by_currency(ec_before_recalc);
     assert!(ec_before_recalc.is_empty());
 
     cala.account_sets()
@@ -463,8 +546,13 @@ async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
     let ec_balances = cala
         .balances()
         .effective()
-        .find_all_cumulative_for_account(journal.id(), ec_set.id(), date)
+        .list_cumulative_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            date,
+            all_balances_query(),
+        )
         .await?;
+    let ec_balances = balances_by_currency(ec_balances);
     let currencies: HashSet<_> = ec_balances.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -476,7 +564,7 @@ async fn find_all_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_range_balances_for_account() -> anyhow::Result<()> {
+async fn list_range_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -520,8 +608,14 @@ async fn find_all_range_balances_for_account() -> anyhow::Result<()> {
     let ranges = cala
         .balances()
         .effective()
-        .find_all_in_range_for_account(journal.id(), recipient_account.id(), from, Some(from))
+        .list_in_range_for_account(
+            (journal.id(), recipient_account.id()),
+            from,
+            Some(from),
+            all_balances_query(),
+        )
         .await?;
+    let ranges = ranges_by_currency(ranges);
     let currencies: HashSet<_> = ranges.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -555,15 +649,21 @@ async fn find_all_range_balances_for_account() -> anyhow::Result<()> {
     let empty = cala
         .balances()
         .effective()
-        .find_all_in_range_for_account(journal.id(), fresh.id(), from, Some(from))
+        .list_in_range_for_account(
+            (journal.id(), fresh.id()),
+            from,
+            Some(from),
+            all_balances_query(),
+        )
         .await?;
+    let empty = ranges_by_currency(empty);
     assert!(empty.is_empty());
 
     Ok(())
 }
 
 #[tokio::test]
-async fn find_all_range_balances_for_accounts() -> anyhow::Result<()> {
+async fn list_range_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -619,15 +719,17 @@ async fn find_all_range_balances_for_accounts() -> anyhow::Result<()> {
     let actual = cala
         .balances()
         .effective()
-        .find_all_in_range_for_accounts(
+        .list_in_range_for_accounts(
             &[
                 (journal.id(), recipient_account.id()),
                 (journal.id(), sender_account.id()),
             ],
             from,
             Some(from),
+            all_balances_query(),
         )
         .await?;
+    let actual = ranges_by_id(actual);
 
     assert_eq!(
         actual.keys().copied().collect::<HashSet<_>>(),
@@ -641,7 +743,7 @@ async fn find_all_range_balances_for_accounts() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn find_all_range_balances_for_account_sets() -> anyhow::Result<()> {
+async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
@@ -720,8 +822,14 @@ async fn find_all_range_balances_for_account_sets() -> anyhow::Result<()> {
     let inline_ranges = cala
         .balances()
         .effective()
-        .find_all_in_range_for_account(journal.id(), inline_set.id(), from, Some(from))
+        .list_in_range_for_account(
+            (journal.id(), AccountId::from(inline_set.id())),
+            from,
+            Some(from),
+            all_balances_query(),
+        )
         .await?;
+    let inline_ranges = ranges_by_currency(inline_ranges);
     let currencies: HashSet<_> = inline_ranges.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 
@@ -810,8 +918,14 @@ async fn find_all_range_balances_for_account_sets() -> anyhow::Result<()> {
     let ec_before_recalc = cala
         .balances()
         .effective()
-        .find_all_in_range_for_account(journal.id(), ec_set.id(), from, Some(from))
+        .list_in_range_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            from,
+            Some(from),
+            all_balances_query(),
+        )
         .await?;
+    let ec_before_recalc = ranges_by_currency(ec_before_recalc);
     assert!(ec_before_recalc.is_empty());
 
     cala.account_sets()
@@ -821,8 +935,14 @@ async fn find_all_range_balances_for_account_sets() -> anyhow::Result<()> {
     let ec_ranges = cala
         .balances()
         .effective()
-        .find_all_in_range_for_account(journal.id(), ec_set.id(), from, Some(from))
+        .list_in_range_for_account(
+            (journal.id(), AccountId::from(ec_set.id())),
+            from,
+            Some(from),
+            all_balances_query(),
+        )
         .await?;
+    let ec_ranges = ranges_by_currency(ec_ranges);
     let currencies: HashSet<_> = ec_ranges.keys().copied().collect();
     assert_eq!(currencies, HashSet::from([Currency::BTC, Currency::USD]));
 

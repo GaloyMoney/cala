@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH account_balance_id AS (\n              SELECT $2::uuid AS journal_id, $3::uuid AS account_id, a.normal_balance_type\n              FROM cala_accounts a\n              WHERE a.id = $3\n            )\n            SELECT\n                h.values,\n                account_balance_id.normal_balance_type as \"normal_balance_type!: DebitOrCredit\"\n            FROM account_balance_id\n            JOIN LATERAL (\n                SELECT DISTINCT ON (journal_id, account_id, currency)\n                    journal_id, account_id, currency, values\n                FROM cala_cumulative_effective_balances\n                WHERE journal_id = account_balance_id.journal_id\n                  AND account_id = account_balance_id.account_id\n                  AND effective <= $4\n                ORDER BY journal_id, account_id, currency, effective DESC, version DESC\n            ) h ON TRUE\n            WHERE ($5::text IS NULL OR h.currency > $5)\n            ORDER BY h.currency ASC\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Uuid",
+        "Date",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d75d1e9f8b97ee2177d821f865e642c3a04592449afe80a344c2a71b90365388"
+}

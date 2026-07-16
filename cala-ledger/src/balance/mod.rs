@@ -24,6 +24,7 @@
 //! `seq > latest_seq` filter cannot drop a real row.
 
 mod account_balance;
+mod cursor;
 mod effective;
 pub mod error;
 mod repo;
@@ -43,6 +44,7 @@ use cala_types::{entry::EntryValues, primitives::*};
 use crate::{journal::Journals, outbox::*, primitives::JournalId};
 
 pub use account_balance::*;
+pub use cursor::*;
 use effective::*;
 use error::BalanceError;
 use repo::*;
@@ -103,26 +105,26 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all_for_account", skip(self))]
-    pub async fn find_all_for_account(
+    #[instrument(name = "cala_ledger.balance.list_for_account", skip(self))]
+    pub async fn list_for_account(
         &self,
-        journal_id: JournalId,
-        account_id: impl Into<AccountId> + std::fmt::Debug,
-    ) -> Result<HashMap<Currency, AccountBalance>, BalanceError> {
-        let account_id = account_id.into();
-        let balances = self
-            .repo
-            .find_all_for_accounts(&[(journal_id, account_id)])
-            .await?;
-        Ok(Self::index_by_currency(balances))
+        id: AccountBalancesId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.repo.list_for_account(id, args).await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all_for_accounts", skip(self))]
-    pub async fn find_all_for_accounts(
+    #[instrument(name = "cala_ledger.balance.list_for_accounts", skip(self))]
+    pub async fn list_for_accounts(
         &self,
         ids: &[AccountBalancesId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
-        self.repo.find_all_for_accounts(ids).await
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.repo.list_for_accounts(ids, args).await
     }
 
     #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
@@ -134,43 +136,28 @@ impl Balances {
         self.repo.find_all_in_op(op, ids).await
     }
 
-    #[instrument(
-        name = "cala_ledger.balance.find_all_for_account_in_op",
-        skip(self, op)
-    )]
-    pub async fn find_all_for_account_in_op(
+    #[instrument(name = "cala_ledger.balance.list_for_account_in_op", skip(self, op))]
+    pub async fn list_for_account_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_id: impl Into<AccountId> + std::fmt::Debug,
-    ) -> Result<HashMap<Currency, AccountBalance>, BalanceError> {
-        let account_id = account_id.into();
-        let balances = self
-            .repo
-            .find_all_for_accounts_in_op(op, &[(journal_id, account_id)])
-            .await?;
-        Ok(Self::index_by_currency(balances))
+        id: AccountBalancesId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.repo.list_for_account_in_op(op, id, args).await
     }
 
-    #[instrument(
-        name = "cala_ledger.balance.find_all_for_accounts_in_op",
-        skip(self, op)
-    )]
-    pub async fn find_all_for_accounts_in_op(
+    #[instrument(name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op))]
+    pub async fn list_for_accounts_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         ids: &[AccountBalancesId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
-        self.repo.find_all_for_accounts_in_op(op, ids).await
-    }
-
-    fn index_by_currency(
-        balances: HashMap<BalanceId, AccountBalance>,
-    ) -> HashMap<Currency, AccountBalance> {
-        balances
-            .into_iter()
-            .map(|((_, _, currency), balance)| (currency, balance))
-            .collect()
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.repo.list_for_accounts_in_op(op, ids, args).await
     }
 
     #[instrument(

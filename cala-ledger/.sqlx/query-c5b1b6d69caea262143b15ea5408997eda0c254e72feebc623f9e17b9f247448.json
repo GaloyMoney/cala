@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH account_balance_ids AS (\n                    SELECT DISTINCT journal_id, account_id\n                    FROM UNNEST($1::uuid[], $2::uuid[])\n                    AS v(journal_id, account_id)\n                )\n                SELECT\n                    c.latest_values AS \"values!\",\n                    a.normal_balance_type as \"normal_balance_type!: DebitOrCredit\"\n                FROM cala_current_balances c\n                JOIN cala_accounts a\n                    ON c.account_id = a.id\n                JOIN account_balance_ids b\n                    ON c.journal_id = b.journal_id\n                    AND c.account_id = b.account_id\n                WHERE (\n                    $3::uuid IS NULL\n                    OR (c.journal_id, c.account_id, c.currency) > ($3::uuid, $4::uuid, $5::text)\n                )\n                ORDER BY c.journal_id ASC, c.account_id ASC, c.currency ASC\n                LIMIT $6",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values!",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "normal_balance_type!: DebitOrCredit",
+        "type_info": {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "c5b1b6d69caea262143b15ea5408997eda0c254e72feebc623f9e17b9f247448"
+}
