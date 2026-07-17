@@ -7,8 +7,7 @@ use cala_types::{
     balance::BalanceSnapshot,
     outbox::OutboxEventPayload,
     primitives::{
-        AccountBalancesId, AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId,
-        JournalId, Status,
+        AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status,
     },
 };
 
@@ -103,23 +102,27 @@ impl BalanceRepo {
     #[instrument(name = "balance.list_for_account", skip_all, err(level = "warn"))]
     pub(super) async fn list_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: AccountId,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
         BalanceError,
     > {
-        self.list_for_account_in_op(&self.pool, id, args).await
+        self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
+            .await
     }
 
     #[instrument(name = "balance.list_for_accounts", skip_all, err(level = "warn"))]
     pub(super) async fn list_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
-        self.list_for_accounts_in_op(&self.pool, ids, args).await
+        self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
+            .await
     }
 
     #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
@@ -182,7 +185,8 @@ impl BalanceRepo {
     pub(super) async fn list_for_account_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: AccountId,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
@@ -190,7 +194,6 @@ impl BalanceRepo {
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
-        let (journal_id, account_id) = id;
 
         let rows = op
             .into_executor()
@@ -241,55 +244,46 @@ impl BalanceRepo {
     pub(super) async fn list_for_accounts_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
-        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+        let (after_account_id, after_currency) = if let Some(after) = after {
             (
-                Some(uuid::Uuid::from(after.journal_id)),
                 Some(uuid::Uuid::from(after.account_id)),
                 Some(after.currency.code().to_string()),
             )
         } else {
-            (None, None, None)
+            (None, None)
         };
-
-        let mut journal_ids = Vec::with_capacity(ids.len());
-        let mut account_ids = Vec::with_capacity(ids.len());
-        for (journal_id, account_id) in ids {
-            journal_ids.push(uuid::Uuid::from(journal_id));
-            account_ids.push(uuid::Uuid::from(account_id));
-        }
 
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
                 r#"
-                WITH account_balance_ids AS (
-                    SELECT DISTINCT journal_id, account_id
-                    FROM UNNEST($1::uuid[], $2::uuid[])
-                    AS v(journal_id, account_id)
+                WITH account_ids AS (
+                    SELECT DISTINCT account_id
+                    FROM UNNEST($2::uuid[]) AS v(account_id)
                 )
                 SELECT
                     c.latest_values AS "values!",
                     a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
-                FROM cala_current_balances c
+                FROM account_ids b
+                JOIN cala_current_balances c
+                    ON c.account_id = b.account_id
+                    AND c.journal_id = $1
                 JOIN cala_accounts a
                     ON c.account_id = a.id
-                JOIN account_balance_ids b
-                    ON c.journal_id = b.journal_id
-                    AND c.account_id = b.account_id
                 WHERE (
                     $3::uuid IS NULL
-                    OR (c.journal_id, c.account_id, c.currency) > ($3::uuid, $4::uuid, $5::text)
+                    OR (c.account_id, c.currency) > ($3::uuid, $4::text)
                 )
-                ORDER BY c.journal_id ASC, c.account_id ASC, c.currency ASC
-                LIMIT $6"#,
-                &journal_ids[..],
-                &account_ids[..],
-                after_journal_id,
+                ORDER BY c.account_id ASC, c.currency ASC
+                LIMIT $5"#,
+                journal_id as JournalId,
+                account_ids as &[AccountId],
                 after_account_id,
                 after_currency.as_deref(),
                 (first + 1) as i64,

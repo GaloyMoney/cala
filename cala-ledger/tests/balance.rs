@@ -90,7 +90,7 @@ async fn list_current_balances_for_account() -> anyhow::Result<()> {
 
     let balances = cala
         .balances()
-        .list_for_account((journal.id(), recipient_account.id()), all_balances_query())
+        .list_for_account(journal.id(), recipient_account.id(), all_balances_query())
         .await?;
     let balances = balances_by_currency(balances);
     let currencies: HashSet<_> = balances.keys().copied().collect();
@@ -113,7 +113,7 @@ async fn list_current_balances_for_account() -> anyhow::Result<()> {
     let fresh = cala.accounts().create(helpers::test_accounts().0).await?;
     let empty = cala
         .balances()
-        .list_for_account((journal.id(), fresh.id()), all_balances_query())
+        .list_for_account(journal.id(), fresh.id(), all_balances_query())
         .await?;
     let empty = balances_by_currency(empty);
     assert!(empty.is_empty());
@@ -159,10 +159,8 @@ async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
     let actual = cala
         .balances()
         .list_for_accounts(
-            &[
-                (journal.id(), recipient_account.id()),
-                (journal.id(), sender_account.id()),
-            ],
+            journal.id(),
+            &[recipient_account.id(), sender_account.id()],
             all_balances_query(),
         )
         .await?;
@@ -237,7 +235,8 @@ async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
     let balances = cala
         .balances()
         .list_for_account(
-            (journal.id(), AccountId::from(account_set.id())),
+            journal.id(),
+            AccountId::from(account_set.id()),
             all_balances_query(),
         )
         .await?;
@@ -295,7 +294,7 @@ async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
     let expected = cala.balances().find_all(&expected_ids).await?;
     let actual = cala
         .balances()
-        .list_for_accounts(&[(journal.id(), account_set_id)], all_balances_query())
+        .list_for_accounts(journal.id(), &[account_set_id], all_balances_query())
         .await?;
     let actual = balances_by_id(actual);
 
@@ -385,7 +384,8 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
     let ec_before_recalc = cala
         .balances()
         .list_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             all_balances_query(),
         )
         .await?;
@@ -399,7 +399,8 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
     let ec_balances = cala
         .balances()
         .list_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             all_balances_query(),
         )
         .await?;
@@ -430,7 +431,8 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
     let inline_balances = cala
         .balances()
         .list_for_account(
-            (journal.id(), AccountId::from(inline_set.id())),
+            journal.id(),
+            AccountId::from(inline_set.id()),
             all_balances_query(),
         )
         .await?;

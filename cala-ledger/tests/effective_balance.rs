@@ -277,7 +277,8 @@ async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_cumulative_for_account(
-            (journal.id(), recipient_account.id()),
+            journal.id(),
+            recipient_account.id(),
             date,
             all_balances_query(),
         )
@@ -306,7 +307,7 @@ async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
     let empty = cala
         .balances()
         .effective()
-        .list_cumulative_for_account((journal.id(), fresh.id()), date, all_balances_query())
+        .list_cumulative_for_account(journal.id(), fresh.id(), date, all_balances_query())
         .await?;
     let empty = balances_by_currency(empty);
     assert!(empty.is_empty());
@@ -362,10 +363,8 @@ async fn list_cumulative_balances_for_accounts() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_cumulative_for_accounts(
-            &[
-                (journal.id(), recipient_account.id()),
-                (journal.id(), sender_account.id()),
-            ],
+            journal.id(),
+            &[recipient_account.id(), sender_account.id()],
             date,
             all_balances_query(),
         )
@@ -465,7 +464,8 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_cumulative_for_account(
-            (journal.id(), AccountId::from(inline_set.id())),
+            journal.id(),
+            AccountId::from(inline_set.id()),
             date,
             all_balances_query(),
         )
@@ -532,7 +532,8 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_cumulative_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             date,
             all_balances_query(),
         )
@@ -548,7 +549,8 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_cumulative_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             date,
             all_balances_query(),
         )
@@ -610,7 +612,8 @@ async fn list_range_balances_for_account() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_account(
-            (journal.id(), recipient_account.id()),
+            journal.id(),
+            recipient_account.id(),
             from,
             Some(from),
             all_balances_query(),
@@ -651,7 +654,8 @@ async fn list_range_balances_for_account() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_account(
-            (journal.id(), fresh.id()),
+            journal.id(),
+            fresh.id(),
             from,
             Some(from),
             all_balances_query(),
@@ -721,10 +725,8 @@ async fn list_range_balances_for_accounts() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_accounts(
-            &[
-                (journal.id(), recipient_account.id()),
-                (journal.id(), sender_account.id()),
-            ],
+            journal.id(),
+            &[recipient_account.id(), sender_account.id()],
             from,
             Some(from),
             all_balances_query(),
@@ -825,7 +827,8 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_account(
-            (journal.id(), AccountId::from(inline_set.id())),
+            journal.id(),
+            AccountId::from(inline_set.id()),
             from,
             Some(from),
             all_balances_query(),
@@ -921,7 +924,8 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             from,
             Some(from),
             all_balances_query(),
@@ -938,7 +942,8 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
         .balances()
         .effective()
         .list_in_range_for_account(
-            (journal.id(), AccountId::from(ec_set.id())),
+            journal.id(),
+            AccountId::from(ec_set.id()),
             from,
             Some(from),
             all_balances_query(),

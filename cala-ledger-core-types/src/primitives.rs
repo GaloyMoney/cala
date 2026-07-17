@@ -43,7 +43,6 @@ es_entity::entity_id! { VelocityLimitId }
 es_entity::entity_id! { VelocityControlId }
 
 pub type BalanceId = (JournalId, AccountId, Currency);
-pub type AccountBalancesId = (JournalId, AccountId);
 impl From<&AccountSetId> for AccountId {
     fn from(id: &AccountSetId) -> Self {
         Self(id.0)

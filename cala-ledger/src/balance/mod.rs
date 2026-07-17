@@ -108,23 +108,29 @@ impl Balances {
     #[instrument(name = "cala_ledger.balance.list_for_account", skip(self))]
     pub async fn list_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
         BalanceError,
     > {
-        self.repo.list_for_account(id, args).await
+        self.repo
+            .list_for_account(journal_id, account_id.into(), args)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.list_for_accounts", skip(self))]
     pub async fn list_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
-        self.repo.list_for_accounts(ids, args).await
+        self.repo
+            .list_for_accounts(journal_id, account_ids, args)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
@@ -140,24 +146,30 @@ impl Balances {
     pub async fn list_for_account_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
         BalanceError,
     > {
-        self.repo.list_for_account_in_op(op, id, args).await
+        self.repo
+            .list_for_account_in_op(op, journal_id, account_id.into(), args)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op))]
     pub async fn list_for_accounts_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
-        self.repo.list_for_accounts_in_op(op, ids, args).await
+        self.repo
+            .list_for_accounts_in_op(op, journal_id, account_ids, args)
+            .await
     }
 
     #[instrument(

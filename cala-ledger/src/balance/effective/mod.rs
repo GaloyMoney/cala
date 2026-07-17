@@ -85,14 +85,17 @@ impl EffectiveBalances {
     )]
     pub async fn list_cumulative_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
         BalanceError,
     > {
-        self.repo.list_for_account(id, date, args).await
+        self.repo
+            .list_for_account(journal_id, account_id.into(), date, args)
+            .await
     }
 
     #[instrument(
@@ -101,12 +104,15 @@ impl EffectiveBalances {
     )]
     pub async fn list_cumulative_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
-        self.repo.list_for_accounts(ids, date, args).await
+        self.repo
+            .list_for_accounts(journal_id, account_ids, date, args)
+            .await
     }
 
     #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
@@ -126,7 +132,8 @@ impl EffectiveBalances {
     )]
     pub async fn list_in_range_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
@@ -135,7 +142,7 @@ impl EffectiveBalances {
         BalanceError,
     > {
         self.repo
-            .list_range_for_account(id, from, until, args)
+            .list_range_for_account(journal_id, account_id.into(), from, until, args)
             .await
     }
 
@@ -145,14 +152,15 @@ impl EffectiveBalances {
     )]
     pub async fn list_in_range_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
     {
         self.repo
-            .list_range_for_accounts(ids, from, until, args)
+            .list_range_for_accounts(journal_id, account_ids, from, until, args)
             .await
     }
 

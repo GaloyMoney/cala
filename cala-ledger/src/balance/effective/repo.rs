@@ -14,10 +14,7 @@ use crate::{
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
     outbox::OutboxEventPayload,
-    primitives::{
-        AccountBalancesId, AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId,
-        JournalId,
-    },
+    primitives::{AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
 use super::data::*;
@@ -236,7 +233,8 @@ impl EffectiveBalanceRepo {
     #[instrument(name = "cala_ledger.balances.effective.list_for_account", skip_all)]
     pub(super) async fn list_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: AccountId,
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
@@ -245,7 +243,6 @@ impl EffectiveBalanceRepo {
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
-        let (journal_id, account_id) = id;
 
         let rows = sqlx::query!(
             r#"
@@ -302,40 +299,33 @@ impl EffectiveBalanceRepo {
     #[instrument(name = "cala_ledger.balances.effective.list_for_accounts", skip_all)]
     pub(super) async fn list_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
-        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+        let (after_account_id, after_currency) = if let Some(after) = after {
             (
-                Some(uuid::Uuid::from(after.journal_id)),
                 Some(uuid::Uuid::from(after.account_id)),
                 Some(after.currency.code().to_string()),
             )
         } else {
-            (None, None, None)
+            (None, None)
         };
-
-        let mut journal_ids = Vec::with_capacity(ids.len());
-        let mut account_ids = Vec::with_capacity(ids.len());
-        for (journal_id, account_id) in ids {
-            journal_ids.push(uuid::Uuid::from(journal_id));
-            account_ids.push(uuid::Uuid::from(account_id));
-        }
 
         let rows = sqlx::query!(
             r#"
-            WITH account_balance_ids AS (
-              SELECT journal_id, account_id, normal_balance_type
-              FROM (
-                SELECT DISTINCT journal_id, account_id
-                FROM UNNEST($1::uuid[], $2::uuid[])
-                AS v(journal_id, account_id)
-              ) AS v
+            WITH account_ids AS (
+              SELECT DISTINCT account_id
+              FROM UNNEST($2::uuid[]) AS v(account_id)
+            ),
+            account_balance_ids AS (
+              SELECT $1::uuid AS journal_id, account_ids.account_id, a.normal_balance_type
+              FROM account_ids
               JOIN cala_accounts a
-              ON account_id = a.id
+              ON account_ids.account_id = a.id
             ),
             balances AS (
               SELECT
@@ -364,15 +354,14 @@ impl EffectiveBalanceRepo {
             FROM balances h
             WHERE (
                 $4::uuid IS NULL
-                OR (journal_id, account_id, currency) > ($4::uuid, $5::uuid, $6::text)
+                OR (h.account_id, h.currency) > ($4::uuid, $5::text)
             )
-            ORDER BY journal_id ASC, account_id ASC, currency ASC
-            LIMIT $7
+            ORDER BY h.account_id ASC, h.currency ASC
+            LIMIT $6
             "#,
-            &journal_ids[..],
-            &account_ids[..],
+            journal_id as JournalId,
+            account_ids as &[AccountId],
             date,
-            after_journal_id,
             after_account_id,
             after_currency.as_deref(),
             (first + 1) as i64,
@@ -513,7 +502,8 @@ impl EffectiveBalanceRepo {
     )]
     pub(super) async fn list_range_for_account(
         &self,
-        id: AccountBalancesId,
+        journal_id: JournalId,
+        account_id: AccountId,
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
@@ -523,7 +513,6 @@ impl EffectiveBalanceRepo {
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
-        let (journal_id, account_id) = id;
 
         let rows = sqlx::query!(
             r#"
@@ -646,41 +635,34 @@ impl EffectiveBalanceRepo {
     )]
     pub(super) async fn list_range_for_accounts(
         &self,
-        ids: &[AccountBalancesId],
+        journal_id: JournalId,
+        account_ids: &[AccountId],
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
-        let (after_journal_id, after_account_id, after_currency) = if let Some(after) = after {
+        let (after_account_id, after_currency) = if let Some(after) = after {
             (
-                Some(uuid::Uuid::from(after.journal_id)),
                 Some(uuid::Uuid::from(after.account_id)),
                 Some(after.currency.code().to_string()),
             )
         } else {
-            (None, None, None)
+            (None, None)
         };
-
-        let mut journal_ids = Vec::with_capacity(ids.len());
-        let mut account_ids = Vec::with_capacity(ids.len());
-        for (journal_id, account_id) in ids {
-            journal_ids.push(uuid::Uuid::from(journal_id));
-            account_ids.push(uuid::Uuid::from(account_id));
-        }
 
         let rows = sqlx::query!(
             r#"
-            WITH account_balance_ids AS (
-              SELECT journal_id, account_id, normal_balance_type
-              FROM (
-                SELECT DISTINCT journal_id, account_id
-                FROM UNNEST($1::uuid[], $2::uuid[])
-                AS v(journal_id, account_id)
-              ) AS v
+            WITH account_ids AS (
+              SELECT DISTINCT account_id
+              FROM UNNEST($2::uuid[]) AS v(account_id)
+            ),
+            account_balance_ids AS (
+              SELECT $1::uuid AS journal_id, account_ids.account_id, a.normal_balance_type
+              FROM account_ids
               JOIN cala_accounts a
-              ON account_id = a.id
+              ON account_ids.account_id = a.id
             ),
             balance_ids AS (
               SELECT h.journal_id, h.account_id, h.currency, account_balance_ids.normal_balance_type
@@ -696,10 +678,10 @@ impl EffectiveBalanceRepo {
               ) h ON TRUE
               WHERE (
                 $5::uuid IS NULL
-                OR (h.journal_id, h.account_id, h.currency) > ($5::uuid, $6::uuid, $7::text)
+                OR (h.account_id, h.currency) > ($5::uuid, $6::text)
               )
-              ORDER BY h.journal_id ASC, h.account_id ASC, h.currency ASC
-              LIMIT $8
+              ORDER BY h.account_id ASC, h.currency ASC
+              LIMIT $7
             ),
             first AS (
               SELECT
@@ -754,11 +736,10 @@ impl EffectiveBalanceRepo {
                 account_id as "account_id: AccountId",
                 currency
             FROM last"#,
-            &journal_ids[..],
-            &account_ids[..],
+            journal_id as JournalId,
+            account_ids as &[AccountId],
             from,
             until,
-            after_journal_id,
             after_account_id,
             after_currency.as_deref(),
             (first + 1) as i64,
