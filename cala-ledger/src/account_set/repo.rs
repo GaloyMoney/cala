@@ -12,7 +12,67 @@ use crate::{
 
 use super::{entity::*, error::*};
 
+/// Coarse advisory lock guarding the account-set membership graph
+/// (`cala_account_set_member_accounts` and
+/// `cala_account_set_member_account_sets`).
+///
+/// Membership maintenance is a read-then-write over the whole ancestor
+/// chain: each mutation walks the set-to-set edges (the recursive
+/// `parents` CTE) and then writes the transitive-closure rows the walk
+/// justifies. Two concurrent mutations that each miss the other's
+/// uncommitted writes would leave the closure table inconsistent
+/// (write-skew), so the walk's snapshot has to stay valid until the
+/// writes commit — which is why every lock here is transaction-scoped
+/// and held to commit; releasing earlier would reopen the race.
+///
+/// Lock protocol:
+///
+/// - Set-structure mutations (`add_member_set` / `remove_member_set`)
+///   take this lock EXCLUSIVE. They mutate the edges that every walk
+///   reads, and read the member rows that account-member mutations
+///   write, so they must exclude everything.
+/// - Account-member mutations (`add_member_account` /
+///   `remove_member_account`) take this lock SHARED plus an EXCLUSIVE
+///   per-member lock (`MEMBER_LOCK_CLASS`, keyed on the member account
+///   id). Shared-vs-exclusive fences them against structure mutations,
+///   while account-member mutations for *different* members run
+///   concurrently — their closure writes are disjoint rows. The
+///   per-member lock serializes mutations touching the *same* member
+///   (e.g. an add and a remove in overlapping hierarchies), whose
+///   interleaved inserts/deletes on shared ancestors would otherwise
+///   tear the closure.
+///
+/// Ordering: the coarse lock is always acquired before the per-member
+/// lock. An operation must never wait on the coarse lock while holding
+/// a per-member lock — under PostgreSQL's FIFO lock queueing that can
+/// form a wait cycle with a queued exclusive (structure) waiter.
 const ADDVISORY_LOCK_ID: i64 = 123456;
+
+/// `classid` namespace for the per-member advisory locks (2-arg form),
+/// keyed on `hashtext(<member account id>)`. Must stay disjoint from
+/// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
+const MEMBER_LOCK_CLASS: i32 = 2;
+
+/// Takes the account-member half of the membership lock protocol (see
+/// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
+/// per-member lock. Two statements so the acquisition order is
+/// guaranteed.
+async fn lock_for_account_member_op(
+    db: &mut impl es_entity::AtomicOperation,
+    account_id: AccountId,
+) -> Result<(), AccountSetError> {
+    sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+        .execute(db.as_executor())
+        .await?;
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+        MEMBER_LOCK_CLASS,
+        account_id.to_string(),
+    )
+    .execute(db.as_executor())
+    .await?;
+    Ok(())
+}
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -367,9 +427,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_for_account_member_op(db, account_id).await?;
         let rows = sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
@@ -442,9 +500,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        lock_for_account_member_op(db, account_id).await?;
         let rows = sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
@@ -514,6 +570,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -599,6 +656,7 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
     ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+        // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
