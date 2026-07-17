@@ -77,6 +77,7 @@ fn new_set(journal_id: JournalId, name: &str) -> NewAccountSet {
         .id(AccountSetId::new())
         .name(name)
         .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap()
 }
