@@ -11,7 +11,11 @@ use cala_types::{
     },
 };
 
-use super::{account_balance::AccountBalance, error::BalanceError};
+use super::{
+    account_balance::AccountBalance,
+    cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+    error::BalanceError,
+};
 use crate::outbox::OutboxPublisher;
 
 const EC_SET_LOCK_CLASS: i32 = 1;
@@ -95,6 +99,32 @@ impl BalanceRepo {
         self.find_all_in_op(&self.pool, ids).await
     }
 
+    #[instrument(name = "balance.list_for_account", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
+            .await
+    }
+
+    #[instrument(name = "balance.list_for_accounts", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_accounts(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
+            .await
+    }
+
     #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
     pub(super) async fn find_all_in_op(
         &self,
@@ -149,6 +179,134 @@ impl BalanceRepo {
             );
         }
         Ok(ret)
+    }
+
+    #[instrument(name = "balance.list_for_account_in_op", skip_all, err(level = "warn"))]
+    pub(super) async fn list_for_account_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_id: AccountId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let after_currency = after.map(|cursor| cursor.currency.code().to_string());
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM cala_current_balances c
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                WHERE c.journal_id = $2
+                  AND c.account_id = $3
+                  AND ($4::text IS NULL OR c.currency > $4)
+                ORDER BY c.currency ASC
+                LIMIT $1"#,
+                (first + 1) as i64,
+                journal_id as JournalId,
+                account_id as AccountId,
+                after_currency.as_deref(),
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    #[instrument(
+        name = "balance.list_for_accounts_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn list_for_accounts_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_account_id, after_currency) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+            )
+        } else {
+            (None, None)
+        };
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                WITH account_ids AS (
+                    SELECT DISTINCT account_id
+                    FROM UNNEST($2::uuid[]) AS v(account_id)
+                )
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM account_ids b
+                JOIN cala_current_balances c
+                    ON c.account_id = b.account_id
+                    AND c.journal_id = $1
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                WHERE (
+                    $3::uuid IS NULL
+                    OR (c.account_id, c.currency) > ($3::uuid, $4::text)
+                )
+                ORDER BY c.account_id ASC, c.currency ASC
+                LIMIT $5"#,
+                journal_id as JournalId,
+                account_ids as &[AccountId],
+                after_account_id,
+                after_currency.as_deref(),
+                (first + 1) as i64,
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
     }
 
     /// Take the poster's per-row locks for a batch of

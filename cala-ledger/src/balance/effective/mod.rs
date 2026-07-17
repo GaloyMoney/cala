@@ -16,7 +16,12 @@ use crate::{outbox::OutboxPublisher, primitives::JournalId};
 
 use data::EffectiveBalanceData;
 
-use super::{account_balance::*, error::BalanceError, snapshot::UNASSIGNED_ENTRY_ID};
+use super::{
+    account_balance::*,
+    cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+    error::BalanceError,
+    snapshot::UNASSIGNED_ENTRY_ID,
+};
 
 use repo::*;
 
@@ -74,6 +79,42 @@ impl EffectiveBalances {
         self.repo.find_all(ids, date).await
     }
 
+    #[instrument(
+        name = "cala_ledger.balance.effective.list_cumulative_for_account",
+        skip(self)
+    )]
+    pub async fn list_cumulative_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        date: NaiveDate,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.repo
+            .list_for_account(journal_id, account_id.into(), date, args)
+            .await
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.list_cumulative_for_accounts",
+        skip(self)
+    )]
+    pub async fn list_cumulative_for_accounts(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        date: NaiveDate,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.repo
+            .list_for_accounts(journal_id, account_ids, date, args)
+            .await
+    }
+
     #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
     pub async fn find_all_in_range(
         &self,
@@ -82,7 +123,50 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
+        Ok(Self::balance_ranges_from_snapshots(ranges))
+    }
 
+    #[instrument(
+        name = "cala_ledger.balance.effective.list_in_range_for_account",
+        skip(self)
+    )]
+    pub async fn list_in_range_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.repo
+            .list_range_for_account(journal_id, account_id.into(), from, until, args)
+            .await
+    }
+
+    #[instrument(
+        name = "cala_ledger.balance.effective.list_in_range_for_accounts",
+        skip(self)
+    )]
+    pub async fn list_in_range_for_accounts(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        from: NaiveDate,
+        until: Option<NaiveDate>,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
+    {
+        self.repo
+            .list_range_for_accounts(journal_id, account_ids, from, until, args)
+            .await
+    }
+
+    fn balance_ranges_from_snapshots(
+        ranges: HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
+    ) -> HashMap<BalanceId, BalanceRange> {
         let mut res = HashMap::new();
         for (id, (start, start_version, end, end_version)) in ranges {
             if let Some(end) = end {
@@ -92,7 +176,7 @@ impl EffectiveBalances {
                 );
             }
         }
-        Ok(res)
+        res
     }
 
     #[instrument(
