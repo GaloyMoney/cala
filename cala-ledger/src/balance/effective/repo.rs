@@ -617,8 +617,8 @@ impl EffectiveBalanceRepo {
             }
         }
 
+        let has_next_page = ranges.len() > first;
         let mut entities = Self::balance_ranges_from_snapshots(ranges);
-        let has_next_page = entities.len() > first;
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
@@ -763,8 +763,8 @@ impl EffectiveBalanceRepo {
                 entry.3 = row.all_time_version.expect("all_time_version") as u32;
             }
         }
+        let has_next_page = ret.len() > first;
         let mut entities = Self::balance_ranges_from_snapshots(ret);
-        let has_next_page = entities.len() > first;
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
