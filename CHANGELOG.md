@@ -1,3 +1,12 @@
+# [cala release v0.16.1](https://github.com/GaloyMoney/cala/releases/tag/0.16.1)
+
+
+
+### Bug Fixes
+
+- Set balance_rollup on membership-locks test helper (#754)
+- Stop serializing account-member ops on the global membership lock (#748)
+
 # [cala release v0.16.0](https://github.com/GaloyMoney/cala/releases/tag/0.16.0)
 
 
