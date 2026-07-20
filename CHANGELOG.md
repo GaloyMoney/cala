@@ -1,3 +1,11 @@
+# [cala release v0.16.2](https://github.com/GaloyMoney/cala/releases/tag/0.16.2)
+
+
+
+### Features
+
+- Query balances with `account_id` and `journal_id` (#751)
+
 # [cala release v0.16.1](https://github.com/GaloyMoney/cala/releases/tag/0.16.1)
 
 
