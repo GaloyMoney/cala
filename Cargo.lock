@@ -321,6 +321,7 @@ name = "cala-ledger"
 version = "0.16.2-dev"
 dependencies = [
  "anyhow",
+ "async-trait",
  "cached",
  "cala-cel-interpreter",
  "cala-ledger-core-types",

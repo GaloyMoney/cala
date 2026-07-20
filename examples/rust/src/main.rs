@@ -38,7 +38,7 @@ async fn main() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
     let code_string = format!("USERS.{example_suffix}");
     let new_account = NewAccount::builder()
         .id(AccountId::new())

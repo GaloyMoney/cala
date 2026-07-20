@@ -1,27 +1,23 @@
-//! # EC recalc <-> poster ordering invariant
+//! # EC set balance maintenance
 //!
-//! `cala_current_balances.latest_seq` is a watermark meaning
-//! *"member-history up to this seq has been folded into the set
-//! balance"*. It is maintained as a side-effect of `insert_new_snapshots`
-//! (the `ON CONFLICT DO UPDATE` bumps `latest_seq` to `MAX(seq)` of the
-//! rows just inserted), so every poster's write to a non-EC ancestor
-//! advances the ancestor's watermark synchronously, and every recalc on
-//! an EC set advances that set's watermark to the max seq of the
-//! synthesized snapshots it just wrote.
+//! Non-EC account-set balances are maintained **inline** by posters
+//! (`update_balances_in_op`), synchronously in the posting transaction.
+//! Eventually-consistent (EC) set balances are excluded from that path
+//! (`find_for_update` filters `eventually_consistent = FALSE`) and are
+//! instead maintained **asynchronously** by the streaming rollup job
+//! ([`crate::ec_rollup`]), which folds each committed transaction's leaf
+//! deltas into its ancestor EC sets. That single, ordered, `spawn_unique`
+//! writer is the only maintainer of EC-set balances.
 //!
-//! Posters take a shared advisory lock on every account they write
-//! (leaves and ancestors, EC and non-EC alike), and recalcs take an
-//! exclusive lock on every set they recalculate (same key space).
-//! Shared/shared does not block, so concurrent posters proceed in
-//! parallel; exclusive blocks until all in-flight posters touching the
-//! locked set's members have committed. Under that exclusive lock there
-//! can be no uncommitted poster row whose seq sits between the recalc's
-//! input max and its output max — every such poster is either committed
-//! before the recalc reads (and folded in), or blocked at the SHARED
-//! acquisition until the recalc commits (and gets a fresh seq strictly
-//! greater than every seq the recalc consumed). So `MAX(seq)` of the
-//! recalc's output rows is a safe watermark, and the next recalc's
-//! `seq > latest_seq` filter cannot drop a real row.
+//! Posters take a shared advisory lock (`EC_SET_LOCK_CLASS`) on every
+//! account they touch — leaves and ancestors alike. Its load-bearing role
+//! is the member side of the membership guard
+//! (`member_has_balance_history_in_op`): adding or removing an EC-set
+//! member takes an EXCLUSIVE lock on that member, so a concurrent poster's
+//! SHARED lock on the same member blocks until the guard's history check
+//! has committed. That keeps a member from ever joining or leaving a set
+//! while it has balance history, which is what makes EC sets
+//! incremental-from-birth for the streaming rollup.
 
 mod account_balance;
 mod cursor;
@@ -32,7 +28,7 @@ mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use tracing::instrument;
 
 pub use cala_types::{
@@ -248,6 +244,93 @@ impl Balances {
         Ok(())
     }
 
+    /// Streaming EC rollup for a single committed transaction.
+    ///
+    /// Mirror of [`Self::update_balances_in_op`] but for the ancestor
+    /// **eventually-consistent** account sets — the ones the inline poster
+    /// path deliberately excludes. Given the transaction's `entries`, fold
+    /// their deltas into every EC ancestor set (settled + effective), under
+    /// the shared EC-set advisory lock. Caller drives this per transaction
+    /// from the outbox and owns the batch/commit/cursor
+    /// (see [`crate::ec_rollup`]).
+    #[instrument(
+        name = "cala_ledger.balance.apply_ec_rollup_in_op",
+        skip(self, op, entries),
+        fields(journal_id = %journal_id, entries_count = entries.len()),
+        err(level = "warn")
+    )]
+    pub(crate) async fn apply_ec_rollup_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        entries: Vec<EntryValues>,
+        effective: NaiveDate,
+        created_at: DateTime<Utc>,
+    ) -> Result<(), BalanceError> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+
+        let member_account_ids: Vec<AccountId> = entries
+            .iter()
+            .map(|e| e.account_id)
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+
+        let ec_mappings = self
+            .repo
+            .fetch_ec_set_mappings(op, journal_id, &member_account_ids)
+            .await?;
+        if ec_mappings.is_empty() {
+            return Ok(());
+        }
+
+        // Distinct (EC set-account, currency) pairs touched by this tx.
+        let empty = Vec::new();
+        let mut involved: BTreeSet<(AccountId, Currency)> = BTreeSet::new();
+        for entry in entries.iter() {
+            for set_id in ec_mappings.get(&entry.account_id).unwrap_or(&empty) {
+                involved.insert((AccountId::from(set_id), entry.currency));
+            }
+        }
+        if involved.is_empty() {
+            return Ok(());
+        }
+        let (account_ids, currencies): (Vec<AccountId>, Vec<&str>) =
+            involved.into_iter().map(|(a, c)| (a, c.code())).unzip();
+
+        let current_balances = self
+            .repo
+            .find_ec_balances_for_update(op, journal_id, &(account_ids.clone(), currencies.clone()))
+            .await?;
+
+        let new_balances =
+            Self::ec_set_snapshots(created_at, current_balances, &entries, &ec_mappings);
+        if !new_balances.is_empty() {
+            self.repo
+                .insert_new_snapshots(op, journal_id, new_balances)
+                .await?;
+        }
+
+        let journal = self.journals.find(journal_id).await?;
+        if journal.insert_effective_balances() {
+            self.effective
+                .apply_ec_rollup_in_op(
+                    op,
+                    journal_id,
+                    entries,
+                    effective,
+                    created_at,
+                    ec_mappings,
+                    (account_ids, currencies),
+                )
+                .await?;
+        }
+
+        Ok(())
+    }
+
     /// Return `true` iff `member_id` has any row in
     /// `cala_balance_history` for `journal_id`, under the lock prelude
     /// described on `BalanceRepo::member_has_balance_history_in_op`.
@@ -273,201 +356,6 @@ impl Balances {
             .await
     }
 
-    #[instrument(
-        name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
-        skip(self, op),
-        err(level = "warn")
-    )]
-    pub(crate) async fn recalculate_account_set_balances_batch_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_set_ids: &[AccountSetId],
-    ) -> Result<(), BalanceError> {
-        let account_ids: Vec<AccountId> = account_set_ids.iter().map(AccountId::from).collect();
-        let lock_targets: HashSet<AccountId> = account_ids.iter().copied().collect();
-
-        self.repo
-            .lock_accounts_exclusive_in_op(op, &lock_targets)
-            .await?;
-
-        let batch_balances = self
-            .repo
-            .load_account_set_balances_batch(op, journal_id, &account_ids)
-            .await?;
-
-        // Compute min_watermark: minimum across all sets. None if any set has None.
-        let min_watermark = batch_balances
-            .values()
-            .try_fold(None, |acc: Option<i64>, (_, wm)| {
-                let wm = (*wm)?;
-                Some(Some(acc.map_or(wm, |a: i64| a.min(wm))))
-            })
-            .flatten();
-
-        let new_history = self
-            .repo
-            .fetch_batch_member_history(op, journal_id, account_set_ids, min_watermark)
-            .await?;
-
-        if new_history.is_empty() {
-            return Ok(());
-        }
-
-        let memberships = self
-            .repo
-            .fetch_member_account_mappings(op, account_set_ids)
-            .await?;
-
-        // Build per-set state: (account_id, balances, watermark)
-        let mut set_states: HashMap<AccountSetId, SetRecalcState> = HashMap::new();
-        for (set_id, account_id) in account_set_ids.iter().zip(account_ids.iter()) {
-            let (balances, watermark) = batch_balances.get(account_id).cloned().unwrap_or_default();
-            set_states.insert(*set_id, (*account_id, balances, watermark));
-        }
-
-        let new_snapshots =
-            Self::replay_member_deltas_batch(journal_id, set_states, &memberships, new_history);
-
-        if !new_snapshots.is_empty() {
-            self.repo
-                .insert_new_snapshots(op, journal_id, new_snapshots)
-                .await?;
-        }
-
-        let journal = self.journals.find(journal_id).await?;
-        if journal.insert_effective_balances() {
-            self.effective
-                .recalculate_for_account_sets_in_op(
-                    op,
-                    journal_id,
-                    account_set_ids,
-                    &memberships,
-                    min_watermark,
-                )
-                .await?;
-        }
-
-        Ok(())
-    }
-
-    #[instrument(name = "cala_ledger.balances.replay_member_deltas_batch", skip_all)]
-    fn replay_member_deltas_batch(
-        journal_id: JournalId,
-        mut set_states: HashMap<AccountSetId, SetRecalcState>,
-        memberships: &HashMap<AccountId, Vec<AccountSetId>>,
-        history: Vec<MemberBalanceHistoryRow>,
-    ) -> Vec<BalanceSnapshot> {
-        use rust_decimal::Decimal;
-
-        let mut new_snapshots = Vec::new();
-
-        for MemberBalanceHistoryRow {
-            snapshot,
-            prev_snapshot,
-            seq,
-        } in history
-        {
-            let (d_settled_dr, d_settled_cr, d_pending_dr, d_pending_cr, d_enc_dr, d_enc_cr) =
-                match prev_snapshot {
-                    Some(ref prev) => (
-                        snapshot.settled.dr_balance - prev.settled.dr_balance,
-                        snapshot.settled.cr_balance - prev.settled.cr_balance,
-                        snapshot.pending.dr_balance - prev.pending.dr_balance,
-                        snapshot.pending.cr_balance - prev.pending.cr_balance,
-                        snapshot.encumbrance.dr_balance - prev.encumbrance.dr_balance,
-                        snapshot.encumbrance.cr_balance - prev.encumbrance.cr_balance,
-                    ),
-                    None => (
-                        snapshot.settled.dr_balance,
-                        snapshot.settled.cr_balance,
-                        snapshot.pending.dr_balance,
-                        snapshot.pending.cr_balance,
-                        snapshot.encumbrance.dr_balance,
-                        snapshot.encumbrance.cr_balance,
-                    ),
-                };
-
-            let empty = Vec::new();
-            let owning_sets = memberships.get(&snapshot.account_id).unwrap_or(&empty);
-
-            for set_id in owning_sets {
-                let Some((_account_id, ref mut balances, ref set_watermark)) =
-                    set_states.get_mut(set_id)
-                else {
-                    continue;
-                };
-
-                // Skip if already processed by this set
-                if let Some(wm) = set_watermark {
-                    if seq <= *wm {
-                        continue;
-                    }
-                }
-
-                let account_id = AccountId::from(set_id);
-                let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
-                let running =
-                    balances
-                        .entry(snapshot.currency)
-                        .or_insert_with(|| BalanceSnapshot {
-                            journal_id,
-                            account_id,
-                            entry_id,
-                            currency: snapshot.currency,
-                            settled: BalanceAmount {
-                                dr_balance: Decimal::ZERO,
-                                cr_balance: Decimal::ZERO,
-                                entry_id,
-                                modified_at: snapshot.modified_at,
-                            },
-                            pending: BalanceAmount {
-                                dr_balance: Decimal::ZERO,
-                                cr_balance: Decimal::ZERO,
-                                entry_id,
-                                modified_at: snapshot.modified_at,
-                            },
-                            encumbrance: BalanceAmount {
-                                dr_balance: Decimal::ZERO,
-                                cr_balance: Decimal::ZERO,
-                                entry_id,
-                                modified_at: snapshot.modified_at,
-                            },
-                            version: 0,
-                            modified_at: snapshot.modified_at,
-                            created_at: snapshot.modified_at,
-                        });
-
-                running.settled.dr_balance += d_settled_dr;
-                running.settled.cr_balance += d_settled_cr;
-                running.pending.dr_balance += d_pending_dr;
-                running.pending.cr_balance += d_pending_cr;
-                running.encumbrance.dr_balance += d_enc_dr;
-                running.encumbrance.cr_balance += d_enc_cr;
-                running.version += 1;
-                running.entry_id = snapshot.entry_id;
-                running.modified_at = snapshot.modified_at;
-
-                if d_settled_dr != Decimal::ZERO || d_settled_cr != Decimal::ZERO {
-                    running.settled.entry_id = snapshot.settled.entry_id;
-                    running.settled.modified_at = snapshot.settled.modified_at;
-                }
-                if d_pending_dr != Decimal::ZERO || d_pending_cr != Decimal::ZERO {
-                    running.pending.entry_id = snapshot.pending.entry_id;
-                    running.pending.modified_at = snapshot.pending.modified_at;
-                }
-                if d_enc_dr != Decimal::ZERO || d_enc_cr != Decimal::ZERO {
-                    running.encumbrance.entry_id = snapshot.encumbrance.entry_id;
-                    running.encumbrance.modified_at = snapshot.encumbrance.modified_at;
-                }
-
-                new_snapshots.push(running.clone());
-            }
-        }
-
-        new_snapshots
-    }
-
     #[instrument(name = "cala_ledger.balances.new_snapshots", skip_all)]
     fn new_snapshots(
         time: DateTime<Utc>,
@@ -485,6 +373,51 @@ impl Balances {
                 .iter()
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
+            {
+                let latest =
+                    if let Some(latest) = latest_balances.remove(&(account_id, &entry.currency)) {
+                        new_balances.push(latest.clone());
+                        Some(latest)
+                    } else {
+                        None
+                    };
+                let current = current_balances.remove(&(account_id, entry.currency));
+                let Some(balance) = latest.map(Some).or(current) else {
+                    continue;
+                };
+
+                let new_snapshot = match balance {
+                    Some(balance) => Snapshots::update_snapshot(time, balance, entry),
+                    None => Snapshots::new_snapshot(time, account_id, entry),
+                };
+
+                latest_balances.insert((account_id, &entry.currency), new_snapshot);
+            }
+        }
+        new_balances.extend(latest_balances.into_values());
+        new_balances
+    }
+
+    /// Like [`Self::new_snapshots`] but fans each entry **only** into its
+    /// EC ancestor sets (never the leaf account itself, which the inline
+    /// poster path already maintains). Chains repeated writes to the same
+    /// set within the batch so versions increment correctly.
+    #[instrument(name = "cala_ledger.balances.ec_set_snapshots", skip_all)]
+    fn ec_set_snapshots(
+        time: DateTime<Utc>,
+        mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
+        entries: &[EntryValues],
+        ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+    ) -> Vec<BalanceSnapshot> {
+        let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
+        let mut new_balances = Vec::new();
+        let empty = Vec::new();
+        for entry in entries.iter() {
+            for account_id in ec_mappings
+                .get(&entry.account_id)
+                .unwrap_or(&empty)
+                .iter()
+                .map(AccountId::from)
             {
                 let latest =
                     if let Some(latest) = latest_balances.remove(&(account_id, &entry.currency)) {
@@ -743,393 +676,78 @@ mod tests {
         }
     }
 
-    mod replay_member_deltas_batch {
+    mod ec_set_snapshots {
         use super::*;
 
         use chrono::Utc;
         use rust_decimal::Decimal;
         use std::collections::HashMap;
 
-        use cala_types::balance::BalanceAmount;
+        use cala_types::{
+            entry::EntryValues,
+            primitives::{DebitOrCredit, Layer},
+        };
 
-        use crate::primitives::{Currency, EntryId, JournalId};
+        use crate::primitives::{AccountSetId, Currency, EntryId, JournalId, TransactionId};
 
-        fn zero_balance(
-            journal_id: JournalId,
-            account_id: AccountId,
-            currency: Currency,
-            entry_id: EntryId,
-            version: u32,
-        ) -> BalanceSnapshot {
-            let time = Utc::now();
-            BalanceSnapshot {
-                journal_id,
-                account_id,
-                entry_id,
-                currency,
-                settled: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                pending: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                encumbrance: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                version,
-                modified_at: time,
-                created_at: time,
-            }
-        }
-
-        /// Create a member snapshot whose `account_id` is `member_id`.
-        fn member_snapshot(
-            member_id: AccountId,
-            currency: &str,
-            entry_id: EntryId,
-            settled_dr: Decimal,
-            settled_cr: Decimal,
-        ) -> BalanceSnapshot {
-            let time = Utc::now();
-            let currency: Currency = currency.parse().unwrap();
-            BalanceSnapshot {
-                journal_id: JournalId::new(),
-                account_id: member_id,
-                entry_id,
-                currency,
-                settled: BalanceAmount {
-                    dr_balance: settled_dr,
-                    cr_balance: settled_cr,
-                    entry_id,
-                    modified_at: time,
-                },
-                pending: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
-                encumbrance: BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id,
-                    modified_at: time,
-                },
+        fn credit_entry(units: Decimal, account_id: AccountId) -> EntryValues {
+            EntryValues {
+                id: EntryId::new(),
                 version: 1,
-                modified_at: time,
-                created_at: time,
-            }
-        }
-
-        /// Build a single-set scenario (equivalent to the old single-set tests).
-        fn single_set_state(
-            journal_id: JournalId,
-            set_id: AccountSetId,
-            member_id: AccountId,
-            balances: HashMap<Currency, BalanceSnapshot>,
-        ) -> (
-            HashMap<AccountSetId, SetRecalcState>,
-            HashMap<AccountId, Vec<AccountSetId>>,
-        ) {
-            let account_id = AccountId::from(&set_id);
-            let set_states = std::iter::once((set_id, (account_id, balances, None))).collect();
-            let memberships = std::iter::once((member_id, vec![set_id])).collect();
-            let _ = journal_id; // only used by callers for consistency
-            (set_states, memberships)
-        }
-
-        #[test]
-        fn first_run_produces_version_1() {
-            let journal_id = JournalId::new();
-            let set_id = AccountSetId::new();
-            let member_id = AccountId::new();
-            let entry_id = EntryId::new();
-
-            let history = vec![MemberBalanceHistoryRow {
-                snapshot: member_snapshot(
-                    member_id,
-                    "USD",
-                    entry_id,
-                    Decimal::from(100),
-                    Decimal::ZERO,
-                ),
-                prev_snapshot: None,
-                seq: 1,
-            }];
-
-            let (set_states, memberships) =
-                single_set_state(journal_id, set_id, member_id, HashMap::new());
-
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
-
-            let account_id = AccountId::from(&set_id);
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].version, 1);
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
-            assert_eq!(result[0].account_id, account_id);
-            assert_eq!(result[0].journal_id, journal_id);
-        }
-
-        #[test]
-        fn incremental_applies_delta_to_existing_balance() {
-            let journal_id = JournalId::new();
-            let set_id = AccountSetId::new();
-            let account_id = AccountId::from(&set_id);
-            let member_id = AccountId::new();
-            let currency: Currency = "USD".parse().unwrap();
-
-            let existing_entry = EntryId::new();
-            let mut existing = zero_balance(journal_id, account_id, currency, existing_entry, 2);
-            existing.settled.dr_balance = Decimal::from(200);
-
-            let mut current_balances = HashMap::new();
-            current_balances.insert(currency, existing);
-
-            let prev = member_snapshot(
-                member_id,
-                "USD",
-                EntryId::new(),
-                Decimal::from(50),
-                Decimal::ZERO,
-            );
-            let curr = member_snapshot(
-                member_id,
-                "USD",
-                EntryId::new(),
-                Decimal::from(80),
-                Decimal::ZERO,
-            );
-            // Delta: 80 - 50 = 30 dr
-            let history = vec![MemberBalanceHistoryRow {
-                snapshot: curr,
-                prev_snapshot: Some(prev),
-                seq: 1,
-            }];
-
-            let (set_states, memberships) =
-                single_set_state(journal_id, set_id, member_id, current_balances);
-
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
-
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].version, 3);
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(230));
-        }
-
-        #[test]
-        fn multiple_deltas_accumulate() {
-            let journal_id = JournalId::new();
-            let set_id = AccountSetId::new();
-            let member_id = AccountId::new();
-
-            let snap1 = member_snapshot(
-                member_id,
-                "USD",
-                EntryId::new(),
-                Decimal::from(100),
-                Decimal::ZERO,
-            );
-            let snap2 = member_snapshot(
-                member_id,
-                "USD",
-                EntryId::new(),
-                Decimal::from(250),
-                Decimal::ZERO,
-            );
-            let history = vec![
-                MemberBalanceHistoryRow {
-                    snapshot: snap1.clone(),
-                    prev_snapshot: None,
-                    seq: 1,
-                },
-                MemberBalanceHistoryRow {
-                    snapshot: snap2,
-                    prev_snapshot: Some(snap1),
-                    seq: 2,
-                },
-            ];
-
-            let (set_states, memberships) =
-                single_set_state(journal_id, set_id, member_id, HashMap::new());
-
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
-
-            assert_eq!(result.len(), 2);
-            assert_eq!(result[0].version, 1);
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
-            assert_eq!(result[1].version, 2);
-            assert_eq!(result[1].settled.dr_balance, Decimal::from(250));
-        }
-
-        #[test]
-        fn multi_currency_tracked_independently() {
-            let journal_id = JournalId::new();
-            let set_id = AccountSetId::new();
-            let member_id = AccountId::new();
-
-            let usd = member_snapshot(
-                member_id,
-                "USD",
-                EntryId::new(),
-                Decimal::from(100),
-                Decimal::ZERO,
-            );
-            let btc = member_snapshot(
-                member_id,
-                "BTC",
-                EntryId::new(),
-                Decimal::ZERO,
-                Decimal::from(50),
-            );
-            let history = vec![
-                MemberBalanceHistoryRow {
-                    snapshot: usd,
-                    prev_snapshot: None,
-                    seq: 1,
-                },
-                MemberBalanceHistoryRow {
-                    snapshot: btc,
-                    prev_snapshot: None,
-                    seq: 2,
-                },
-            ];
-
-            let (set_states, memberships) =
-                single_set_state(journal_id, set_id, member_id, HashMap::new());
-
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
-
-            assert_eq!(result.len(), 2);
-            let usd_snap = result.iter().find(|s| s.currency.code() == "USD").unwrap();
-            let btc_snap = result.iter().find(|s| s.currency.code() == "BTC").unwrap();
-            assert_eq!(usd_snap.settled.dr_balance, Decimal::from(100));
-            assert_eq!(btc_snap.settled.cr_balance, Decimal::from(50));
-            assert_eq!(usd_snap.version, 1);
-            assert_eq!(btc_snap.version, 1);
-        }
-
-        #[test]
-        fn empty_history_returns_empty() {
-            let result = Balances::replay_member_deltas_batch(
-                JournalId::new(),
-                HashMap::new(),
-                &HashMap::new(),
-                Vec::new(),
-            );
-            assert!(result.is_empty());
-        }
-
-        #[test]
-        fn shared_member_dispatches_to_multiple_sets() {
-            let journal_id = JournalId::new();
-            let set_a = AccountSetId::new();
-            let set_b = AccountSetId::new();
-            let member_id = AccountId::new();
-
-            let history = vec![MemberBalanceHistoryRow {
-                snapshot: member_snapshot(
-                    member_id,
-                    "USD",
-                    EntryId::new(),
-                    Decimal::from(100),
-                    Decimal::ZERO,
-                ),
-                prev_snapshot: None,
-                seq: 1,
-            }];
-
-            let set_states: HashMap<AccountSetId, SetRecalcState> = [
-                (set_a, (AccountId::from(&set_a), HashMap::new(), None)),
-                (set_b, (AccountId::from(&set_b), HashMap::new(), None)),
-            ]
-            .into_iter()
-            .collect();
-            let memberships: HashMap<AccountId, Vec<AccountSetId>> =
-                std::iter::once((member_id, vec![set_a, set_b])).collect();
-
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
-
-            assert_eq!(result.len(), 2);
-            for snap in &result {
-                assert_eq!(snap.version, 1);
-                assert_eq!(snap.settled.dr_balance, Decimal::from(100));
+                transaction_id: TransactionId::new(),
+                journal_id: JournalId::new(),
+                account_id,
+                entry_type: "TEST_ENTRY".to_string(),
+                sequence: 1,
+                layer: Layer::Settled,
+                currency: "USD".parse().unwrap(),
+                direction: DebitOrCredit::Credit,
+                units,
+                description: None,
+                metadata: None,
             }
         }
 
         #[test]
-        fn watermark_skips_already_processed_rows() {
-            let journal_id = JournalId::new();
+        fn fans_member_deltas_into_ec_ancestor_only() {
+            let usd: Currency = "USD".parse().unwrap();
             let set_id = AccountSetId::new();
-            let account_id = AccountId::from(&set_id);
-            let member_id = AccountId::new();
-            let currency: Currency = "USD".parse().unwrap();
+            let set_account = AccountId::from(&set_id);
+            let m1 = AccountId::new();
+            let m2 = AccountId::new();
 
-            // Set already has version 1 balance and watermark at seq=5
-            let mut existing = zero_balance(journal_id, account_id, currency, EntryId::new(), 1);
-            existing.settled.dr_balance = Decimal::from(100);
-            let mut balances = HashMap::new();
-            balances.insert(currency, existing);
-
-            let set_states: HashMap<AccountSetId, SetRecalcState> =
-                std::iter::once((set_id, (account_id, balances, Some(5)))).collect();
-            let memberships: HashMap<AccountId, Vec<AccountSetId>> =
-                std::iter::once((member_id, vec![set_id])).collect();
-
-            let history = vec![
-                // seq=3 should be skipped (below watermark 5)
-                MemberBalanceHistoryRow {
-                    snapshot: member_snapshot(
-                        member_id,
-                        "USD",
-                        EntryId::new(),
-                        Decimal::from(50),
-                        Decimal::ZERO,
-                    ),
-                    prev_snapshot: None,
-                    seq: 3,
-                },
-                // seq=7 should be applied
-                MemberBalanceHistoryRow {
-                    snapshot: member_snapshot(
-                        member_id,
-                        "USD",
-                        EntryId::new(),
-                        Decimal::from(80),
-                        Decimal::ZERO,
-                    ),
-                    prev_snapshot: Some(member_snapshot(
-                        member_id,
-                        "USD",
-                        EntryId::new(),
-                        Decimal::from(50),
-                        Decimal::ZERO,
-                    )),
-                    seq: 7,
-                },
+            let entries = vec![
+                credit_entry(Decimal::from(100), m1),
+                credit_entry(Decimal::from(50), m2),
             ];
 
-            let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+            let mut ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+            ec_mappings.insert(m1, vec![set_id]);
+            ec_mappings.insert(m2, vec![set_id]);
 
-            // Only one snapshot produced (seq=3 skipped)
-            assert_eq!(result.len(), 1);
-            assert_eq!(result[0].version, 2);
-            // 100 (existing) + 30 (delta: 80-50) = 130
-            assert_eq!(result[0].settled.dr_balance, Decimal::from(130));
+            // EC set has no prior balance.
+            let mut current: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> =
+                HashMap::new();
+            current.insert((set_account, usd), None);
+
+            let snapshots = Balances::ec_set_snapshots(Utc::now(), current, &entries, &ec_mappings);
+
+            // Only the EC set is written — never the leaf accounts.
+            assert!(snapshots.iter().all(|s| s.account_id == set_account));
+            // The final (highest-version) snapshot reflects both credits.
+            let final_snapshot = snapshots.iter().max_by_key(|s| s.version).unwrap();
+            assert_eq!(final_snapshot.settled.cr_balance, Decimal::from(150));
+            assert_eq!(final_snapshot.version, 2);
+        }
+
+        #[test]
+        fn skips_members_without_ec_ancestors() {
+            let entries = vec![credit_entry(Decimal::from(10), AccountId::new())];
+            let ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+            let current: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> = HashMap::new();
+
+            let snapshots = Balances::ec_set_snapshots(Utc::now(), current, &entries, &ec_mappings);
+            assert!(snapshots.is_empty());
         }
     }
 }

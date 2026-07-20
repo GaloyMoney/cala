@@ -11,7 +11,7 @@ async fn transaction_post() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await.unwrap();

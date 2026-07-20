@@ -24,7 +24,7 @@
 //!         .pg_con(&pg_con)
 //!         // .exec_migrations(true) # commented out for execution in CI
 //!         .build()?;
-//!     let cala = CalaLedger::init(cala_config).await?;
+//!     let cala = CalaLedger::init(cala_config, None).await?;
 //!
 //!     // Initialize the journal - all entities are constructed via builders
 //!     let new_journal = NewJournal::builder()
@@ -127,6 +127,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod cel_context;
+mod ec_rollup;
 mod param;
 
 pub mod account;
@@ -140,6 +141,10 @@ pub mod tx_template;
 pub mod velocity;
 
 pub use es_entity;
+// Re-exported so consumers register the streaming EC rollup job against
+// the same `job` version cala-ledger links (see
+// `CalaLedger::register_ec_balance_rollup_job`).
+pub use job;
 
 mod ledger;
 pub mod outbox;

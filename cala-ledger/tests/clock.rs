@@ -19,6 +19,7 @@ async fn transaction_effective_date_uses_clock() -> anyhow::Result<()> {
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
+        None,
     )
     .await?;
 
@@ -58,6 +59,7 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
+        None,
     )
     .await?;
 
@@ -113,6 +115,7 @@ async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
+        None,
     )
     .await?;
 
@@ -163,6 +166,7 @@ async fn begin_operation_attaches_clock_time() -> anyhow::Result<()> {
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
+        None,
     )
     .await?;
 
@@ -186,6 +190,7 @@ async fn clock_propagates_through_atomic_operations() -> anyhow::Result<()> {
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
+        None,
     )
     .await?;
 

@@ -9,7 +9,7 @@ async fn find_returns_not_found_by_id() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let id = AccountId::new();
     match cala.accounts().find(id).await {

@@ -35,11 +35,28 @@ pub struct CalaLedger {
     velocities: Velocities,
     balances: Balances,
     publisher: OutboxPublisher,
+    // When the caller doesn't supply a `job::Jobs`, the ledger creates one,
+    // registers the streaming EC rollup on it, and holds it here. It is not
+    // polled until `job::Jobs::start_poll` is called: a live rollup listener
+    // contends with concurrent posters (obix gap-fill), so running it is
+    // always explicit. When the caller *does* pass a `Jobs`, the rollup is
+    // registered against it and this stays `None`.
+    _owned_jobs: Option<job::Jobs>,
 }
 
 impl CalaLedger {
+    /// Initialize the ledger.
+    ///
+    /// The streaming EC account-set balance rollup is registered here. Pass
+    /// `Some(&mut jobs)` to register it against a `job::Jobs` you own and
+    /// drive (call `start_poll` yourself); pass `None` and the ledger creates
+    /// and holds its own `job::Jobs`. Either way the rollup only runs once
+    /// the owning `Jobs` is polled.
     #[instrument(name = "cala_ledger.init", skip_all)]
-    pub async fn init(config: CalaLedgerConfig) -> Result<Self, LedgerError> {
+    pub async fn init(
+        config: CalaLedgerConfig,
+        jobs: Option<&mut job::Jobs>,
+    ) -> Result<Self, LedgerError> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
             (None, Some(pg_con)) => {
@@ -72,6 +89,40 @@ impl CalaLedger {
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+
+        // Register the streaming EC rollup against the caller's `Jobs`, or an
+        // internally-owned one when none is provided.
+        let _owned_jobs = match jobs {
+            Some(jobs) => {
+                crate::ec_rollup::spawn_ec_balance_rollup_job(
+                    jobs,
+                    publisher.inner(),
+                    &balances,
+                    &entries,
+                )
+                .await?;
+                None
+            }
+            None => {
+                let mut owned = job::Jobs::init(
+                    job::JobSvcConfig::builder()
+                        .pool(pool.clone())
+                        .clock(clock.clone())
+                        .build()
+                        .map_err(|e| LedgerError::ConfigError(e.to_string()))?,
+                )
+                .await?;
+                crate::ec_rollup::spawn_ec_balance_rollup_job(
+                    &mut owned,
+                    publisher.inner(),
+                    &balances,
+                    &entries,
+                )
+                .await?;
+                Some(owned)
+            }
+        };
+
         Ok(Self {
             accounts,
             account_sets,
@@ -84,6 +135,7 @@ impl CalaLedger {
             velocities,
             pool,
             clock,
+            _owned_jobs,
         })
     }
 
