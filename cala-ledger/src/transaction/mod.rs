@@ -9,7 +9,7 @@ use tracing::instrument;
 use std::collections::HashMap;
 
 use crate::outbox::*;
-use crate::primitives::{EntryId, TxTemplateId};
+use crate::primitives::TxTemplateId;
 
 pub use entity::*;
 use error::*;
@@ -36,24 +36,6 @@ impl Transactions {
     ) -> Result<Transaction, TransactionError> {
         let transaction = self.repo.create_in_op(db, new_transaction).await?;
         Ok(transaction)
-    }
-
-    #[instrument(name = "cala_ledger.transactions.create_voided_tx_in_op", skip_all)]
-    pub async fn create_voided_tx_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperationWithTime,
-        voiding_tx_id: TransactionId,
-        existing_tx_id: TransactionId,
-        entry_ids: impl IntoIterator<Item = EntryId>,
-    ) -> Result<Transaction, TransactionError> {
-        let mut existing_tx = self.repo.find_by_id_in_op(&mut *db, existing_tx_id).await?;
-
-        let new_tx = existing_tx.void(voiding_tx_id, entry_ids.into_iter().collect(), db.now())?;
-
-        self.repo.update_in_op(db, &mut existing_tx).await?;
-        let voided_tx = self.repo.create_in_op(db, new_tx).await?;
-
-        Ok(voided_tx)
     }
 
     #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self))]
