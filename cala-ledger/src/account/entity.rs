@@ -278,7 +278,18 @@ impl NewAccountBuilder {
         self
     }
 
-    pub(crate) fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
+    /// Marks the account as eventually consistent: posters skip the
+    /// exclusive per-(journal, account, currency) advisory lock and do not
+    /// maintain `cala_current_balances` rows for it.
+    ///
+    /// Only sound for rollup-only counterparty accounts whose *current
+    /// balance is never read* (e.g. product omnibus accounts that exist so
+    /// double-entry postings have a shared counterparty). Unlike account
+    /// sets, plain accounts have no out-of-band recalculation path, so an
+    /// eventually-consistent account's current balance reads as
+    /// zero/not-found forever — entries and set rollups over those entries
+    /// are unaffected.
+    pub fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
         self.eventually_consistent = Some(eventually_consistent);
         self
     }
