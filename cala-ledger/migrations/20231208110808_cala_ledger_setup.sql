@@ -79,6 +79,10 @@ CREATE TABLE cala_account_set_member_account_sets (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_set_id, member_account_set_id)
 );
+-- Reverse index for the upward `WITH RECURSIVE parents` walk, which filters and
+-- joins member_account_set_id at every level; the UNIQUE above leads on account_set_id.
+CREATE INDEX idx_cala_account_set_member_account_sets_member_set
+  ON cala_account_set_member_account_sets (member_account_set_id, account_set_id);
 
 CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,
