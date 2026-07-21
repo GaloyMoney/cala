@@ -296,7 +296,7 @@ dependencies = [
  "anyhow",
  "cala-cel-parser",
  "chrono",
- "es-entity",
+ "es-entity 0.10.40",
  "rust_decimal",
  "schemars 1.2.1",
  "serde",
@@ -326,7 +326,7 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.40",
  "futures",
  "job",
  "obix",
@@ -353,7 +353,7 @@ dependencies = [
  "cala-cel-interpreter",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.40",
  "rust_decimal",
  "rusty-money",
  "schemars 1.2.1",
@@ -834,7 +834,28 @@ checksum = "4eef4c84ca2adcf9627af48c440d558c856a915c0b85e2fd884a3852ee8ce3d9"
 dependencies = [
  "chrono",
  "derive_builder",
- "es-entity-macros",
+ "es-entity-macros 0.10.40",
+ "im",
+ "parking_lot",
+ "pin-project",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "es-entity"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b10239773bfe267aef2997b044ec77d794b9c986cc7620cb247d6a615860129"
+dependencies = [
+ "chrono",
+ "derive_builder",
+ "es-entity-macros 0.11.1",
  "im",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -856,6 +877,21 @@ name = "es-entity-macros"
 version = "0.10.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b4d2f9d7f0926ec76535e65a764ab2528657731811fa2b35f3563573dd1fc60"
+dependencies = [
+ "convert_case",
+ "darling 0.23.0",
+ "pluralizer",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.117",
+]
+
+[[package]]
+name = "es-entity-macros"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8196c4a16efad694064949e98d06dbebce06583cbe74aa29dcd07a22c4cde1a9"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1382,14 +1418,14 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.28"
+version = "0.6.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518512c0122e327140301d066e994339ce74cbbff0d33be40d0292d0c1b57d94"
+checksum = "9b00c544fff704cda06c322b8537fda242b560b294abb67cd20a9b6b12b1d617"
 dependencies = [
  "async-trait",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.11.1",
  "futures",
  "rand 0.10.1",
  "schemars 1.2.1",
@@ -1616,7 +1652,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "derive_builder",
- "es-entity",
+ "es-entity 0.10.40",
  "futures",
  "im",
  "job",
