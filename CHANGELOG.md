@@ -1,3 +1,16 @@
+# [cala release v0.17.0](https://github.com/GaloyMoney/cala/releases/tag/0.17.0)
+
+
+
+### Features
+
+- [**breaking**] Remove transaction voiding (#755)
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.11.2, job to 0.6.30, obix to 0.2.32 (#760)
+- Bump rand in the all-dependencies group (#750)
+
 # [cala release v0.16.2](https://github.com/GaloyMoney/cala/releases/tag/0.16.2)
 
 
