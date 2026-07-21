@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO jobs (id, job_type, unique_per_type, parent_job_id, created_at) VALUES ($1, $2, $3, $4, COALESCE($5, NOW()))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Bool",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ab55c317dd4a1ec809a076acad473e78f765255e1f5d0b712b7bef9716eb21f3"
+}

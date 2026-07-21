@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH entities AS (SELECT external_id, id FROM cala_account_sets WHERE ((external_id IS NOT DISTINCT FROM $3) AND COALESCE(id > $2, true) OR COALESCE(external_id > $3, external_id IS NOT NULL)) ORDER BY external_id ASC NULLS FIRST, id ASC LIMIT $1) SELECT i.id AS \"entity_id: Repo__Id\", e.sequence, e.event, CASE WHEN $4 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at, NULL::jsonb as \"forgettable_payload?\" FROM entities i JOIN cala_account_set_events e ON i.id = e.id ORDER BY i.external_id asc nulls first, i.id asc, i.id, e.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "entity_id: Repo__Id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "event",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "context: es_entity::ContextData",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "forgettable_payload?",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      false,
+      null
+    ]
+  },
+  "hash": "e1bf1a0849f6d659a2bf107642d9b3ec520a4b0485fd0c6d8091eb0983c4130d"
+}

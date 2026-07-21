@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        UPDATE job_executions\n                        SET alive_at = $1\n                        WHERE poller_instance_id = $2\n                          AND state = 'running'\n                          AND id = ANY($3)\n                        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "932da1ca0fcd83172902956efaaa7dfed872f1aa8be8c117d0c1fbb02f4fa4aa"
+}

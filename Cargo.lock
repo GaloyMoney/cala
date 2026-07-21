@@ -92,6 +92,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-stream"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b5a71a6f37880a80d1d7f19efd781e4b5de42c88f0722cc13bcb6cc2cfe8476"
+dependencies = [
+ "async-stream-impl",
+ "futures-core",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "async-stream-impl"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c7c24de15d275a1ecfd47a380fb4d5ec9bfe0933f309ed5e705b775596a3574d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.89"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -828,13 +850,16 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.10.40"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4eef4c84ca2adcf9627af48c440d558c856a915c0b85e2fd884a3852ee8ce3d9"
+checksum = "2e9202fb16f15dd697e20a31b1b7a38772f6e7926014cacd847cdefe2f2ce214"
 dependencies = [
+ "async-stream",
  "chrono",
  "derive_builder",
  "es-entity-macros",
+ "futures-core",
+ "futures-util",
  "im",
  "opentelemetry",
  "opentelemetry_sdk",
@@ -853,9 +878,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.10.40"
+version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b4d2f9d7f0926ec76535e65a764ab2528657731811fa2b35f3563573dd1fc60"
+checksum = "c0c32fdc62f4087581040d26a88e6708c0c754761b7509709ab13b7f4cff112d"
 dependencies = [
  "convert_case",
  "darling 0.23.0",
@@ -1382,9 +1407,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.28"
+version = "0.6.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "518512c0122e327140301d066e994339ce74cbbff0d33be40d0292d0c1b57d94"
+checksum = "87168d8fdabbc2b5a57d63470040134da6ae9135140af92e03ee494e277475e2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1609,9 +1634,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.2.29"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84f63afe93c8e13398d013aaff17b7d8800b1fea5d0e709e58f64aca9eb36d07"
+checksum = "beb14f07f2c5a6f6d3c464e1f6765efcb83aebb7f77bd6aaeec6a41ed0c71c59"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1632,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.2.29"
+version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73d399ca2be33ad1b067282eaf957a847f1030a1b43178fdd2ef98cde50fabb7"
+checksum = "799ab83a7d10f85ea632c638fbf2f04a9ec58cde9885f691ae065b755c840407"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
