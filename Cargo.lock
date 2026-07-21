@@ -330,7 +330,7 @@ dependencies = [
  "futures",
  "job",
  "obix",
- "rand 0.10.1",
+ "rand 0.10.2",
  "regex",
  "rust_decimal",
  "rust_decimal_macros",
@@ -371,7 +371,7 @@ version = "0.16.3-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
- "rand 0.10.1",
+ "rand 0.10.2",
  "sqlx",
  "tokio",
 ]
@@ -385,7 +385,7 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "criterion",
- "rand 0.10.1",
+ "rand 0.10.2",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -1391,7 +1391,7 @@ dependencies = [
  "derive_builder",
  "es-entity",
  "futures",
- "rand 0.10.1",
+ "rand 0.10.2",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -1985,9 +1985,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2e8e8bcc7961af1fdac401278c6a831614941f6164ee3bf4ce61b7edb162207"
+checksum = "c7f5fa3a058cd35567ef9bfa5e75732bee0f9e4c55fa90477bef2dfcdbc4be80"
 dependencies = [
  "chacha20",
  "getrandom 0.4.1",
