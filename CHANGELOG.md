@@ -1,3 +1,17 @@
+# [cala release v0.18.0](https://github.com/GaloyMoney/cala/releases/tag/0.18.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Bump obix to 0.3.0 (#766)
+
+### Performance
+
+- Size mailbox buffers for listener stalls (#764)
+- Index member_account_id for balance-set resolution (#765)
+- Index member_account_set_id for upward walk (#761)
+
 # [cala release v0.17.0](https://github.com/GaloyMoney/cala/releases/tag/0.17.0)
 
 
