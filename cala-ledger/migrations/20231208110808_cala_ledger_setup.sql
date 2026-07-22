@@ -72,6 +72,11 @@ CREATE TABLE cala_account_set_member_accounts (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_set_id, member_account_id)
 );
+-- Reverse index for account->sets resolution (fetch_mappings_in_op on the
+-- posting path), which filters member_account_id; the UNIQUE above leads on
+-- account_set_id.
+CREATE INDEX idx_cala_account_set_member_accounts_member_account
+  ON cala_account_set_member_accounts (member_account_id, account_set_id);
 
 CREATE TABLE cala_account_set_member_account_sets (
   account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
