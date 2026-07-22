@@ -12,6 +12,8 @@ impl OutboxPublisher {
     pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, sqlx::Error> {
         let config = obix::MailboxConfig::builder()
             .clock(clock.clone())
+            .event_buffer_size(2_000)
+            .event_cache_size(10_000)
             .build()
             .expect("MailboxConfig");
         let outbox = ObixOutbox::init(pool, config).await?;
