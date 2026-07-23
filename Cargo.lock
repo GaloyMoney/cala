@@ -313,7 +313,7 @@ checksum = "26cf465651fa6ad902a2d327ba60c3a6bc61c6a2f4ad70d091cf20dfda0074ef"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "anyhow",
  "cala-cel-parser",
@@ -330,7 +330,7 @@ dependencies = [
 
 [[package]]
 name = "cala-cel-parser"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "cached",
  "lalrpop",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "anyhow",
  "cached",
@@ -370,7 +370,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -389,7 +389,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-example-rust"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "cala-perf"
-version = "0.18.1"
+version = "0.18.2-dev"
 dependencies = [
  "anyhow",
  "cala-ledger",
