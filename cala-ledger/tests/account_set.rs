@@ -604,7 +604,11 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
     assert_eq!(inline_bal_2.settled(), ec_bal_2.settled());
     assert_eq!(inline_bal_2.details.version, ec_bal_2.details.version);
 
-    // Verify balance_history counts match across ALL currencies
+    // Coalesced recalc: the EC set writes one history row per currency per
+    // recalculation that consumed new member history (2 recalcs x 2
+    // currencies), while the inline set writes one row per member entry
+    // (4 transactions x 3 recipient entries: settled BTC, settled USD,
+    // pending USD).
     let inline_account_id = AccountId::from(&inline_set.id());
     let ec_account_id = AccountId::from(&ec_set.id());
 
@@ -627,11 +631,16 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
     .try_get("cnt")?;
 
     assert_eq!(
-        inline_count, ec_count,
-        "EC set should have same number of balance_history rows as inline set"
+        inline_count, 12,
+        "inline set writes one history row per entry"
+    );
+    assert_eq!(
+        ec_count, 4,
+        "EC set writes one coalesced history row per currency per recalc"
     );
 
-    // Verify each BTC snapshot's running balance matches
+    // The EC set's BTC history must be a coalesced subsequence of the inline
+    // set's: each EC row is identical to the inline row at the same version.
     let inline_history = sqlx::query(
         "SELECT values FROM cala_balance_history WHERE account_id = $1 AND journal_id = $2 AND currency = $3 ORDER BY version",
     )
@@ -651,34 +660,39 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
     .await?;
 
     assert_eq!(
-        inline_history.len(),
         ec_history.len(),
-        "BTC history count mismatch"
+        2,
+        "one coalesced BTC history row per recalc"
     );
-    for (inline_row, ec_row) in inline_history.iter().zip(ec_history.iter()) {
-        let i_snap: BalanceSnapshot =
-            serde_json::from_value(inline_row.try_get::<serde_json::Value, _>("values")?)?;
+    let inline_by_version: std::collections::HashMap<u32, BalanceSnapshot> = inline_history
+        .iter()
+        .map(|row| {
+            let snap: BalanceSnapshot =
+                serde_json::from_value(row.try_get::<serde_json::Value, _>("values").unwrap())
+                    .unwrap();
+            (snap.version, snap)
+        })
+        .collect();
+    for ec_row in ec_history.iter() {
         let e_snap: BalanceSnapshot =
             serde_json::from_value(ec_row.try_get::<serde_json::Value, _>("values")?)?;
-        assert_eq!(
-            i_snap.version, e_snap.version,
-            "version mismatch at v{}",
-            i_snap.version
-        );
+        let i_snap = inline_by_version
+            .get(&e_snap.version)
+            .unwrap_or_else(|| panic!("no inline history row at v{}", e_snap.version));
         assert_eq!(
             i_snap.settled.dr_balance, e_snap.settled.dr_balance,
             "settled dr mismatch at v{}",
-            i_snap.version
+            e_snap.version
         );
         assert_eq!(
             i_snap.settled.cr_balance, e_snap.settled.cr_balance,
             "settled cr mismatch at v{}",
-            i_snap.version
+            e_snap.version
         );
         assert_eq!(
             i_snap.entry_id, e_snap.entry_id,
             "entry_id mismatch at v{}",
-            i_snap.version
+            e_snap.version
         );
     }
 

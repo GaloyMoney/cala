@@ -249,6 +249,15 @@ impl EffectiveBalances {
         Ok(())
     }
 
+    /// Folds member effective-balance deltas into each owning set's
+    /// running snapshot and returns one snapshot per touched
+    /// `(set, currency, effective_date)` — the final coalesced state for
+    /// that date — rather than one snapshot per replayed delta. Both
+    /// `version` (per-date) and `all_time_version` still advance once
+    /// per folded delta, so the emitted row for a date carries the same
+    /// version numbers as the last of the per-delta rows used to, and
+    /// rebuilds of a date can never emit a lower version than a prior
+    /// build of the same date.
     #[instrument(
         name = "cala_ledger.balance.effective.replay_effective_deltas",
         skip_all
@@ -353,6 +362,15 @@ impl EffectiveBalances {
                     });
 
                 if state.last_date != Some(row.effective_date) {
+                    if let Some(prev_date) = state.last_date {
+                        result.push(RecalcEffectiveSnapshot {
+                            account_id,
+                            currency: row.snapshot.currency,
+                            effective_date: prev_date,
+                            snapshot: state.snapshot.clone(),
+                            all_time_version: state.all_time_version,
+                        });
+                    }
                     state.snapshot.version = 0;
                     state.last_date = Some(row.effective_date);
                 }
@@ -382,16 +400,31 @@ impl EffectiveBalances {
                 }
 
                 state.all_time_version += 1;
-
-                result.push(RecalcEffectiveSnapshot {
-                    account_id,
-                    currency: row.snapshot.currency,
-                    effective_date: row.effective_date,
-                    snapshot: running.clone(),
-                    all_time_version: state.all_time_version,
-                });
             }
         }
+
+        // Flush the final pending date of every state touched this run,
+        // in a deterministic order.
+        let mut final_flushes: Vec<_> = states
+            .into_iter()
+            .filter_map(|((account_id, currency), state)| {
+                state
+                    .last_date
+                    .map(|effective_date| RecalcEffectiveSnapshot {
+                        account_id,
+                        currency,
+                        effective_date,
+                        snapshot: state.snapshot,
+                        all_time_version: state.all_time_version,
+                    })
+            })
+            .collect();
+        final_flushes.sort_by(|a, b| {
+            a.account_id
+                .cmp(&b.account_id)
+                .then_with(|| a.currency.cmp(&b.currency))
+        });
+        result.extend(final_flushes);
 
         result
     }
