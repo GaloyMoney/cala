@@ -1,3 +1,11 @@
+# [cala release v0.18.3](https://github.com/GaloyMoney/cala/releases/tag/0.18.3)
+
+
+
+### Performance
+
+- Raise event buffer 2k -> 50k (#775)
+
 # [cala release v0.18.2](https://github.com/GaloyMoney/cala/releases/tag/0.18.2)
 
 
