@@ -12,6 +12,14 @@ pub struct CalaLedgerConfig {
     pub(super) exec_migrations: bool,
     #[builder(setter(into, strip_option), default)]
     pub(super) pool: Option<sqlx::PgPool>,
+    /// Bound on how many `post_transaction*` calls may be in flight at
+    /// once. Postings serialize on hot shared accounts via advisory
+    /// locks; without a bound the queue forms inside Postgres where
+    /// each waiter pins a connection, an open transaction and a
+    /// snapshot. With a bound, excess posters wait in-process instead.
+    /// `None` (default) keeps the previous unbounded behavior.
+    #[builder(setter(into, strip_option), default)]
+    pub(super) max_concurrent_postings: Option<usize>,
     #[builder(setter(into), default = "Clock::handle().clone()")]
     pub(super) clock: ClockHandle,
 }
