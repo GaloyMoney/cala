@@ -278,7 +278,18 @@ impl NewAccountBuilder {
         self
     }
 
-    pub(crate) fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
+    /// Marks the account as eventually consistent: posters skip the
+    /// exclusive per-(journal, account, currency) advisory lock and do not
+    /// maintain balance snapshots for it — no `cala_current_balances`, no
+    /// `cala_balance_history`, no effective-balance history.
+    ///
+    /// WARNING: this is only sound for accounts that are **not a member of
+    /// any account set**. Set recalculation replays member balance history,
+    /// so an eventually-consistent member's entries silently drop out of
+    /// every ancestor set's recalculated balance. Entries themselves
+    /// (`cala_entries`) are always written; everything derived from balance
+    /// snapshots is not.
+    pub fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
         self.eventually_consistent = Some(eventually_consistent);
         self
     }
