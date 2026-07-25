@@ -181,7 +181,11 @@ impl EffectiveBalances {
 
     #[instrument(
         name = "cala_ledger.balance.effective.recalculate_for_account_sets_in_op",
-        skip(self, op)
+        skip(self, op, account_set_ids, memberships),
+        fields(
+            account_set_ids_count = account_set_ids.len(),
+            memberships_count = memberships.len()
+        )
     )]
     pub(crate) async fn recalculate_for_account_sets_in_op(
         &self,

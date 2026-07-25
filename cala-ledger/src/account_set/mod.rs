@@ -82,7 +82,7 @@ impl AccountSets {
         Ok(account_sets)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create_all_in_op", skip(self, db))]
+    #[instrument(name = "cala_ledger.account_sets.create_all_in_op", skip(self, db, new_account_sets), fields(count = new_account_sets.len()))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -536,7 +536,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_batch",
-        skip(self)
+        skip(self, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_batch(
         &self,
@@ -551,7 +552,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_batch_in_op",
-        skip(self, op)
+        skip(self, op, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_batch_in_op(
         &self,
@@ -611,7 +613,8 @@ impl AccountSets {
     /// descendant account sets in a single batch.
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_deep",
-        skip(self)
+        skip(self, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_deep(
         &self,
@@ -626,7 +629,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_deep_in_op",
-        skip(self, op)
+        skip(self, op, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_deep_in_op(
         &self,

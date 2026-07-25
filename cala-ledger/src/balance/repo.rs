@@ -344,7 +344,7 @@ impl BalanceRepo {
     /// nested-loop join with `v` as the outer side for the tiny inputs
     /// this query receives, preserving UNNEST scan order through to
     /// the function calls in the SELECT list.
-    #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op))]
+    #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,

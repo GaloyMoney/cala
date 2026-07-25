@@ -275,7 +275,8 @@ impl Balances {
 
     #[instrument(
         name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
-        skip(self, op),
+        skip(self, op, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len()),
         err(level = "warn")
     )]
     pub(crate) async fn recalculate_account_set_balances_batch_in_op(

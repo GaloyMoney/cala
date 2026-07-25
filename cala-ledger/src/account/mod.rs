@@ -60,7 +60,7 @@ impl Accounts {
         Ok(accounts)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create_all_in_op", skip(self, db))]
+    #[instrument(name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len()))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
