@@ -1,3 +1,11 @@
+# [cala release v0.18.4](https://github.com/GaloyMoney/cala/releases/tag/0.18.4)
+
+
+
+### Performance
+
+- Skip collection args in #[instrument] span fields (#777)
+
 # [cala release v0.18.3](https://github.com/GaloyMoney/cala/releases/tag/0.18.3)
 
 
