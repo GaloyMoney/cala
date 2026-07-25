@@ -193,7 +193,7 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = tracing::Level::WARN))]
+    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_ids, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = tracing::Level::WARN))]
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -250,7 +250,7 @@ impl Velocities {
         self.limits.list_for_control(op, control_id).await
     }
 
-    #[instrument(name = "velocity.find_all_limits", skip(self), fields(count = limit_ids.len()), err(level = tracing::Level::WARN))]
+    #[instrument(name = "velocity.find_all_limits", skip(self, limit_ids), fields(count = limit_ids.len()), err(level = tracing::Level::WARN))]
     pub async fn find_all_limits<T: From<VelocityLimit>>(
         &self,
         limit_ids: &[VelocityLimitId],
@@ -258,7 +258,7 @@ impl Velocities {
         Ok(self.limits.find_all(limit_ids).await?)
     }
 
-    #[instrument(name = "velocity.find_all_controls", skip(self), fields(count = control_ids.len()))]
+    #[instrument(name = "velocity.find_all_controls", skip(self, control_ids), fields(count = control_ids.len()))]
     pub async fn find_all_controls<T: From<VelocityControl>>(
         &self,
         control_ids: &[VelocityControlId],

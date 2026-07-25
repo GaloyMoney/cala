@@ -70,7 +70,7 @@ impl Transactions {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_all", skip(self))]
+    #[instrument(name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],
