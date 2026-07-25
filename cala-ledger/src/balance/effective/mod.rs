@@ -70,7 +70,7 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_all_cumulative", skip(self))]
+    #[instrument(name = "cala_ledger.balance.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_cumulative(
         &self,
         ids: &[BalanceId],
@@ -100,7 +100,8 @@ impl EffectiveBalances {
 
     #[instrument(
         name = "cala_ledger.balance.effective.list_cumulative_for_accounts",
-        skip(self)
+        skip(self, account_ids),
+        fields(account_ids_count = account_ids.len())
     )]
     pub async fn list_cumulative_for_accounts(
         &self,
@@ -115,7 +116,7 @@ impl EffectiveBalances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self))]
+    #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range(
         &self,
         ids: &[BalanceId],
@@ -148,7 +149,8 @@ impl EffectiveBalances {
 
     #[instrument(
         name = "cala_ledger.balance.effective.list_in_range_for_accounts",
-        skip(self)
+        skip(self, account_ids),
+        fields(account_ids_count = account_ids.len())
     )]
     pub async fn list_in_range_for_accounts(
         &self,

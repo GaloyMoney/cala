@@ -46,7 +46,7 @@ impl Journals {
         Ok(journal)
     }
 
-    #[instrument(name = "cala_ledger.journals.find_all", skip(self))]
+    #[instrument(name = "cala_ledger.journals.find_all", skip(self, journal_ids), fields(journal_ids_count = journal_ids.len()))]
     pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],

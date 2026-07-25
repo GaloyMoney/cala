@@ -97,7 +97,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all", skip(self))]
+    #[instrument(name = "cala_ledger.balance.find_all", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -120,7 +120,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_accounts", skip(self))]
+    #[instrument(name = "cala_ledger.balance.list_for_accounts", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn list_for_accounts(
         &self,
         journal_id: JournalId,
@@ -133,7 +133,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op))]
+    #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -158,7 +158,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op))]
+    #[instrument(name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn list_for_accounts_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

@@ -59,7 +59,7 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self))]
+    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],

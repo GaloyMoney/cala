@@ -337,7 +337,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self))]
+    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self, account_set_ids), fields(account_set_ids_count = account_set_ids.len()))]
     pub async fn find_all<T: From<AccountSet>>(
         &self,
         account_set_ids: &[AccountSetId],
@@ -345,7 +345,7 @@ impl AccountSets {
         Ok(self.repo.find_all(account_set_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
+    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op, account_set_ids), fields(account_set_ids_count = account_set_ids.len()))]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
         op: &mut impl es_entity::AtomicOperation,
