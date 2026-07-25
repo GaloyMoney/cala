@@ -83,7 +83,7 @@ impl Accounts {
         Ok(self.repo.find_all(account_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
+    #[instrument(name = "cala_ledger.accounts.find_all_in_op", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
         db: &mut impl es_entity::AtomicOperation,
