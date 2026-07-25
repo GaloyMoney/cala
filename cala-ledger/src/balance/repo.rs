@@ -51,7 +51,7 @@ impl BalanceRepo {
             .await
     }
 
-    #[instrument(name = "balance.find_in_op", skip_all)]
+    #[instrument(level = "debug", name = "balance.find_in_op", skip_all)]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -91,7 +91,12 @@ impl BalanceRepo {
         }
     }
 
-    #[instrument(name = "balance.find_all", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.find_all",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -99,7 +104,12 @@ impl BalanceRepo {
         self.find_all_in_op(&self.pool, ids).await
     }
 
-    #[instrument(name = "balance.list_for_account", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_account",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn list_for_account(
         &self,
         journal_id: JournalId,
@@ -113,7 +123,12 @@ impl BalanceRepo {
             .await
     }
 
-    #[instrument(name = "balance.list_for_accounts", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_accounts",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn list_for_accounts(
         &self,
         journal_id: JournalId,
@@ -125,7 +140,12 @@ impl BalanceRepo {
             .await
     }
 
-    #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.find_all_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn find_all_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -181,7 +201,12 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(name = "balance.list_for_account_in_op", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_account_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn list_for_account_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -237,6 +262,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.list_for_accounts_in_op",
         skip_all,
         err(level = "warn")
@@ -344,7 +370,7 @@ impl BalanceRepo {
     /// nested-loop join with `v` as the outer side for the tiny inputs
     /// this query receives, preserving UNNEST scan order through to
     /// the function calls in the SELECT list.
-    #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -415,6 +441,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.lock_accounts_exclusive_in_op",
         skip_all,
         err(level = "warn")
@@ -470,6 +497,7 @@ impl BalanceRepo {
     /// `add_member_in_op` transactions from contending with posters
     /// on hot parent sets.
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.member_has_balance_history_in_op",
         skip_all,
         err(level = "warn")
@@ -516,6 +544,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+    level = "debug",
     name = "cala_ledger.balances.insert_new_snapshots",
     skip(self, op, new_balances)
     fields(n_new_balances)
@@ -627,6 +656,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.load_account_set_balances_batch",
         skip_all,
         err(level = "warn")
@@ -680,6 +710,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.fetch_batch_member_history",
         skip_all,
         err(level = "warn")
@@ -746,6 +777,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.fetch_member_account_mappings",
         skip_all,
         err(level = "warn")

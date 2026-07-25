@@ -28,7 +28,11 @@ impl Transactions {
         }
     }
 
-    #[instrument(name = "cala_ledger.transactions.create_in_op", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.create_in_op",
+        skip_all
+    )]
     pub(crate) async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -38,7 +42,11 @@ impl Transactions {
         Ok(transaction)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.find_by_external_id",
+        skip(self)
+    )]
     pub async fn find_by_external_id(
         &self,
         external_id: String,
@@ -46,7 +54,11 @@ impl Transactions {
         Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.find_by_id",
+        skip(self)
+    )]
     pub async fn find_by_id(
         &self,
         transaction_id: TransactionId,
@@ -54,7 +66,11 @@ impl Transactions {
         Ok(self.repo.find_by_id(transaction_id).await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.list_for_template_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.list_for_template_id",
+        skip(self)
+    )]
     pub async fn list_for_template_id(
         &self,
         template_id: TxTemplateId,
@@ -70,7 +86,7 @@ impl Transactions {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],

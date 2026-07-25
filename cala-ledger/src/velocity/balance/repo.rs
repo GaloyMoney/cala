@@ -29,6 +29,7 @@ impl VelocityBalanceRepo {
         }
     }
     #[instrument(
+        level = "debug",
         name = "velocity_balance.find_for_update",
         skip_all,
         err(level = "warn")
@@ -178,6 +179,7 @@ impl VelocityBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "velocity_balance.insert_new_snapshots",
         skip_all,
         err(level = "warn")

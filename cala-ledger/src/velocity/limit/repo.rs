@@ -22,7 +22,11 @@ impl VelocityLimitRepo {
         Self { pool: pool.clone() }
     }
 
-    #[instrument(name = "velocity_limit.add_limit_to_control", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "velocity_limit.add_limit_to_control",
+        skip_all
+    )]
     pub async fn add_limit_to_control(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -41,6 +45,7 @@ impl VelocityLimitRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "velocity_limit.list_for_control",
         skip_all,
         err(level = "warn")

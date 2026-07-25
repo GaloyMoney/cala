@@ -161,6 +161,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.list_children_by_created_at_in_op",
         skip_all,
         err(level = "warn")
@@ -417,6 +418,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.add_member_account_and_return_parents",
         skip_all,
         err(level = "warn")
@@ -490,6 +492,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.remove_member_account_and_return_parents",
         skip_all,
         err(level = "warn")
@@ -560,6 +563,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.add_member_set_and_return_parents",
         skip_all,
         err(level = "warn")
@@ -646,6 +650,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.remove_member_set_and_return_parents",
         skip_all,
         err(level = "warn")
@@ -824,6 +829,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.fetch_mappings_in_op",
         skip_all,
         err(level = "warn")
@@ -869,6 +875,7 @@ impl AccountSetRepo {
     // account-set ids — not fully hydrated `AccountSet` entities — which keeps
     // periodic reconciliation jobs cheap as the number of EC account sets grows.
     #[instrument(
+        level = "debug",
         name = "account_set.list_eventually_consistent_ids_in_op",
         skip_all,
         err(level = "warn")
@@ -915,6 +922,7 @@ impl AccountSetRepo {
     /// out at the SQL level so callers (the recalc deep walk) don't try
     /// to recalc them.
     #[instrument(
+        level = "debug",
         name = "account_set.find_all_ec_descendant_set_ids",
         skip_all,
         err(level = "warn")
