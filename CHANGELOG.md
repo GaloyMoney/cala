@@ -1,3 +1,11 @@
+# [cala release v0.18.5](https://github.com/GaloyMoney/cala/releases/tag/0.18.5)
+
+
+
+### Performance
+
+- Demote inner-path spans to debug level (#778)
+
 # [cala release v0.18.4](https://github.com/GaloyMoney/cala/releases/tag/0.18.4)
 
 
