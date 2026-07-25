@@ -28,7 +28,7 @@ impl Entries {
         }
     }
 
-    #[instrument(name = "cala_ledger.entries.find_all", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.entries.find_all", skip_all)]
     pub async fn find_all(
         &self,
         entry_ids: &[EntryId],
@@ -36,7 +36,11 @@ impl Entries {
         Ok(self.repo.find_all(entry_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_account_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_account_id",
+        skip_all
+    )]
     pub async fn list_for_account_id(
         &self,
         account_id: AccountId,
@@ -49,7 +53,11 @@ impl Entries {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_account_set_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_account_set_id",
+        skip_all
+    )]
     pub async fn list_for_account_set_id(
         &self,
         account_id: AccountSetId,
@@ -61,7 +69,11 @@ impl Entries {
             .await
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_journal_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_journal_id",
+        skip_all
+    )]
     pub async fn list_for_journal_id(
         &self,
         journal_id: JournalId,
@@ -74,7 +86,11 @@ impl Entries {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_transaction_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_transaction_id",
+        skip_all
+    )]
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
@@ -96,7 +112,11 @@ impl Entries {
         Ok(entries)
     }
 
-    #[instrument(name = "cala_ledger.entries.create_all_in_op", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.create_all_in_op",
+        skip_all
+    )]
     pub(crate) async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,

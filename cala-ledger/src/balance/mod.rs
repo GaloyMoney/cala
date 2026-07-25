@@ -72,7 +72,7 @@ impl Balances {
         &self.effective
     }
 
-    #[instrument(name = "cala_ledger.balance.find", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.find", skip(self))]
     pub async fn find(
         &self,
         journal_id: JournalId,
@@ -84,7 +84,11 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_in_op", skip(self, op))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.find_in_op",
+        skip(self, op)
+    )]
     pub async fn find_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -97,7 +101,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all", skip(self, ids), fields(ids_count = ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.find_all", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -105,7 +109,11 @@ impl Balances {
         self.repo.find_all(ids).await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_account", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.list_for_account",
+        skip(self)
+    )]
     pub async fn list_for_account(
         &self,
         journal_id: JournalId,
@@ -120,7 +128,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_accounts", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.list_for_accounts", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn list_for_accounts(
         &self,
         journal_id: JournalId,
@@ -133,7 +141,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.find_all_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.find_all_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -142,7 +150,11 @@ impl Balances {
         self.repo.find_all_in_op(op, ids).await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_account_in_op", skip(self, op))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.list_for_account_in_op",
+        skip(self, op)
+    )]
     pub async fn list_for_account_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -158,7 +170,7 @@ impl Balances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op, account_ids), fields(account_ids_count = account_ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn list_for_accounts_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -173,6 +185,7 @@ impl Balances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.update_balances_in_op",
         skip(self, op, entries, account_set_mappings),
         fields(journal_id = %journal_id, entries_count = entries.len()),
@@ -252,6 +265,7 @@ impl Balances {
     /// `cala_balance_history` for `journal_id`, under the lock prelude
     /// described on `BalanceRepo::member_has_balance_history_in_op`.
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.member_has_balance_history_in_op",
         skip(self, op),
         fields(
@@ -274,6 +288,7 @@ impl Balances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
         skip(self, op, account_set_ids),
         fields(account_set_ids_count = account_set_ids.len()),
@@ -352,7 +367,11 @@ impl Balances {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.balances.replay_member_deltas_batch", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.replay_member_deltas_batch",
+        skip_all
+    )]
     fn replay_member_deltas_batch(
         journal_id: JournalId,
         mut set_states: HashMap<AccountSetId, SetRecalcState>,
@@ -469,7 +488,7 @@ impl Balances {
         new_snapshots
     }
 
-    #[instrument(name = "cala_ledger.balances.new_snapshots", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.balances.new_snapshots", skip_all)]
     fn new_snapshots(
         time: DateTime<Utc>,
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,

@@ -59,7 +59,7 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],
@@ -67,7 +67,7 @@ impl TxTemplates {
         Ok(self.repo.find_all(tx_template_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.list", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.tx_templates.list", skip(self))]
     pub async fn list(
         &self,
         cursor: es_entity::PaginatedQueryArgs<TxTemplateByCodeCursor>,
@@ -77,12 +77,13 @@ impl TxTemplates {
         Ok(self.repo.list_by_code(cursor, direction).await?)
     }
 
-    #[instrument(name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err(level = tracing::Level::WARN))]
+    #[instrument(level = "debug", name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err(level = tracing::Level::WARN))]
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
         Ok(self.repo.find_by_code(code.as_ref().to_string()).await?)
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.tx_template.prepare_transaction_in_op",
         skip(self, db)
     )]
@@ -143,6 +144,7 @@ impl TxTemplates {
     }
 
     #[instrument(
+        level = "debug",
         name = "tx_template.prep_entries",
         skip(self, tmpl, ctx),
         fields(

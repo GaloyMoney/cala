@@ -38,7 +38,11 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_cumulative", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.find_cumulative",
+        skip(self)
+    )]
     pub async fn find_cumulative(
         &self,
         journal_id: JournalId,
@@ -51,7 +55,11 @@ impl EffectiveBalances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_in_range", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.find_in_range",
+        skip(self)
+    )]
     pub async fn find_in_range(
         &self,
         journal_id: JournalId,
@@ -70,7 +78,7 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_cumulative(
         &self,
         ids: &[BalanceId],
@@ -80,6 +88,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.list_cumulative_for_account",
         skip(self)
     )]
@@ -99,6 +108,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.list_cumulative_for_accounts",
         skip(self, account_ids),
         fields(account_ids_count = account_ids.len())
@@ -116,7 +126,7 @@ impl EffectiveBalances {
             .await
     }
 
-    #[instrument(name = "cala_ledger.balance.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range(
         &self,
         ids: &[BalanceId],
@@ -128,6 +138,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.list_in_range_for_account",
         skip(self)
     )]
@@ -148,6 +159,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.list_in_range_for_accounts",
         skip(self, account_ids),
         fields(account_ids_count = account_ids.len())
@@ -182,6 +194,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.recalculate_for_account_sets_in_op",
         skip(self, op, account_set_ids, memberships),
         fields(
@@ -256,6 +269,7 @@ impl EffectiveBalances {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.replay_effective_deltas",
         skip_all
     )]

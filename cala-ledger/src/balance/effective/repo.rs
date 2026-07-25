@@ -53,7 +53,12 @@ impl EffectiveBalanceRepo {
             .await
     }
 
-    #[instrument(name = "effective_balance.find_in_op", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "effective_balance.find_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -93,7 +98,12 @@ impl EffectiveBalanceRepo {
         }
     }
 
-    #[instrument(name = "effective_balance.find_range", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "effective_balance.find_range",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn find_range(
         &self,
         journal_id: JournalId,
@@ -167,7 +177,11 @@ impl EffectiveBalanceRepo {
         Ok((first, last, last_version - first_version))
     }
 
-    #[instrument(name = "cala_ledger.balances.effective.find_all", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.find_all",
+        skip_all
+    )]
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -230,7 +244,11 @@ impl EffectiveBalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(name = "cala_ledger.balances.effective.list_for_account", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.list_for_account",
+        skip_all
+    )]
     pub(super) async fn list_for_account(
         &self,
         journal_id: JournalId,
@@ -296,7 +314,11 @@ impl EffectiveBalanceRepo {
         })
     }
 
-    #[instrument(name = "cala_ledger.balances.effective.list_for_accounts", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.list_for_accounts",
+        skip_all
+    )]
     pub(super) async fn list_for_accounts(
         &self,
         journal_id: JournalId,
@@ -388,7 +410,11 @@ impl EffectiveBalanceRepo {
         })
     }
 
-    #[instrument(name = "cala_ledger.balances.effective.find_range_all", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.find_range_all",
+        skip_all
+    )]
     pub(super) async fn find_range_all(
         &self,
         ids: &[BalanceId],
@@ -497,6 +523,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.effective.list_range_for_account",
         skip_all
     )]
@@ -630,6 +657,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.effective.list_range_for_accounts",
         skip_all
     )]
@@ -795,6 +823,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.effective.find_for_update",
         skip(self, op)
     )]
@@ -901,6 +930,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "effective_balance.fetch_member_effective_history",
         skip_all,
         err(level = "warn")
@@ -969,6 +999,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "effective_balance.fetch_effective_history_from_date",
         skip_all,
         err(level = "warn")
@@ -1037,6 +1068,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "effective_balance.delete_at_or_after",
         skip_all,
         err(level = "warn")
@@ -1066,6 +1098,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "effective_balance.load_latest_before",
         skip_all,
         err(level = "warn")
@@ -1115,6 +1148,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "effective_balance.insert_recalc_snapshots",
         skip(self, op, snapshots)
     )]
@@ -1187,6 +1221,7 @@ impl EffectiveBalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.effective.insert_new_snapshots",
         skip(self, op, new_balances)
     )]
