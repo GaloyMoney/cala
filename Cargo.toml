@@ -17,8 +17,8 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.18.7-dev" }
 
 es-entity = "0.11.9"
-job = { version = "0.6.34", features = ["es-entity"] }
-obix = { version = "0.4.1", default-features = false }
+job = { version = "0.6.35", features = ["es-entity"] }
+obix = { version = "0.4.2", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "2.0", features = ["async"] }
