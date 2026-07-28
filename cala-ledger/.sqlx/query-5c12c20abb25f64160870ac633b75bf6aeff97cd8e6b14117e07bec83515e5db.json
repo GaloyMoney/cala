@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT h.account_id AS \"account_id!\"\n            FROM cala_balance_history h\n            JOIN UNNEST($1::uuid[], $2::uuid[]) AS v(journal_id, member_id)\n                ON h.journal_id = v.journal_id AND h.account_id = v.member_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5c12c20abb25f64160870ac633b75bf6aeff97cd8e6b14117e07bec83515e5db"
+}
