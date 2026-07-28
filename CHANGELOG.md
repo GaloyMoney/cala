@@ -1,3 +1,11 @@
+# [cala release v0.18.7](https://github.com/GaloyMoney/cala/releases/tag/0.18.7)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job to 0.6.35 and obix to 0.4.2 (#781)
+
 # [cala release v0.18.6](https://github.com/GaloyMoney/cala/releases/tag/0.18.6)
 
 
