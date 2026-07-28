@@ -37,10 +37,6 @@ CREATE INDEX idx_job_executions_poller_instance
   ON job_executions(poller_instance_id)
   WHERE state = 'running';
 
-CREATE INDEX idx_job_executions_running_alive_at
-  ON job_executions(alive_at)
-  WHERE state = 'running';
-
 CREATE INDEX idx_job_executions_pending_execute_at
   ON job_executions(execute_at)
   WHERE state = 'pending';
@@ -53,6 +49,20 @@ CREATE INDEX idx_job_executions_running_queue_id
   ON job_executions(queue_id)
   WHERE state = 'running' AND queue_id IS NOT NULL;
 
+-- job_executions is a small, extremely update-heavy table (state flips,
+-- heartbeat bumps, per-attempt reschedules). A lowered fillfactor leaves
+-- room in each page so non-indexed-column updates (execution_state_json,
+-- alive_at, poller_instance_id) can go HOT instead of appending a new
+-- row version elsewhere, and aggressive autovacuum settings keep dead
+-- tuples near zero — cheap at this table size, and it stops the poll
+-- query's cost from growing between default-schedule vacuums.
+ALTER TABLE job_executions SET (
+  fillfactor = 70,
+  autovacuum_vacuum_scale_factor = 0.01,
+  autovacuum_vacuum_threshold = 50,
+  autovacuum_analyze_scale_factor = 0.02
+);
+
 CREATE OR REPLACE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
 BEGIN
   IF TG_OP = 'INSERT' THEN
@@ -62,7 +72,13 @@ BEGIN
   END IF;
 
   IF TG_OP = 'UPDATE' THEN
-    IF NEW.execute_at IS DISTINCT FROM OLD.execute_at THEN
+    -- Only wake pollers when a row is (or becomes) eligible in the
+    -- pending set. Transitions out of 'pending' (a poller taking the job
+    -- sets execute_at = NULL, completion, etc.) must not notify: the
+    -- poller's own UPDATE would wake every poller including itself for
+    -- no reason, multiplying poll load with throughput.
+    IF NEW.state = 'pending'
+      AND NEW.execute_at IS DISTINCT FROM OLD.execute_at THEN
       PERFORM pg_notify('job_events',
         json_build_object('type', 'execution_ready', 'job_type', NEW.job_type)::text);
     END IF;
