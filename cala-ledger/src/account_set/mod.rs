@@ -224,12 +224,12 @@ impl AccountSets {
         match member {
             AccountSetMemberId::Account(id) => {
                 self.repo
-                    .add_member_account_and_return_parents(&mut *op, account_set_id, id)
+                    .add_member_account(&mut *op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
                 self.repo
-                    .add_member_set_and_return_parents(op, account_set_id, id)
+                    .add_member_set(op, account_set_id, id)
                     .await?;
             }
         }
@@ -335,12 +335,12 @@ impl AccountSets {
         match member {
             AccountSetMemberId::Account(id) => {
                 self.repo
-                    .remove_member_account_and_return_parents(op, account_set_id, id)
+                    .remove_member_account(op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
                 self.repo
-                    .remove_member_set_and_return_parents(op, account_set_id, id)
+                    .remove_member_set(op, account_set_id, id)
                     .await?;
             }
         }
