@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                CASE WHEN v.parent_account_id <> v.member_id THEN\n                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.parent_account_id::text))\n                ELSE\n                    NULL\n                END,\n                pg_advisory_xact_lock($1::int4, hashtext(v.member_id::text))\n            FROM UNNEST($2::uuid[], $3::uuid[]) AS v(parent_account_id, member_id)\n            ORDER BY v.parent_account_id, v.member_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "case",
+        "type_info": "Void"
+      },
+      {
+        "ordinal": 1,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5b666ee49205dae73cc3d76094050c977937afbfd59441e365bbb9a6caea6ea5"
+}
