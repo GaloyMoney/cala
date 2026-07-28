@@ -468,6 +468,96 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    /// Batch variant of [`add_member_account`]: attaches every
+    /// `(account_set_id, account_id)` pair in one statement, so a single
+    /// recursive ancestor walk covers all pairs instead of one walk per
+    /// pair. Callers creating many accounts (e.g. a chart-of-accounts
+    /// expansion per business entity) should prefer this over looping
+    /// `add_member_account`.
+    ///
+    /// Lock protocol matches the single-pair path (SHARED coarse lock,
+    /// then EXCLUSIVE per-member locks, in that order) with all member
+    /// locks taken in one id-ordered statement.
+    #[instrument(
+        level = "debug",
+        name = "account_set.add_member_accounts",
+        skip_all,
+        fields(count = members.len()),
+        err(level = "warn")
+    )]
+    pub async fn add_member_accounts(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountId)],
+    ) -> Result<(), AccountSetError> {
+        if members.is_empty() {
+            return Ok(());
+        }
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
+
+        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+            .execute(db.as_executor())
+            .await?;
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
+            FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
+            "#,
+            MEMBER_LOCK_CLASS,
+            &account_ids as &[AccountId],
+        )
+        .execute(db.as_executor())
+        .await?;
+
+        sqlx::query!(
+            r#"
+          WITH RECURSIVE input_pairs AS (
+            SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
+          ),
+          parents AS (
+            SELECT i.account_id, m.member_account_set_id, m.account_set_id
+            FROM input_pairs i
+            JOIN cala_account_set_member_account_sets m
+                ON m.member_account_set_id = i.account_set_id
+
+            UNION ALL
+
+            SELECT p.account_id, p.member_account_set_id, m.account_set_id
+            FROM parents p
+            JOIN cala_account_set_member_account_sets m
+                ON p.account_set_id = m.member_account_set_id
+          ),
+          non_transitive_insert AS (
+            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+            SELECT account_set_id, account_id FROM input_pairs
+          )
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+          SELECT p.account_set_id, p.account_id, TRUE
+          FROM parents p
+          "#,
+            &account_set_ids as &[AccountSetId],
+            &account_ids as &[AccountId],
+        )
+        .execute(db.as_executor())
+        .await?;
+
+        self.publisher
+            .publish_all(
+                db,
+                members.iter().map(|(account_set_id, account_id)| {
+                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id: *account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::Account(*account_id),
+                    }
+                }),
+            )
+            .await?;
+
+        Ok(())
+    }
+
     #[instrument(
         level = "debug",
         name = "account_set.remove_member_account",

@@ -543,6 +543,66 @@ impl BalanceRepo {
         Ok(row.exists)
     }
 
+    /// Batch variant of [`member_has_balance_history_in_op`]: takes the same
+    /// per-pair locks (SHARED on the parent, FOR_UPDATE-style exclusive on
+    /// the member) in a single statement and returns every member that
+    /// already has balance history in its journal, instead of checking pair
+    /// by pair.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.members_with_balance_history_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn members_with_balance_history_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        pairs: &[(JournalId, AccountId, AccountId)],
+    ) -> Result<Vec<AccountId>, BalanceError> {
+        if pairs.is_empty() {
+            return Ok(Vec::new());
+        }
+        let journal_ids: Vec<JournalId> = pairs.iter().map(|(j, _, _)| *j).collect();
+        let parent_ids: Vec<AccountId> = pairs.iter().map(|(_, p, _)| *p).collect();
+        let member_ids: Vec<AccountId> = pairs.iter().map(|(_, _, m)| *m).collect();
+
+        sqlx::query!(
+            r#"
+            SELECT
+                CASE WHEN v.parent_account_id <> v.member_id THEN
+                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.parent_account_id::text))
+                ELSE
+                    NULL
+                END,
+                pg_advisory_xact_lock($1::int4, hashtext(v.member_id::text))
+            FROM UNNEST($2::uuid[], $3::uuid[]) AS v(parent_account_id, member_id)
+            ORDER BY v.parent_account_id, v.member_id
+            "#,
+            EC_SET_LOCK_CLASS,
+            &parent_ids as &[AccountId],
+            &member_ids as &[AccountId],
+        )
+        .execute(op.as_executor())
+        .await?;
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT h.account_id AS "account_id!"
+            FROM cala_balance_history h
+            JOIN UNNEST($1::uuid[], $2::uuid[]) AS v(journal_id, member_id)
+                ON h.journal_id = v.journal_id AND h.account_id = v.member_id
+            "#,
+            &journal_ids as &[JournalId],
+            &member_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| AccountId::from(row.account_id))
+            .collect())
+    }
+
     #[instrument(
     level = "debug",
     name = "cala_ledger.balances.insert_new_snapshots",
