@@ -47,11 +47,7 @@ fn bench_parse_cached(c: &mut Criterion) {
 
 fn bench_evaluate(c: &mut Criterion) {
     let cases: &[(&str, &str, CelContext)] = &[
-        (
-            "eval_lookup",
-            "params.hello.world",
-            params_context(),
-        ),
+        ("eval_lookup", "params.hello.world", params_context()),
         (
             "eval_decimal_eq (velocity-style)",
             "context.vars.entry.units == decimal('100')",
@@ -62,18 +58,12 @@ fn bench_evaluate(c: &mut Criterion) {
             "true || false ? false && true : true",
             CelContext::new(),
         ),
-        (
-            "eval_date_fn",
-            "date('2022-10-10')",
-            CelContext::new(),
-        ),
+        ("eval_date_fn", "date('2022-10-10')", CelContext::new()),
     ];
 
     for (name, src, ctx) in cases {
         let expr = src.parse::<CelExpression>().unwrap();
-        c.bench_function(name, |b| {
-            b.iter(|| expr.evaluate(black_box(ctx)).unwrap())
-        });
+        c.bench_function(name, |b| b.iter(|| expr.evaluate(black_box(ctx)).unwrap()));
     }
 }
 
