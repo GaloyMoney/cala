@@ -4,7 +4,7 @@ description = "An embeddable double sided accounting ledger built on PG/SQLx"
 repository = "https://github.com/GaloyMoney/cala"
 documentation = "https://docs.rs/cala-ledger"
 readme = "../README.md"
-version = "0.15.9-dev"
+version = "0.18.8-dev"
 edition = "2021"
 license = "Apache-2.0"
 categories = ["finance"]
@@ -32,7 +32,6 @@ required-features = ["json-schema"]
 [dependencies]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
-cala-tracing = { workspace = true }
 es-entity = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
@@ -49,8 +48,6 @@ serde_json = { workspace = true }
 tracing = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
-opentelemetry = { workspace = true }
-tracing-opentelemetry = { workspace = true }
 futures = { workspace = true }
 rust_decimal = { workspace = true }
 schemars = { workspace = true, optional = true }

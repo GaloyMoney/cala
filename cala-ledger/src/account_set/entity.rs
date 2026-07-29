@@ -207,8 +207,7 @@ pub struct NewAccountSet {
     pub(super) journal_id: JournalId,
     #[builder(default)]
     pub(super) normal_balance_type: DebitOrCredit,
-    #[builder(default)]
-    pub(super) eventually_consistent: bool,
+    pub(super) balance_rollup: BalanceRollup,
     #[builder(setter(strip_option, into), default)]
     pub(super) description: Option<String>,
     #[builder(setter(custom), default)]
@@ -218,6 +217,10 @@ pub struct NewAccountSet {
 impl NewAccountSet {
     pub fn builder() -> NewAccountSetBuilder {
         NewAccountSetBuilder::default()
+    }
+
+    pub(super) fn is_eventually_consistent(&self) -> bool {
+        matches!(self.balance_rollup, BalanceRollup::EventuallyConsistent)
     }
 
     pub(super) fn context_values(&self) -> VelocityContextAccountValues {

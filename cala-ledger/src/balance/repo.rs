@@ -11,10 +11,21 @@ use cala_types::{
     },
 };
 
-use super::{account_balance::AccountBalance, error::BalanceError};
+use super::{
+    account_balance::AccountBalance,
+    cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+    error::BalanceError,
+};
 use crate::outbox::OutboxPublisher;
 
 const EC_SET_LOCK_CLASS: i32 = 1;
+
+/// Maximum balance snapshots written per `INSERT` + outbox publish in
+/// [`BalanceRepo::insert_new_snapshots`]. A deep account-set recalc can produce
+/// one history row per member event; flushing in bounded sub-batches (within
+/// the same transaction) keeps any single statement's working set small so it
+/// cannot OOM-crash a Postgres backend.
+const INSERT_SNAPSHOT_BATCH_SIZE: usize = 5_000;
 
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
@@ -40,7 +51,7 @@ impl BalanceRepo {
             .await
     }
 
-    #[instrument(name = "balance.find_in_op", skip_all)]
+    #[instrument(level = "debug", name = "balance.find_in_op", skip_all)]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -80,7 +91,12 @@ impl BalanceRepo {
         }
     }
 
-    #[instrument(name = "balance.find_all", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.find_all",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
@@ -88,7 +104,48 @@ impl BalanceRepo {
         self.find_all_in_op(&self.pool, ids).await
     }
 
-    #[instrument(name = "balance.find_all_in_op", skip_all, err(level = "warn"))]
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_account",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn list_for_account(
+        &self,
+        journal_id: JournalId,
+        account_id: AccountId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
+            .await
+    }
+
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_accounts",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn list_for_accounts(
+        &self,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
+            .await
+    }
+
+    #[instrument(
+        level = "debug",
+        name = "balance.find_all_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
     pub(super) async fn find_all_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
@@ -144,6 +201,140 @@ impl BalanceRepo {
         Ok(ret)
     }
 
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_account_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn list_for_account_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_id: AccountId,
+        args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let after_currency = after.map(|cursor| cursor.currency.code().to_string());
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM cala_current_balances c
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                WHERE c.journal_id = $2
+                  AND c.account_id = $3
+                  AND ($4::text IS NULL OR c.currency > $4)
+                ORDER BY c.currency ASC
+                LIMIT $1"#,
+                (first + 1) as i64,
+                journal_id as JournalId,
+                account_id as AccountId,
+                after_currency.as_deref(),
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    #[instrument(
+        level = "debug",
+        name = "balance.list_for_accounts_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn list_for_accounts_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+        args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_account_id, after_currency) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+            )
+        } else {
+            (None, None)
+        };
+
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
+                WITH account_ids AS (
+                    SELECT DISTINCT account_id
+                    FROM UNNEST($2::uuid[]) AS v(account_id)
+                )
+                SELECT
+                    c.latest_values AS "values!",
+                    a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
+                FROM account_ids b
+                JOIN cala_current_balances c
+                    ON c.account_id = b.account_id
+                    AND c.journal_id = $1
+                JOIN cala_accounts a
+                    ON c.account_id = a.id
+                WHERE (
+                    $3::uuid IS NULL
+                    OR (c.account_id, c.currency) > ($3::uuid, $4::text)
+                )
+                ORDER BY c.account_id ASC, c.currency ASC
+                LIMIT $5"#,
+                journal_id as JournalId,
+                account_ids as &[AccountId],
+                after_account_id,
+                after_currency.as_deref(),
+                (first + 1) as i64,
+            ))
+            .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                let details: BalanceSnapshot = serde_json::from_value(row.values)
+                    .expect("Failed to deserialize balance snapshot");
+                AccountBalance::new(row.normal_balance_type, details)
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
     /// Take the poster's per-row locks for a batch of
     /// `(account_id, currency)` pairs and load the current balance
     /// snapshots in two SQL statements (one combined lock query plus a
@@ -179,7 +370,7 @@ impl BalanceRepo {
     /// nested-loop join with `v` as the outer side for the tiny inputs
     /// this query receives, preserving UNNEST scan order through to
     /// the function calls in the SELECT list.
-    #[instrument(name = "cala_ledger.balances.find_for_update", skip(self, op))]
+    #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -250,6 +441,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.lock_accounts_exclusive_in_op",
         skip_all,
         err(level = "warn")
@@ -305,6 +497,7 @@ impl BalanceRepo {
     /// `add_member_in_op` transactions from contending with posters
     /// on hot parent sets.
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balances.member_has_balance_history_in_op",
         skip_all,
         err(level = "warn")
@@ -351,6 +544,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+    level = "debug",
     name = "cala_ledger.balances.insert_new_snapshots",
     skip(self, op, new_balances)
     fields(n_new_balances)
@@ -366,25 +560,34 @@ impl BalanceRepo {
             tracing::field::display(new_balances.len()),
         );
 
-        let mut journal_ids = Vec::with_capacity(new_balances.len());
-        let mut account_ids = Vec::with_capacity(new_balances.len());
-        let mut entry_ids = Vec::with_capacity(new_balances.len());
-        let mut currencies = Vec::with_capacity(new_balances.len());
-        let mut versions = Vec::with_capacity(new_balances.len());
-        let mut values = Vec::with_capacity(new_balances.len());
+        // Flush in bounded sub-batches within the caller's transaction so a
+        // single set's recalc (which can emit one history row per member event)
+        // never becomes one multi-million-row INSERT + outbox publish large
+        // enough to OOM-crash a Postgres backend. Each sub-batch is a
+        // self-contained statement (history insert + current_balances upsert),
+        // so the balance-history FK is satisfied per sub-batch; the whole set
+        // still commits atomically as one transaction.
+        for chunk in new_balances.chunks(INSERT_SNAPSHOT_BATCH_SIZE) {
+            let mut journal_ids = Vec::with_capacity(chunk.len());
+            let mut account_ids = Vec::with_capacity(chunk.len());
+            let mut entry_ids = Vec::with_capacity(chunk.len());
+            let mut currencies = Vec::with_capacity(chunk.len());
+            let mut versions = Vec::with_capacity(chunk.len());
+            let mut values = Vec::with_capacity(chunk.len());
 
-        for balance in new_balances.iter() {
-            journal_ids.push(balance.journal_id);
-            account_ids.push(balance.account_id);
-            entry_ids.push(balance.entry_id);
-            currencies.push(balance.currency.code());
-            versions.push(balance.version as i32);
-            values
-                .push(serde_json::to_value(balance).expect("Failed to serialize balance snapshot"));
-        }
+            for balance in chunk.iter() {
+                journal_ids.push(balance.journal_id);
+                account_ids.push(balance.account_id);
+                entry_ids.push(balance.entry_id);
+                currencies.push(balance.currency.code());
+                versions.push(balance.version as i32);
+                values.push(
+                    serde_json::to_value(balance).expect("Failed to serialize balance snapshot"),
+                );
+            }
 
-        sqlx::query!(
-            r#"
+            sqlx::query!(
+                r#"
         WITH new_snapshots AS (
             INSERT INTO cala_balance_history (
                 journal_id, account_id, currency, version, latest_entry_id, values
@@ -421,33 +624,39 @@ impl BalanceRepo {
             END,
             latest_seq = GREATEST(c.latest_seq, EXCLUDED.latest_seq)
         "#,
-            &journal_ids as &[JournalId],
-            &account_ids as &[AccountId],
-            &currencies as &[&str],
-            &versions as &[i32],
-            &entry_ids as &[EntryId],
-            &values
-        )
-        .execute(op.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                new_balances.into_iter().map(|balance| {
-                    if balance.version == 1 {
-                        OutboxEventPayload::BalanceCreated { balance }
-                    } else {
-                        OutboxEventPayload::BalanceUpdated { balance }
-                    }
-                }),
+                &journal_ids as &[JournalId],
+                &account_ids as &[AccountId],
+                &currencies as &[&str],
+                &versions as &[i32],
+                &entry_ids as &[EntryId],
+                &values
             )
+            .execute(op.as_executor())
             .await?;
+
+            self.publisher
+                .publish_all(
+                    op,
+                    chunk.iter().map(|balance| {
+                        if balance.version == 1 {
+                            OutboxEventPayload::BalanceCreated {
+                                balance: balance.clone(),
+                            }
+                        } else {
+                            OutboxEventPayload::BalanceUpdated {
+                                balance: balance.clone(),
+                            }
+                        }
+                    }),
+                )
+                .await?;
+        }
 
         Ok(())
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.load_account_set_balances_batch",
         skip_all,
         err(level = "warn")
@@ -501,6 +710,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.fetch_batch_member_history",
         skip_all,
         err(level = "warn")
@@ -567,6 +777,7 @@ impl BalanceRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "balance.fetch_member_account_mappings",
         skip_all,
         err(level = "warn")

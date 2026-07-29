@@ -26,6 +26,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("SET ONE")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let set_one = cala.account_sets().create(set_one).await.unwrap();
@@ -34,6 +35,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("SET TWO")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let set_two = cala.account_sets().create(set_two).await.unwrap();
@@ -42,6 +44,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("parent")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let parent = cala.account_sets().create(parent).await.unwrap();
@@ -113,6 +116,7 @@ async fn balances() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Recipient Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -125,6 +129,7 @@ async fn balances() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Sender Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -137,6 +142,7 @@ async fn balances() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Parent")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -242,6 +248,7 @@ async fn account_set_update() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name(initial_name.clone())
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()?;
 
     let mut account_set = cala.account_sets().create(new_account_set).await?;
@@ -277,6 +284,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("SET ONE")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let set_one = cala.account_sets().create(set_one).await.unwrap();
@@ -284,6 +292,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("SET TWO")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let set_two = cala.account_sets().create(set_two).await.unwrap();
@@ -292,6 +301,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("parent")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let parent = cala.account_sets().create(parent).await.unwrap();
@@ -395,6 +405,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Parent Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()?,
         )
         .await?;
@@ -507,6 +518,7 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Inline Set")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
@@ -516,7 +528,7 @@ async fn eventually_consistent_balances() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("EC Set")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let ec_set = cala.account_sets().create(ec_set).await.unwrap();
@@ -734,7 +746,7 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Set A")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let set_a = cala.account_sets().create(set_a).await.unwrap();
@@ -743,7 +755,7 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Set B")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let set_b = cala.account_sets().create(set_b).await.unwrap();
@@ -752,7 +764,7 @@ async fn batch_recalculate_shared_members() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Root")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let root = cala.account_sets().create(root).await.unwrap();
@@ -892,7 +904,7 @@ async fn deep_recalculate_expands_to_descendants() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Child")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let child = cala.account_sets().create(child).await.unwrap();
@@ -901,7 +913,7 @@ async fn deep_recalculate_expands_to_descendants() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Root")
         .journal_id(journal.id())
-        .eventually_consistent(true)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
         .unwrap();
     let root = cala.account_sets().create(root).await.unwrap();
@@ -980,6 +992,7 @@ async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
         .id(AccountSetId::new())
         .name("Inline Set")
         .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
@@ -990,7 +1003,7 @@ async fn list_eventually_consistent_ids() -> anyhow::Result<()> {
             .id(AccountSetId::new())
             .name(format!("EC Set {i}"))
             .journal_id(journal.id())
-            .eventually_consistent(true)
+            .balance_rollup(BalanceRollup::EventuallyConsistent)
             .build()
             .unwrap();
         let ec_set = cala.account_sets().create(ec_set).await.unwrap();
@@ -1089,6 +1102,7 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Target")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -1169,6 +1183,7 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Target")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -1240,6 +1255,7 @@ async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
                 .id(AccountSetId::new())
                 .name("Inline Set")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )
@@ -1330,7 +1346,7 @@ async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<
                 .id(AccountSetId::new())
                 .name("EC Root")
                 .journal_id(journal.id())
-                .eventually_consistent(true)
+                .balance_rollup(BalanceRollup::EventuallyConsistent)
                 .build()
                 .unwrap(),
         )
@@ -1343,7 +1359,7 @@ async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<
                 .id(AccountSetId::new())
                 .name("EC Child")
                 .journal_id(journal.id())
-                .eventually_consistent(true)
+                .balance_rollup(BalanceRollup::EventuallyConsistent)
                 .build()
                 .unwrap(),
         )
@@ -1356,6 +1372,7 @@ async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<
                 .id(AccountSetId::new())
                 .name("Inline Child")
                 .journal_id(journal.id())
+                .balance_rollup(BalanceRollup::Synchronous)
                 .build()
                 .unwrap(),
         )

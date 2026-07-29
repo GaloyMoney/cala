@@ -97,20 +97,6 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
-        },
-        "void_of": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "uuid"
-        },
-        "voided_by": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "uuid"
         }
       },
       "required": [

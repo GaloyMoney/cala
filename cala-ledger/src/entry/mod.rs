@@ -28,7 +28,7 @@ impl Entries {
         }
     }
 
-    #[instrument(name = "cala_ledger.entries.find_all", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.entries.find_all", skip_all)]
     pub async fn find_all(
         &self,
         entry_ids: &[EntryId],
@@ -36,7 +36,11 @@ impl Entries {
         Ok(self.repo.find_all(entry_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_account_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_account_id",
+        skip_all
+    )]
     pub async fn list_for_account_id(
         &self,
         account_id: AccountId,
@@ -49,7 +53,11 @@ impl Entries {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_account_set_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_account_set_id",
+        skip_all
+    )]
     pub async fn list_for_account_set_id(
         &self,
         account_id: AccountSetId,
@@ -61,7 +69,11 @@ impl Entries {
             .await
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_journal_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_journal_id",
+        skip_all
+    )]
     pub async fn list_for_journal_id(
         &self,
         journal_id: JournalId,
@@ -74,7 +86,11 @@ impl Entries {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.entries.list_for_transaction_id", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_transaction_id",
+        skip_all
+    )]
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
@@ -96,47 +112,11 @@ impl Entries {
         Ok(entries)
     }
 
-    #[instrument(name = "cala_ledger.entries.new_entries_for_voided_tx", skip_all)]
-    pub async fn new_entries_for_voided_tx(
-        &self,
-        voiding_tx_id: TransactionId,
-        existing_tx_id: TransactionId,
-    ) -> Result<Vec<NewEntry>, EntryError> {
-        let entries = self.list_for_transaction_id(existing_tx_id).await?;
-
-        let new_entries = entries
-            .into_iter()
-            .map(|entry| {
-                let value = entry.into_values();
-
-                let mut builder = NewEntry::builder();
-                builder
-                    .id(EntryId::new())
-                    .transaction_id(voiding_tx_id)
-                    .journal_id(value.journal_id)
-                    .sequence(value.sequence)
-                    .account_id(value.account_id)
-                    .entry_type(format!("{}_VOID", value.entry_type))
-                    .layer(value.layer)
-                    .currency(value.currency)
-                    .units(-value.units)
-                    .direction(value.direction);
-
-                if let Some(description) = value.description {
-                    builder.description(description);
-                }
-                if let Some(metadata) = value.metadata {
-                    builder.metadata(metadata);
-                }
-
-                builder.build().expect("Couldn't build voided entry")
-            })
-            .collect();
-
-        Ok(new_entries)
-    }
-
-    #[instrument(name = "cala_ledger.entries.create_all_in_op", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.create_all_in_op",
+        skip_all
+    )]
     pub(crate) async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,

@@ -1,7 +1,9 @@
 #![allow(dead_code)]
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{account::*, account_set::NewAccountSet, journal::*, tx_template::*};
+use cala_ledger::{
+    account::*, account_set::NewAccountSet, journal::*, primitives::BalanceRollup, tx_template::*,
+};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     init_pool_with(sqlx::postgres::PgPoolOptions::new()).await
@@ -12,8 +14,7 @@ pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
 pub async fn init_pool_with(
     options: sqlx::postgres::PgPoolOptions,
 ) -> anyhow::Result<sqlx::PgPool> {
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
-    let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
+    let pg_con = std::env::var("PG_CON").unwrap();
     let pool = options.connect(&pg_con).await?;
     use job::IncludeMigrations;
     sqlx::migrate!().include_job_migrations().run(&pool).await?;
@@ -64,6 +65,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Sender Account Set {code}"))
         .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
 
@@ -72,6 +74,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Recipient Account Set {code}"))
         .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous)
         .build()
         .unwrap();
 

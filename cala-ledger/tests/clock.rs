@@ -102,9 +102,9 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
-    let original_time = Utc.with_ymd_and_hms(2025, 3, 1, 9, 0, 0).unwrap();
-    let (clock_handle, clock_ctrl) = ClockHandle::manual_at(original_time);
+async fn transaction_created_at_uses_clock_time() -> anyhow::Result<()> {
+    let first_time = Utc.with_ymd_and_hms(2025, 3, 1, 9, 0, 0).unwrap();
+    let (clock_handle, clock_ctrl) = ClockHandle::manual_at(first_time);
 
     let pool = helpers::init_pool().await?;
     let cala = CalaLedger::init(
@@ -131,22 +131,28 @@ async fn void_transaction_uses_clock_time() -> anyhow::Result<()> {
     params.insert("recipient", recipient.id());
     params.insert("amount", Decimal::from(100));
 
-    let original_tx_id = TransactionId::new();
-    let original_tx = cala
-        .post_transaction(original_tx_id, &tx_code, params)
+    let first_tx = cala
+        .post_transaction(TransactionId::new(), &tx_code, params)
         .await?;
 
-    let void_time = Utc.with_ymd_and_hms(2025, 3, 15, 16, 30, 0).unwrap();
-    let advance_duration = (void_time - original_time)
+    let second_time = Utc.with_ymd_and_hms(2025, 3, 15, 16, 30, 0).unwrap();
+    let advance_duration = (second_time - first_time)
         .to_std()
         .expect("positive duration");
     clock_ctrl.advance(advance_duration).await;
 
-    let voiding_tx_id = TransactionId::new();
-    let voided_tx = cala.void_transaction(voiding_tx_id, original_tx_id).await?;
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender.id());
+    params.insert("recipient", recipient.id());
+    params.insert("amount", Decimal::from(100));
 
-    assert_eq!(original_tx.created_at(), original_time);
-    assert_eq!(voided_tx.created_at(), void_time);
+    let second_tx = cala
+        .post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    assert_eq!(first_tx.created_at(), first_time);
+    assert_eq!(second_tx.created_at(), second_time);
 
     Ok(())
 }

@@ -245,6 +245,7 @@ mod limit_via_account_sets {
             .journal_id(journal_id)
             .metadata(json!({ "closed": true }))
             .unwrap()
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let account_set = cala.account_sets().create(new_account_set).await?;
@@ -315,6 +316,7 @@ mod limit_via_account_sets {
             .journal_id(journal_id)
             .metadata(json!({ "closed": true }))
             .unwrap()
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
@@ -324,6 +326,7 @@ mod limit_via_account_sets {
             .journal_id(journal_id)
             .metadata(json!({ "closed": true }))
             .unwrap()
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let res = cala
@@ -428,6 +431,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Account Set {code}"))
             .journal_id(journal_id)
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let mut account_set = cala.account_sets().create(new_account_set).await?;
@@ -522,6 +526,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Parent Account Set {code}"))
             .journal_id(journal_id)
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let mut parent_account_set = cala
@@ -538,6 +543,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Child Account Set {code}"))
             .journal_id(journal_id)
+            .balance_rollup(BalanceRollup::Synchronous)
             .build()
             .unwrap();
         let child_account_set = cala

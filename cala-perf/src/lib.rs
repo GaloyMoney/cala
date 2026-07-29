@@ -5,8 +5,7 @@ use rand::distr::{Alphanumeric, SampleString};
 use cala_ledger::{account::*, account_set::*, journal::*, velocity::*, *};
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
-    let pg_host = std::env::var("PG_HOST").unwrap_or("localhost".to_string());
-    let pg_con = format!("postgres://user:password@{pg_host}:5432/pg");
+    let pg_con = std::env::var("PG_CON").unwrap();
 
     // Configure pool for high-concurrency performance testing
     let pool = sqlx::postgres::PgPoolOptions::new()
@@ -153,7 +152,11 @@ pub async fn init_accounts_with_account_sets_depth(
             .id(AccountSetId::new())
             .name(format!("Sender Account Set L{}", i + 1))
             .journal_id(journal.id())
-            .eventually_consistent(eventually_consistent)
+            .balance_rollup(if eventually_consistent {
+                BalanceRollup::EventuallyConsistent
+            } else {
+                BalanceRollup::Synchronous
+            })
             .build()
             .unwrap();
         let sender_set = cala.account_sets().create(sender_set).await?;
@@ -167,7 +170,11 @@ pub async fn init_accounts_with_account_sets_depth(
             .id(AccountSetId::new())
             .name(format!("Recipient Account Set L{}", i + 1))
             .journal_id(journal.id())
-            .eventually_consistent(eventually_consistent)
+            .balance_rollup(if eventually_consistent {
+                BalanceRollup::EventuallyConsistent
+            } else {
+                BalanceRollup::Synchronous
+            })
             .build()
             .unwrap();
         let recipient_set = cala.account_sets().create(recipient_set).await?;

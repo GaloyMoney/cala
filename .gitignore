@@ -11,6 +11,9 @@ target/
 
 .direnv/
 
+# nix process-compose dev deps (Postgres data dir, logs, config)
+.nix-deps/
+
 -
 .e2e-logs
 .rust-example-logs

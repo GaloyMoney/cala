@@ -37,7 +37,7 @@ impl AccountSets {
             clock: clock.clone(),
         }
     }
-    #[instrument(name = "cala_ledger.account_sets.create", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.create", skip(self))]
     pub async fn create(
         &self,
         new_account_set: NewAccountSet,
@@ -48,7 +48,11 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create_in_op", skip(self, db))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.create_in_op",
+        skip(self, db)
+    )]
     pub async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -60,7 +64,7 @@ impl AccountSets {
             .code(new_account_set.id.to_string())
             .normal_balance_type(new_account_set.normal_balance_type)
             .is_account_set(true)
-            .eventually_consistent(new_account_set.eventually_consistent)
+            .eventually_consistent(new_account_set.is_eventually_consistent())
             .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
@@ -71,7 +75,7 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
     pub async fn create_all(
         &self,
         new_account_sets: Vec<NewAccountSet>,
@@ -82,7 +86,7 @@ impl AccountSets {
         Ok(account_sets)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.create_all_in_op", skip(self, db))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.create_all_in_op", skip(self, db, new_account_sets), fields(count = new_account_sets.len()))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -96,7 +100,7 @@ impl AccountSets {
                 .code(new_account_set.id.to_string())
                 .normal_balance_type(new_account_set.normal_balance_type)
                 .is_account_set(true)
-                .eventually_consistent(new_account_set.eventually_consistent)
+                .eventually_consistent(new_account_set.is_eventually_consistent())
                 .velocity_context_values(new_account_set.context_values())
                 .build()
                 .expect("Failed to build account");
@@ -109,7 +113,11 @@ impl AccountSets {
         Ok(account_sets)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.persist", skip(self, account_set))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.persist",
+        skip(self, account_set)
+    )]
     pub async fn persist(&self, account_set: &mut AccountSet) -> Result<(), AccountSetError> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account_set).await?;
@@ -118,6 +126,7 @@ impl AccountSets {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.persist_in_op",
         skip(self, db, account_set)
     )]
@@ -135,7 +144,7 @@ impl AccountSets {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.account_sets.add_member", skip(self, member), fields(account_set_id = %account_set_id))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.add_member", skip(self, member), fields(account_set_id = %account_set_id))]
     pub async fn add_member(
         &self,
         account_set_id: AccountSetId,
@@ -150,6 +159,7 @@ impl AccountSets {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.add_member_in_op",
         skip(self, op, member),
         fields(
@@ -214,13 +224,11 @@ impl AccountSets {
         match member {
             AccountSetMemberId::Account(id) => {
                 self.repo
-                    .add_member_account_and_return_parents(&mut *op, account_set_id, id)
+                    .add_member_account(&mut *op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
-                self.repo
-                    .add_member_set_and_return_parents(op, account_set_id, id)
-                    .await?;
+                self.repo.add_member_set(op, account_set_id, id).await?;
             }
         }
 
@@ -259,7 +267,7 @@ impl AccountSets {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.account_sets.remove_member", skip(self, member), fields(account_set_id = %account_set_id))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.remove_member", skip(self, member), fields(account_set_id = %account_set_id))]
     pub async fn remove_member(
         &self,
         account_set_id: AccountSetId,
@@ -274,6 +282,7 @@ impl AccountSets {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.remove_member_in_op",
         skip(self, op, member),
         fields(account_set_id = %account_set_id),
@@ -324,20 +333,18 @@ impl AccountSets {
         match member {
             AccountSetMemberId::Account(id) => {
                 self.repo
-                    .remove_member_account_and_return_parents(op, account_set_id, id)
+                    .remove_member_account(op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
-                self.repo
-                    .remove_member_set_and_return_parents(op, account_set_id, id)
-                    .await?;
+                self.repo.remove_member_set(op, account_set_id, id).await?;
             }
         }
 
         Ok(account_set)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.find_all", skip(self, account_set_ids), fields(account_set_ids_count = account_set_ids.len()))]
     pub async fn find_all<T: From<AccountSet>>(
         &self,
         account_set_ids: &[AccountSetId],
@@ -345,7 +352,7 @@ impl AccountSets {
         Ok(self.repo.find_all(account_set_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_all_in_op", skip(self, op))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.find_all_in_op", skip(self, op, account_set_ids), fields(account_set_ids_count = account_set_ids.len()))]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -354,12 +361,16 @@ impl AccountSets {
         Ok(self.repo.find_all_in_op(op, account_set_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.find", skip(self))]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
         Ok(self.repo.find_by_id(account_set_id).await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_in_op", skip(self, op))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.find_in_op",
+        skip(self, op)
+    )]
     pub async fn find_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -368,7 +379,11 @@ impl AccountSets {
         Ok(self.repo.find_by_id_in_op(op, account_set_id).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts_sets.find_by_external_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts_sets.find_by_external_id",
+        skip(self)
+    )]
     pub async fn find_by_external_id(
         &self,
         external_id: String,
@@ -376,7 +391,11 @@ impl AccountSets {
         Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.find_where_member", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.find_where_member",
+        skip(self)
+    )]
     pub async fn find_where_member(
         &self,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
@@ -397,7 +416,11 @@ impl AccountSets {
         }
     }
 
-    #[instrument(name = "cala_ledger.account_sets.list_for_name", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.list_for_name",
+        skip(self)
+    )]
     pub async fn list_for_name(
         &self,
         name: String,
@@ -412,7 +435,11 @@ impl AccountSets {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.account_sets.list_for_name_in_op", skip(self, op))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.list_for_name_in_op",
+        skip(self, op)
+    )]
     pub async fn list_for_name_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -429,6 +456,7 @@ impl AccountSets {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.find_where_member_in_op",
         skip(self, op)
     )]
@@ -536,7 +564,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_batch",
-        skip(self)
+        skip(self, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_batch(
         &self,
@@ -551,7 +580,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_batch_in_op",
-        skip(self, op)
+        skip(self, op, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_batch_in_op(
         &self,
@@ -611,7 +641,8 @@ impl AccountSets {
     /// descendant account sets in a single batch.
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_deep",
-        skip(self)
+        skip(self, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_deep(
         &self,
@@ -626,7 +657,8 @@ impl AccountSets {
 
     #[instrument(
         name = "cala_ledger.account_sets.recalculate_balances_deep_in_op",
-        skip(self, op)
+        skip(self, op, account_set_ids),
+        fields(account_set_ids_count = account_set_ids.len())
     )]
     pub async fn recalculate_balances_deep_in_op(
         &self,
@@ -666,6 +698,7 @@ impl AccountSets {
     /// to batch-recalculate balances for EC account sets (e.g. via
     /// [`Self::recalculate_balances_deep`]).
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.list_eventually_consistent_ids",
         skip(self)
     )]
@@ -678,6 +711,7 @@ impl AccountSets {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.account_sets.list_eventually_consistent_ids_in_op",
         skip(self, op)
     )]

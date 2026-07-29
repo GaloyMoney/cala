@@ -1,3 +1,166 @@
+# [cala release v0.18.7](https://github.com/GaloyMoney/cala/releases/tag/0.18.7)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job to 0.6.35 and obix to 0.4.2 (#781)
+
+# [cala release v0.18.6](https://github.com/GaloyMoney/cala/releases/tag/0.18.6)
+
+
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.11.9 and job to 0.6.34 (#780)
+- Bump obix to 0.4.1 (#774)
+- Bump es-entity to 0.11.8 (#772)
+- Bump the all-dependencies group with 2 updates (#767)
+
+# [cala release v0.18.5](https://github.com/GaloyMoney/cala/releases/tag/0.18.5)
+
+
+
+### Performance
+
+- Demote inner-path spans to debug level (#778)
+
+# [cala release v0.18.4](https://github.com/GaloyMoney/cala/releases/tag/0.18.4)
+
+
+
+### Performance
+
+- Skip collection args in #[instrument] span fields (#777)
+
+# [cala release v0.18.3](https://github.com/GaloyMoney/cala/releases/tag/0.18.3)
+
+
+
+### Performance
+
+- Raise event buffer 2k -> 50k (#775)
+
+# [cala release v0.18.2](https://github.com/GaloyMoney/cala/releases/tag/0.18.2)
+
+
+
+### Miscellaneous Tasks
+
+- Bump obix to 0.4.0, es-entity to 0.11.7 (#773)
+
+# [cala release v0.18.1](https://github.com/GaloyMoney/cala/releases/tag/0.18.1)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job, obix
+- Bump es-entity to 0.11.6 (#770)
+- Bump job to 0.6.31 (#769)
+
+# [cala release v0.18.0](https://github.com/GaloyMoney/cala/releases/tag/0.18.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Bump obix to 0.3.0 (#766)
+
+### Performance
+
+- Size mailbox buffers for listener stalls (#764)
+- Index member_account_id for balance-set resolution (#765)
+- Index member_account_set_id for upward walk (#761)
+
+# [cala release v0.17.0](https://github.com/GaloyMoney/cala/releases/tag/0.17.0)
+
+
+
+### Features
+
+- [**breaking**] Remove transaction voiding (#755)
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.11.2, job to 0.6.30, obix to 0.2.32 (#760)
+- Bump rand in the all-dependencies group (#750)
+
+# [cala release v0.16.2](https://github.com/GaloyMoney/cala/releases/tag/0.16.2)
+
+
+
+### Features
+
+- Query balances with `account_id` and `journal_id` (#751)
+
+# [cala release v0.16.1](https://github.com/GaloyMoney/cala/releases/tag/0.16.1)
+
+
+
+### Bug Fixes
+
+- Set balance_rollup on membership-locks test helper (#754)
+- Stop serializing account-member ops on the global membership lock (#748)
+
+# [cala release v0.16.0](https://github.com/GaloyMoney/cala/releases/tag/0.16.0)
+
+
+
+### Features
+
+- [**breaking**] Make account set balance rollup explicit (#752)
+
+# [cala release v0.15.12](https://github.com/GaloyMoney/cala/releases/tag/0.15.12)
+
+
+
+### Bug Fixes
+
+- Batch snapshot inserts to avoid deep-recalc OOM (#740)
+
+### Miscellaneous Tasks
+
+- Bump job to 0.6.28 and obix to 0.2.29 (#743)
+- Bump job to 0.6.27 (#738)
+- Bump the all-dependencies group across 1 directory with 2 updates (#739)
+- Bump the all-dependencies group across 1 directory with 4 updates (#736)
+- Bump es-entity to 0.10.40 (#734)
+- Bump uuid in the all-dependencies group (#733)
+
+# [cala release v0.15.11](https://github.com/GaloyMoney/cala/releases/tag/0.15.11)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job from 0.6.25 to 0.6.26 (#732)
+- Bump the all-dependencies group across 1 directory with 2 updates (#728)
+- Migrate dev deps to nix process-compose (#729)
+- Remove cala-tracing crate and otel collector (#727)
+- Bump the all-dependencies group with 4 updates (#723)
+
+# [cala release v0.15.10](https://github.com/GaloyMoney/cala/releases/tag/0.15.10)
+
+
+
+### Bug Fixes
+
+- Sync Cargo.lock after version bump (#722)
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.10.37 (#724)
+
+# [cala release v0.15.9](https://github.com/GaloyMoney/cala/releases/tag/0.15.9)
+
+
+
+### Miscellaneous Tasks
+
+- Bump es-entity to 0.10.36, job to 0.6.25, obix to 0.2.27 (#721)
+- Bump the all-dependencies group with 2 updates (#720)
+
 # [cala release v0.15.8](https://github.com/GaloyMoney/cala/releases/tag/0.15.8)
 
 

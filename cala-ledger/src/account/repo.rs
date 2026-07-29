@@ -50,6 +50,7 @@ impl AccountRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account.update_velocity_context_values_in_op",
         skip_all,
         err(level = "warn")

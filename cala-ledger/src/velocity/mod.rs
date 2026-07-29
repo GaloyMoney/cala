@@ -108,7 +108,7 @@ impl Velocities {
         Ok(self.controls.find_by_id_in_op(db, control).await?)
     }
 
-    #[instrument(name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
+    #[instrument(level = "debug", name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
     pub async fn attach_control_to_account(
         &self,
         control: VelocityControlId,
@@ -123,7 +123,7 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(name = "velocity.attach_control_to_account_set", skip(self), fields(control_id = %control, account_set_id = %account_set_id))]
+    #[instrument(level = "debug", name = "velocity.attach_control_to_account_set", skip(self), fields(control_id = %control, account_set_id = %account_set_id))]
     pub async fn attach_control_to_account_set(
         &self,
         control: VelocityControlId,
@@ -143,7 +143,7 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(name = "velocity.attach_control_to_account_in_op", skip(self, db), fields(control_id = %control_id, account_id = %account_id))]
+    #[instrument(level = "debug", name = "velocity.attach_control_to_account_in_op", skip(self, db), fields(control_id = %control_id, account_id = %account_id))]
     pub async fn attach_control_to_account_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -155,7 +155,7 @@ impl Velocities {
             .await
     }
 
-    #[instrument(name = "velocity.attach_control_to_account_set_in_op", skip(self, db), fields(control_id = %control_id, account_set_id = %account_set_id))]
+    #[instrument(level = "debug", name = "velocity.attach_control_to_account_set_in_op", skip(self, db), fields(control_id = %control_id, account_set_id = %account_set_id))]
     pub async fn attach_control_to_account_set_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -167,7 +167,7 @@ impl Velocities {
             .await
     }
 
-    #[instrument(name = "velocity.attach_control_internal", skip(self, db, account_id), fields(control_id = %control_id, account_id = tracing::field::Empty))]
+    #[instrument(level = "debug", name = "velocity.attach_control_internal", skip(self, db, account_id), fields(control_id = %control_id, account_id = tracing::field::Empty))]
     async fn attach_control_to_account_or_account_set_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -193,7 +193,7 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = tracing::Level::WARN))]
+    #[instrument(level = "debug", name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_ids, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = tracing::Level::WARN))]
     pub(crate) async fn update_balances_with_limit_enforcement_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -228,7 +228,7 @@ impl Velocities {
             .await
     }
 
-    #[instrument(name = "velocity.list_limits_for_control", skip(self), fields(control_id = %control_id))]
+    #[instrument(level = "debug", name = "velocity.list_limits_for_control", skip(self), fields(control_id = %control_id))]
     pub async fn list_limits_for_control(
         &self,
         control_id: VelocityControlId,
@@ -241,7 +241,7 @@ impl Velocities {
         Ok(limits)
     }
 
-    #[instrument(name = "velocity.list_limits_for_control_in_op", skip(self, op), fields(control_id = %control_id), err(level = tracing::Level::WARN))]
+    #[instrument(level = "debug", name = "velocity.list_limits_for_control_in_op", skip(self, op), fields(control_id = %control_id), err(level = tracing::Level::WARN))]
     pub async fn list_limits_for_control_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -250,7 +250,7 @@ impl Velocities {
         self.limits.list_for_control(op, control_id).await
     }
 
-    #[instrument(name = "velocity.find_all_limits", skip(self), fields(count = limit_ids.len()), err(level = tracing::Level::WARN))]
+    #[instrument(level = "debug", name = "velocity.find_all_limits", skip(self, limit_ids), fields(count = limit_ids.len()), err(level = tracing::Level::WARN))]
     pub async fn find_all_limits<T: From<VelocityLimit>>(
         &self,
         limit_ids: &[VelocityLimitId],
@@ -258,7 +258,7 @@ impl Velocities {
         Ok(self.limits.find_all(limit_ids).await?)
     }
 
-    #[instrument(name = "velocity.find_all_controls", skip(self), fields(count = control_ids.len()))]
+    #[instrument(level = "debug", name = "velocity.find_all_controls", skip(self, control_ids), fields(count = control_ids.len()))]
     pub async fn find_all_controls<T: From<VelocityControl>>(
         &self,
         control_ids: &[VelocityControlId],

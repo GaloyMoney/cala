@@ -22,7 +22,11 @@ impl VelocityLimitRepo {
         Self { pool: pool.clone() }
     }
 
-    #[instrument(name = "velocity_limit.add_limit_to_control", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "velocity_limit.add_limit_to_control",
+        skip_all
+    )]
     pub async fn add_limit_to_control(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -41,6 +45,7 @@ impl VelocityLimitRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "velocity_limit.list_for_control",
         skip_all,
         err(level = "warn")
@@ -60,7 +65,7 @@ impl VelocityLimitRepo {
               JOIN cala_velocity_control_limits ON id = velocity_limit_id
               WHERE velocity_control_id = $1
             )
-            SELECT l.id as entity_id, e.sequence, e.event, NULL as "context: es_entity::ContextData", e.recorded_at
+            SELECT l.id as entity_id, e.sequence, e.event, NULL as "context: es_entity::ContextData", e.recorded_at, NULL::jsonb as "forgettable_payload?"
             FROM limits l
             JOIN cala_velocity_limit_events e ON l.id = e.id
             ORDER BY l.id, e.sequence"#,

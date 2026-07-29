@@ -1,4 +1,3 @@
-use chrono::{DateTime, Utc};
 use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -12,7 +11,67 @@ use crate::{
 
 use super::{entity::*, error::*};
 
+/// Coarse advisory lock guarding the account-set membership graph
+/// (`cala_account_set_member_accounts` and
+/// `cala_account_set_member_account_sets`).
+///
+/// Membership maintenance is a read-then-write over the whole ancestor
+/// chain: each mutation walks the set-to-set edges (the recursive
+/// `parents` CTE) and then writes the transitive-closure rows the walk
+/// justifies. Two concurrent mutations that each miss the other's
+/// uncommitted writes would leave the closure table inconsistent
+/// (write-skew), so the walk's snapshot has to stay valid until the
+/// writes commit — which is why every lock here is transaction-scoped
+/// and held to commit; releasing earlier would reopen the race.
+///
+/// Lock protocol:
+///
+/// - Set-structure mutations (`add_member_set` / `remove_member_set`)
+///   take this lock EXCLUSIVE. They mutate the edges that every walk
+///   reads, and read the member rows that account-member mutations
+///   write, so they must exclude everything.
+/// - Account-member mutations (`add_member_account` /
+///   `remove_member_account`) take this lock SHARED plus an EXCLUSIVE
+///   per-member lock (`MEMBER_LOCK_CLASS`, keyed on the member account
+///   id). Shared-vs-exclusive fences them against structure mutations,
+///   while account-member mutations for *different* members run
+///   concurrently — their closure writes are disjoint rows. The
+///   per-member lock serializes mutations touching the *same* member
+///   (e.g. an add and a remove in overlapping hierarchies), whose
+///   interleaved inserts/deletes on shared ancestors would otherwise
+///   tear the closure.
+///
+/// Ordering: the coarse lock is always acquired before the per-member
+/// lock. An operation must never wait on the coarse lock while holding
+/// a per-member lock — under PostgreSQL's FIFO lock queueing that can
+/// form a wait cycle with a queued exclusive (structure) waiter.
 const ADDVISORY_LOCK_ID: i64 = 123456;
+
+/// `classid` namespace for the per-member advisory locks (2-arg form),
+/// keyed on `hashtext(<member account id>)`. Must stay disjoint from
+/// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
+const MEMBER_LOCK_CLASS: i32 = 2;
+
+/// Takes the account-member half of the membership lock protocol (see
+/// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
+/// per-member lock. Two statements so the acquisition order is
+/// guaranteed.
+async fn lock_for_account_member_op(
+    db: &mut impl es_entity::AtomicOperation,
+    account_id: AccountId,
+) -> Result<(), AccountSetError> {
+    sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+        .execute(db.as_executor())
+        .await?;
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+        MEMBER_LOCK_CLASS,
+        account_id.to_string(),
+    )
+    .execute(db.as_executor())
+    .await?;
+    Ok(())
+}
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -101,6 +160,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.list_children_by_created_at_in_op",
         skip_all,
         err(level = "warn")
@@ -357,25 +417,22 @@ impl AccountSetRepo {
     }
 
     #[instrument(
-        name = "account_set.add_member_account_and_return_parents",
+        level = "debug",
+        name = "account_set.add_member_account",
         skip_all,
         err(level = "warn")
     )]
-    pub async fn add_member_account_and_return_parents(
+    pub async fn add_member_account(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
-        let rows = sqlx::query!(r#"
+    ) -> Result<(), AccountSetError> {
+        lock_for_account_member_op(db, account_id).await?;
+        sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
-            JOIN cala_account_sets s
-            ON s.id = m.account_set_id
             WHERE m.member_account_set_id = $1
 
             UNION ALL
@@ -387,36 +444,16 @@ impl AccountSetRepo {
           non_transitive_insert AS (
             INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
             VALUES ($1, $2)
-          ),
-          transitive_insert AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-            SELECT p.account_set_id, $2, TRUE
-            FROM parents p
           )
-          SELECT account_set_id, NULL AS now
-          FROM parents
-          UNION ALL
-          SELECT NULL AS account_set_id, NOW() AS now
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+          SELECT p.account_set_id, $2, TRUE
+          FROM parents p
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .fetch_all(db.as_executor())
+        .execute(db.as_executor())
         .await?;
-        let mut time = None;
-        let ret = rows
-            .into_iter()
-            .filter_map(|row| {
-                if let Some(t) = row.now {
-                    time = Some(t);
-                    None
-                } else {
-                    Some(AccountSetId::from(
-                        row.account_set_id.expect("account_set_id not set"),
-                    ))
-                }
-            })
-            .collect();
 
         self.publisher
             .publish_all(
@@ -428,30 +465,27 @@ impl AccountSetRepo {
             )
             .await?;
 
-        Ok((time.expect("time not set"), ret))
+        Ok(())
     }
 
     #[instrument(
-        name = "account_set.remove_member_account_and_return_parents",
+        level = "debug",
+        name = "account_set.remove_member_account",
         skip_all,
         err(level = "warn")
     )]
-    pub async fn remove_member_account_and_return_parents(
+    pub async fn remove_member_account(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
-    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
-        let rows = sqlx::query!(
+    ) -> Result<(), AccountSetError> {
+        lock_for_account_member_op(db, account_id).await?;
+        sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
-            JOIN cala_account_sets s
-            ON s.id = m.account_set_id
             WHERE m.member_account_set_id = $1
 
             UNION ALL
@@ -459,36 +493,16 @@ impl AccountSetRepo {
             FROM parents p
             JOIN cala_account_set_member_account_sets m
                 ON p.account_set_id = m.member_account_set_id
-          ),
-          deletions as (
-            DELETE FROM cala_account_set_member_accounts
-            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
-            AND member_account_id = $2
           )
-          SELECT account_set_id, NULL AS now
-          FROM parents
-          UNION ALL
-          SELECT NULL AS account_set_id, NOW() AS now
+          DELETE FROM cala_account_set_member_accounts
+          WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
+          AND member_account_id = $2
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
         )
-        .fetch_all(db.as_executor())
+        .execute(db.as_executor())
         .await?;
-        let mut time = None;
-        let ret = rows
-            .into_iter()
-            .filter_map(|row| {
-                if let Some(t) = row.now {
-                    time = Some(t);
-                    None
-                } else {
-                    Some(AccountSetId::from(
-                        row.account_set_id.expect("account_set_id not set"),
-                    ))
-                }
-            })
-            .collect();
 
         self.publisher
             .publish_all(
@@ -500,29 +514,29 @@ impl AccountSetRepo {
             )
             .await?;
 
-        Ok((time.expect("time not set"), ret))
+        Ok(())
     }
 
     #[instrument(
-        name = "account_set.add_member_set_and_return_parents",
+        level = "debug",
+        name = "account_set.add_member_set",
         skip_all,
         err(level = "warn")
     )]
-    pub async fn add_member_set_and_return_parents(
+    pub async fn add_member_set(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+    ) -> Result<(), AccountSetError> {
+        // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
-        let rows = sqlx::query!(r#"
+        sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
-            JOIN cala_account_sets s
-            ON s.id = m.account_set_id
             WHERE m.member_account_set_id = $1
 
             UNION ALL
@@ -541,37 +555,17 @@ impl AccountSetRepo {
             FROM cala_account_set_member_accounts m
             WHERE m.account_set_id = $2
             RETURNING member_account_id
-          ),
-          transitive_inserts AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-            SELECT p.account_set_id, n.member_account_id, TRUE
-            FROM parents p
-            CROSS JOIN new_members n
           )
-          SELECT account_set_id, NULL AS now
-          FROM parents
-          UNION ALL
-          SELECT NULL AS account_set_id, NOW() AS now
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+          SELECT p.account_set_id, n.member_account_id, TRUE
+          FROM parents p
+          CROSS JOIN new_members n
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .fetch_all(db.as_executor())
+        .execute(db.as_executor())
         .await?;
-        let mut time = None;
-        let ret = rows
-            .into_iter()
-            .filter_map(|row| {
-                if let Some(t) = row.now {
-                    time = Some(t);
-                    None
-                } else {
-                    Some(AccountSetId::from(
-                        row.account_set_id.expect("account_set_id not set"),
-                    ))
-                }
-            })
-            .collect();
 
         self.publisher
             .publish_all(
@@ -585,30 +579,30 @@ impl AccountSetRepo {
             )
             .await?;
 
-        Ok((time.expect("time not set"), ret))
+        Ok(())
     }
 
     #[instrument(
-        name = "account_set.remove_member_set_and_return_parents",
+        level = "debug",
+        name = "account_set.remove_member_set",
         skip_all,
         err(level = "warn")
     )]
-    pub async fn remove_member_set_and_return_parents(
+    pub async fn remove_member_set(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(DateTime<Utc>, Vec<AccountSetId>), AccountSetError> {
+    ) -> Result<(), AccountSetError> {
+        // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
-        let rows = sqlx::query!(
+        sqlx::query!(
             r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id
             FROM cala_account_set_member_account_sets m
-            JOIN cala_account_sets s
-            ON s.id = m.account_set_id
             WHERE m.member_account_set_id = $1
 
             UNION ALL
@@ -622,36 +616,16 @@ impl AccountSetRepo {
             WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
             AND member_account_id IN (SELECT member_account_id FROM cala_account_set_member_accounts
                                       WHERE account_set_id = $2)
-          ),
-          member_account_set_deletion AS (
-            DELETE FROM cala_account_set_member_account_sets
-            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
-            AND member_account_set_id = $2
           )
-          SELECT account_set_id, NULL AS now
-          FROM parents
-          UNION ALL
-          SELECT NULL AS account_set_id, NOW() AS now
+          DELETE FROM cala_account_set_member_account_sets
+          WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
+          AND member_account_set_id = $2
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
         )
-        .fetch_all(db.as_executor())
+        .execute(db.as_executor())
         .await?;
-        let mut time = None;
-        let ret = rows
-            .into_iter()
-            .filter_map(|row| {
-                if let Some(t) = row.now {
-                    time = Some(t);
-                    None
-                } else {
-                    Some(AccountSetId::from(
-                        row.account_set_id.expect("account_set_id not set"),
-                    ))
-                }
-            })
-            .collect();
 
         self.publisher
             .publish_all(
@@ -665,7 +639,7 @@ impl AccountSetRepo {
             )
             .await?;
 
-        Ok((time.expect("time not set"), ret))
+        Ok(())
     }
 
     pub async fn find_where_account_is_member(
@@ -766,6 +740,7 @@ impl AccountSetRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "account_set.fetch_mappings_in_op",
         skip_all,
         err(level = "warn")
@@ -811,6 +786,7 @@ impl AccountSetRepo {
     // account-set ids — not fully hydrated `AccountSet` entities — which keeps
     // periodic reconciliation jobs cheap as the number of EC account sets grows.
     #[instrument(
+        level = "debug",
         name = "account_set.list_eventually_consistent_ids_in_op",
         skip_all,
         err(level = "warn")
@@ -857,6 +833,7 @@ impl AccountSetRepo {
     /// out at the SQL level so callers (the recalc deep walk) don't try
     /// to recalc them.
     #[instrument(
+        level = "debug",
         name = "account_set.find_all_ec_descendant_set_ids",
         skip_all,
         err(level = "warn")

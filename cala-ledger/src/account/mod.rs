@@ -31,7 +31,7 @@ impl Accounts {
         }
     }
 
-    #[instrument(name = "cala_ledger.accounts.create", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.create", skip_all)]
     pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
@@ -39,7 +39,11 @@ impl Accounts {
         Ok(account)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create_in_op", skip(self, db))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.create_in_op",
+        skip(self, db)
+    )]
     pub async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -49,7 +53,7 @@ impl Accounts {
         Ok(account)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create_all", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all", skip_all)]
     pub async fn create_all(
         &self,
         new_accounts: Vec<NewAccount>,
@@ -60,7 +64,7 @@ impl Accounts {
         Ok(accounts)
     }
 
-    #[instrument(name = "cala_ledger.accounts.create_all_in_op", skip(self, db))]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len()))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -70,12 +74,12 @@ impl Accounts {
         Ok(accounts)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.find", skip_all)]
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
         Ok(self.repo.find_by_id(account_id).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.find_all", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all<T: From<Account>>(
         &self,
         account_ids: &[AccountId],
@@ -83,7 +87,7 @@ impl Accounts {
         Ok(self.repo.find_all(account_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_all", skip(self, db))]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.find_all_in_op", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -92,17 +96,25 @@ impl Accounts {
         Ok(self.repo.find_all_in_op(db, account_ids).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_by_external_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.find_by_external_id",
+        skip(self)
+    )]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
         Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.find_by_code", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.find_by_code",
+        skip(self)
+    )]
     pub async fn find_by_code(&self, code: String) -> Result<Account, AccountError> {
         Ok(self.repo.find_by_code(code).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.list", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.list", skip(self))]
     pub async fn list(
         &self,
         query: es_entity::PaginatedQueryArgs<AccountByNameCursor>,
@@ -110,7 +122,11 @@ impl Accounts {
         Ok(self.repo.list_by_name(query, Default::default()).await?)
     }
 
-    #[instrument(name = "cala_ledger.accounts.lock_in_op", skip(self, db))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.lock_in_op",
+        skip(self, db)
+    )]
     pub async fn lock_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -123,7 +139,11 @@ impl Accounts {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.accounts.unlock_in_op", skip(self, db))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.unlock_in_op",
+        skip(self, db)
+    )]
     pub async fn unlock_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -136,7 +156,11 @@ impl Accounts {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.accounts.persist", skip(self, account))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.persist",
+        skip(self, account)
+    )]
     pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account).await?;
@@ -144,7 +168,7 @@ impl Accounts {
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.accounts.persist_in_op", skip_all)]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.persist_in_op", skip_all)]
     pub async fn persist_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -158,6 +182,7 @@ impl Accounts {
     }
 
     #[instrument(
+        level = "debug",
         name = "cala_ledger.accounts.update_velocity_context_values_in_op",
         skip_all
     )]

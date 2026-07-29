@@ -9,7 +9,7 @@ use tracing::instrument;
 use std::collections::HashMap;
 
 use crate::outbox::*;
-use crate::primitives::{EntryId, TxTemplateId};
+use crate::primitives::TxTemplateId;
 
 pub use entity::*;
 use error::*;
@@ -28,7 +28,11 @@ impl Transactions {
         }
     }
 
-    #[instrument(name = "cala_ledger.transactions.create_in_op", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.create_in_op",
+        skip_all
+    )]
     pub(crate) async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -38,25 +42,11 @@ impl Transactions {
         Ok(transaction)
     }
 
-    #[instrument(name = "cala_ledger.transactions.create_voided_tx_in_op", skip_all)]
-    pub async fn create_voided_tx_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperationWithTime,
-        voiding_tx_id: TransactionId,
-        existing_tx_id: TransactionId,
-        entry_ids: impl IntoIterator<Item = EntryId>,
-    ) -> Result<Transaction, TransactionError> {
-        let mut existing_tx = self.repo.find_by_id_in_op(&mut *db, existing_tx_id).await?;
-
-        let new_tx = existing_tx.void(voiding_tx_id, entry_ids.into_iter().collect(), db.now())?;
-
-        self.repo.update_in_op(db, &mut existing_tx).await?;
-        let voided_tx = self.repo.create_in_op(db, new_tx).await?;
-
-        Ok(voided_tx)
-    }
-
-    #[instrument(name = "cala_ledger.transactions.find_by_external_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.find_by_external_id",
+        skip(self)
+    )]
     pub async fn find_by_external_id(
         &self,
         external_id: String,
@@ -64,7 +54,11 @@ impl Transactions {
         Ok(self.repo.find_by_external_id(Some(external_id)).await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_by_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.find_by_id",
+        skip(self)
+    )]
     pub async fn find_by_id(
         &self,
         transaction_id: TransactionId,
@@ -72,7 +66,11 @@ impl Transactions {
         Ok(self.repo.find_by_id(transaction_id).await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.list_for_template_id", skip(self))]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.transactions.list_for_template_id",
+        skip(self)
+    )]
     pub async fn list_for_template_id(
         &self,
         template_id: TxTemplateId,
@@ -88,7 +86,7 @@ impl Transactions {
             .await?)
     }
 
-    #[instrument(name = "cala_ledger.transactions.find_all", skip(self))]
+    #[instrument(level = "debug", name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],

@@ -1,4 +1,4 @@
-use cached::proc_macro::cached;
+use cached::macros::cached;
 
 use es_entity::*;
 use sqlx::PgPool;
@@ -48,6 +48,7 @@ impl TxTemplateRepo {
     }
 
     #[instrument(
+        level = "debug",
         name = "tx_template.find_latest_version_in_op",
         skip_all,
         err(level = "warn")
@@ -80,10 +81,10 @@ impl TxTemplateRepo {
 #[cached(
     key = "(TxTemplateId, i32)",
     convert = "{ (id, version) }",
-    result = true,
     sync_writes = "default"
 )]
 #[instrument(
+    level = "debug",
     name = "tx_template.find_versioned_cached",
     skip(op),
     fields(template_id = %id, version = version),

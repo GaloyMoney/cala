@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n              m.max_sequence AS \"max_sequence!: i64\",\n              e.sequence AS \"sequence?: i64\",\n              e.id AS \"id?\",\n              e.payload AS \"payload?\",\n              e.tracing_context AS \"tracing_context?\",\n              e.recorded_at AS \"recorded_at?\"\n            FROM (\n                SELECT COALESCE(MAX(sequence), 0) AS max_sequence\n                FROM cala_persistent_outbox_events\n            ) m\n            LEFT JOIN LATERAL (\n                SELECT sequence, id, payload, tracing_context, recorded_at\n                FROM cala_persistent_outbox_events\n                WHERE sequence > $1\n                  AND sequence <= $1 + $2\n                ORDER BY sequence ASC\n                LIMIT $2\n            ) e ON true\n            ORDER BY e.sequence ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "max_sequence!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence?: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload?",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "tracing_context?",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "recorded_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "881ee9c523fe37b5385ab72045861773febab0b850d1374a72f32967678d4484"
+}

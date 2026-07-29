@@ -285,8 +285,6 @@ mod tests {
                 correlation_id: "test-correlation".to_string(),
                 external_id: Some("test-external".to_string()),
                 description: None,
-                void_of: None,
-                voided_by: None,
                 metadata: None,
             }
         }
