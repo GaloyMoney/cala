@@ -331,8 +331,10 @@ name = "cala-cel-interpreter"
 version = "0.18.8-dev"
 dependencies = [
  "anyhow",
+ "cached",
  "cel",
  "chrono",
+ "criterion",
  "es-entity",
  "rust_decimal",
  "schemars 1.2.2",

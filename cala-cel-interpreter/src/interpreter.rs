@@ -1,8 +1,23 @@
 use std::sync::Arc;
 
+use cached::cached;
 use cel::Program;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
+
+/// Globally memoized CEL program compilation.
+///
+/// `CelExpression`s are frequently re-created from the same source string
+/// (e.g. velocity controls deserialized from the DB on every transaction),
+/// so compilation results are cached to avoid re-compiling the same
+/// expression multiple times.
+#[cached(max_size = 10000, cache_err = true)]
+#[instrument(name = "cel.compile", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
+fn compile_program(source: String) -> Result<Arc<Program>, String> {
+    Program::compile(&source)
+        .map(Arc::new)
+        .map_err(|e| e.to_string())
+}
 
 use crate::{context::*, error::*, value::*};
 
@@ -63,12 +78,8 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
-        let program =
-            Program::compile(&source).map_err(|e| CelError::CelParseError(e.to_string()))?;
-        Ok(Self {
-            source,
-            program: Arc::new(program),
-        })
+        let program = compile_program(source.clone()).map_err(CelError::CelParseError)?;
+        Ok(Self { source, program })
     }
 }
 
