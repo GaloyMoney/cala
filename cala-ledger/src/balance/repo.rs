@@ -509,6 +509,13 @@ impl BalanceRepo {
         parent_account_id: AccountId,
         member_id: AccountId,
     ) -> Result<bool, BalanceError> {
+        // Lock both ids in canonical ascending AccountId order, with
+        // the sort done in Rust: the planner is free to evaluate the
+        // lock projection before any SQL-level sort node, so an
+        // ORDER BY on the query is not a reliable ordering guarantee
+        // (see lock_accounts_exclusive_in_op).
+        let mut lock_ids = [parent_account_id, member_id];
+        lock_ids.sort();
         sqlx::query!(
             r#"
             SELECT
@@ -518,11 +525,10 @@ impl BalanceRepo {
                     pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
                 END
             FROM UNNEST($3::uuid[]) AS v(account_id)
-            ORDER BY v.account_id
             "#,
             EC_SET_LOCK_CLASS,
             member_id as AccountId,
-            &[parent_account_id, member_id] as &[AccountId],
+            &lock_ids as &[AccountId],
         )
         .execute(op.as_executor())
         .await?;
@@ -543,11 +549,11 @@ impl BalanceRepo {
         Ok(row.exists)
     }
 
-    /// Batch variant of [`member_has_balance_history_in_op`]: takes the same
-    /// per-pair locks (SHARED on the parent, FOR_UPDATE-style exclusive on
-    /// the member) in a single statement and returns every member that
-    /// already has balance history in its journal, instead of checking pair
-    /// by pair.
+    /// Batch variant of [`member_has_balance_history_in_op`]: takes the
+    /// same locks (SHARED on parents, FOR_UPDATE-style EXCLUSIVE on
+    /// members) in a single canonically-ordered statement and returns
+    /// every member that already has balance history in its journal,
+    /// instead of checking pair by pair.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.members_with_balance_history_in_op",
@@ -563,24 +569,43 @@ impl BalanceRepo {
             return Ok(Vec::new());
         }
         let journal_ids: Vec<JournalId> = pairs.iter().map(|(j, _, _)| *j).collect();
-        let parent_ids: Vec<AccountId> = pairs.iter().map(|(_, p, _)| *p).collect();
         let member_ids: Vec<AccountId> = pairs.iter().map(|(_, _, m)| *m).collect();
+
+        // Canonical lock protocol, shared with the single-pair
+        // member_has_balance_history_in_op: every id is locked in
+        // ascending AccountId order — EXCLUSIVE where the id is a
+        // member in any pair, SHARED where it only ever appears as a
+        // parent (EXCLUSIVE wins when an id is both). The list is
+        // built, deduped and sorted in Rust because a SQL ORDER BY
+        // does not order projection-evaluated advisory locks (see
+        // lock_accounts_exclusive_in_op). Locking pair-wise (SHARED
+        // parent, then EXCLUSIVE member) instead would invert the
+        // acquisition order against the single-pair path whenever
+        // member_id < parent_account_id, and concurrent single- and
+        // batch-path transactions on the same pair could deadlock.
+        let mut lock_modes: HashMap<AccountId, bool> = HashMap::new();
+        for (_, parent, member) in pairs {
+            lock_modes.entry(*parent).or_insert(false);
+            lock_modes.insert(*member, true);
+        }
+        let mut lock_modes: Vec<(AccountId, bool)> = lock_modes.into_iter().collect();
+        lock_modes.sort_by_key(|(id, _)| *id);
+        let lock_ids: Vec<AccountId> = lock_modes.iter().map(|(id, _)| *id).collect();
+        let lock_exclusive: Vec<bool> = lock_modes.iter().map(|(_, exclusive)| *exclusive).collect();
 
         sqlx::query!(
             r#"
             SELECT
-                CASE WHEN v.parent_account_id <> v.member_id THEN
-                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.parent_account_id::text))
+                CASE WHEN v.is_exclusive THEN
+                    pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
                 ELSE
-                    NULL
-                END,
-                pg_advisory_xact_lock($1::int4, hashtext(v.member_id::text))
-            FROM UNNEST($2::uuid[], $3::uuid[]) AS v(parent_account_id, member_id)
-            ORDER BY v.parent_account_id, v.member_id
+                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
+                END
+            FROM UNNEST($2::uuid[], $3::bool[]) AS v(account_id, is_exclusive)
             "#,
             EC_SET_LOCK_CLASS,
-            &parent_ids as &[AccountId],
-            &member_ids as &[AccountId],
+            &lock_ids as &[AccountId],
+            &lock_exclusive as &[bool],
         )
         .execute(op.as_executor())
         .await?;

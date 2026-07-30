@@ -496,6 +496,17 @@ impl AccountSetRepo {
         let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
         let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
 
+        // Sort and dedup the lock ids in Rust so the per-member locks
+        // are always acquired in canonical id order, matching the
+        // single-pair path. A SQL ORDER BY is not a reliable
+        // substitute: the planner is free to evaluate the lock
+        // projection before any sort node. (`account_ids` itself must
+        // stay pair-aligned with `account_set_ids` for the insert
+        // below, hence the separate vector.)
+        let mut lock_ids = account_ids.clone();
+        lock_ids.sort();
+        lock_ids.dedup();
+
         sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
@@ -503,10 +514,9 @@ impl AccountSetRepo {
             r#"
             SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
             FROM UNNEST($2::uuid[]) AS v(account_id)
-            ORDER BY v.account_id
             "#,
             MEMBER_LOCK_CLASS,
-            &account_ids as &[AccountId],
+            &lock_ids as &[AccountId],
         )
         .execute(db.as_executor())
         .await?;
