@@ -235,7 +235,78 @@ impl AccountSets {
         Ok(account_set)
     }
 
-    /// Refuse the membership change if `member_id` already has any
+    #[instrument(level = "debug", name = "cala_ledger.account_sets.add_members", skip(self, members), fields(count = members.len()))]
+    pub async fn add_members(
+        &self,
+        members: &[(AccountSetId, AccountId)],
+    ) -> Result<(), AccountSetError> {
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
+        self.add_members_in_op(&mut op, members).await?;
+        op.commit().await?;
+        Ok(())
+    }
+
+    /// Batch variant of [`add_member_in_op`](Self::add_member_in_op) for
+    /// account members: resolves all target sets, runs the
+    /// no-balance-history check for every pair, and inserts all
+    /// memberships — including the transitive ancestor rows — with a
+    /// single recursive walk, instead of one walk per account. Callers
+    /// attaching many accounts at once should prefer this over looping
+    /// `add_member_in_op`.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.add_members_in_op",
+        skip(self, op, members),
+        fields(count = members.len()),
+        err(level = "warn")
+    )]
+    pub async fn add_members_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountId)],
+    ) -> Result<(), AccountSetError> {
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|(set_id, _)| *set_id).collect();
+        let sets = self
+            .repo
+            .find_all_in_op::<AccountSet>(&mut *op, &account_set_ids)
+            .await?;
+
+        let mut check_pairs = Vec::with_capacity(members.len());
+        for (account_set_id, member_id) in members {
+            let set = sets
+                .get(account_set_id)
+                .ok_or(AccountSetError::CouldNotFindById(*account_set_id))?;
+            check_pairs.push((
+                set.values().journal_id,
+                AccountId::from(set.id()),
+                *member_id,
+            ));
+        }
+        let with_history = self
+            .balances
+            .members_with_balance_history_in_op(op, &check_pairs)
+            .await?;
+        if let Some(member_id) = with_history.into_iter().next() {
+            let (account_set_id, _) = members
+                .iter()
+                .find(|(_, m)| *m == member_id)
+                .expect("member with history must be in input");
+            return Err(AccountSetError::MemberHasBalanceHistory {
+                account_set_id: *account_set_id,
+                member_id,
+            });
+        }
+
+        self.repo.add_member_accounts(op, members).await?;
+
+        Ok(())
+    }
+
     /// `cala_balance_history` row in `journal_id`. Folding existing
     /// balance into a parent set after the fact is unsafe under
     /// concurrent posters and EC recalcs (the watermark advance can leap

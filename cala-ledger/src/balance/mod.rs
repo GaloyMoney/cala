@@ -287,6 +287,26 @@ impl Balances {
             .await
     }
 
+    /// Batch variant of [`member_has_balance_history_in_op`](Self::member_has_balance_history_in_op):
+    /// returns every member of `pairs` (`(journal_id, parent_account_id,
+    /// member_id)`) that already has balance history in its journal.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.members_with_balance_history_in_op",
+        skip(self, op, pairs),
+        fields(count = pairs.len()),
+        err(level = "warn")
+    )]
+    pub(crate) async fn members_with_balance_history_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        pairs: &[(JournalId, AccountId, AccountId)],
+    ) -> Result<Vec<AccountId>, BalanceError> {
+        self.repo
+            .members_with_balance_history_in_op(op, pairs)
+            .await
+    }
+
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.recalculate_account_set_balances_batch_in_op",
