@@ -1,3 +1,15 @@
+# [cala release v0.19.1](https://github.com/GaloyMoney/cala/releases/tag/0.19.1)
+
+
+
+### Bug Fixes
+
+- Cap nextest at 2 threads (#790)
+
+### Features
+
+- Batch account-set member attach in a single ancestor walk (#789)
+
 # [cala release v0.19.0](https://github.com/GaloyMoney/cala/releases/tag/0.19.0)
 
 
