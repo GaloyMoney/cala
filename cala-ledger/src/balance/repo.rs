@@ -591,7 +591,8 @@ impl BalanceRepo {
         let mut lock_modes: Vec<(AccountId, bool)> = lock_modes.into_iter().collect();
         lock_modes.sort_by_key(|(id, _)| *id);
         let lock_ids: Vec<AccountId> = lock_modes.iter().map(|(id, _)| *id).collect();
-        let lock_exclusive: Vec<bool> = lock_modes.iter().map(|(_, exclusive)| *exclusive).collect();
+        let lock_exclusive: Vec<bool> =
+            lock_modes.iter().map(|(_, exclusive)| *exclusive).collect();
 
         sqlx::query!(
             r#"
