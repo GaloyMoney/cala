@@ -1395,8 +1395,7 @@ async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
         .account_sets()
         .recalculate_balances(inline_set.id())
         .await
-        .err()
-        .expect("recalculate_balances should fail on a non-EC set");
+        .expect_err("recalculate_balances should fail on a non-EC set");
 
     match err {
         AccountSetError::CannotRecalculateNonEcSet { account_set_id } => {
@@ -1410,8 +1409,7 @@ async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
         .account_sets()
         .recalculate_balances_batch(&[inline_set.id()])
         .await
-        .err()
-        .expect("recalculate_balances_batch should fail on a non-EC set");
+        .expect_err("recalculate_balances_batch should fail on a non-EC set");
     assert!(matches!(
         err,
         AccountSetError::CannotRecalculateNonEcSet { .. }
