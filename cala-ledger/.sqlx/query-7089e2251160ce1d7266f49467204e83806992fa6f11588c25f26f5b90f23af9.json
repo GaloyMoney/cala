@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH new_events AS (\n                   INSERT INTO cala_persistent_outbox_events (payload, tracing_context, recorded_at)\n                   SELECT unnest($1::jsonb[]) AS payload, $2::jsonb AS tracing_context, COALESCE($3::timestamptz, NOW()) AS recorded_at\n                   RETURNING id, sequence, recorded_at\n               ),\n               notified AS (\n                   SELECT pg_notify(\n                       'cala_persistent_outbox_events',\n                       json_build_object('min_sequence', MIN(sequence), 'max_sequence', MAX(sequence))::TEXT\n                   )\n                   FROM new_events\n                   HAVING COUNT(*) > 0\n               )\n               SELECT ne.id AS \"id!\", ne.sequence AS \"sequence!\", ne.recorded_at AS \"recorded_at!\"\n               FROM new_events ne\n               LEFT JOIN notified ON TRUE\n               ORDER BY ne.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "JsonbArray",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7089e2251160ce1d7266f49467204e83806992fa6f11588c25f26f5b90f23af9"
+}

@@ -1634,9 +1634,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e23e5699fbc15a1c6fa0a39fb49f5e175ecf2c2a3e03957498debd1ca7350e1"
+checksum = "b00a17f5e2191f733df57aca36a8f20ca2bea81dcd4bee84ea49fd0036e35ab6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1657,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.4.2"
+version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62404a571f1888d94abacd595e0714c0ca7e34ac1b69d5c925164db1d3caa25f"
+checksum = "b1b687622cd5ee49af5192568dffb282c7f5fe1f3f16108d82e299ade75acee2"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -3458,7 +3458,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
