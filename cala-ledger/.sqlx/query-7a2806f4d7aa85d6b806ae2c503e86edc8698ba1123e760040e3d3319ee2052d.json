@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT account_set_id AS \"account_set_id!: AccountSetId\",\n                   member_account_set_id AS \"member_account_set_id!: AccountSetId\"\n            FROM cala_account_set_member_account_sets\n            WHERE members_filled IS FALSE\n            ORDER BY created_at\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "7a2806f4d7aa85d6b806ae2c503e86edc8698ba1123e760040e3d3319ee2052d"
+}

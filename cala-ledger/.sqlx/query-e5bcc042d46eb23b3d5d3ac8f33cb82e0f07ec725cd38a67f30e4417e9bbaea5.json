@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE closure AS (\n                -- Live descendant walk with root attribution: transitive\n                -- rows are a posting-path cache and may lag; recalc must\n                -- not rely on them.\n                SELECT unnest($1::uuid[]) AS account_set_id,\n                       unnest($1::uuid[]) AS root_set_id\n                UNION\n                SELECT m.member_account_set_id, c.root_set_id\n                FROM closure c\n                JOIN cala_account_set_member_account_sets m\n                    ON c.account_set_id = m.account_set_id\n            )\n            SELECT\n                c.root_set_id AS \"account_set_id!: AccountSetId\",\n                m.member_account_id AS \"member_account_id!: AccountId\"\n            FROM closure c\n            JOIN cala_account_set_member_accounts m\n                ON m.account_set_id = c.account_set_id\n               AND m.transitive IS FALSE\n            LEFT JOIN cala_account_sets s ON s.id = m.member_account_id\n            WHERE s.id IS NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "e5bcc042d46eb23b3d5d3ac8f33cb82e0f07ec725cd38a67f30e4417e9bbaea5"
+}

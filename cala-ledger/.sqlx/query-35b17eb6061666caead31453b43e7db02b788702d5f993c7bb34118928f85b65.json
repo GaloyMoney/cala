@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE up AS (\n            SELECT $1::uuid AS account_set_id\n            UNION\n            SELECT m.account_set_id\n            FROM up u\n            JOIN cala_account_set_member_account_sets m\n                ON u.account_set_id = m.member_account_set_id\n          ),\n          up_subtrees AS (\n            SELECT account_set_id FROM up\n            UNION\n            SELECT m.member_account_set_id\n            FROM up_subtrees us\n            JOIN cala_account_set_member_account_sets m\n                ON us.account_set_id = m.account_set_id\n          ),\n          new_descendants AS (\n            SELECT $2::uuid AS account_set_id\n            UNION\n            SELECT m.member_account_set_id\n            FROM new_descendants d\n            JOIN cala_account_set_member_account_sets m\n                ON d.account_set_id = m.account_set_id\n          )\n          SELECT 1 AS found\n          FROM cala_account_set_member_accounts ma\n          WHERE ma.transitive IS FALSE\n            AND ma.account_set_id IN (SELECT account_set_id FROM up_subtrees)\n            AND ma.member_account_id IN (\n              SELECT member_account_id FROM cala_account_set_member_accounts\n              WHERE transitive IS FALSE\n                AND account_set_id IN (SELECT account_set_id FROM new_descendants)\n            )\n          LIMIT 1\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "found",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "35b17eb6061666caead31453b43e7db02b788702d5f993c7bb34118928f85b65"
+}

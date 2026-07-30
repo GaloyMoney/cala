@@ -1605,3 +1605,116 @@ async fn recalculate_balances_deep_skips_non_ec_descendants() -> anyhow::Result<
 
     Ok(())
 }
+
+/// Direct attaches write only the direct membership row; the async fill
+/// job materializes ancestor (transitive) rows afterwards, and postings
+/// see the full hierarchy via the live-walk fallback in the meantime.
+#[tokio::test]
+async fn async_transitive_fill() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (one, _) = helpers::test_accounts();
+    let one = cala.accounts().create(one).await.unwrap();
+
+    let new_ec_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::EventuallyConsistent)
+            .build()
+            .unwrap()
+    };
+    let grandparent = cala.account_sets().create(new_ec_set("GP")).await.unwrap();
+    let parent = cala.account_sets().create(new_ec_set("P")).await.unwrap();
+    cala.account_sets()
+        .add_member(grandparent.id(), parent.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(parent.id(), one.id())
+        .await
+        .unwrap();
+
+    let member_count = |set_id: AccountSetId| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM cala_account_set_member_accounts WHERE account_set_id = $1",
+            )
+            .bind(uuid::Uuid::from(set_id))
+            .fetch_one(&pool)
+            .await
+            .unwrap()
+        }
+    };
+
+    // Before the fill: only the direct row exists.
+    assert_eq!(member_count(parent.id()).await, 1);
+    assert_eq!(member_count(grandparent.id()).await, 0);
+
+    // End-to-end before the fill: posting + recalc still rolls the
+    // account's balance up the live hierarchy.
+    let (two, _) = helpers::test_accounts();
+    let two = cala.accounts().create(two).await.unwrap();
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await
+        .unwrap();
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", two.id());
+    params.insert("recipient", one.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+    cala.account_sets()
+        .recalculate_balances_deep(&[grandparent.id()])
+        .await
+        .unwrap();
+    let btc: Currency = "BTC".parse().unwrap();
+    let parent_balance = cala
+        .balances()
+        .find(journal.id(), AccountId::from(parent.id()), btc)
+        .await?;
+    assert!(parent_balance.settled() > rust_decimal::Decimal::ZERO);
+
+    // After the fill: the transitive row is materialized and flagged.
+    // (Other tests share this database and leave their own pending
+    // memberships, so drain rather than asserting a count.)
+    while cala
+        .account_sets()
+        .fill_pending_transitive_memberships(1_000)
+        .await?
+        > 0
+    {}
+    assert_eq!(member_count(grandparent.id()).await, 1);
+    let complete = sqlx::query_scalar::<_, bool>(
+        "SELECT transitive_complete FROM cala_account_set_member_accounts
+         WHERE account_set_id = $1 AND member_account_id = $2 AND transitive IS FALSE",
+    )
+    .bind(uuid::Uuid::from(parent.id()))
+    .bind(uuid::Uuid::from(one.id()))
+    .fetch_one(&pool)
+    .await?;
+    assert!(complete);
+
+    // Nothing left to fill.
+    assert_eq!(
+        cala.account_sets().fill_pending_transitive_memberships(100).await?,
+        0
+    );
+    Ok(())
+}

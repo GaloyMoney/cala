@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE descendants AS (\n            SELECT $2::uuid AS account_set_id\n            UNION\n            SELECT m.member_account_set_id\n            FROM descendants d\n            JOIN cala_account_set_member_account_sets m\n                ON d.account_set_id = m.account_set_id\n          ),\n          set_insert AS (\n            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)\n            VALUES ($1, $2)\n          )\n          -- Every direct membership in the member set's closure gains new\n          -- ancestors from this edge; the fill job re-materializes them.\n          UPDATE cala_account_set_member_accounts\n          SET transitive_complete = FALSE\n          WHERE transitive IS FALSE\n            AND transitive_complete IS TRUE\n            AND account_set_id IN (SELECT account_set_id FROM descendants)\n          ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56da9a3f2b71a34806303c29d369a11a7dc1a1ac9a32fe334795a30e5871c268"
+}

@@ -261,6 +261,10 @@ async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
         handle.await??;
     }
 
+    // Direct rows land synchronously; ancestor (transitive) rows are
+    // materialized by the fill job. Drain it before asserting closure.
+    while cala.account_sets().fill_pending_transitive_memberships(1_000).await? > 0 {}
+
     // Every account must have its direct row on the leaf and transitive
     // rows on every ancestor.
     for set_id in [leaf.id(), parent.id(), grandparent.id()] {
