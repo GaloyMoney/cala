@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))\n            FROM UNNEST($2::uuid[]) AS v(account_id)\n            ORDER BY v.account_id\n            ",
+  "query": "\n            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))\n            FROM UNNEST($2::uuid[]) AS v(account_id)\n            ",
   "describe": {
     "columns": [
       {
@@ -19,5 +19,5 @@
       null
     ]
   },
-  "hash": "d700babad318c548fe57eaf1c925a404c6902ed9e7390e1efcb0c0cd4ed5ca7a"
+  "hash": "578c9bf47583d80074e4f8bb4536c852738f71407e49bfae931b852aea042846"
 }
