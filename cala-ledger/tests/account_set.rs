@@ -88,6 +88,135 @@ async fn errors_on_collision() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn add_members_batch() -> anyhow::Result<()> {
+    let btc: Currency = "BTC".parse().unwrap();
+
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let (sender, recipient) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await.unwrap();
+    let recipient_account = cala.accounts().create(recipient).await.unwrap();
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let new_template = helpers::currency_conversion_template(&tx_code);
+    cala.tx_templates().create(new_template).await.unwrap();
+
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let recipient_set = cala
+        .account_sets()
+        .create(new_set("Recipient Set"))
+        .await
+        .unwrap();
+    let sender_set = cala
+        .account_sets()
+        .create(new_set("Sender Set"))
+        .await
+        .unwrap();
+    let parent_set = cala.account_sets().create(new_set("Parent")).await.unwrap();
+
+    cala.account_sets()
+        .add_member(parent_set.id(), recipient_set.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(parent_set.id(), sender_set.id())
+        .await
+        .unwrap();
+
+    // Empty batch is a no-op.
+    cala.account_sets().add_members(&[]).await.unwrap();
+
+    // Attach both accounts in one batch call.
+    cala.account_sets()
+        .add_members(&[
+            (recipient_set.id(), recipient_account.id()),
+            (sender_set.id(), sender_account.id()),
+        ])
+        .await
+        .unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id().to_string());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await
+        .unwrap();
+
+    // Rollups see the batch-attached members exactly as the
+    // single-attach path would produce.
+    let recipient_balance = cala
+        .balances()
+        .find(journal.id(), recipient_account.id(), btc)
+        .await?;
+    let recipient_set_balance = cala
+        .balances()
+        .find(journal.id(), recipient_set.id(), btc)
+        .await?;
+    assert_eq!(recipient_balance.settled(), recipient_set_balance.settled());
+    assert_eq!(
+        recipient_balance.details.entry_id,
+        recipient_set_balance.details.entry_id
+    );
+
+    let sender_balance = cala
+        .balances()
+        .find(journal.id(), sender_account.id(), btc)
+        .await?;
+    let sender_set_balance = cala
+        .balances()
+        .find(journal.id(), sender_set.id(), btc)
+        .await?;
+    assert_eq!(sender_balance.settled(), sender_set_balance.settled());
+
+    // The grandparent receives both sides of the same transaction, so
+    // its settled balance is zero.
+    let parent_balance = cala
+        .balances()
+        .find(journal.id(), parent_set.id(), btc)
+        .await?;
+    assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
+
+    // Re-attaching an existing member errors (the account now has
+    // balance history, so the batch no-history check fires first).
+    let res = cala
+        .account_sets()
+        .add_members(&[(recipient_set.id(), recipient_account.id())])
+        .await;
+    assert!(res.is_err());
+
+    // Unknown target set errors.
+    let (unknown, _) = helpers::test_accounts();
+    let unknown = cala.accounts().create(unknown).await.unwrap();
+    let res = cala
+        .account_sets()
+        .add_members(&[(AccountSetId::new(), unknown.id())])
+        .await;
+    assert!(res.is_err());
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn balances() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 
@@ -1266,8 +1395,7 @@ async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
         .account_sets()
         .recalculate_balances(inline_set.id())
         .await
-        .err()
-        .expect("recalculate_balances should fail on a non-EC set");
+        .expect_err("recalculate_balances should fail on a non-EC set");
 
     match err {
         AccountSetError::CannotRecalculateNonEcSet { account_set_id } => {
@@ -1281,8 +1409,7 @@ async fn recalculate_balances_errors_on_non_ec_set() -> anyhow::Result<()> {
         .account_sets()
         .recalculate_balances_batch(&[inline_set.id()])
         .await
-        .err()
-        .expect("recalculate_balances_batch should fail on a non-EC set");
+        .expect_err("recalculate_balances_batch should fail on a non-EC set");
     assert!(matches!(
         err,
         AccountSetError::CannotRecalculateNonEcSet { .. }
