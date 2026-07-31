@@ -703,9 +703,11 @@ impl AccountSetRepo {
     /// Guard replacing the collision detection that used to fall out of
     /// the unique constraint on materialized transitive rows: with async
     /// fill those rows may not exist yet, so check membership against the
-    /// live hierarchy — an account may not attach under a set if it is
-    /// already a (direct) member of that set, of any of its ancestors, or
-    /// of any set in those ancestors' subtrees (e.g. a sibling branch).
+    /// live hierarchy. An account may not attach under a set if any
+    /// ancestor (inclusive) of the target is also an ancestor (inclusive)
+    /// of a set the account already belongs to — that is what would
+    /// double-count the account in a rollup. Both walks go *upward* over
+    /// the small set-edges table; no subtree scans.
     #[instrument(
         level = "debug",
         name = "account_set.assert_members_absent_in_op",
@@ -725,34 +727,33 @@ impl AccountSetRepo {
           WITH RECURSIVE input_pairs AS (
             SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
           ),
-          up AS (
-            SELECT i.account_id, m.member_account_set_id, m.account_set_id
+          acct_direct AS (
+            SELECT i.account_id, m.account_set_id
             FROM input_pairs i
-            JOIN cala_account_set_member_account_sets m
-                ON m.member_account_set_id = i.account_set_id
-            UNION ALL
-            SELECT u.account_id, u.member_account_set_id, m.account_set_id
-            FROM up u
+            JOIN cala_account_set_member_accounts m
+                ON m.member_account_id = i.account_id
+               AND m.transitive IS FALSE
+          ),
+          up_acct AS (
+            SELECT account_id, account_set_id FROM acct_direct
+            UNION
+            SELECT u.account_id, m.account_set_id
+            FROM up_acct u
             JOIN cala_account_set_member_account_sets m
                 ON u.account_set_id = m.member_account_set_id
           ),
-          targets AS (
-            SELECT account_set_id, account_id FROM input_pairs
-            UNION ALL
-            SELECT account_set_id, account_id FROM up
-          ),
-          down AS (
-            SELECT t.account_set_id, t.account_id FROM targets t
+          up_t AS (
+            SELECT account_id, account_set_id FROM input_pairs
             UNION
-            SELECT m.member_account_set_id, d.account_id
-            FROM down d
+            SELECT u.account_id, m.account_set_id
+            FROM up_t u
             JOIN cala_account_set_member_account_sets m
-                ON d.account_set_id = m.account_set_id
+                ON u.account_set_id = m.member_account_set_id
           )
-          SELECT 1 AS found FROM cala_account_set_member_accounts ma
-          JOIN down d ON d.account_set_id = ma.account_set_id
-                     AND d.account_id = ma.member_account_id
-          WHERE ma.transitive IS FALSE
+          SELECT 1 AS found
+          FROM up_acct a
+          JOIN up_t t ON t.account_id = a.account_id
+                     AND t.account_set_id = a.account_set_id
           LIMIT 1
           "#,
             &account_set_ids as &[AccountSetId],
