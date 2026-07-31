@@ -1,3 +1,15 @@
+# [cala release v0.20.0](https://github.com/GaloyMoney/cala/releases/tag/0.20.0)
+
+
+
+### Miscellaneous Tasks
+
+- Bump obix to 0.5.0
+
+### Refactor
+
+- [**breaking**] Replace custom CEL evaluator with cel-rust (#718)
+
 # [cala release v0.19.2](https://github.com/GaloyMoney/cala/releases/tag/0.19.2)
 
 
