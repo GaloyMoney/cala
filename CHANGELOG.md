@@ -1,3 +1,12 @@
+# [cala release v0.20.1](https://github.com/GaloyMoney/cala/releases/tag/0.20.1)
+
+
+
+### Bug Fixes
+
+- Remove persistent outbox notify trigger from obix setup
+- Drop stale persistent outbox notify trigger
+
 # [cala release v0.20.0](https://github.com/GaloyMoney/cala/releases/tag/0.20.0)
 
 
