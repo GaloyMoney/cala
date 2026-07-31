@@ -5,17 +5,16 @@ members = [
 
   "cala-ledger",
   "cala-ledger-core-types",
-  "cala-cel-parser",
   "cala-cel-interpreter",
   "cala-perf",
 ]
 
 [workspace.dependencies]
-cel-parser = { path = "cala-cel-parser", package = "cala-cel-parser", version = "0.19.3-dev" }
 cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.19.3-dev" }
 cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.19.3-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.19.3-dev" }
 
+cel = "0.14.1"
 es-entity = "0.11.11"
 job = { version = "0.6.36", features = ["es-entity"] }
 obix = { version = "0.4.3", default-features = false }
@@ -35,8 +34,6 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 strum = { version = "0.28", features = ["derive"] }
 futures = "0.3.29"
-lalrpop-util = { version = "0.23", features = ["lexer"] }
-lalrpop = { version = "0.23", features = ["lexer"] }
 rust_decimal_macros = "1.39"
 rust_decimal = "1.42"
 rusty-money = { version = "0.5", features = ["iso", "crypto"] }

@@ -32,6 +32,13 @@ impl ParamDataType {
             String if *self == ParamDataType::String => Ok(value),
             Map if *self == ParamDataType::Json => Ok(value),
             Date if *self == ParamDataType::Date => Ok(value),
+            Timestamp if *self == ParamDataType::Date => {
+                if let CelValue::Timestamp(ts) = value {
+                    Ok(CelValue::Date(ts.date_naive()))
+                } else {
+                    unreachable!()
+                }
+            }
             Uuid if *self == ParamDataType::Uuid => Ok(value),
             Decimal if *self == ParamDataType::Decimal => Ok(value),
             Bool if *self == ParamDataType::Boolean => Ok(value),

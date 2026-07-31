@@ -13,7 +13,8 @@ fail-on-warnings = []
 json-schema = ["dep:schemars"]
 
 [dependencies]
-cel-parser = { workspace = true }
+cached = { workspace = true }
+cel = { workspace = true }
 es-entity = { workspace = true }
 
 chrono = { workspace = true }
@@ -27,3 +28,8 @@ schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "cel_eval"
+harness = false

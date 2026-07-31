@@ -50,3 +50,22 @@ pub enum CelError {
     #[error("Error evaluating cell expression '{0}' - {1}")]
     EvaluationError(String, Box<Self>),
 }
+
+impl From<cel::ExecutionError> for CelError {
+    fn from(error: cel::ExecutionError) -> Self {
+        match error {
+            cel::ExecutionError::UndeclaredReference(name) => {
+                CelError::UnknownIdent(name.to_string())
+            }
+            cel::ExecutionError::NoSuchKey(name) => CelError::UnknownIdent(name.to_string()),
+            cel::ExecutionError::NoSuchOverload => {
+                CelError::NoMatchingOverload("No such overload".to_string())
+            }
+            cel::ExecutionError::InvalidArgumentCount { .. } => CelError::MissingArgument,
+            cel::ExecutionError::FunctionError { function, message } => {
+                CelError::Unexpected(format!("{function}: {message}"))
+            }
+            error => CelError::Unexpected(error.to_string()),
+        }
+    }
+}
