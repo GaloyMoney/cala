@@ -889,11 +889,6 @@ impl AccountSetRepo {
                 WHERE account_set_id IN (SELECT account_set_id FROM descendants)
                   AND transitive IS FALSE
               ),
-              locks AS (
-                SELECT pg_advisory_xact_lock($3, hashtext(member_account_id::text))
-                FROM member_accounts
-                ORDER BY member_account_id
-              ),
               ancestors AS (
                 SELECT $1::uuid AS account_set_id
                 UNION
@@ -912,11 +907,9 @@ impl AccountSetRepo {
               UPDATE cala_account_set_member_account_sets
               SET members_filled = TRUE
               WHERE account_set_id = $1 AND member_account_set_id = $2
-                AND (SELECT count(*) FROM locks) >= 0
               "#,
                 edge.account_set_id as AccountSetId,
                 edge.member_account_set_id as AccountSetId,
-                MEMBER_LOCK_CLASS,
             )
             .execute(db.as_executor())
             .await?;
@@ -943,22 +936,15 @@ impl AccountSetRepo {
                 pending.iter().map(|r| r.account_set_id).collect();
             let account_ids: Vec<AccountId> = pending.iter().map(|r| r.member_account_id).collect();
 
-            // Per-member EXCLUSIVE locks (id-ordered, same protocol as
-            // add_member_accounts) so a concurrent remove_member_account
-            // either deletes before us or waits and then also deletes the
-            // rows we insert — no resurrected memberships.
-            sqlx::query!(
-                r#"
-              SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
-              FROM UNNEST($2::uuid[]) AS v(account_id)
-              ORDER BY v.account_id
-              "#,
-                MEMBER_LOCK_CLASS,
-                &account_ids as &[AccountId],
-            )
-            .execute(db.as_executor())
-            .await?;
-
+            // NB: no per-member advisory locks here. Acquiring them for
+            // hundreds of accounts in one statement stalls the fill loop
+            // behind long in-flight attach transactions (they hold the
+            // same per-account locks until commit), which measured ~19s
+            // per iteration on a 10-loan/s sandbox and let the backlog
+            // spiral. The batch statement re-checks direct-row existence
+            // in the same statement; a concurrent remove_member_account
+            // racing inside that statement window is accepted (removes
+            // are rare structure operations, not loan-path traffic).
             let res = sqlx::query!(
                 r#"
               WITH RECURSIVE batch AS (
