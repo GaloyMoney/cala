@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT account_set_id AS \"account_set_id!: AccountSetId\",\n                   member_account_set_id AS \"member_account_set_id!: AccountSetId\"\n            FROM cala_account_set_member_account_sets\n            WHERE members_filled IS FALSE\n            ORDER BY created_at\n            LIMIT $1\n            ",
+  "query": "\n            SELECT account_set_id AS \"account_set_id!: AccountSetId\",\n                   member_account_set_id AS \"member_account_set_id!: AccountSetId\"\n            FROM cala_account_set_member_account_sets\n            WHERE members_filled IS FALSE\n            LIMIT $1\n            ",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "7a2806f4d7aa85d6b806ae2c503e86edc8698ba1123e760040e3d3319ee2052d"
+  "hash": "fb01ddafbfbf4ecc3536861b3b5b3ce9b88039cb5a1188d3ea40d4139326bd4c"
 }

@@ -864,7 +864,6 @@ impl AccountSetRepo {
                    member_account_set_id AS "member_account_set_id!: AccountSetId"
             FROM cala_account_set_member_account_sets
             WHERE members_filled IS FALSE
-            ORDER BY created_at
             LIMIT $1
             "#,
             limit
@@ -931,7 +930,6 @@ impl AccountSetRepo {
             FROM cala_account_set_member_accounts
             WHERE transitive IS FALSE
               AND transitive_complete IS FALSE
-            ORDER BY created_at
             LIMIT $1
             "#,
             limit

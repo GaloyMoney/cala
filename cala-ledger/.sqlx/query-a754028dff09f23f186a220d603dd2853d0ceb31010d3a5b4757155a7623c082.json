@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT account_set_id AS \"account_set_id!: AccountSetId\",\n                   member_account_id AS \"member_account_id!: AccountId\"\n            FROM cala_account_set_member_accounts\n            WHERE transitive IS FALSE\n              AND transitive_complete IS FALSE\n            LIMIT $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a754028dff09f23f186a220d603dd2853d0ceb31010d3a5b4757155a7623c082"
+}
