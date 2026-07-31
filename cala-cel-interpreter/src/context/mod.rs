@@ -49,6 +49,9 @@ impl CelContext {
         inner.add_function("uuid", builtins::uuid);
         inner.add_function("decimal", builtins::decimal);
         inner.add_function("decimal.Add", builtins::decimal_add);
+        inner.add_function("decimal.Sub", builtins::decimal_sub);
+        inner.add_function("decimal.Mul", builtins::decimal_mul);
+        inner.add_function("decimal.Cmp", builtins::decimal_cmp);
         inner.add_function("format", builtins::timestamp_format);
 
         Self {

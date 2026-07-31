@@ -75,12 +75,43 @@ pub(crate) fn decimal(Arguments(args): Arguments) -> Result<Value> {
 }
 
 pub(crate) fn decimal_add(Arguments(args): Arguments) -> Result<Value> {
-    match args.as_slice() {
-        [left, right] => {
-            let left = decimal_from_value(left)?;
-            let right = decimal_from_value(right)?;
-            Ok(Value::Opaque(Arc::new(CelDecimal(left + right))))
-        }
+    let (left, right) = decimal_binary_args(&args)?;
+    let res = left
+        .checked_add(right)
+        .ok_or_else(|| ExecutionError::function_error("decimal.Add", "overflow"))?;
+    Ok(Value::Opaque(Arc::new(CelDecimal(res))))
+}
+
+pub(crate) fn decimal_sub(Arguments(args): Arguments) -> Result<Value> {
+    let (left, right) = decimal_binary_args(&args)?;
+    let res = left
+        .checked_sub(right)
+        .ok_or_else(|| ExecutionError::function_error("decimal.Sub", "overflow"))?;
+    Ok(Value::Opaque(Arc::new(CelDecimal(res))))
+}
+
+pub(crate) fn decimal_mul(Arguments(args): Arguments) -> Result<Value> {
+    let (left, right) = decimal_binary_args(&args)?;
+    let res = left
+        .checked_mul(right)
+        .ok_or_else(|| ExecutionError::function_error("decimal.Mul", "overflow"))?;
+    Ok(Value::Opaque(Arc::new(CelDecimal(res))))
+}
+
+/// Three-way comparison: returns -1, 0 or 1 as an int, so it composes with
+/// native int comparisons (e.g. `decimal.Cmp(a, b) > 0` for `a > b`).
+pub(crate) fn decimal_cmp(Arguments(args): Arguments) -> Result<Value> {
+    let (left, right) = decimal_binary_args(&args)?;
+    Ok(Value::Int(match left.cmp(&right) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }))
+}
+
+fn decimal_binary_args(args: &[Value]) -> Result<(rust_decimal::Decimal, rust_decimal::Decimal)> {
+    match args {
+        [left, right] => Ok((decimal_from_value(left)?, decimal_from_value(right)?)),
         values => Err(ExecutionError::invalid_argument_count(2, values.len())),
     }
 }

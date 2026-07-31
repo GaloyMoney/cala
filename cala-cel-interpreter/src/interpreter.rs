@@ -183,6 +183,48 @@ mod tests {
     }
 
     #[test]
+    fn decimal_arithmetic_functions() -> anyhow::Result<()> {
+        let context = CelContext::new();
+
+        let expression = "decimal.Sub(decimal('3'), decimal('1'))".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(2.into()));
+
+        let expression = "decimal.Mul(decimal('2.5'), decimal('4'))".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(10.into()));
+
+        // args coerce like `decimal()` does (ints, strings)
+        let expression = "decimal.Sub('3', 1)".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Decimal(2.into()));
+
+        Ok(())
+    }
+
+    #[test]
+    fn decimal_cmp_function() -> anyhow::Result<()> {
+        let context = CelContext::new();
+
+        let expression = "decimal.Cmp(decimal('2'), decimal('1'))".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Int(1));
+
+        let expression = "decimal.Cmp(decimal('1'), decimal('2'))".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Int(-1));
+
+        // equal across scales
+        let expression = "decimal.Cmp(decimal('1.0'), decimal('1'))".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Int(0));
+
+        // composes with native int comparisons: a > b
+        let expression = "decimal.Cmp(decimal('2'), decimal('1')) > 0".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Bool(true));
+
+        // a <= b
+        let expression = "decimal.Cmp(decimal('2'), decimal('1')) <= 0".parse::<CelExpression>()?;
+        assert_eq!(expression.evaluate(&context)?, CelValue::Bool(false));
+
+        Ok(())
+    }
+
+    #[test]
     fn has_macro_with_map() {
         let expression = "has(params.hello)".parse::<CelExpression>().unwrap();
         let mut params = CelMap::new();
