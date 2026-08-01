@@ -52,12 +52,6 @@ pub enum OutboxEventPayload {
     EntryCreated {
         entry: EntryValues,
     },
-    BalanceCreated {
-        balance: BalanceSnapshot,
-    },
-    BalanceUpdated {
-        balance: BalanceSnapshot,
-    },
     EffectiveBalanceCreated {
         balance: EffectiveBalanceSnapshot,
     },
