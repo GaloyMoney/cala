@@ -65,8 +65,8 @@ impl CalaLedger {
         let clock = config.clock;
         let publisher = OutboxPublisher::init(&pool, &clock).await?;
         let accounts = Accounts::new(&pool, &publisher, &clock);
-        let journals = Journals::new(&pool, &publisher, &clock);
-        let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
+        let journals = Journals::new(&pool, &clock);
+        let tx_templates = TxTemplates::new(&pool, &clock);
         let transactions = Transactions::new(&pool, &publisher);
         let entries = Entries::new(&pool, &publisher);
         let balances = Balances::new(&pool, &publisher, &journals);

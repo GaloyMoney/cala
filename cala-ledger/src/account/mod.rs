@@ -203,13 +203,7 @@ impl From<&AccountEvent> for OutboxEventPayload {
             AccountEvent::Initialized { values: account } => OutboxEventPayload::AccountCreated {
                 account: account.clone(),
             },
-            AccountEvent::Updated {
-                values: account,
-                fields,
-            } => OutboxEventPayload::AccountUpdated {
-                account: account.clone(),
-                fields: fields.clone(),
-            },
+            AccountEvent::Updated { .. } => OutboxEventPayload::Empty,
         }
     }
 }

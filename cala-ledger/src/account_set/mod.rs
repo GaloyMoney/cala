@@ -808,19 +808,3 @@ impl AccountSets {
             .await
     }
 }
-
-impl From<&AccountSetEvent> for OutboxEventPayload {
-    fn from(event: &AccountSetEvent) -> Self {
-        match event {
-            AccountSetEvent::Initialized {
-                values: account_set,
-            } => OutboxEventPayload::AccountSetCreated {
-                account_set: account_set.clone(),
-            },
-            AccountSetEvent::Updated { values, fields } => OutboxEventPayload::AccountSetUpdated {
-                account_set: values.clone(),
-                fields: fields.clone(),
-            },
-        }
-    }
-}

@@ -8,8 +8,6 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-use crate::outbox::*;
-
 pub use entity::*;
 use error::*;
 use repo::*;
@@ -22,9 +20,9 @@ pub struct Journals {
 }
 
 impl Journals {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, clock: &ClockHandle) -> Self {
+    pub(crate) fn new(pool: &PgPool, clock: &ClockHandle) -> Self {
         Self {
-            repo: JournalRepo::new(pool, publisher),
+            repo: JournalRepo::new(pool),
             clock: clock.clone(),
         }
     }
@@ -80,19 +78,5 @@ impl Journals {
     #[instrument(level = "debug", name = "cala_ledger.journal.find_by_code", skip(self))]
     pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
         Ok(self.repo.find_by_code(Some(code)).await?)
-    }
-}
-
-impl From<&JournalEvent> for OutboxEventPayload {
-    fn from(event: &JournalEvent) -> Self {
-        match event {
-            JournalEvent::Initialized { values } => OutboxEventPayload::JournalCreated {
-                journal: values.clone(),
-            },
-            JournalEvent::Updated { values, fields } => OutboxEventPayload::JournalUpdated {
-                journal: values.clone(),
-                fields: fields.clone(),
-            },
-        }
     }
 }

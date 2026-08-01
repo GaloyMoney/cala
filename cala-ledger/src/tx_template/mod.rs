@@ -12,7 +12,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 pub use crate::param::*;
-use crate::{entry::NewEntry, outbox::*, primitives::*, transaction::NewTransaction};
+use crate::{entry::NewEntry, primitives::*, transaction::NewTransaction};
 
 pub use entity::*;
 use error::*;
@@ -31,9 +31,9 @@ pub struct TxTemplates {
 }
 
 impl TxTemplates {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, clock: &ClockHandle) -> Self {
+    pub(crate) fn new(pool: &PgPool, clock: &ClockHandle) -> Self {
         Self {
-            repo: TxTemplateRepo::new(pool, publisher),
+            repo: TxTemplateRepo::new(pool),
             clock: clock.clone(),
         }
     }
@@ -213,17 +213,5 @@ impl TxTemplates {
         }
 
         Ok(new_entries)
-    }
-}
-
-impl From<&TxTemplateEvent> for OutboxEventPayload {
-    fn from(event: &TxTemplateEvent) -> Self {
-        match event {
-            TxTemplateEvent::Initialized {
-                values: tx_template,
-            } => OutboxEventPayload::TxTemplateCreated {
-                tx_template: tx_template.clone(),
-            },
-        }
     }
 }

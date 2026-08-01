@@ -30,9 +30,10 @@ impl OutboxPublisher {
         Event: es_entity::EsEvent,
         for<'a> &'a Event: Into<OutboxEventPayload>,
     {
-        self.inner
-            .publish_all_persisted(op, new_events.map(|e| &e.event))
-            .await
+        let events = new_events
+            .map(|e| (&e.event).into())
+            .filter(|e| !matches!(e, OutboxEventPayload::Empty));
+        self.inner.publish_all_persisted(op, events).await
     }
 
     pub async fn publish_all(

@@ -131,7 +131,6 @@ use members_cursor::*;
         ),
     ),
     tbl_prefix = "cala",
-    post_persist_hook = "publish",
     persist_event_context = false
 )]
 pub(super) struct AccountSetRepo {
@@ -965,17 +964,5 @@ impl AccountSetRepo {
         .await?;
 
         Ok(rows.into_iter().map(|r| r.id).collect())
-    }
-
-    async fn publish(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        entity: &AccountSet,
-        new_events: es_entity::LastPersisted<'_, AccountSetEvent>,
-    ) -> Result<(), sqlx::Error> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
-        Ok(())
     }
 }
