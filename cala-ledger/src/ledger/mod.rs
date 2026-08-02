@@ -63,7 +63,8 @@ impl CalaLedger {
         }
 
         let clock = config.clock;
-        let publisher = OutboxPublisher::init(&pool, &clock).await?;
+        let publisher =
+            OutboxPublisher::init(&pool, &clock, config.outbox_archive.as_ref()).await?;
         let accounts = Accounts::new(&pool, &publisher, &clock);
         let journals = Journals::new(&pool, &publisher, &clock);
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
@@ -221,6 +222,24 @@ impl CalaLedger {
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
         self.publisher.inner()
+    }
+
+    /// Register the job sweeping settled spans of outbox history to the
+    /// configured archive storage (one span per run, rescheduling until
+    /// caught up). Requires `outbox_archive` to have been set at
+    /// [`init`](Self::init) — fails with `obix::ArchiveError::NotConfigured`
+    /// otherwise.
+    pub async fn register_outbox_archiver(
+        &self,
+        jobs: &mut job::Jobs,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.publisher
+            .inner()
+            .register_event_archiver(
+                jobs,
+                obix::OutboxArchiverJobConfig::new(job::JobType::new("cala.outbox.archiver")),
+            )
+            .await
     }
 
     pub fn register_outbox_listener(

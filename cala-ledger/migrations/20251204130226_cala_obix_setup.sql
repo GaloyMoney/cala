@@ -8,6 +8,21 @@ CREATE TABLE cala_persistent_outbox_events (
   seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Archive manifest: one row per exported JSONL chunk of pruned
+-- persistent outbox events. Chunks are contiguous — the next chunk starts
+-- at max_sequence + 1 of the previous one.
+-- Any grouping label (e.g. a calendar date) is encoded in a chunk's
+-- path; grouping semantics belong to the deployment, not to obix.
+CREATE TABLE cala_persistent_outbox_archive_chunks (
+  path TEXT PRIMARY KEY,
+  min_sequence BIGINT NOT NULL,
+  max_sequence BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX cala_idx_persistent_outbox_archive_chunks_max_sequence
+  ON cala_persistent_outbox_archive_chunks (max_sequence);
+
 -- Ephemeral outbox events
 CREATE TABLE cala_ephemeral_outbox_events (
   event_type VARCHAR NOT NULL UNIQUE,

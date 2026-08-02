@@ -1,9 +1,11 @@
+mod config;
 mod publisher;
 
 mod event {
     pub use cala_types::outbox::*;
 }
 
+pub use config::OutboxArchiveConfig;
 pub use event::*;
 pub use publisher::OutboxPublisher;
 

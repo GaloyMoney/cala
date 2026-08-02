@@ -1,7 +1,7 @@
 use cala_types::outbox::OutboxEventPayload;
 use es_entity::clock::ClockHandle;
 
-use super::ObixOutbox;
+use super::{ObixOutbox, OutboxArchiveConfig};
 
 #[derive(Debug, Clone)]
 pub struct OutboxPublisher {
@@ -9,11 +9,16 @@ pub struct OutboxPublisher {
 }
 
 impl OutboxPublisher {
-    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, sqlx::Error> {
+    pub async fn init(
+        pool: &sqlx::PgPool,
+        clock: &ClockHandle,
+        archive: Option<&OutboxArchiveConfig>,
+    ) -> Result<Self, sqlx::Error> {
         let config = obix::MailboxConfig::builder()
             .clock(clock.clone())
             .event_buffer_size(50_000)
             .event_cache_size(10_000)
+            .archive(archive.map(|a| a.build(pool, clock)))
             .build()
             .expect("MailboxConfig");
         let outbox = ObixOutbox::init(pool, config).await?;

@@ -1611,11 +1611,11 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7918bab03582f8ccb1f1a932d28b2220cab559339c6e48c731a1d92920bc830a"
+version = "0.5.1-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?branch=feat-event-archive#e38bb75746931bbbe1fef5f05df92bed98b8b8a9"
 dependencies = [
  "async-trait",
+ "bytes",
  "chrono",
  "derive_builder",
  "es-entity",
@@ -1634,9 +1634,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0d22945a31b5451e80efefcc19c5e995457f833a0771d76bd05bd5af1a0ad38"
+version = "0.5.1-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?branch=feat-event-archive#e38bb75746931bbbe1fef5f05df92bed98b8b8a9"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",

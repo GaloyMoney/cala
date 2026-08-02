@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (recorded_at AT TIME ZONE 'UTC')::date AS \"day!\",\n                   MAX(sequence) AS \"max_sequence!: i64\"\n            FROM cala_persistent_outbox_events\n            WHERE sequence > $1\n              AND recorded_at < $2\n            GROUP BY 1\n            ORDER BY 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "day!",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "max_sequence!: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "e9651d0da9d8ee98ff5344a5e201e7fba0c357044122702c011839e50669c399"
+}
