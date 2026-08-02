@@ -1,6 +1,8 @@
 # Cala
 
-Cala is a robust ledger system developed by Galoy, designed to handle complex financial transactions and accounting operations. It provides a flexible and scalable solution for managing financial records with strong consistency guarantees.
+Cala is a robust ledger library developed by Galoy, designed to handle complex financial transactions and accounting operations. It provides a flexible and scalable solution for managing financial records with strong consistency guarantees.
+
+Cala is distributed as a Rust library that you embed in your own service — it does not run as a standalone server.
 
 ## Features
 
@@ -13,10 +15,42 @@ Cala is a robust ledger system developed by Galoy, designed to handle complex fi
 
 ### API & Integration
 
-- **GraphQL API**: Modern API interface with built-in playground for easy integration and testing
-- **Extensible Architecture**: Modular design with support for custom extensions via the Node.js bindings
-- **Transaction Templates**: Customizable transaction templates for common financial operations
+- **Rust Library**: Embed the ledger directly in your Rust service via the `cala-ledger` crate
+- **Transaction Templates**: Customizable transaction templates for common financial operations, parameterized with CEL expressions
 - **Multi-Currency Support**: Handle transactions across different currencies
+- **Event Sourcing**: Persistent outbox for reliably streaming ledger events to downstream consumers
+
+## Usage
+
+Add the dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+cala-ledger = "0.20"
+```
+
+Then initialize the ledger with a PostgreSQL connection pool:
+
+```rust
+use cala_ledger::{CalaLedger, CalaLedgerConfig};
+
+let pool = sqlx::postgres::PgPoolOptions::new()
+    .max_connections(20)
+    .connect("postgres://user:password@localhost:5432/pg")
+    .await?;
+
+let cala_config = CalaLedgerConfig::builder()
+    .pool(pool)
+    .exec_migrations(true)
+    .build()?;
+let cala = CalaLedger::init(cala_config).await?;
+```
+
+For a complete working example — including creating accounts, transaction templates, and posting transactions — see [examples/rust](./examples/rust) and run it with:
+
+```bash
+make reset-deps rust-example
+```
 
 ## Developing
 
