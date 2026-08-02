@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT path, min_sequence, max_sequence\n            FROM cala_persistent_outbox_archive_chunks\n            WHERE max_sequence > $1\n            ORDER BY min_sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "min_sequence",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fa6f632029b2016f71a67592f6835b34c409e7504bbddc3ef5d0f1c9c7b9046f"
+}

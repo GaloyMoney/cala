@@ -1,6 +1,8 @@
 use derive_builder::Builder;
 use es_entity::clock::{Clock, ClockHandle};
 
+use crate::outbox::OutboxArchiveConfig;
+
 #[derive(Builder, Clone, Debug)]
 #[builder(build_fn(validate = "Self::validate"))]
 pub struct CalaLedgerConfig {
@@ -14,6 +16,12 @@ pub struct CalaLedgerConfig {
     pub(super) pool: Option<sqlx::PgPool>,
     #[builder(setter(into), default = "Clock::handle().clone()")]
     pub(super) clock: ClockHandle,
+    /// Cold-storage archiving of old outbox events. When set, settled
+    /// history is swept out of postgres by the archiver job (see
+    /// [`CalaLedger::register_outbox_archiver`](crate::ledger::CalaLedger::register_outbox_archiver))
+    /// and pre-watermark reads fall back to the archive.
+    #[builder(setter(strip_option), default)]
+    pub(super) outbox_archive: Option<OutboxArchiveConfig>,
 }
 
 impl CalaLedgerConfig {
