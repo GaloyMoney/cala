@@ -1,8 +1,0 @@
-mutation journalCreate($input: JournalCreateInput!) {
-  journalCreate(input: $input) {
-    journal {
-      journalId
-      name
-    }
-  }
-}
