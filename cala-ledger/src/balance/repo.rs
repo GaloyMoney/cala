@@ -5,7 +5,6 @@ use std::collections::{HashMap, HashSet};
 
 use cala_types::{
     balance::BalanceSnapshot,
-    outbox::OutboxEventPayload,
     primitives::{
         AccountId, AccountSetId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId, Status,
     },
@@ -16,11 +15,10 @@ use super::{
     cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
     error::BalanceError,
 };
-use crate::outbox::OutboxPublisher;
 
 const EC_SET_LOCK_CLASS: i32 = 1;
 
-/// Maximum balance snapshots written per `INSERT` + outbox publish in
+/// Maximum balance snapshots written per `INSERT` in
 /// [`BalanceRepo::insert_new_snapshots`]. A deep account-set recalc can produce
 /// one history row per member event; flushing in bounded sub-batches (within
 /// the same transaction) keeps any single statement's working set small so it
@@ -30,15 +28,11 @@ const INSERT_SNAPSHOT_BATCH_SIZE: usize = 5_000;
 #[derive(Debug, Clone)]
 pub(super) struct BalanceRepo {
     pool: PgPool,
-    publisher: OutboxPublisher,
 }
 
 impl BalanceRepo {
-    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
-        Self {
-            pool: pool.clone(),
-            publisher: publisher.clone(),
-        }
+    pub fn new(pool: &PgPool) -> Self {
+        Self { pool: pool.clone() }
     }
 
     pub async fn find(
@@ -719,23 +713,6 @@ impl BalanceRepo {
             )
             .execute(op.as_executor())
             .await?;
-
-            self.publisher
-                .publish_all(
-                    op,
-                    chunk.iter().map(|balance| {
-                        if balance.version == 1 {
-                            OutboxEventPayload::BalanceCreated {
-                                balance: balance.clone(),
-                            }
-                        } else {
-                            OutboxEventPayload::BalanceUpdated {
-                                balance: balance.clone(),
-                            }
-                        }
-                    }),
-                )
-                .await?;
         }
 
         Ok(())

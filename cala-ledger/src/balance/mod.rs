@@ -61,7 +61,7 @@ pub struct Balances {
 impl Balances {
     pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, journals: &Journals) -> Self {
         Self {
-            repo: BalanceRepo::new(pool, publisher),
+            repo: BalanceRepo::new(pool),
             effective: EffectiveBalances::new(pool, publisher),
             journals: journals.clone(),
             _pool: pool.clone(),
