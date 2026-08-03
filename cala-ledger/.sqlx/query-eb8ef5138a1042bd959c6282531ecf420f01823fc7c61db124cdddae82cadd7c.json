@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          SELECT m.account_set_id AS \"set_id!: AccountSetId\",\n                 m.member_account_id AS \"account_id!: AccountId\",\n                 m.transitive,\n                 m.transitive_complete\n          FROM cala_account_set_member_accounts m\n          JOIN cala_account_sets s\n          ON m.account_set_id = s.id AND s.journal_id = $1\n          WHERE m.member_account_id = ANY($2)\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "transitive",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "transitive_complete",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "eb8ef5138a1042bd959c6282531ecf420f01823fc7c61db124cdddae82cadd7c"
+}

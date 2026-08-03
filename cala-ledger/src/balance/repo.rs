@@ -810,11 +810,23 @@ impl BalanceRepo {
     ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
         let rows = sqlx::query!(
             r#"
-            WITH member_accounts AS (
+            WITH RECURSIVE closure AS (
+                -- Live descendant walk: transitive rows are a posting-path
+                -- cache and may lag, but recalc must see every current
+                -- member or late members' history is skipped permanently.
+                SELECT unnest($1::uuid[]) AS account_set_id
+                UNION
+                SELECT m.member_account_set_id
+                FROM closure c
+                JOIN cala_account_set_member_account_sets m
+                    ON c.account_set_id = m.account_set_id
+            ),
+            member_accounts AS (
                 SELECT DISTINCT m.member_account_id
                 FROM cala_account_set_member_accounts m
                 LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
-                WHERE m.account_set_id = ANY($1)
+                WHERE m.account_set_id IN (SELECT account_set_id FROM closure)
+                  AND m.transitive IS FALSE
                   AND s.id IS NULL
             ),
             all_history AS (
@@ -875,13 +887,27 @@ impl BalanceRepo {
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
+            WITH RECURSIVE closure AS (
+                -- Live descendant walk with root attribution: transitive
+                -- rows are a posting-path cache and may lag; recalc must
+                -- not rely on them.
+                SELECT unnest($1::uuid[]) AS account_set_id,
+                       unnest($1::uuid[]) AS root_set_id
+                UNION
+                SELECT m.member_account_set_id, c.root_set_id
+                FROM closure c
+                JOIN cala_account_set_member_account_sets m
+                    ON c.account_set_id = m.account_set_id
+            )
             SELECT
-                account_set_id AS "account_set_id!: AccountSetId",
-                member_account_id AS "member_account_id!: AccountId"
-            FROM cala_account_set_member_accounts m
+                c.root_set_id AS "account_set_id!: AccountSetId",
+                m.member_account_id AS "member_account_id!: AccountId"
+            FROM closure c
+            JOIN cala_account_set_member_accounts m
+                ON m.account_set_id = c.account_set_id
+               AND m.transitive IS FALSE
             LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
-            WHERE m.account_set_id = ANY($1)
-              AND s.id IS NULL
+            WHERE s.id IS NULL
             "#,
             account_set_ids as &[AccountSetId],
         )

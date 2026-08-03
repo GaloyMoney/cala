@@ -69,6 +69,10 @@ CREATE TABLE cala_account_set_member_accounts (
   account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
   member_account_id UUID NOT NULL REFERENCES cala_accounts(id),
   transitive BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Only meaningful on direct (transitive = FALSE) rows: FALSE until the
+  -- async fill job has materialized this membership's ancestor rows.
+  -- Postings fall back to a live ancestor walk while FALSE.
+  transitive_complete BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Lead the uniqueness constraint on the random member_account_id: all
   -- concurrent attaches insert into the same few hot account_set_id key
@@ -83,10 +87,18 @@ CREATE TABLE cala_account_set_member_accounts (
 -- also pay unique-check page pinning on a hot leading column.
 CREATE INDEX idx_cala_account_set_member_accounts_set
   ON cala_account_set_member_accounts (account_set_id);
+-- Scan index for the async transitive-fill job: direct rows whose ancestor
+-- rows have not been materialized yet. Rows leave the index when filled.
+CREATE INDEX idx_cala_account_set_member_accounts_pending_fill
+  ON cala_account_set_member_accounts (account_set_id, member_account_id)
+  WHERE transitive IS FALSE AND transitive_complete IS FALSE;
 
 CREATE TABLE cala_account_set_member_account_sets (
   account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
   member_account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
+  -- FALSE until the async fill job has copied the member set's descendant
+  -- accounts into this set's ancestor chain as transitive rows.
+  members_filled BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_set_id, member_account_set_id)
 );
@@ -94,6 +106,11 @@ CREATE TABLE cala_account_set_member_account_sets (
 -- joins member_account_set_id at every level; the UNIQUE above leads on account_set_id.
 CREATE INDEX idx_cala_account_set_member_account_sets_member_set
   ON cala_account_set_member_account_sets (member_account_set_id, account_set_id);
+-- Scan index for the async transitive-fill job: set edges whose descendant
+-- accounts have not been copied up the ancestor chain yet.
+CREATE INDEX idx_cala_account_set_member_account_sets_pending_fill
+  ON cala_account_set_member_account_sets (account_set_id, member_account_set_id)
+  WHERE members_filled IS FALSE;
 
 CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,

@@ -2,7 +2,6 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
 
 use crate::{
     outbox::OutboxPublisher,
@@ -429,25 +428,12 @@ impl AccountSetRepo {
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         lock_for_account_member_op(db, account_id).await?;
+        // Direct membership only; ancestor (transitive) rows are
+        // materialized asynchronously by the fill job, and postings walk
+        // the live hierarchy while `transitive_complete` is FALSE.
         sqlx::query!(r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
-
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          ),
-          non_transitive_insert AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-            VALUES ($1, $2)
-          )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, $2, TRUE
-          FROM parents p
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+          VALUES ($1, $2)
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
@@ -469,11 +455,11 @@ impl AccountSetRepo {
     }
 
     /// Batch variant of [`add_member_account`]: attaches every
-    /// `(account_set_id, account_id)` pair in one statement, so a single
-    /// recursive ancestor walk covers all pairs instead of one walk per
-    /// pair. Callers creating many accounts (e.g. a chart-of-accounts
-    /// expansion per business entity) should prefer this over looping
-    /// `add_member_account`.
+    /// `(account_set_id, account_id)` pair in one statement. Only direct
+    /// rows are written; ancestor rows are materialized asynchronously by
+    /// the fill job. Callers creating many accounts (e.g. a
+    /// chart-of-accounts expansion per business entity) should prefer
+    /// this over looping `add_member_account`.
     ///
     /// Lock protocol matches the single-pair path (SHARED coarse lock,
     /// then EXCLUSIVE per-member locks, in that order) with all member
@@ -523,29 +509,8 @@ impl AccountSetRepo {
 
         sqlx::query!(
             r#"
-          WITH RECURSIVE input_pairs AS (
-            SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
-          ),
-          parents AS (
-            SELECT i.account_id, m.member_account_set_id, m.account_set_id
-            FROM input_pairs i
-            JOIN cala_account_set_member_account_sets m
-                ON m.member_account_set_id = i.account_set_id
-
-            UNION ALL
-
-            SELECT p.account_id, p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          ),
-          non_transitive_insert AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-            SELECT account_set_id, account_id FROM input_pairs
-          )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, p.account_id, TRUE
-          FROM parents p
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+          SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
           "#,
             &account_set_ids as &[AccountSetId],
             &account_ids as &[AccountId],
@@ -634,32 +599,25 @@ impl AccountSetRepo {
             .execute(db.as_executor())
             .await?;
         sqlx::query!(r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
-
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
+          WITH RECURSIVE descendants AS (
+            SELECT $2::uuid AS account_set_id
+            UNION
+            SELECT m.member_account_set_id
+            FROM descendants d
             JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
+                ON d.account_set_id = m.account_set_id
           ),
           set_insert AS (
             INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
             VALUES ($1, $2)
-          ),
-          new_members AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-            SELECT $1, m.member_account_id, TRUE
-            FROM cala_account_set_member_accounts m
-            WHERE m.account_set_id = $2
-            RETURNING member_account_id
           )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, n.member_account_id, TRUE
-          FROM parents p
-          CROSS JOIN new_members n
+          -- Every direct membership in the member set's closure gains new
+          -- ancestors from this edge; the fill job re-materializes them.
+          UPDATE cala_account_set_member_accounts
+          SET transitive_complete = FALSE
+          WHERE transitive IS FALSE
+            AND transitive_complete IS TRUE
+            AND account_set_id IN (SELECT account_set_id FROM descendants)
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
@@ -740,6 +698,295 @@ impl AccountSetRepo {
             .await?;
 
         Ok(())
+    }
+
+    /// Guard replacing the collision detection that used to fall out of
+    /// the unique constraint on materialized transitive rows: with async
+    /// fill those rows may not exist yet, so check membership against the
+    /// live hierarchy. An account may not attach under a set if any
+    /// ancestor (inclusive) of the target is also an ancestor (inclusive)
+    /// of a set the account already belongs to — that is what would
+    /// double-count the account in a rollup. Both walks go *upward* over
+    /// the small set-edges table; no subtree scans.
+    #[instrument(
+        level = "debug",
+        name = "account_set.assert_members_absent_in_op",
+        skip_all,
+        fields(count = members.len()),
+        err(level = "warn")
+    )]
+    pub async fn assert_members_absent_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountId)],
+    ) -> Result<(), AccountSetError> {
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
+        let found = sqlx::query!(
+            r#"
+          WITH RECURSIVE input_pairs AS (
+            SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
+          ),
+          acct_direct AS (
+            SELECT i.account_id, m.account_set_id
+            FROM input_pairs i
+            JOIN cala_account_set_member_accounts m
+                ON m.member_account_id = i.account_id
+               AND m.transitive IS FALSE
+          ),
+          up_acct AS (
+            SELECT account_id, account_set_id FROM acct_direct
+            UNION
+            SELECT u.account_id, m.account_set_id
+            FROM up_acct u
+            JOIN cala_account_set_member_account_sets m
+                ON u.account_set_id = m.member_account_set_id
+          ),
+          up_t AS (
+            SELECT account_id, account_set_id FROM input_pairs
+            UNION
+            SELECT u.account_id, m.account_set_id
+            FROM up_t u
+            JOIN cala_account_set_member_account_sets m
+                ON u.account_set_id = m.member_account_set_id
+          )
+          SELECT 1 AS found
+          FROM up_acct a
+          JOIN up_t t ON t.account_id = a.account_id
+                     AND t.account_set_id = a.account_set_id
+          LIMIT 1
+          "#,
+            &account_set_ids as &[AccountSetId],
+            &account_ids as &[AccountId],
+        )
+        .fetch_optional(db.as_executor())
+        .await?;
+        if found.is_some() {
+            return Err(AccountSetError::MemberAlreadyAdded);
+        }
+        Ok(())
+    }
+
+    /// Set-edge variant of [`Self::assert_members_absent_in_op`]: attaching
+    /// a set must not double-count any of its descendant accounts under
+    /// the target's ancestor chain.
+    #[instrument(
+        level = "debug",
+        name = "account_set.assert_member_set_absent_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub async fn assert_member_set_absent_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    ) -> Result<(), AccountSetError> {
+        let found = sqlx::query!(
+            r#"
+          WITH RECURSIVE up AS (
+            SELECT $1::uuid AS account_set_id
+            UNION
+            SELECT m.account_set_id
+            FROM up u
+            JOIN cala_account_set_member_account_sets m
+                ON u.account_set_id = m.member_account_set_id
+          ),
+          up_subtrees AS (
+            SELECT account_set_id FROM up
+            UNION
+            SELECT m.member_account_set_id
+            FROM up_subtrees us
+            JOIN cala_account_set_member_account_sets m
+                ON us.account_set_id = m.account_set_id
+          ),
+          new_descendants AS (
+            SELECT $2::uuid AS account_set_id
+            UNION
+            SELECT m.member_account_set_id
+            FROM new_descendants d
+            JOIN cala_account_set_member_account_sets m
+                ON d.account_set_id = m.account_set_id
+          )
+          SELECT 1 AS found
+          FROM cala_account_set_member_accounts ma
+          WHERE ma.transitive IS FALSE
+            AND ma.account_set_id IN (SELECT account_set_id FROM up_subtrees)
+            AND ma.member_account_id IN (
+              SELECT member_account_id FROM cala_account_set_member_accounts
+              WHERE transitive IS FALSE
+                AND account_set_id IN (SELECT account_set_id FROM new_descendants)
+            )
+          LIMIT 1
+          "#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
+        )
+        .fetch_optional(db.as_executor())
+        .await?;
+        if found.is_some() {
+            return Err(AccountSetError::MemberAlreadyAdded);
+        }
+        Ok(())
+    }
+
+    /// Materialize pending transitive membership rows in bulk. Direct
+    /// attaches (account and set) only write the direct row; this job
+    /// building block fills the ancestor rows afterwards so the posting
+    /// path's `fetch_mappings_in_op` can keep using the single indexed
+    /// lookup. Intended to be called by a periodically scheduled job in
+    /// the host application. Returns the number of memberships filled
+    /// (direct account rows flagged complete + set edges marked filled).
+    #[instrument(
+        level = "debug",
+        name = "account_set.fill_pending_transitive_memberships_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub async fn fill_pending_transitive_memberships_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        limit: i64,
+    ) -> Result<usize, AccountSetError> {
+        let mut filled = 0usize;
+
+        // SHARED coarse lock (same protocol as attach): fences against
+        // concurrent add_member_set, which takes the EXCLUSIVE side and
+        // would otherwise interleave flag invalidation with our fills.
+        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+            .execute(db.as_executor())
+            .await?;
+
+        // Phase 1: set edges whose descendant accounts haven't been copied
+        // up the ancestor chain yet.
+        let pending_edges = sqlx::query!(
+            r#"
+            SELECT account_set_id AS "account_set_id!: AccountSetId",
+                   member_account_set_id AS "member_account_set_id!: AccountSetId"
+            FROM cala_account_set_member_account_sets
+            WHERE members_filled IS FALSE
+            LIMIT $1
+            "#,
+            limit
+        )
+        .fetch_all(db.as_executor())
+        .await?;
+
+        for edge in &pending_edges {
+            sqlx::query!(
+                r#"
+              WITH RECURSIVE descendants AS (
+                SELECT $2::uuid AS account_set_id
+                UNION
+                SELECT m.member_account_set_id
+                FROM descendants d
+                JOIN cala_account_set_member_account_sets m
+                    ON d.account_set_id = m.account_set_id
+              ),
+              member_accounts AS (
+                SELECT DISTINCT member_account_id
+                FROM cala_account_set_member_accounts
+                WHERE account_set_id IN (SELECT account_set_id FROM descendants)
+                  AND transitive IS FALSE
+              ),
+              ancestors AS (
+                SELECT $1::uuid AS account_set_id
+                UNION
+                SELECT m.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets m
+                    ON a.account_set_id = m.member_account_set_id
+              ),
+              ins AS (
+                INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+                SELECT a.account_set_id, ma.member_account_id, TRUE
+                FROM ancestors a
+                CROSS JOIN member_accounts ma
+                ON CONFLICT (account_set_id, member_account_id) DO NOTHING
+              )
+              UPDATE cala_account_set_member_account_sets
+              SET members_filled = TRUE
+              WHERE account_set_id = $1 AND member_account_set_id = $2
+              "#,
+                edge.account_set_id as AccountSetId,
+                edge.member_account_set_id as AccountSetId,
+            )
+            .execute(db.as_executor())
+            .await?;
+            filled += 1;
+        }
+
+        // Phase 2: direct account memberships awaiting ancestor rows.
+        let pending = sqlx::query!(
+            r#"
+            SELECT account_set_id AS "account_set_id!: AccountSetId",
+                   member_account_id AS "member_account_id!: AccountId"
+            FROM cala_account_set_member_accounts
+            WHERE transitive IS FALSE
+              AND transitive_complete IS FALSE
+            LIMIT $1
+            "#,
+            limit
+        )
+        .fetch_all(db.as_executor())
+        .await?;
+
+        if !pending.is_empty() {
+            let account_set_ids: Vec<AccountSetId> =
+                pending.iter().map(|r| r.account_set_id).collect();
+            let account_ids: Vec<AccountId> = pending.iter().map(|r| r.member_account_id).collect();
+
+            // NB: no per-member advisory locks here. Acquiring them for
+            // hundreds of accounts in one statement stalls the fill loop
+            // behind long in-flight attach transactions (they hold the
+            // same per-account locks until commit), which measured ~19s
+            // per iteration on a 10-loan/s sandbox and let the backlog
+            // spiral. The batch statement re-checks direct-row existence
+            // in the same statement; a concurrent remove_member_account
+            // racing inside that statement window is accepted (removes
+            // are rare structure operations, not loan-path traffic).
+            let res = sqlx::query!(
+                r#"
+              WITH RECURSIVE batch AS (
+                SELECT d.account_set_id, d.member_account_id AS account_id
+                FROM cala_account_set_member_accounts d
+                WHERE d.transitive IS FALSE
+                  AND (d.account_set_id, d.member_account_id) IN (
+                        SELECT * FROM UNNEST($1::uuid[], $2::uuid[]))
+              ),
+              parents AS (
+                SELECT b.account_id, m.member_account_set_id, m.account_set_id
+                FROM batch b
+                JOIN cala_account_set_member_account_sets m
+                    ON m.member_account_set_id = b.account_set_id
+                UNION ALL
+                SELECT p.account_id, p.member_account_set_id, m.account_set_id
+                FROM parents p
+                JOIN cala_account_set_member_account_sets m
+                    ON p.account_set_id = m.member_account_set_id
+              ),
+              ins AS (
+                INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
+                SELECT p.account_set_id, p.account_id, TRUE
+                FROM parents p
+                ON CONFLICT (account_set_id, member_account_id) DO NOTHING
+              )
+              UPDATE cala_account_set_member_accounts m
+              SET transitive_complete = TRUE
+              FROM batch b
+              WHERE m.account_set_id = b.account_set_id
+                AND m.member_account_id = b.account_id
+                AND m.transitive IS FALSE
+              "#,
+                &account_set_ids as &[AccountSetId],
+                &account_ids as &[AccountId],
+            )
+            .execute(db.as_executor())
+            .await?;
+            filled += res.rows_affected() as usize;
+        }
+
+        Ok(filled)
     }
 
     pub async fn find_where_account_is_member(
@@ -837,40 +1084,6 @@ impl AccountSetRepo {
             has_next_page,
             end_cursor,
         })
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "account_set.fetch_mappings_in_op",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub async fn fetch_mappings_in_op(
-        &self,
-        op: impl es_entity::IntoOneTimeExecutor<'_>,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        let rows = op.into_executor().fetch_all(sqlx::query!(
-            r#"
-          SELECT m.account_set_id AS "set_id!: AccountSetId", m.member_account_id AS "account_id!: AccountId"
-          FROM cala_account_set_member_accounts m
-          JOIN cala_account_sets s
-          ON m.account_set_id = s.id AND s.journal_id = $1
-          WHERE m.member_account_id = ANY($2)
-          "#,
-            journal_id as JournalId,
-            account_ids as &[AccountId]
-        ))
-        .await?;
-        let mut mappings = HashMap::new();
-        for row in rows {
-            mappings
-                .entry(row.account_id)
-                .or_insert_with(Vec::new)
-                .push(row.set_id);
-        }
-        Ok(mappings)
     }
 
     pub async fn list_eventually_consistent_ids(

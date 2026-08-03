@@ -224,10 +224,16 @@ impl AccountSets {
         match member {
             AccountSetMemberId::Account(id) => {
                 self.repo
+                    .assert_members_absent_in_op(op, &[(account_set_id, id)])
+                    .await?;
+                self.repo
                     .add_member_account(&mut *op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
+                self.repo
+                    .assert_member_set_absent_in_op(op, account_set_id, id)
+                    .await?;
                 self.repo.add_member_set(op, account_set_id, id).await?;
             }
         }
@@ -248,11 +254,10 @@ impl AccountSets {
 
     /// Batch variant of [`add_member_in_op`](Self::add_member_in_op) for
     /// account members: resolves all target sets, runs the
-    /// no-balance-history check for every pair, and inserts all
-    /// memberships — including the transitive ancestor rows — with a
-    /// single recursive walk, instead of one walk per account. Callers
-    /// attaching many accounts at once should prefer this over looping
-    /// `add_member_in_op`.
+    /// no-balance-history check for every pair, and inserts all direct
+    /// memberships in one statement. Ancestor rows are materialized
+    /// asynchronously by the fill job. Callers attaching many accounts at
+    /// once should prefer this over looping `add_member_in_op`.
     #[instrument(
         level = "debug",
         name = "cala_ledger.account_sets.add_members_in_op",
@@ -301,6 +306,8 @@ impl AccountSets {
                 member_id,
             });
         }
+
+        self.repo.assert_members_absent_in_op(op, members).await?;
 
         self.repo.add_member_accounts(op, members).await?;
 
@@ -797,15 +804,102 @@ impl AccountSets {
             .await
     }
 
+    /// Building block for a host-scheduled fill job: materialize pending
+    /// transitive membership rows (ancestors of newly attached accounts
+    /// and set edges) in bulk. Direct attaches write only the direct row;
+    /// while a membership is pending, postings fall back to a live walk.
+    /// Call repeatedly until it returns 0. Returns the number of
+    /// memberships processed in this call.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.fill_pending_transitive_memberships",
+        skip(self),
+        err(level = "warn")
+    )]
+    pub async fn fill_pending_transitive_memberships(
+        &self,
+        limit: usize,
+    ) -> Result<usize, AccountSetError> {
+        let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
+        let n = self
+            .repo
+            .fill_pending_transitive_memberships_in_op(&mut op, limit as i64)
+            .await?;
+        op.commit().await?;
+        Ok(n)
+    }
+
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        self.repo
-            .fetch_mappings_in_op(op, journal_id, account_ids)
-            .await
+        let rows = sqlx::query!(
+            r#"
+          SELECT m.account_set_id AS "set_id!: AccountSetId",
+                 m.member_account_id AS "account_id!: AccountId",
+                 m.transitive,
+                 m.transitive_complete
+          FROM cala_account_set_member_accounts m
+          JOIN cala_account_sets s
+          ON m.account_set_id = s.id AND s.journal_id = $1
+          WHERE m.member_account_id = ANY($2)
+          "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId]
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        let mut mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+        let mut incomplete: Vec<(AccountId, AccountSetId)> = Vec::new();
+        for row in rows {
+            mappings.entry(row.account_id).or_default().push(row.set_id);
+            if !row.transitive && !row.transitive_complete {
+                incomplete.push((row.account_id, row.set_id));
+            }
+        }
+        if !incomplete.is_empty() {
+            // The async fill job hasn't materialized these memberships'
+            // ancestor rows yet — walk the live hierarchy so postings
+            // always see the complete set list (locks, velocity, rollup).
+            let pair_account_ids: Vec<AccountId> =
+                incomplete.iter().map(|(a, _)| *a).collect();
+            let pair_set_ids: Vec<AccountSetId> = incomplete.iter().map(|(_, s)| *s).collect();
+            let walk_rows = sqlx::query!(
+                r#"
+              WITH RECURSIVE input_pairs AS (
+                SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_id, account_set_id)
+              ),
+              parents AS (
+                SELECT i.account_id, m.member_account_set_id, m.account_set_id
+                FROM input_pairs i
+                JOIN cala_account_set_member_account_sets m
+                    ON m.member_account_set_id = i.account_set_id
+                UNION ALL
+                SELECT p.account_id, p.member_account_set_id, m.account_set_id
+                FROM parents p
+                JOIN cala_account_set_member_account_sets m
+                    ON p.account_set_id = m.member_account_set_id
+              )
+              SELECT DISTINCT account_id AS "account_id!: AccountId",
+                              account_set_id AS "set_id!: AccountSetId"
+              FROM parents
+              "#,
+                &pair_account_ids as &[AccountId],
+                &pair_set_ids as &[AccountSetId],
+            )
+            .fetch_all(op.as_executor())
+            .await?;
+            for row in walk_rows {
+                mappings.entry(row.account_id).or_default().push(row.set_id);
+            }
+        }
+        for sets in mappings.values_mut() {
+            sets.sort_unstable();
+            sets.dedup();
+        }
+        Ok(mappings)
     }
 }
 

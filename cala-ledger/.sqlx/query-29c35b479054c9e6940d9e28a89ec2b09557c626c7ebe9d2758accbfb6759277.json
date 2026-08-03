@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n              WITH RECURSIVE input_pairs AS (\n                SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_id, account_set_id)\n              ),\n              parents AS (\n                SELECT i.account_id, m.member_account_set_id, m.account_set_id\n                FROM input_pairs i\n                JOIN cala_account_set_member_account_sets m\n                    ON m.member_account_set_id = i.account_set_id\n                UNION ALL\n                SELECT p.account_id, p.member_account_set_id, m.account_set_id\n                FROM parents p\n                JOIN cala_account_set_member_account_sets m\n                    ON p.account_set_id = m.member_account_set_id\n              )\n              SELECT DISTINCT account_id AS \"account_id!: AccountId\",\n                              account_set_id AS \"set_id!: AccountSetId\"\n              FROM parents\n              ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "set_id!: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "29c35b479054c9e6940d9e28a89ec2b09557c626c7ebe9d2758accbfb6759277"
+}
