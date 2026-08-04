@@ -190,6 +190,27 @@ impl CalaLedger {
             .iter()
             .map(|entry| entry.account_id)
             .collect::<Vec<_>>();
+
+        // Entries must not target eventually-consistent (EC) accounts
+        // directly: the posting path deliberately skips EC accounts when
+        // updating balances (EC sets are maintained by recalculation
+        // from member history), so such an entry would be persisted and
+        // published yet never reflected in any balance - not even by
+        // recalc, which only folds in *member* history.
+        {
+            let accounts = self
+                .accounts
+                .find_all_in_op::<crate::account::Account>(&mut db, &account_ids)
+                .await?;
+            for account in accounts.values() {
+                if account.values().config.eventually_consistent {
+                    return Err(LedgerError::EntriesTargetEventuallyConsistentAccount(
+                        account.id(),
+                    ));
+                }
+            }
+        }
+
         let mappings = self
             .account_sets
             .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &account_ids)

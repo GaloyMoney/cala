@@ -34,6 +34,11 @@ pub enum LedgerError {
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
     VelocityError(#[from] VelocityError),
+    #[error(
+        "LedgerError - EntriesTargetEventuallyConsistentAccount: entries cannot target \
+         eventually-consistent account '{0}' directly; post to its member accounts instead"
+    )]
+    EntriesTargetEventuallyConsistentAccount(crate::primitives::AccountId),
 }
 
 impl From<sqlx::Error> for LedgerError {
