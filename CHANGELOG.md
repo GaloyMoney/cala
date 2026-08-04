@@ -1,3 +1,21 @@
+# [cala release v0.20.2](https://github.com/GaloyMoney/cala/releases/tag/0.20.2)
+
+
+
+### Documentation
+
+- Update README to reflect current state of the project (#796)
+
+### Features
+
+- Journal entry listing filtered by created-at + effective date (Option A for lana #7796) (#798)
+
+### Miscellaneous Tasks
+
+- Fix cargo audit failures (#808)
+- Pin nix dev postgres to 18 (#807)
+- Stop publishing BalanceCreated/BalanceUpdated outbox events (#793)
+
 # [cala release v0.20.1](https://github.com/GaloyMoney/cala/releases/tag/0.20.1)
 
 
