@@ -67,7 +67,7 @@
         cargo-deny
         samply
         bacon
-        postgresql
+        postgresql_18
         process-compose
         bc
         jq
@@ -108,7 +108,7 @@
       pg-start = pkgs.writeShellApplication {
         name = "pg-start";
         runtimeInputs =
-          [pkgs.postgresql pkgs.coreutils]
+          [pkgs.postgresql_18 pkgs.coreutils]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [pkgs.util-linux];
         text = ''
           NAME="$1" PORT="$2" PGUSER="$3" DB="$4"
@@ -211,7 +211,7 @@
           exec.command = "${
             pkgs.writeShellApplication {
               name = "ready-${name}";
-              runtimeInputs = [pkgs.postgresql];
+              runtimeInputs = [pkgs.postgresql_18];
               text = ''
                 exec psql -p "''${PGPORT:-${toString port}}" -U ${user} -h 127.0.0.1 -d ${db} -c 'SELECT 1' -t -q
               '';
@@ -305,7 +305,7 @@
           pkgs.gnused
           pkgs.gnugrep
           pkgs.findutils
-          pkgs.postgresql
+          pkgs.postgresql_18
           rustToolchain
           pkgs.stdenv.cc
         ]}:$PATH"
@@ -327,7 +327,7 @@
         ${depsUp}
 
         echo "Running perf DB setup..."
-        ${pkgs.postgresql}/bin/psql "$DATABASE_URL" -f ./cala-perf/pg-tools/setup.sql
+        ${pkgs.postgresql_18}/bin/psql "$DATABASE_URL" -f ./cala-perf/pg-tools/setup.sql
 
         echo "Running benchmarks..."
         cargo bench -p cala-perf
