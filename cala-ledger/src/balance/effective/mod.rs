@@ -268,7 +268,7 @@ impl EffectiveBalances {
             }
         }
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
+            data.re_calculate_snapshots(created_at)?;
         }
 
         let new_balances = all_data
@@ -375,7 +375,7 @@ impl EffectiveBalances {
             .max()
             .expect("txns is non-empty: earliest was populated from it above");
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(rewritten_at);
+            data.re_calculate_snapshots(rewritten_at)?;
         }
 
         let new_balances = all_data
@@ -469,7 +469,9 @@ mod __fuzz {
         }
 
         let mut data = EffectiveBalanceData::new(account_id, currency, last, 0, updates);
-        data.re_calculate_snapshots(chrono::Utc::now());
+        // An overflow is a legitimate fuzz outcome, not a crash: the
+        // harness only reports panics.
+        let _ = data.re_calculate_snapshots(chrono::Utc::now());
         let _ = data
             .into_snapshots(JournalId::from(uuid::Uuid::nil()))
             .count();

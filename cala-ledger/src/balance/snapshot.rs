@@ -12,6 +12,8 @@ use tracing::instrument;
 use crate::primitives::{AccountId, AccountSetId, Currency, EntryId};
 use std::collections::{HashMap, HashSet};
 
+use super::error::BalanceError;
+
 pub(super) const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 
 pub(crate) struct Snapshots;
@@ -21,7 +23,7 @@ impl Snapshots {
         time: DateTime<Utc>,
         account_id: AccountId,
         entry: &EntryValues,
-    ) -> BalanceSnapshot {
+    ) -> Result<BalanceSnapshot, BalanceError> {
         let entry_id = EntryId::from(UNASSIGNED_ENTRY_ID);
         Self::update_snapshot(
             time,
@@ -60,20 +62,30 @@ impl Snapshots {
         time: DateTime<Utc>,
         mut snapshot: BalanceSnapshot,
         entry: &EntryValues,
-    ) -> BalanceSnapshot {
+    ) -> Result<BalanceSnapshot, BalanceError> {
         snapshot.version += 1;
         snapshot.modified_at = time;
         snapshot.entry_id = entry.id;
+        // Decimal addition panics on overflow; a balance that exceeds
+        // the representable range must roll the transaction back with
+        // an error instead of crashing the caller's task.
+        let account_id = snapshot.account_id;
+        let add = |balance: &mut Decimal| {
+            *balance = balance
+                .checked_add(entry.units)
+                .ok_or(BalanceError::Overflow(account_id))?;
+            Ok::<(), BalanceError>(())
+        };
         match entry.layer {
             Layer::Settled => {
                 snapshot.settled.entry_id = entry.id;
                 snapshot.settled.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.settled.dr_balance += entry.units;
+                        add(&mut snapshot.settled.dr_balance)?;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.settled.cr_balance += entry.units;
+                        add(&mut snapshot.settled.cr_balance)?;
                     }
                 }
             }
@@ -82,10 +94,10 @@ impl Snapshots {
                 snapshot.pending.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.pending.dr_balance += entry.units;
+                        add(&mut snapshot.pending.dr_balance)?;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.pending.cr_balance += entry.units;
+                        add(&mut snapshot.pending.cr_balance)?;
                     }
                 }
             }
@@ -94,15 +106,15 @@ impl Snapshots {
                 snapshot.encumbrance.modified_at = time;
                 match entry.direction {
                     DebitOrCredit::Debit => {
-                        snapshot.encumbrance.dr_balance += entry.units;
+                        add(&mut snapshot.encumbrance.dr_balance)?;
                     }
                     DebitOrCredit::Credit => {
-                        snapshot.encumbrance.cr_balance += entry.units;
+                        add(&mut snapshot.encumbrance.cr_balance)?;
                     }
                 }
             }
         }
-        snapshot
+        Ok(snapshot)
     }
 
     /// Build a chain of balance snapshots from a batch of entries.
@@ -120,7 +132,7 @@ impl Snapshots {
         current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
         entries: &[EntryValues],
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
-    ) -> Vec<BalanceSnapshot> {
+    ) -> Result<Vec<BalanceSnapshot>, BalanceError> {
         let mut fold = SnapshotFold::new(time, current_balances);
         for entry in entries.iter() {
             for set in account_set_mappings
@@ -129,12 +141,12 @@ impl Snapshots {
                 .flatten()
                 .map(AccountId::from)
             {
-                fold.apply(set, entry);
+                fold.apply(set, entry)?;
             }
             // Leaf account balance is maintained on this inline path.
-            fold.apply(entry.account_id, entry);
+            fold.apply(entry.account_id, entry)?;
         }
-        fold.into_snapshots()
+        Ok(fold.into_snapshots())
     }
 
     /// Streaming-rollup counterpart of [`Self::from_entries`]: fans each entry
@@ -153,7 +165,7 @@ impl Snapshots {
         entries: &[EntryValues],
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
-    ) -> Vec<BalanceSnapshot> {
+    ) -> Result<Vec<BalanceSnapshot>, BalanceError> {
         let mut fold = SnapshotFold::new(time, current_balances);
         for entry in entries.iter() {
             for set in ec_mappings
@@ -162,13 +174,13 @@ impl Snapshots {
                 .flatten()
                 .map(AccountId::from)
             {
-                fold.apply(set, entry);
+                fold.apply(set, entry)?;
             }
             if ec_leaves.contains(&entry.account_id) {
-                fold.apply(entry.account_id, entry);
+                fold.apply(entry.account_id, entry)?;
             }
         }
-        fold.into_snapshots()
+        Ok(fold.into_snapshots())
     }
 }
 
@@ -197,7 +209,7 @@ impl<'a> SnapshotFold<'a> {
 
     /// Fold one entry's delta into `account_id`, chaining onto any prior
     /// snapshot already written for that `(account, currency)` this batch.
-    fn apply(&mut self, account_id: AccountId, entry: &'a EntryValues) {
+    fn apply(&mut self, account_id: AccountId, entry: &'a EntryValues) -> Result<(), BalanceError> {
         let base = if let Some(prev) = self.latest.remove(&(account_id, &entry.currency)) {
             // Already touched this batch: persist the intermediate, chain on.
             self.completed.push(prev.clone());
@@ -207,15 +219,16 @@ impl<'a> SnapshotFold<'a> {
             // was never loaded is not involved — skip it.
             match self.current.remove(&(account_id, entry.currency)) {
                 Some(loaded) => loaded,
-                None => return,
+                None => return Ok(()),
             }
         };
 
         let next = match base {
-            Some(balance) => Snapshots::update_snapshot(self.time, balance, entry),
-            None => Snapshots::new_snapshot(self.time, account_id, entry),
+            Some(balance) => Snapshots::update_snapshot(self.time, balance, entry)?,
+            None => Snapshots::new_snapshot(self.time, account_id, entry)?,
         };
         self.latest.insert((account_id, &entry.currency), next);
+        Ok(())
     }
 
     fn into_snapshots(mut self) -> Vec<BalanceSnapshot> {
@@ -227,6 +240,7 @@ impl<'a> SnapshotFold<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cala_types::primitives::{JournalId, TransactionId};
 
     mod new_snapshots {
         use super::*;
@@ -323,7 +337,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new());
+                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
@@ -353,7 +368,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new());
+                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
@@ -397,7 +413,8 @@ mod tests {
             let entries = vec![entry1, entry2];
 
             let result =
-                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new());
+                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 2);
 
@@ -422,7 +439,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new());
+                Snapshots::from_entries(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert!(result.is_empty());
         }
@@ -450,7 +468,8 @@ mod tests {
 
             let entries = vec![entry];
 
-            let result = Snapshots::from_entries(Utc::now(), current_balances, &entries, &mappings);
+            let result =
+                Snapshots::from_entries(Utc::now(), current_balances, &entries, &mappings).unwrap();
 
             assert_eq!(result.len(), 2);
         }
@@ -557,7 +576,8 @@ mod tests {
                 &entries,
                 &ec_mappings,
                 &no_leaves(),
-            );
+            )
+            .unwrap();
 
             // Only the EC set is written — never the leaf accounts.
             assert!(snapshots.iter().all(|s| s.account_id == set_account));
@@ -593,7 +613,8 @@ mod tests {
                 &entries,
                 &ec_mappings,
                 &no_leaves(),
-            );
+            )
+            .unwrap();
 
             assert_eq!(snapshots.len(), 1);
             let snapshot = &snapshots[0];
@@ -628,7 +649,8 @@ mod tests {
                 &entries,
                 &ec_mappings,
                 &no_leaves(),
-            );
+            )
+            .unwrap();
 
             assert_eq!(snapshots.len(), 2);
             assert!(snapshots.iter().all(|s| s.version == 1));
@@ -652,7 +674,8 @@ mod tests {
                 &entries,
                 &ec_mappings,
                 &no_leaves(),
-            );
+            )
+            .unwrap();
             assert!(snapshots.is_empty());
         }
 
@@ -679,7 +702,8 @@ mod tests {
             current.insert((leaf, usd), None);
 
             let snapshots =
-                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves);
+                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves)
+                    .unwrap();
 
             // Both the leaf and its EC ancestor are written — and only those.
             let leaf_final = snapshots
@@ -716,11 +740,42 @@ mod tests {
             current.insert((leaf, usd), None);
 
             let snapshots =
-                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves);
+                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves)
+                    .unwrap();
 
             assert_eq!(snapshots.len(), 1);
             assert_eq!(snapshots[0].account_id, leaf);
             assert_eq!(snapshots[0].settled.cr_balance, Decimal::from(25));
         }
+    }
+
+    fn test_entry(units: Decimal) -> EntryValues {
+        EntryValues {
+            id: EntryId::new(),
+            version: 1,
+            transaction_id: TransactionId::new(),
+            journal_id: JournalId::new(),
+            account_id: AccountId::new(),
+            entry_type: "TEST".to_string(),
+            sequence: 1,
+            layer: Layer::Settled,
+            currency: "USD".parse().unwrap(),
+            direction: DebitOrCredit::Debit,
+            units,
+            description: None,
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn update_snapshot_errors_on_decimal_overflow_instead_of_panicking() {
+        let entry = test_entry(Decimal::MAX);
+        let snapshot = Snapshots::new_snapshot(Utc::now(), entry.account_id, &entry).unwrap();
+        assert_eq!(snapshot.settled.dr_balance, Decimal::MAX);
+
+        // Adding one more unit overflows Decimal's range
+        let err = Snapshots::update_snapshot(Utc::now(), snapshot, &test_entry(Decimal::ONE))
+            .expect_err("overflow must be an error, not a panic");
+        assert!(matches!(err, BalanceError::Overflow(_)));
     }
 }
