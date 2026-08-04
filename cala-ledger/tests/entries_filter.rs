@@ -1,0 +1,191 @@
+mod helpers;
+
+use chrono::{Duration, NaiveDate};
+use rand::distr::{Alphanumeric, SampleString};
+
+use cala_ledger::{
+    entry::{EntriesFilter, Entry, EntryByCreatedAtCursor},
+    tx_template::*,
+    *,
+};
+
+async fn post_tx(
+    cala: &CalaLedger,
+    code: &str,
+    journal_id: JournalId,
+    sender: AccountId,
+    recipient: AccountId,
+    effective: NaiveDate,
+) -> TransactionId {
+    let mut params = Params::new();
+    params.insert("journal_id", journal_id);
+    params.insert("sender", sender);
+    params.insert("recipient", recipient);
+    params.insert("effective", effective);
+    let id = TransactionId::new();
+    cala.post_transaction(id, code, params).await.unwrap();
+    id
+}
+
+async fn page(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    filter: EntriesFilter,
+    first: usize,
+    after: Option<EntryByCreatedAtCursor>,
+) -> es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor> {
+    cala.entries()
+        .list_for_journal_id_filtered(
+            journal_id,
+            filter,
+            es_entity::PaginatedQueryArgs { first, after },
+            es_entity::ListDirection::Descending,
+        )
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let (sender, recipient) = helpers::test_accounts();
+    let sender = cala.accounts().create(sender).await?;
+    let recipient = cala.accounts().create(recipient).await?;
+
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+
+    // Each posting of the currency-conversion template writes 6 entries.
+    let jan = NaiveDate::from_ymd_opt(2020, 1, 15).unwrap();
+    let jun = NaiveDate::from_ymd_opt(2020, 6, 20).unwrap();
+    let tx_jan = post_tx(&cala, &code, journal.id(), sender.id(), recipient.id(), jan).await;
+    let tx_jun = post_tx(&cala, &code, journal.id(), sender.id(), recipient.id(), jun).await;
+
+    // No filter -> every entry in the journal, across both transactions.
+    let all = page(&cala, journal.id(), EntriesFilter::default(), 100, None).await;
+    assert_eq!(all.entities.len(), 12);
+    assert!(!all.has_next_page);
+
+    // effective == jan -> only the January transaction's entries.
+    let only_jan = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            effective_from: Some(jan),
+            effective_to: Some(jan),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert_eq!(only_jan.entities.len(), 6);
+    assert!(only_jan
+        .entities
+        .iter()
+        .all(|e| e.values().transaction_id == tx_jan));
+
+    // effective range covering only June.
+    let only_jun = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            effective_from: Some(NaiveDate::from_ymd_opt(2020, 6, 1).unwrap()),
+            effective_to: Some(NaiveDate::from_ymd_opt(2020, 12, 31).unwrap()),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert_eq!(only_jun.entities.len(), 6);
+    assert!(only_jun
+        .entities
+        .iter()
+        .all(|e| e.values().transaction_id == tx_jun));
+
+    // effective range that matches nothing.
+    let empty = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            effective_from: Some(NaiveDate::from_ymd_opt(2019, 1, 1).unwrap()),
+            effective_to: Some(NaiveDate::from_ymd_opt(2019, 12, 31).unwrap()),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert!(empty.entities.is_empty());
+    assert!(empty.end_cursor.is_none());
+
+    // created_at bounds derived from the entries themselves (avoids clock skew).
+    let max_created = all.entities.iter().map(|e| e.created_at()).max().unwrap();
+    let up_to_max = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            created_at_to: Some(max_created),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert_eq!(up_to_max.entities.len(), 12);
+
+    let after_all = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            created_at_from: Some(max_created + Duration::seconds(1)),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert!(after_all.entities.is_empty());
+
+    // created + effective filters compose with AND.
+    let combined = page(
+        &cala,
+        journal.id(),
+        EntriesFilter {
+            created_at_to: Some(max_created),
+            effective_from: Some(jan),
+            effective_to: Some(jan),
+            ..Default::default()
+        },
+        100,
+        None,
+    )
+    .await;
+    assert_eq!(combined.entities.len(), 6);
+
+    // Cursor pagination composes with a filter: 4 + 2 over the 6 June entries.
+    let jun_filter = || EntriesFilter {
+        effective_from: Some(jun),
+        effective_to: Some(jun),
+        ..Default::default()
+    };
+    let first_page = page(&cala, journal.id(), jun_filter(), 4, None).await;
+    assert_eq!(first_page.entities.len(), 4);
+    assert!(first_page.has_next_page);
+
+    let second_page = page(&cala, journal.id(), jun_filter(), 4, first_page.end_cursor).await;
+    assert_eq!(second_page.entities.len(), 2);
+    assert!(!second_page.has_next_page);
+
+    Ok(())
+}

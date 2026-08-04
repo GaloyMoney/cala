@@ -123,6 +123,7 @@ CREATE TABLE cala_transactions (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_transactions_correlation_id ON cala_transactions (correlation_id);
+CREATE INDEX idx_cala_transactions_effective ON cala_transactions (effective);
 
 CREATE TABLE cala_transaction_events (
   id UUID NOT NULL REFERENCES cala_transactions(id),
@@ -145,6 +146,7 @@ CREATE TABLE cala_entries (
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 CREATE INDEX idx_cala_entries_account_id ON cala_entries (account_id, created_at DESC, id DESC);
+CREATE INDEX idx_cala_entries_journal_id_created_at ON cala_entries (journal_id, created_at DESC, id DESC);
 
 CREATE TABLE cala_entry_events (
   id UUID NOT NULL REFERENCES cala_entries(id),

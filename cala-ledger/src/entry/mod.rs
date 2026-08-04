@@ -86,6 +86,28 @@ impl Entries {
             .await?)
     }
 
+    /// List a journal's entries with optional inclusive filters on the entry
+    /// creation time and on the posting transaction's effective date, paginated
+    /// on `(created_at, id)`. Unlike [`Self::list_for_journal_id`] this supports
+    /// date ranges and the cross-entity effective-date filter, which the generated
+    /// `list_for_*` methods cannot express.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.entries.list_for_journal_id_filtered",
+        skip_all
+    )]
+    pub async fn list_for_journal_id_filtered(
+        &self,
+        journal_id: JournalId,
+        filter: EntriesFilter,
+        query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
+        direction: es_entity::ListDirection,
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
+        self.repo
+            .list_for_journal_id_filtered_by_created_at(journal_id, filter, query, direction)
+            .await
+    }
+
     #[instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_transaction_id",

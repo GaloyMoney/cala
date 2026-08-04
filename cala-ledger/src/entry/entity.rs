@@ -5,6 +5,20 @@ use serde::{Deserialize, Serialize};
 use crate::primitives::*;
 pub use cala_types::{entry::*, primitives::EntryId};
 
+/// Filter for listing a journal's entries. All bounds are inclusive and combined
+/// with AND semantics; an unset bound is ignored.
+#[derive(Debug, Clone, Default)]
+pub struct EntriesFilter {
+    /// Inclusive lower bound on the entry's creation time.
+    pub created_at_from: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive upper bound on the entry's creation time.
+    pub created_at_to: Option<chrono::DateTime<chrono::Utc>>,
+    /// Inclusive lower bound on the posting transaction's effective date.
+    pub effective_from: Option<chrono::NaiveDate>,
+    /// Inclusive upper bound on the posting transaction's effective date.
+    pub effective_to: Option<chrono::NaiveDate>,
+}
+
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "type", rename_all = "snake_case")]
