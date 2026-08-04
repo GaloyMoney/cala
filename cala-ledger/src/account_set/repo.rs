@@ -45,6 +45,16 @@ use super::{entity::*, error::*};
 /// lock. An operation must never wait on the coarse lock while holding
 /// a per-member lock — under PostgreSQL's FIFO lock queueing that can
 /// form a wait cycle with a queued exclusive (structure) waiter.
+///
+/// Namespace note: this is a 1-arg `pg_advisory_xact_lock`, so it
+/// shares a key space with the balance locks
+/// (`hashtext(journal_id, account_id, currency)`), the
+/// velocity-balance locks, and any other 1-arg advisory lock in the
+/// database. A `hashtext` collision with this id would only cause
+/// false serialization between unrelated operations — never
+/// incorrectness. The 2-arg locks (`EC_SET_LOCK_CLASS`,
+/// `MEMBER_LOCK_CLASS`) live in a disjoint namespace keyed by
+/// `classid`.
 const ADDVISORY_LOCK_ID: i64 = 123456;
 
 /// `classid` namespace for the per-member advisory locks (2-arg form),

@@ -358,12 +358,27 @@ impl BalanceRepo {
     ///
     /// The 2-arg and 1-arg `pg_advisory_xact_lock` namespaces are
     /// disjoint in PostgreSQL, so the two locks cannot collide with
-    /// each other. Lock acquisition order across transactions is
-    /// canonical because the caller pre-sorts the input via a BTreeSet
-    /// in `Balances::update_balances_in_op` and the planner picks a
-    /// nested-loop join with `v` as the outer side for the tiny inputs
-    /// this query receives, preserving UNNEST scan order through to
-    /// the function calls in the SELECT list.
+    /// each other.
+    ///
+    /// Lock acquisition order across transactions is canonical
+    /// **only** because the caller pre-sorts the input via a BTreeSet
+    /// in `Balances::update_balances_in_op`: the planner is free to
+    /// evaluate the per-row projection (the lock function calls)
+    /// before any SQL-level sort node, so the `ORDER BY` below is
+    /// *not* what orders the lock acquisitions — it merely keeps the
+    /// (already sorted) scan on the simple path. Do not change the
+    /// caller to an unordered container (e.g. HashMap iteration), and
+    /// do not "optimize" this query in ways that would let the
+    /// planner evaluate the locks in a different order than the
+    /// UNNEST input; both would reopen the deadlock window this
+    /// protocol exists to close.
+    ///
+    /// All lock keys are 32-bit `hashtext` values, and this 1-arg
+    /// namespace is shared with the velocity-balance locks and the
+    /// membership coarse lock (`ADDVISORY_LOCK_ID`). Hash collisions
+    /// only cause false serialization between unrelated accounts —
+    /// never a correctness issue — at the price of occasional extra
+    /// contention.
     #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
