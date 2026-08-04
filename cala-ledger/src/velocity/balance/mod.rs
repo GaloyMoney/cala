@@ -147,7 +147,10 @@ impl VelocityBalances {
                     Some(balance) => {
                         crate::balance::Snapshots::update_snapshot(time, balance, entry)
                     }
-                    None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
+                    // The snapshot belongs to the balance key's account
+                    // (which may be an account *set* aggregating member
+                    // entries), not necessarily to the entry's account.
+                    None => crate::balance::Snapshots::new_snapshot(time, key.account_id, entry),
                 };
 
                 let ctx = context.context_for_entry(key.account_id, entry);
@@ -448,6 +451,50 @@ mod tests {
                 snapshots[1].settled.cr_balance,
                 initial_credit + entry2_credit
             );
+        }
+
+        #[test]
+        fn new_snapshots_uses_key_account_id_not_entry_account_id() {
+            // For controls attached to an account set, the balance key
+            // is the set while the entry belongs to a member account.
+            // The snapshot must record the key's account id.
+            let key = create_test_key();
+            let limit = dummy_test_limit();
+
+            let transaction = create_test_transaction();
+            let account = create_test_account_values(key.account_id);
+            let context = EvalContext::new(
+                Clock::handle().clone(),
+                &transaction,
+                [&account].into_iter(),
+            );
+
+            let member_account_id = AccountId::new();
+            assert_ne!(member_account_id, key.account_id);
+            let mut entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+            );
+            entry.account_id = member_account_id;
+
+            let mut entries_to_add = HashMap::new();
+            entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert(key.clone(), None);
+
+            let result = VelocityBalances::new_snapshots_with_limit_enforcement(
+                context,
+                Utc::now(),
+                current_balances,
+                &entries_to_add,
+            )
+            .unwrap();
+
+            let snapshot = &result.get(&key).unwrap()[0];
+            assert_eq!(snapshot.account_id, key.account_id);
         }
 
         #[test]
