@@ -100,7 +100,10 @@ impl<'a> EffectiveBalanceData<'a> {
             .push(SnapshotOrEntry::Entry { effective, entry });
     }
 
-    pub fn re_calculate_snapshots(&mut self, created_at: DateTime<Utc>) {
+    pub fn re_calculate_snapshots(
+        &mut self,
+        created_at: DateTime<Utc>,
+    ) -> Result<(), crate::balance::error::BalanceError> {
         self.updates.sort();
         let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
             Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),
@@ -122,16 +125,16 @@ impl<'a> EffectiveBalanceData<'a> {
             match update {
                 SnapshotOrEntry::Entry { effective, entry } => {
                     last_effective = *effective;
-                    last_balance = Snapshots::update_snapshot(created_at, last_balance, entry);
+                    last_balance = Snapshots::update_snapshot(created_at, last_balance, entry)?;
                     diff_snapshot = if let Some(diff) = diff_snapshot {
-                        Some(Snapshots::update_snapshot(created_at, diff, entry))
+                        Some(Snapshots::update_snapshot(created_at, diff, entry)?)
                     } else {
                         let mut initial = Self::first_snapshot(created_at, self.account_id, entry);
                         initial.entry_id = last_balance.entry_id;
                         initial.encumbrance.entry_id = last_balance.encumbrance.entry_id;
                         initial.pending.entry_id = last_balance.pending.entry_id;
                         initial.settled.entry_id = last_balance.settled.entry_id;
-                        Some(Snapshots::update_snapshot(created_at, initial, entry))
+                        Some(Snapshots::update_snapshot(created_at, initial, entry)?)
                     };
                     *update = SnapshotOrEntry::Snapshot {
                         effective: *effective,
@@ -184,6 +187,7 @@ impl<'a> EffectiveBalanceData<'a> {
                 }
             }
         }
+        Ok(())
     }
 
     fn first_snapshot(
@@ -337,7 +341,7 @@ mod tests {
         data.push(effective, &entry);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -366,7 +370,7 @@ mod tests {
         data.push(effective, &entry);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -395,7 +399,7 @@ mod tests {
         data.push(effective, &entry);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -420,7 +424,7 @@ mod tests {
         data.push(effective, &entry_two);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 2);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -463,7 +467,7 @@ mod tests {
         data.push(effective, &entry_two);
 
         let posted_at = Utc::now();
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 3);
 

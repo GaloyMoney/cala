@@ -318,15 +318,18 @@ mod tests {
             },
         };
         let mut entry = entry();
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         entry.direction = DebitOrCredit::Credit;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
@@ -353,7 +356,8 @@ mod tests {
         };
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
@@ -381,16 +385,19 @@ mod tests {
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
         entry.layer = Layer::Settled;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         entry.layer = Layer::Pending;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
 
         entry.layer = Layer::Encumbrance;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
     }
@@ -418,7 +425,8 @@ mod tests {
         let mut entry = entry();
         entry.units = Decimal::ONE_HUNDRED;
         ctx.add_variable("time", time);
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
         ctx.add_variable("time", time - chrono::Duration::minutes(1));
@@ -451,11 +459,13 @@ mod tests {
         };
         let mut entry = entry();
         entry.direction = DebitOrCredit::Credit;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_ok());
         entry.units = Decimal::ONE_HUNDRED;
-        let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
+        let new_snapshot =
+            crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry).unwrap();
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
     }

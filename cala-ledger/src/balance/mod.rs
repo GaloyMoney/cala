@@ -239,7 +239,7 @@ impl Balances {
             current_balances,
             &entries,
             &account_set_mappings,
-        );
+        )?;
         self.repo
             .insert_new_snapshots(op, journal.id, new_balances)
             .await?;
@@ -363,7 +363,7 @@ impl Balances {
         }
 
         let new_snapshots =
-            Self::replay_member_deltas_batch(journal_id, set_states, &memberships, new_history);
+            Self::replay_member_deltas_batch(journal_id, set_states, &memberships, new_history)?;
 
         if !new_snapshots.is_empty() {
             self.repo
@@ -397,8 +397,21 @@ impl Balances {
         mut set_states: HashMap<AccountSetId, SetRecalcState>,
         memberships: &HashMap<AccountId, Vec<AccountSetId>>,
         history: Vec<MemberBalanceHistoryRow>,
-    ) -> Vec<BalanceSnapshot> {
+    ) -> Result<Vec<BalanceSnapshot>, BalanceError> {
         use rust_decimal::Decimal;
+
+        // Decimal addition panics on overflow; roll the recalculation
+        // back with an error instead of crashing the caller's task.
+        fn checked_add(
+            target: &mut Decimal,
+            delta: Decimal,
+            account_id: AccountId,
+        ) -> Result<(), BalanceError> {
+            *target = target
+                .checked_add(delta)
+                .ok_or(BalanceError::Overflow(account_id))?;
+            Ok(())
+        }
 
         let mut new_snapshots = Vec::new();
 
@@ -478,12 +491,12 @@ impl Balances {
                             created_at: snapshot.modified_at,
                         });
 
-                running.settled.dr_balance += d_settled_dr;
-                running.settled.cr_balance += d_settled_cr;
-                running.pending.dr_balance += d_pending_dr;
-                running.pending.cr_balance += d_pending_cr;
-                running.encumbrance.dr_balance += d_enc_dr;
-                running.encumbrance.cr_balance += d_enc_cr;
+                checked_add(&mut running.settled.dr_balance, d_settled_dr, account_id)?;
+                checked_add(&mut running.settled.cr_balance, d_settled_cr, account_id)?;
+                checked_add(&mut running.pending.dr_balance, d_pending_dr, account_id)?;
+                checked_add(&mut running.pending.cr_balance, d_pending_cr, account_id)?;
+                checked_add(&mut running.encumbrance.dr_balance, d_enc_dr, account_id)?;
+                checked_add(&mut running.encumbrance.cr_balance, d_enc_cr, account_id)?;
                 running.version += 1;
                 running.entry_id = snapshot.entry_id;
                 running.modified_at = snapshot.modified_at;
@@ -505,7 +518,7 @@ impl Balances {
             }
         }
 
-        new_snapshots
+        Ok(new_snapshots)
     }
 
     #[instrument(level = "debug", name = "cala_ledger.balances.new_snapshots", skip_all)]
@@ -514,7 +527,7 @@ impl Balances {
         mut current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
         entries: &[EntryValues],
         mappings: &HashMap<AccountId, Vec<AccountSetId>>,
-    ) -> Vec<BalanceSnapshot> {
+    ) -> Result<Vec<BalanceSnapshot>, BalanceError> {
         let mut latest_balances: HashMap<(AccountId, &Currency), BalanceSnapshot> = HashMap::new();
         let mut new_balances = Vec::new();
         let empty = Vec::new();
@@ -539,15 +552,15 @@ impl Balances {
                 };
 
                 let new_snapshot = match balance {
-                    Some(balance) => Snapshots::update_snapshot(time, balance, entry),
-                    None => Snapshots::new_snapshot(time, account_id, entry),
+                    Some(balance) => Snapshots::update_snapshot(time, balance, entry)?,
+                    None => Snapshots::new_snapshot(time, account_id, entry)?,
                 };
 
                 latest_balances.insert((account_id, &entry.currency), new_snapshot);
             }
         }
         new_balances.extend(latest_balances.into_values());
-        new_balances
+        Ok(new_balances)
     }
 }
 
@@ -650,7 +663,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
@@ -680,7 +694,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 1);
             let snapshot = &result[0];
@@ -724,7 +739,8 @@ mod tests {
             let entries = vec![entry1, entry2];
 
             let result =
-                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert_eq!(result.len(), 2);
 
@@ -749,7 +765,8 @@ mod tests {
             let entries = vec![entry];
 
             let result =
-                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new());
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &HashMap::new())
+                    .unwrap();
 
             assert!(result.is_empty());
         }
@@ -777,7 +794,8 @@ mod tests {
 
             let entries = vec![entry];
 
-            let result = Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings);
+            let result =
+                Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings).unwrap();
 
             assert_eq!(result.len(), 2);
         }
@@ -910,7 +928,8 @@ mod tests {
                 single_set_state(journal_id, set_id, member_id, HashMap::new());
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             let account_id = AccountId::from(&set_id);
             assert_eq!(result.len(), 1);
@@ -960,7 +979,8 @@ mod tests {
                 single_set_state(journal_id, set_id, member_id, current_balances);
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             assert_eq!(result.len(), 1);
             assert_eq!(result[0].version, 3);
@@ -1004,7 +1024,8 @@ mod tests {
                 single_set_state(journal_id, set_id, member_id, HashMap::new());
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             assert_eq!(result.len(), 2);
             assert_eq!(result[0].version, 1);
@@ -1050,7 +1071,8 @@ mod tests {
                 single_set_state(journal_id, set_id, member_id, HashMap::new());
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             assert_eq!(result.len(), 2);
             let usd_snap = result.iter().find(|s| s.currency.code() == "USD").unwrap();
@@ -1068,7 +1090,8 @@ mod tests {
                 HashMap::new(),
                 &HashMap::new(),
                 Vec::new(),
-            );
+            )
+            .unwrap();
             assert!(result.is_empty());
         }
 
@@ -1101,7 +1124,8 @@ mod tests {
                 std::iter::once((member_id, vec![set_a, set_b])).collect();
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             assert_eq!(result.len(), 2);
             for snap in &result {
@@ -1163,7 +1187,8 @@ mod tests {
             ];
 
             let result =
-                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history);
+                Balances::replay_member_deltas_batch(journal_id, set_states, &memberships, history)
+                    .unwrap();
 
             // Only one snapshot produced (seq=3 skipped)
             assert_eq!(result.len(), 1);
