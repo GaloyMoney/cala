@@ -1,2 +1,11 @@
 [advisories]
-ignore = ["RUSTSEC-2023-0071"]
+ignore = [
+  "RUSTSEC-2023-0071",
+  # rkyv 0.7.46 appears in Cargo.lock only as an *optional* dependency of
+  # rust_decimal whose "rkyv" feature is never enabled in this workspace
+  # (verified with `cargo tree` / `cargo metadata`: rust_decimal resolves with
+  # features default, maths, serde, std only). The crate is never compiled or
+  # shipped, so the OOB-read advisory is not exploitable here. Remove this
+  # ignore if rust_decimal/rkyv is ever enabled.
+  "RUSTSEC-2026-0235",
+]
