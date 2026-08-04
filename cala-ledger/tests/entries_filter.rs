@@ -34,12 +34,31 @@ async fn page(
     first: usize,
     after: Option<EntryByCreatedAtCursor>,
 ) -> es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor> {
+    page_dir(
+        cala,
+        journal_id,
+        filter,
+        first,
+        after,
+        es_entity::ListDirection::Descending,
+    )
+    .await
+}
+
+async fn page_dir(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    filter: EntriesFilter,
+    first: usize,
+    after: Option<EntryByCreatedAtCursor>,
+    direction: es_entity::ListDirection,
+) -> es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor> {
     cala.entries()
         .list_for_journal_id_filtered(
             journal_id,
             filter,
             es_entity::PaginatedQueryArgs { first, after },
-            es_entity::ListDirection::Descending,
+            direction,
         )
         .await
         .unwrap()
@@ -186,6 +205,63 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
     let second_page = page(&cala, journal.id(), jun_filter(), 4, first_page.end_cursor).await;
     assert_eq!(second_page.entities.len(), 2);
     assert!(!second_page.has_next_page);
+
+    // Ascending direction: oldest first, ordered on (created_at, id) -- entries
+    // posted in the same transaction can share a created_at, so the id
+    // tie-break matters.
+    let asc_first = page_dir(
+        &cala,
+        journal.id(),
+        EntriesFilter::default(),
+        5,
+        None,
+        es_entity::ListDirection::Ascending,
+    )
+    .await;
+    assert_eq!(asc_first.entities.len(), 5);
+    assert!(asc_first.has_next_page);
+    assert!(asc_first
+        .entities
+        .windows(2)
+        .all(|w| (w[0].created_at(), w[0].id) <= (w[1].created_at(), w[1].id)));
+
+    // Cursor continuation covers the rest with no gaps or overlap.
+    let asc_rest = page_dir(
+        &cala,
+        journal.id(),
+        EntriesFilter::default(),
+        100,
+        asc_first.end_cursor,
+        es_entity::ListDirection::Ascending,
+    )
+    .await;
+    assert_eq!(asc_rest.entities.len(), 7);
+    assert!(!asc_rest.has_next_page);
+    let mut ids: std::collections::HashSet<_> = asc_first.entities.iter().map(|e| e.id).collect();
+    for entry in &asc_rest.entities {
+        assert!(ids.insert(entry.id));
+    }
+    assert_eq!(ids.len(), 12);
+
+    // Ascending composes with a filter: June's entries, oldest first.
+    let jun_asc = page_dir(
+        &cala,
+        journal.id(),
+        jun_filter(),
+        100,
+        None,
+        es_entity::ListDirection::Ascending,
+    )
+    .await;
+    assert_eq!(jun_asc.entities.len(), 6);
+    assert!(jun_asc
+        .entities
+        .iter()
+        .all(|e| e.values().transaction_id == tx_jun));
+    assert!(jun_asc
+        .entities
+        .windows(2)
+        .all(|w| (w[0].created_at(), w[0].id) <= (w[1].created_at(), w[1].id)));
 
     Ok(())
 }
