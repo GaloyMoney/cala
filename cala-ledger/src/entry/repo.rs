@@ -69,7 +69,7 @@ impl EntryRepo {
                               AND (COALESCE((created_at, id) > ($3, $2), $2 IS NULL))
                             ORDER BY created_at ASC, id ASC
                             LIMIT $1"#,
-                            (first + 1) as i64,
+                            crate::clamped_page_limit(first),
                             id as Option<EntryId>,
                             created_at as Option<chrono::DateTime<chrono::Utc>>,
                             account_set_id as AccountSetId,
@@ -88,7 +88,7 @@ impl EntryRepo {
                               AND (COALESCE((created_at, id) < ($3, $2), $2 IS NULL))
                             ORDER BY created_at DESC, id DESC
                             LIMIT $1"#,
-                            (first + 1) as i64,
+                            crate::clamped_page_limit(first),
                             id as Option<EntryId>,
                             created_at as Option<chrono::DateTime<chrono::Utc>>,
                             account_set_id as AccountSetId,
@@ -164,7 +164,7 @@ impl EntryRepo {
                       AND (COALESCE((created_at, id) > ($3, $2), $2 IS NULL))
                     ORDER BY created_at ASC, id ASC
                     LIMIT $1"#,
-                    (first + 1) as i64,
+                    crate::clamped_page_limit(first),
                     id as Option<EntryId>,
                     created_at as Option<chrono::DateTime<chrono::Utc>>,
                     journal_id as JournalId,
@@ -196,7 +196,7 @@ impl EntryRepo {
                       AND (COALESCE((created_at, id) < ($3, $2), $2 IS NULL))
                     ORDER BY created_at DESC, id DESC
                     LIMIT $1"#,
-                    (first + 1) as i64,
+                    crate::clamped_page_limit(first),
                     id as Option<EntryId>,
                     created_at as Option<chrono::DateTime<chrono::Utc>>,
                     journal_id as JournalId,
