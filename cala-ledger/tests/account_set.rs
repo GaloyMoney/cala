@@ -88,6 +88,65 @@ async fn errors_on_collision() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn errors_on_membership_cycle() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let set_a = cala.account_sets().create(new_set("SET A")).await.unwrap();
+    let set_b = cala.account_sets().create(new_set("SET B")).await.unwrap();
+    let set_c = cala.account_sets().create(new_set("SET C")).await.unwrap();
+
+    // B becomes a member of A, C a member of B
+    let res = cala.account_sets().add_member(set_a.id(), set_b.id()).await;
+    assert!(res.is_ok());
+    let res = cala.account_sets().add_member(set_b.id(), set_c.id()).await;
+    assert!(res.is_ok());
+
+    // A is an ancestor of B: adding A to B would close a cycle
+    let res = cala.account_sets().add_member(set_b.id(), set_a.id()).await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::MembershipCycleDetected { .. })
+    ));
+
+    // A is a (transitive) ancestor of C: adding A to C would close a cycle
+    let res = cala.account_sets().add_member(set_c.id(), set_a.id()).await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::MembershipCycleDetected { .. })
+    ));
+
+    // A set can never be its own member
+    let res = cala.account_sets().add_member(set_a.id(), set_a.id()).await;
+    assert!(res.is_err());
+
+    // Non-cyclic additions still work
+    let res = cala.account_sets().add_member(set_a.id(), set_c.id()).await;
+    assert!(res.is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn add_members_batch() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 

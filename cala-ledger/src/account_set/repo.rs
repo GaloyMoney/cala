@@ -630,9 +630,52 @@ impl AccountSetRepo {
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
         // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
+        // Held across the cycle check and the insert below, so the graph
+        // the check validated cannot change before the new edge commits.
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
+
+        // Reject edges that would close a cycle: the ancestor walks in
+        // this repo are `UNION ALL` recursive CTEs without cycle
+        // detection, so a cycle would make subsequent membership
+        // mutations non-terminating (while holding the coarse lock) and
+        // would cross-contaminate the transitive member closure.
+        if account_set_id == member_account_set_id {
+            return Err(AccountSetError::MembershipCycleDetected {
+                account_set_id,
+                member_account_set_id,
+            });
+        }
+        let cycle = sqlx::query!(
+            r#"
+          WITH RECURSIVE parents AS (
+            SELECT m.member_account_set_id, m.account_set_id
+            FROM cala_account_set_member_account_sets m
+            WHERE m.member_account_set_id = $1
+
+            UNION ALL
+            SELECT p.member_account_set_id, m.account_set_id
+            FROM parents p
+            JOIN cala_account_set_member_account_sets m
+                ON p.account_set_id = m.member_account_set_id
+          )
+          SELECT EXISTS(
+            SELECT 1 FROM parents WHERE account_set_id = $2
+          ) AS "exists!"
+          "#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
+        )
+        .fetch_one(db.as_executor())
+        .await?;
+        if cycle.exists {
+            return Err(AccountSetError::MembershipCycleDetected {
+                account_set_id,
+                member_account_set_id,
+            });
+        }
+
         sqlx::query!(r#"
           WITH RECURSIVE parents AS (
             SELECT m.member_account_set_id, m.account_set_id

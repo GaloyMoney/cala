@@ -48,6 +48,15 @@ pub enum AccountSetError {
          only eventually-consistent sets support recalculation"
     )]
     CannotRecalculateNonEcSet { account_set_id: AccountSetId },
+    #[error(
+        "AccountSetError - Cannot add account set '{member_account_set_id}' as a member of \
+         account set '{account_set_id}': the member is already an ancestor of the set, \
+         so the membership would create a cycle"
+    )]
+    MembershipCycleDetected {
+        account_set_id: AccountSetId,
+        member_account_set_id: AccountSetId,
+    },
 }
 
 impl From<AccountSetFindError> for AccountSetError {
