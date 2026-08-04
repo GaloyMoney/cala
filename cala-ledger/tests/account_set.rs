@@ -88,6 +88,60 @@ async fn errors_on_collision() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn errors_on_self_membership() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let set = NewAccountSet::builder()
+        .id(AccountSetId::new())
+        .name("SELF SET")
+        .journal_id(journal.id())
+        .balance_rollup(BalanceRollup::Synchronous)
+        .build()
+        .unwrap();
+    let set = cala.account_sets().create(set).await.unwrap();
+
+    // Cannot add the set's own underlying account as a member
+    let res = cala
+        .account_sets()
+        .add_member(set.id(), AccountId::from(set.id()))
+        .await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::CannotAddSelfAsMember { .. })
+    ));
+
+    // Cannot add the set itself as a member
+    let res = cala.account_sets().add_member(set.id(), set.id()).await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::CannotAddSelfAsMember { .. })
+    ));
+
+    // Batch path rejects self-membership too
+    let res = cala
+        .account_sets()
+        .add_members(&[(set.id(), AccountId::from(set.id()))])
+        .await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::CannotAddSelfAsMember { .. })
+    ));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn add_members_batch() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 

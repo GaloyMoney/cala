@@ -48,6 +48,12 @@ pub enum AccountSetError {
          only eventually-consistent sets support recalculation"
     )]
     CannotRecalculateNonEcSet { account_set_id: AccountSetId },
+    #[error(
+        "AccountSetError - Cannot add account set '{account_set_id}' as a member of itself: \
+         self-membership would make every entry to the underlying account count twice \
+         in the set's balance"
+    )]
+    CannotAddSelfAsMember { account_set_id: AccountSetId },
 }
 
 impl From<AccountSetFindError> for AccountSetError {
