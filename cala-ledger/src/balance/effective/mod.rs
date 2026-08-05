@@ -438,6 +438,10 @@ impl EffectiveBalances {
                 .unwrap_or(&empty)
                 .iter()
                 .map(AccountId::from)
+                // Skip self-mappings (rejected at the API level): the
+                // entry's own account is appended by the chain below,
+                // and pushing the entry twice would double-apply it.
+                .filter(|account_id| *account_id != entry.account_id)
                 .chain(std::iter::once(entry.account_id))
             {
                 if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {

@@ -94,6 +94,10 @@ impl VelocityBalances {
                 .unwrap_or(&empty)
                 .iter()
                 .map(AccountId::from)
+                // Skip self-mappings (rejected at the API level): the
+                // entry's own account is appended by the chain below,
+                // and checking it twice would double-count the entry.
+                .filter(|account_id| *account_id != entry.account_id)
                 .chain(std::iter::once(entry.account_id))
             {
                 let Some((_, controls)) = controls.get(&account_id) else {

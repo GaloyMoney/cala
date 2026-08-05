@@ -178,6 +178,16 @@ impl AccountSets {
     ) -> Result<AccountSet, AccountSetError> {
         let member = member.into();
 
+        // Self-membership is never meaningful and actively corrupts
+        // balances: the posting path resolves an entry's account to its
+        // member sets *and* the account itself, so a set containing its
+        // own underlying account would apply every entry twice.
+        if let AccountSetMemberId::AccountSet(id) = member {
+            if id == account_set_id {
+                return Err(AccountSetError::CannotAddSelfAsMember { account_set_id });
+            }
+        }
+
         // Resolve the target set (and, for set-member, verify the journal
         // matches) without writing the membership row, so we can run the
         // no-history check first.
@@ -211,6 +221,10 @@ impl AccountSets {
                 (target, AccountId::from(id))
             }
         };
+
+        if member_id == AccountId::from(account_set.id()) {
+            return Err(AccountSetError::CannotAddSelfAsMember { account_set_id });
+        }
 
         self.assert_member_history_empty_in_op(
             op,
@@ -281,6 +295,12 @@ impl AccountSets {
             let set = sets
                 .get(account_set_id)
                 .ok_or(AccountSetError::CouldNotFindById(*account_set_id))?;
+            // See add_member_in_op: self-membership would double-apply entries.
+            if *member_id == AccountId::from(set.id()) {
+                return Err(AccountSetError::CannotAddSelfAsMember {
+                    account_set_id: *account_set_id,
+                });
+            }
             check_pairs.push((
                 set.values().journal_id,
                 AccountId::from(set.id()),

@@ -524,6 +524,11 @@ impl Balances {
                 .unwrap_or(&empty)
                 .iter()
                 .map(AccountId::from)
+                // Self-mappings are rejected at the API level, but skip
+                // them here too: the entry's own account is appended by
+                // the chain below, and visiting it twice would apply
+                // the entry twice.
+                .filter(|account_id| *account_id != entry.account_id)
                 .chain(std::iter::once(entry.account_id))
             {
                 let latest =
@@ -780,6 +785,37 @@ mod tests {
             let result = Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings);
 
             assert_eq!(result.len(), 2);
+        }
+
+        #[test]
+        fn new_snapshots_applies_entry_once_for_self_mapping() {
+            // A set that (incorrectly) contains its own underlying
+            // account must not have entries applied twice: the entry's
+            // account is already visited via the chain's final `once`.
+            let account_set_id = AccountSetId::new();
+            let account_id = AccountId::from(&account_set_id);
+            let currency: Currency = "USD".parse().unwrap();
+
+            let mut current_balances = HashMap::new();
+            current_balances.insert((account_id, currency), None);
+
+            let mut mappings = HashMap::new();
+            mappings.insert(account_id, vec![account_set_id]);
+
+            let entry = create_test_entry(
+                Decimal::from(100),
+                DebitOrCredit::Debit,
+                Layer::Settled,
+                "USD",
+                account_id,
+            );
+            let entries = vec![entry];
+
+            let result = Balances::new_snapshots(Utc::now(), current_balances, &entries, &mappings);
+
+            assert_eq!(result.len(), 1);
+            assert_eq!(result[0].version, 1);
+            assert_eq!(result[0].settled.dr_balance, Decimal::from(100));
         }
     }
 
