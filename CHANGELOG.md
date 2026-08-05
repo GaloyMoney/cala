@@ -1,3 +1,11 @@
+# [cala release v0.20.3](https://github.com/GaloyMoney/cala/releases/tag/0.20.3)
+
+
+
+### Features
+
+- Range-partition cala_persistent_outbox_events (obix 0.6.0) (#809)
+
 # [cala release v0.20.2](https://github.com/GaloyMoney/cala/releases/tag/0.20.2)
 
 
