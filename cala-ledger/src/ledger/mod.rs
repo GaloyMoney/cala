@@ -35,6 +35,7 @@ pub struct CalaLedger {
     velocities: Velocities,
     balances: Balances,
     publisher: OutboxPublisher,
+    posting_permits: Option<std::sync::Arc<tokio::sync::Semaphore>>,
 }
 
 impl CalaLedger {
@@ -72,6 +73,9 @@ impl CalaLedger {
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+        let posting_permits = config
+            .max_concurrent_postings
+            .map(|n| std::sync::Arc::new(tokio::sync::Semaphore::new(n)));
         Ok(Self {
             accounts,
             account_sets,
@@ -84,7 +88,30 @@ impl CalaLedger {
             velocities,
             pool,
             clock,
+            posting_permits,
         })
+    }
+
+    /// Wait for a posting permit when `max_concurrent_postings` is
+    /// configured. The permit is held until the returned guard drops.
+    /// Posters beyond the bound queue in-process (no connection, no
+    /// open transaction) instead of piling up on the balance-poster
+    /// advisory locks inside Postgres.
+    #[instrument(
+        name = "cala_ledger.posting_permit.acquire",
+        skip(self),
+        fields(bounded = self.posting_permits.is_some())
+    )]
+    async fn acquire_posting_permit(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        match &self.posting_permits {
+            Some(sem) => Some(
+                sem.clone()
+                    .acquire_owned()
+                    .await
+                    .expect("posting semaphore is never closed"),
+            ),
+            None => None,
+        }
     }
 
     pub fn pool(&self) -> &PgPool {
@@ -145,9 +172,10 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
+        let _permit = self.acquire_posting_permit().await;
         let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
         let transaction = self
-            .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
+            .post_transaction_in_op_ungated(&mut db, tx_id, tx_template_code, params)
             .await?;
         db.commit().await?;
         Ok(transaction)
@@ -159,6 +187,21 @@ impl CalaLedger {
         fields(transaction_id, external_id)
     )]
     pub async fn post_transaction_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        tx_id: TransactionId,
+        tx_template_code: &str,
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<Transaction, LedgerError> {
+        // NOTE: callers composing several posts into one op acquire and
+        // release one permit per post, so a single task never holds more
+        // than one permit and cannot self-deadlock.
+        let _permit = self.acquire_posting_permit().await;
+        self.post_transaction_in_op_ungated(db, tx_id, tx_template_code, params)
+            .await
+    }
+
+    async fn post_transaction_in_op_ungated(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         tx_id: TransactionId,
