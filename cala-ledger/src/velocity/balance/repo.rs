@@ -28,6 +28,24 @@ impl VelocityBalanceRepo {
             _pool: pool.clone(),
         }
     }
+    /// Takes one advisory lock per velocity-balance key and loads the
+    /// current snapshots.
+    ///
+    /// Lock ordering notes (same protocol as
+    /// `BalanceRepo::find_for_update`):
+    ///
+    /// - The canonical acquisition order is guaranteed by the
+    ///   Rust-side `sorted_keys` sort below, *not* by the query's
+    ///   `ORDER BY`: the planner may evaluate the lock projection
+    ///   before any sort node. Keep the input sort and the UNNEST
+    ///   parameter order in sync if this function is ever changed.
+    /// - The lock key deliberately excludes `window`: keys that differ
+    ///   only in their partition window share one lock. That is safe
+    ///   over-serialization (a posting updates all of a key's windows
+    ///   in one go anyway) and keeps the lock space small.
+    /// - Keys are 32-bit `hashtext` values in the shared 1-arg
+    ///   advisory-lock namespace; collisions with unrelated locks only
+    ///   cause false serialization, never incorrectness.
     #[instrument(
         level = "debug",
         name = "velocity_balance.find_for_update",
