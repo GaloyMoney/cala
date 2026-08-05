@@ -113,7 +113,7 @@ impl VelocityBalanceRepo {
         // (added prophylactically in #684) was redundant with the
         // Rust-side sort and only added a Sort node — see the
         // lock-ordering notes on `balance::BalanceRepo::find_for_update`
-        // for when an `ORDER BY` *is* required (JOINed lock queries).
+        // for when an `ORDER BY` *is* required (lock queries with a JOIN).
         //
         // The partition window is part of the lock key: a velocity
         // balance row is keyed per window, so posters hitting
