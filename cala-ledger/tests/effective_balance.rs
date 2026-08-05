@@ -128,7 +128,7 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let new_journal = helpers::test_journal_with_effective_balances();
     let journal = cala.journals().create(new_journal).await.unwrap();
@@ -248,7 +248,7 @@ async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let journal = cala
         .journals()
@@ -322,7 +322,7 @@ async fn list_cumulative_balances_for_accounts() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let journal = cala
         .journals()
@@ -385,12 +385,13 @@ async fn list_cumulative_balances_for_accounts() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
-    let pool = helpers::init_pool().await?;
+    let pool = helpers::init_isolated_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
 
     let journal = cala
         .journals()
@@ -528,7 +529,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
         &recipient_two_usd,
     );
 
-    let ec_before_recalc = cala
+    let ec_before_rollup = cala
         .balances()
         .effective()
         .list_cumulative_for_account(
@@ -538,12 +539,22 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
             all_balances_query(),
         )
         .await?;
-    let ec_before_recalc = balances_by_currency(ec_before_recalc);
-    assert!(ec_before_recalc.is_empty());
+    let ec_before_rollup = balances_by_currency(ec_before_rollup);
+    assert!(ec_before_rollup.is_empty());
 
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
+    // The streaming rollup populates the EC set asynchronously.
+    jobs.start_poll().await?;
+    for currency in [Currency::BTC, Currency::USD] {
+        helpers::wait_for_effective(
+            &cala,
+            journal.id(),
+            ec_set.id(),
+            currency,
+            date,
+            inline_balances[&currency].settled(),
+        )
         .await?;
+    }
 
     let ec_balances = cala
         .balances()
@@ -573,7 +584,7 @@ async fn list_range_balances_for_account() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let journal = cala
         .journals()
@@ -674,7 +685,7 @@ async fn list_range_balances_for_accounts() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
 
     let journal = cala
         .journals()
@@ -747,12 +758,13 @@ async fn list_range_balances_for_accounts() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
-    let pool = helpers::init_pool().await?;
+    let pool = helpers::init_isolated_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
 
     let journal = cala
         .journals()
@@ -920,7 +932,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
         &recipient_two_usd,
     );
 
-    let ec_before_recalc = cala
+    let ec_before_rollup = cala
         .balances()
         .effective()
         .list_in_range_for_account(
@@ -931,12 +943,28 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
             all_balances_query(),
         )
         .await?;
-    let ec_before_recalc = ranges_by_currency(ec_before_recalc);
-    assert!(ec_before_recalc.is_empty());
+    let ec_before_rollup = ranges_by_currency(ec_before_rollup);
+    assert!(ec_before_rollup.is_empty());
 
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
+    // The streaming rollup populates the EC set asynchronously; wait for
+    // cumulative convergence (range balances derive from the same snapshots).
+    jobs.start_poll().await?;
+    for currency in [Currency::BTC, Currency::USD] {
+        let inline_cumulative = cala
+            .balances()
+            .effective()
+            .find_cumulative(journal.id(), inline_set.id(), currency, from)
+            .await?;
+        helpers::wait_for_effective(
+            &cala,
+            journal.id(),
+            ec_set.id(),
+            currency,
+            from,
+            inline_cumulative.settled(),
+        )
         .await?;
+    }
 
     let ec_ranges = cala
         .balances()
@@ -960,14 +988,19 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The streaming rollup must maintain an EC set's *cumulative effective*
+/// balances, including for **back-dated** transactions (which drive the
+/// effective path's delete-future / replay logic). Verified against an
+/// inline (non-EC) set maintained synchronously by the poster path.
 #[tokio::test]
-async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> {
-    let pool = helpers::init_pool().await?;
+async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
+    let pool = helpers::init_isolated_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
 
     let journal = cala
         .journals()
@@ -985,7 +1018,7 @@ async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> 
         .await
         .unwrap();
 
-    // Inline set — effective balances updated immediately on post
+    // Inline set — effective balances updated inline on post.
     let inline_set = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name("Inline Set")
@@ -995,7 +1028,7 @@ async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> 
         .unwrap();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
 
-    // EC set — effective balances only appear after recalculate
+    // EC set — effective balances maintained by the streaming rollup.
     let ec_set = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name("EC Set")
@@ -1014,174 +1047,88 @@ async fn ec_account_set_effective_balance_recalculation() -> anyhow::Result<()> 
         .await
         .unwrap();
 
-    // --- Post 2 transactions on different effective dates ---
+    // Post 3 transactions; the last is back-dated *between* the first two.
     let date1 = NaiveDate::from_ymd_opt(2025, 3, 10).unwrap();
     let date2 = NaiveDate::from_ymd_opt(2025, 3, 20).unwrap();
+    let date3 = NaiveDate::from_ymd_opt(2025, 3, 15).unwrap();
+    for date in [date1, date2, date3] {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        params.insert("effective", date);
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await
+            .unwrap();
+    }
 
-    let mut params = Params::new();
-    params.insert("journal_id", journal.id());
-    params.insert("sender", sender_account.id());
-    params.insert("recipient", recipient_account.id());
-    params.insert("effective", date1);
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
-        .await
-        .unwrap();
+    jobs.start_poll().await?;
 
-    let mut params = Params::new();
-    params.insert("journal_id", journal.id());
-    params.insert("sender", sender_account.id());
-    params.insert("recipient", recipient_account.id());
-    params.insert("effective", date2);
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
-        .await
-        .unwrap();
-
-    // Inline set should already have effective balances
-    let inline_d1 = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date1)
-        .await?;
-    assert_eq!(inline_d1.settled(), dec!(1290));
-
+    // Inline effective balances are maintained synchronously.
     let inline_d2 = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date2)
         .await?;
-    assert_eq!(inline_d2.settled(), dec!(2580));
+    assert_eq!(inline_d2.settled(), dec!(3870));
 
-    // EC set should have NO effective balance before recalculation
-    assert!(
-        cala.balances()
-            .effective()
-            .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date2)
-            .await
-            .is_err(),
-        "EC set should not have effective balance before recalculation"
-    );
-
-    // --- Recalculate ---
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
-        .await
-        .unwrap();
-
-    // EC set effective balances should now match inline at each date
-    let ec_d1 = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date1)
-        .await?;
-    assert_eq!(
-        ec_d1.settled(),
-        inline_d1.settled(),
-        "BTC at date1 mismatch"
-    );
-
-    let ec_d2 = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date2)
-        .await?;
-    assert_eq!(
-        ec_d2.settled(),
+    // Wait for the rollup to fold all three transactions (incl. the
+    // back-dated one) into the EC set's cumulative effective balance.
+    helpers::wait_for_effective(
+        &cala,
+        journal.id(),
+        ec_set.id(),
+        Currency::BTC,
+        date2,
         inline_d2.settled(),
-        "BTC at date2 mismatch"
-    );
+    )
+    .await?;
 
-    // Also verify USD settled + pending
-    let inline_usd_d2 = cala
+    // EC cumulative effective balances now match inline at every date.
+    for (date, expected) in [
+        (date1, dec!(1290)),
+        (date3, dec!(2580)),
+        (date2, dec!(3870)),
+    ] {
+        let ec = cala
+            .balances()
+            .effective()
+            .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date)
+            .await?;
+        let inline = cala
+            .balances()
+            .effective()
+            .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date)
+            .await?;
+        assert_eq!(
+            ec.settled(),
+            inline.settled(),
+            "BTC (EC vs inline) at {date}"
+        );
+        assert_eq!(ec.settled(), expected, "BTC expected at {date}");
+    }
+
+    // USD settled + pending at date2 match inline too.
+    let inline_usd = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), inline_set.id(), Currency::USD, date2)
         .await?;
-    let ec_usd_d2 = cala
+    let ec_usd = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), ec_set.id(), Currency::USD, date2)
         .await?;
     assert_eq!(
-        inline_usd_d2.settled(),
-        ec_usd_d2.settled(),
+        ec_usd.settled(),
+        inline_usd.settled(),
         "USD settled at date2"
     );
     assert_eq!(
-        inline_usd_d2.pending(),
-        ec_usd_d2.pending(),
+        ec_usd.pending(),
+        inline_usd.pending(),
         "USD pending at date2"
     );
-
-    // --- Idempotency: recalculate again should be a no-op ---
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
-        .await
-        .unwrap();
-    let ec_d2_again = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date2)
-        .await?;
-    assert_eq!(
-        ec_d2.settled(),
-        ec_d2_again.settled(),
-        "should be idempotent"
-    );
-
-    // --- Incremental: post another transaction, recalculate again ---
-    let date3 = NaiveDate::from_ymd_opt(2025, 3, 15).unwrap();
-    let mut params = Params::new();
-    params.insert("journal_id", journal.id());
-    params.insert("sender", sender_account.id());
-    params.insert("recipient", recipient_account.id());
-    params.insert("effective", date3);
-    cala.post_transaction(TransactionId::new(), &tx_code, params)
-        .await
-        .unwrap();
-
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
-        .await
-        .unwrap();
-
-    // date1 cumulative should still be 1290 (only 1 tx at or before date1)
-    let ec_d1_after = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date1)
-        .await?;
-    let inline_d1_after = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date1)
-        .await?;
-    assert_eq!(ec_d1_after.settled(), inline_d1_after.settled());
-
-    // date3 cumulative should be 2580 (date1 + date3)
-    let ec_d3 = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date3)
-        .await?;
-    let inline_d3 = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date3)
-        .await?;
-    assert_eq!(ec_d3.settled(), inline_d3.settled());
-
-    // date2 cumulative should be 3870 (all 3 txs)
-    let ec_d2_final = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), ec_set.id(), Currency::BTC, date2)
-        .await?;
-    let inline_d2_final = cala
-        .balances()
-        .effective()
-        .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date2)
-        .await?;
-    assert_eq!(ec_d2_final.settled(), inline_d2_final.settled());
 
     Ok(())
 }

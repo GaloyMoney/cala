@@ -69,7 +69,7 @@ async fn init_cala() -> anyhow::Result<CalaLedger> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    Ok(CalaLedger::init(cala_config).await?)
+    Ok(CalaLedger::init(cala_config, None).await?)
 }
 
 fn new_set(journal_id: JournalId, name: &str) -> NewAccountSet {
@@ -219,7 +219,7 @@ async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
         .pool(pool.clone())
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, None).await?;
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
     // grandparent <- parent <- leaf

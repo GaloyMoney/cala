@@ -36,6 +36,15 @@ impl Entries {
         Ok(self.repo.find_all(entry_ids).await?)
     }
 
+    #[instrument(level = "debug", name = "cala_ledger.entries.find_all_in_op", skip_all)]
+    pub(crate) async fn find_all_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        entry_ids: &[EntryId],
+    ) -> Result<HashMap<EntryId, Entry>, EntryError> {
+        Ok(self.repo.find_all_in_op(op, entry_ids).await?)
+    }
+
     #[instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_account_id",

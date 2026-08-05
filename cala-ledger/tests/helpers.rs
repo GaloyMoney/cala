@@ -2,11 +2,115 @@
 use rand::distr::{Alphanumeric, SampleString};
 
 use cala_ledger::{
-    account::*, account_set::NewAccountSet, journal::*, primitives::BalanceRollup, tx_template::*,
+    account::*, account_set::NewAccountSet, job::*, journal::*, primitives::BalanceRollup,
+    tx_template::*, AccountId, CalaLedger, Currency,
 };
 
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     init_pool_with(sqlx::postgres::PgPoolOptions::new()).await
+}
+
+/// Create a fresh, isolated database. The streaming EC-balance rollup job
+/// is a **global** outbox consumer, so any test that runs it must not share
+/// a database with other tests — otherwise it would roll their transactions
+/// into its EC sets. cala's own migrations already provision the job +
+/// obix tables, so a plain `migrate!().run()` suffices.
+pub async fn init_isolated_pool() -> anyhow::Result<sqlx::PgPool> {
+    use sqlx::Connection as _;
+
+    let base = std::env::var("PG_CON")?;
+    let db_name = format!("cala_ec_stream_{}", uuid::Uuid::now_v7().simple());
+
+    let mut admin = sqlx::PgConnection::connect(&base).await?;
+    let create = format!(r#"CREATE DATABASE "{db_name}""#);
+    sqlx::query(&create).execute(&mut admin).await?;
+    admin.close().await?;
+
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(10)
+        .connect(&with_db_name(&base, &db_name))
+        .await?;
+    sqlx::migrate!().run(&pool).await?;
+    Ok(pool)
+}
+
+fn with_db_name(url: &str, db: &str) -> String {
+    let (base, query) = match url.split_once('?') {
+        Some((b, q)) => (b, Some(q)),
+        None => (url, None),
+    };
+    let idx = base.rfind('/').expect("connection URL has a path segment");
+    let mut out = format!("{}/{}", &base[..idx], db);
+    if let Some(q) = query {
+        out.push('?');
+        out.push_str(q);
+    }
+    out
+}
+
+/// Build a `job::Jobs` on `pool`. The streaming rollup is registered inside
+/// `CalaLedger::init` (pass `Some(&mut jobs)`); the test drives `start_poll`
+/// itself — typically *after* posting its backlog. Keep the returned `Jobs`
+/// alive for the duration of the test (dropping it shuts the poller down).
+pub async fn init_jobs(pool: sqlx::PgPool) -> anyhow::Result<Jobs> {
+    Ok(Jobs::init(
+        JobSvcConfig::builder()
+            .pool(pool)
+            .build()
+            .map_err(anyhow::Error::msg)?,
+    )
+    .await?)
+}
+
+/// Poll (up to ~30s) until `account_id`'s settled balance reaches `expected`.
+pub async fn wait_for_settled(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    account_id: impl Into<AccountId> + Copy + std::fmt::Debug,
+    currency: Currency,
+    expected: rust_decimal::Decimal,
+) -> anyhow::Result<()> {
+    for _ in 0..300 {
+        if let Ok(bal) = cala.balances().find(journal_id, account_id, currency).await {
+            if bal.settled() == expected {
+                return Ok(());
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let last = cala.balances().find(journal_id, account_id, currency).await;
+    anyhow::bail!("settled balance did not converge to {expected}; last observed = {last:?}");
+}
+
+/// Poll (up to ~30s) until `account_id`'s cumulative effective settled
+/// balance as of `date` reaches `expected`.
+pub async fn wait_for_effective(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    account_id: impl Into<AccountId> + Copy + std::fmt::Debug,
+    currency: Currency,
+    date: chrono::NaiveDate,
+    expected: rust_decimal::Decimal,
+) -> anyhow::Result<()> {
+    for _ in 0..300 {
+        if let Ok(bal) = cala
+            .balances()
+            .effective()
+            .find_cumulative(journal_id, account_id, currency, date)
+            .await
+        {
+            if bal.settled() == expected {
+                return Ok(());
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    let last = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal_id, account_id, currency, date)
+        .await;
+    anyhow::bail!("effective balance did not converge to {expected}; last observed = {last:?}");
 }
 
 /// Same as `init_pool`, but lets the caller pre-configure the pool (max
