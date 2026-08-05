@@ -32,7 +32,7 @@ mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 pub use cala_types::{
@@ -205,13 +205,7 @@ impl Balances {
             return Err(BalanceError::JournalLocked(journal.id));
         }
 
-        // Using BTreeSet ensures consistent ordering of account/currency pairs
-        // across all transactions. This prevents deadlocks when acquiring
-        // advisory locks in find_for_update, as all transactions will attempt
-        // to lock the same resources in the same order. Without this ordering,
-        // concurrent transactions could acquire locks in different orders and
-        // deadlock waiting for each other.
-        let mut all_involved_balances: BTreeSet<_> = BTreeSet::new();
+        let mut all_involved_balances: HashSet<_> = HashSet::new();
         let empty = Vec::new();
         for entry in entries.iter() {
             all_involved_balances.extend(

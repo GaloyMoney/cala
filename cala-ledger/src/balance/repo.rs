@@ -358,12 +358,31 @@ impl BalanceRepo {
     ///
     /// The 2-arg and 1-arg `pg_advisory_xact_lock` namespaces are
     /// disjoint in PostgreSQL, so the two locks cannot collide with
-    /// each other. Lock acquisition order across transactions is
-    /// canonical because the caller pre-sorts the input via a BTreeSet
-    /// in `Balances::update_balances_in_op` and the planner picks a
-    /// nested-loop join with `v` as the outer side for the tiny inputs
-    /// this query receives, preserving UNNEST scan order through to
-    /// the function calls in the SELECT list.
+    /// each other.
+    ///
+    /// Lock-ordering invariant: the `ORDER BY` is what makes lock
+    /// acquisition order canonical here — do not remove it. It is
+    /// *required* because the JOIN lets the planner produce rows in
+    /// arbitrary order (a hash join probing from a `cala_accounts`
+    /// scan emits heap order, not UNNEST array order — observed as
+    /// real deadlocks and fixed by adding the `ORDER BY` in #684). It
+    /// is also *sufficient*: advisory-lock functions are VOLATILE,
+    /// and since PostgreSQL 9.6 the planner unconditionally postpones
+    /// volatile SELECT-list expressions until after the Sort
+    /// (`make_sort_input_target` — the same mechanism that makes
+    /// `nextval()` follow `ORDER BY`), so the lock calls run row by
+    /// row in sorted order. Verified empirically during the #779
+    /// investigation: `EXPLAIN (VERBOSE)` shows the lock calls in a
+    /// `Result` node *above* the Sort across nested-loop, hash-join,
+    /// merge-join and forced-generic prepared plans. The caller
+    /// (`Balances::update_balances_in_op`) only dedups the input
+    /// pairs; its iteration order is not load-bearing.
+    ///
+    /// Note this only guarantees ordering *within* this statement. A
+    /// transaction that runs several postings (repeated
+    /// `post_transaction_in_op` calls in one op) acquires locks
+    /// across multiple statements with no global ordering, and can
+    /// still deadlock against other lockers — see #779.
     #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
@@ -451,11 +470,14 @@ impl BalanceRepo {
         // Sort at the Rust level so every caller acquires the
         // `pg_advisory_xact_lock` locks in canonical `AccountId`
         // order, which is what lets concurrent callers with
-        // overlapping inputs serialize without deadlock. Ordering
-        // has to be enforced on the input array — the planner is
-        // free to evaluate the per-row projection (the lock
-        // function call) before any SQL-level sort node, so an
-        // `ORDER BY` on the query is not a reliable substitute.
+        // overlapping inputs serialize without deadlock. This
+        // statement is join-free, so the bare UNNEST scan emits rows
+        // in array order and the lock call is evaluated per row in
+        // exactly that order — array order IS the acquisition order.
+        // (An `ORDER BY` would also work — PostgreSQL >= 9.6
+        // evaluates volatile SELECT-list expressions after the Sort —
+        // but it would only add a pointless Sort node here; see the
+        // ordering notes on `find_for_update`.)
         let mut account_ids: Vec<AccountId> = account_ids.iter().copied().collect();
         account_ids.sort();
         sqlx::query!(
@@ -504,10 +526,10 @@ impl BalanceRepo {
         member_id: AccountId,
     ) -> Result<bool, BalanceError> {
         // Lock both ids in canonical ascending AccountId order, with
-        // the sort done in Rust: the planner is free to evaluate the
-        // lock projection before any SQL-level sort node, so an
-        // ORDER BY on the query is not a reliable ordering guarantee
-        // (see lock_accounts_exclusive_in_op).
+        // the sort done in Rust: the statement is join-free, so the
+        // bare UNNEST scan emits rows in array order and array order
+        // IS the lock acquisition order (see
+        // lock_accounts_exclusive_in_op).
         let mut lock_ids = [parent_account_id, member_id];
         lock_ids.sort();
         sqlx::query!(
@@ -570,9 +592,9 @@ impl BalanceRepo {
         // ascending AccountId order — EXCLUSIVE where the id is a
         // member in any pair, SHARED where it only ever appears as a
         // parent (EXCLUSIVE wins when an id is both). The list is
-        // built, deduped and sorted in Rust because a SQL ORDER BY
-        // does not order projection-evaluated advisory locks (see
-        // lock_accounts_exclusive_in_op). Locking pair-wise (SHARED
+        // built, deduped and sorted in Rust; the lock statement is
+        // join-free, so the UNNEST array order is the acquisition
+        // order (see lock_accounts_exclusive_in_op). Locking pair-wise (SHARED
         // parent, then EXCLUSIVE member) instead would invert the
         // acquisition order against the single-pair path whenever
         // member_id < parent_account_id, and concurrent single- and
