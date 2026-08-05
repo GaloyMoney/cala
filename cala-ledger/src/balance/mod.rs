@@ -32,7 +32,7 @@ mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 pub use cala_types::{
@@ -205,12 +205,7 @@ impl Balances {
             return Err(BalanceError::JournalLocked(journal.id));
         }
 
-        // The BTreeSet dedups the account/currency pairs (an entry list can
-        // repeat a pair). Advisory-lock acquisition order is enforced by the
-        // ORDER BY inside `BalanceRepo::find_for_update`'s lock statement —
-        // not by this iteration order — so the sortedness here is incidental
-        // (see the lock-ordering notes on `find_for_update`).
-        let mut all_involved_balances: BTreeSet<_> = BTreeSet::new();
+        let mut all_involved_balances: HashSet<_> = HashSet::new();
         let empty = Vec::new();
         for entry in entries.iter() {
             all_involved_balances.extend(

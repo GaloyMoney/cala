@@ -374,9 +374,9 @@ impl BalanceRepo {
     /// row in sorted order. Verified empirically during the #779
     /// investigation: `EXPLAIN (VERBOSE)` shows the lock calls in a
     /// `Result` node *above* the Sort across nested-loop, hash-join,
-    /// merge-join and forced-generic prepared plans. The caller's
-    /// BTreeSet in `Balances::update_balances_in_op` provides dedup;
-    /// its iteration order is not load-bearing for lock ordering.
+    /// merge-join and forced-generic prepared plans. The caller
+    /// (`Balances::update_balances_in_op`) only dedups the input
+    /// pairs; its iteration order is not load-bearing.
     ///
     /// Note this only guarantees ordering *within* this statement. A
     /// transaction that runs several postings (repeated
