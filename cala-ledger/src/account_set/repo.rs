@@ -227,7 +227,7 @@ impl AccountSetRepo {
             ORDER BY created_at DESC, member_id DESC
             LIMIT $1
           "#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 id.map(uuid::Uuid::from),
                 created_at,
                 uuid::Uuid::from(account_set_id),
@@ -366,7 +366,7 @@ impl AccountSetRepo {
             ORDER BY external_id ASC NULLS LAST, member_id ASC
             LIMIT $1
         "#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 id.map(uuid::Uuid::from),
                 external_id,
                 uuid::Uuid::from(account_set_id),
@@ -772,7 +772,7 @@ impl AccountSetRepo {
             account_id as AccountId,
             query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
             query.after.map(|c| c.name),
-            query.first as i64 + 1
+            crate::clamped_page_limit(query.first)
         )
         .fetch_n(op, query.first)
         .await?;
@@ -821,7 +821,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
             query.after.map(|c| c.name),
-            query.first as i64 + 1
+            crate::clamped_page_limit(query.first)
         )
         .fetch_n(op, query.first)
         .await?;
@@ -911,7 +911,7 @@ impl AccountSetRepo {
             ORDER BY s.id ASC
             LIMIT $1
             "#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 after.map(|c| uuid::Uuid::from(c.id)),
             ))
             .await?;

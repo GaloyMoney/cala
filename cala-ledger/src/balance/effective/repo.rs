@@ -174,7 +174,9 @@ impl EffectiveBalanceRepo {
                 last_version = row.all_time_version.expect("all_time_version") as u32;
             }
         }
-        Ok((first, last, last_version - first_version))
+        // Saturate: an inverted range (until < from) can pair a "last"
+        // snapshot older than the "first" snapshot.
+        Ok((first, last, last_version.saturating_sub(first_version)))
     }
 
     #[instrument(
@@ -286,7 +288,7 @@ impl EffectiveBalanceRepo {
             ORDER BY h.currency ASC
             LIMIT $1
             "#,
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
             journal_id as JournalId,
             account_id as AccountId,
             date,
@@ -386,7 +388,7 @@ impl EffectiveBalanceRepo {
             date,
             after_account_id,
             after_currency.as_deref(),
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -617,7 +619,7 @@ impl EffectiveBalanceRepo {
                 account_id as "account_id: AccountId",
                 currency
             FROM last"#,
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
             journal_id as JournalId,
             account_id as AccountId,
             from,
@@ -770,7 +772,7 @@ impl EffectiveBalanceRepo {
             until,
             after_account_id,
             after_currency.as_deref(),
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -807,7 +809,11 @@ impl EffectiveBalanceRepo {
         let mut ranges = ranges
             .into_iter()
             .filter_map(|(_, (start, start_version, end, end_version))| {
-                end.map(|end| BalanceRange::new(start, end, end_version - start_version))
+                // Saturate: an inverted range (until < from) can pair an
+                // end snapshot older than the start snapshot.
+                end.map(|end| {
+                    BalanceRange::new(start, end, end_version.saturating_sub(start_version))
+                })
             })
             .collect::<Vec<_>>();
 

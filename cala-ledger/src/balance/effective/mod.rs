@@ -186,7 +186,9 @@ impl EffectiveBalances {
             if let Some(end) = end {
                 res.insert(
                     id,
-                    BalanceRange::new(start, end, end_version - start_version),
+                    // Saturate: an inverted range (until < from) can pair an
+                    // end snapshot older than the start snapshot.
+                    BalanceRange::new(start, end, end_version.saturating_sub(start_version)),
                 );
             }
         }
@@ -257,7 +259,7 @@ impl EffectiveBalances {
             memberships,
             full_history,
             base_snapshots,
-        );
+        )?;
 
         if !snapshots.is_empty() {
             self.repo
@@ -279,8 +281,21 @@ impl EffectiveBalances {
         memberships: &HashMap<AccountId, Vec<AccountSetId>>,
         history: Vec<EffectiveMemberHistoryRow>,
         base_snapshots: HashMap<(AccountId, Currency), LatestBeforeEntry>,
-    ) -> Vec<RecalcEffectiveSnapshot> {
+    ) -> Result<Vec<RecalcEffectiveSnapshot>, BalanceError> {
         use rust_decimal::Decimal;
+
+        // Decimal addition panics on overflow; roll the recalculation
+        // back with an error instead of crashing the caller's task.
+        fn checked_add(
+            target: &mut Decimal,
+            delta: Decimal,
+            account_id: AccountId,
+        ) -> Result<(), BalanceError> {
+            *target = target
+                .checked_add(delta)
+                .ok_or(BalanceError::Overflow(account_id))?;
+            Ok(())
+        }
 
         let set_ids: HashSet<&AccountSetId> = account_set_ids.iter().collect();
 
@@ -378,12 +393,12 @@ impl EffectiveBalances {
                 }
 
                 let running = &mut state.snapshot;
-                running.settled.dr_balance += d_settled_dr;
-                running.settled.cr_balance += d_settled_cr;
-                running.pending.dr_balance += d_pending_dr;
-                running.pending.cr_balance += d_pending_cr;
-                running.encumbrance.dr_balance += d_enc_dr;
-                running.encumbrance.cr_balance += d_enc_cr;
+                checked_add(&mut running.settled.dr_balance, d_settled_dr, account_id)?;
+                checked_add(&mut running.settled.cr_balance, d_settled_cr, account_id)?;
+                checked_add(&mut running.pending.dr_balance, d_pending_dr, account_id)?;
+                checked_add(&mut running.pending.cr_balance, d_pending_cr, account_id)?;
+                checked_add(&mut running.encumbrance.dr_balance, d_enc_dr, account_id)?;
+                checked_add(&mut running.encumbrance.cr_balance, d_enc_cr, account_id)?;
                 running.version += 1;
                 running.entry_id = row.snapshot.entry_id;
                 running.modified_at = row.snapshot.modified_at;
@@ -413,7 +428,7 @@ impl EffectiveBalances {
             }
         }
 
-        result
+        Ok(result)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -446,7 +461,7 @@ impl EffectiveBalances {
             }
         }
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
+            data.re_calculate_snapshots(created_at)?;
         }
 
         let new_balances = Self::new_effective_snapshots(journal_id, all_data);

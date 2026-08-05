@@ -229,7 +229,7 @@ impl BalanceRepo {
                   AND ($4::text IS NULL OR c.currency > $4)
                 ORDER BY c.currency ASC
                 LIMIT $1"#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 journal_id as JournalId,
                 account_id as AccountId,
                 after_currency.as_deref(),
@@ -306,7 +306,7 @@ impl BalanceRepo {
                 account_ids as &[AccountId],
                 after_account_id,
                 after_currency.as_deref(),
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
             ))
             .await?;
 

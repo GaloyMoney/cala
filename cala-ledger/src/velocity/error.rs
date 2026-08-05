@@ -50,6 +50,8 @@ pub enum VelocityError {
     LimitIdAlreadyExists(String),
     #[error("VelocityError - Limit already added to Control")]
     LimitAlreadyAddedToControl,
+    #[error("VelocityError - BalanceError: {0}")]
+    BalanceError(#[from] crate::balance::error::BalanceError),
 }
 
 impl From<VelocityControlFindError> for VelocityError {

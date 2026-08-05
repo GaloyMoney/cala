@@ -145,9 +145,9 @@ impl VelocityBalances {
             for (limit, entry) in entries {
                 let new_balance = match latest_balance.take() {
                     Some(balance) => {
-                        crate::balance::Snapshots::update_snapshot(time, balance, entry)
+                        crate::balance::Snapshots::update_snapshot(time, balance, entry)?
                     }
-                    None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry),
+                    None => crate::balance::Snapshots::new_snapshot(time, entry.account_id, entry)?,
                 };
 
                 let ctx = context.context_for_entry(key.account_id, entry);
