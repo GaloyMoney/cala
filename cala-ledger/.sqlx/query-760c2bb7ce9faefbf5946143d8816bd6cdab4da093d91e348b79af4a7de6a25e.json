@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT pg_advisory_xact_lock(hashtext(concat(\n            currency,\n            journal_id::text,\n            account_id::text,\n            velocity_control_id::text,\n            velocity_limit_id::text,\n            partition_window::text\n        )))\n        FROM UNNEST(\n            $1::text[],\n            $2::uuid[],\n            $3::uuid[],\n            $4::uuid[],\n            $5::uuid[],\n            $6::jsonb[]\n        )\n        AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id, partition_window)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "760c2bb7ce9faefbf5946143d8816bd6cdab4da093d91e348b79af4a7de6a25e"
+}

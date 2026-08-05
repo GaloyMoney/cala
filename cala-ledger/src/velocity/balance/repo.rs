@@ -39,6 +39,13 @@ impl VelocityBalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
     ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
+        // The window participates in the lock key below, so it must
+        // also participate in the canonical sort — keys differing only
+        // by window map to distinct locks and need a deterministic
+        // relative order across transactions. `serde_json::Value`'s
+        // `Display` is deterministic here (object keys are
+        // BTreeMap-backed without the `preserve_order` feature), so
+        // its string form is a stable tiebreaker.
         let mut sorted_keys: Vec<_> = keys.collect();
         sorted_keys.sort_by(|a, b| {
             a.account_id
@@ -47,6 +54,12 @@ impl VelocityBalanceRepo {
                 .then_with(|| a.limit_id.cmp(&b.limit_id))
                 .then_with(|| a.currency.cmp(&b.currency))
                 .then_with(|| a.journal_id.cmp(&b.journal_id))
+                .then_with(|| {
+                    a.window
+                        .inner()
+                        .to_string()
+                        .cmp(&b.window.inner().to_string())
+                })
         });
 
         let (windows, currencies, journal_ids, account_ids, control_ids, limit_ids) =
@@ -101,6 +114,14 @@ impl VelocityBalanceRepo {
         // Rust-side sort and only added a Sort node — see the
         // lock-ordering notes on `balance::BalanceRepo::find_for_update`
         // for when an `ORDER BY` *is* required (JOINed lock queries).
+        //
+        // The partition window is part of the lock key: a velocity
+        // balance row is keyed per window, so posters hitting
+        // different windows of the same (journal, account, control,
+        // limit, currency) never contend on the same row and need not
+        // serialize. `partition_window::text` is safe as a hash input
+        // because jsonb is stored in canonical form — equal jsonb
+        // values render identical text.
         sqlx::query!(
             r#"
         SELECT pg_advisory_xact_lock(hashtext(concat(
@@ -108,22 +129,25 @@ impl VelocityBalanceRepo {
             journal_id::text,
             account_id::text,
             velocity_control_id::text,
-            velocity_limit_id::text
+            velocity_limit_id::text,
+            partition_window::text
         )))
         FROM UNNEST(
             $1::text[],
             $2::uuid[],
             $3::uuid[],
             $4::uuid[],
-            $5::uuid[]
+            $5::uuid[],
+            $6::jsonb[]
         )
-        AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
+        AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id, partition_window)
         "#,
             &currencies as &[&str],
             &journal_ids as &[JournalId],
             &account_ids as &[AccountId],
             &control_ids as &[VelocityControlId],
             &limit_ids as &[VelocityLimitId],
+            &windows[..],
         )
         .execute(op.as_executor())
         .await?;
