@@ -92,6 +92,15 @@ impl VelocityBalanceRepo {
                 },
             );
 
+        // Canonical lock acquisition order is enforced by the
+        // Rust-side sort of `sorted_keys` above: this statement is
+        // join-free, so the bare UNNEST scan emits rows in array
+        // order and the lock call is evaluated per row in exactly
+        // that order. The `ORDER BY` this statement used to carry
+        // (added prophylactically in #684) was redundant with the
+        // Rust-side sort and only added a Sort node — see the
+        // lock-ordering notes on `balance::BalanceRepo::find_for_update`
+        // for when an `ORDER BY` *is* required (JOINed lock queries).
         sqlx::query!(
             r#"
         SELECT pg_advisory_xact_lock(hashtext(concat(
@@ -109,7 +118,6 @@ impl VelocityBalanceRepo {
             $5::uuid[]
         )
         AS v(currency, journal_id, account_id, velocity_control_id, velocity_limit_id)
-        ORDER BY account_id, velocity_control_id, velocity_limit_id, currency, journal_id
         "#,
             &currencies as &[&str],
             &journal_ids as &[JournalId],

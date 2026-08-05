@@ -205,12 +205,11 @@ impl Balances {
             return Err(BalanceError::JournalLocked(journal.id));
         }
 
-        // Using BTreeSet ensures consistent ordering of account/currency pairs
-        // across all transactions. This prevents deadlocks when acquiring
-        // advisory locks in find_for_update, as all transactions will attempt
-        // to lock the same resources in the same order. Without this ordering,
-        // concurrent transactions could acquire locks in different orders and
-        // deadlock waiting for each other.
+        // The BTreeSet dedups the account/currency pairs (an entry list can
+        // repeat a pair). Advisory-lock acquisition order is enforced by the
+        // ORDER BY inside `BalanceRepo::find_for_update`'s lock statement —
+        // not by this iteration order — so the sortedness here is incidental
+        // (see the lock-ordering notes on `find_for_update`).
         let mut all_involved_balances: BTreeSet<_> = BTreeSet::new();
         let empty = Vec::new();
         for entry in entries.iter() {
