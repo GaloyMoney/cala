@@ -10,9 +10,12 @@ CREATE TABLE cala_accounts (
 
   normal_balance_type DebitOrCredit NOT NULL, -- For quick lookup when querying balances
   eventually_consistent BOOLEAN NOT NULL, -- For balance locking
+  is_account_set BOOLEAN NOT NULL, -- TRUE for account-set backing accounts
   velocity_context_values JSONB NOT NULL, -- Cached for quicker velocity enforcement
   status Status NOT NULL, -- For checking account status
-  created_at TIMESTAMPTZ NOT NULL
+  created_at TIMESTAMPTZ NOT NULL,
+
+  UNIQUE (id, is_account_set) -- FK target: entries reference only non-set accounts
 );
 CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
 
@@ -139,10 +142,13 @@ CREATE TABLE cala_transaction_events (
 CREATE TABLE cala_entries (
   id UUID PRIMARY KEY,
   journal_id UUID NOT NULL,
-  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  account_id UUID NOT NULL,
   transaction_id UUID NOT NULL,
+  account_is_account_set BOOLEAN NOT NULL GENERATED ALWAYS AS (FALSE) STORED,
 
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT cala_entries_account_not_account_set_fkey
+    FOREIGN KEY (account_id, account_is_account_set) REFERENCES cala_accounts(id, is_account_set)
 );
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 CREATE INDEX idx_cala_entries_account_id ON cala_entries (account_id, created_at DESC, id DESC);

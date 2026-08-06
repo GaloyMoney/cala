@@ -137,14 +137,11 @@ impl Snapshots {
         fold.into_snapshots()
     }
 
-    /// Like [`Self::from_entries`] but for the streaming rollup: fans each
-    /// entry into its eventually-consistent ancestor account sets, and — for
-    /// an entry whose leaf account is itself **eventually-consistent** (an
-    /// EC plain account, listed in `ec_leaves`) — into that leaf's own
-    /// balance too. A *synchronous* leaf is skipped here because it is
-    /// already maintained by the inline poster path; an EC leaf is skipped
-    /// by the poster (`find_for_update` filters `eventually_consistent =
-    /// FALSE`), so the rollup is its sole writer.
+    /// Streaming-rollup counterpart of [`Self::from_entries`]: fans each entry
+    /// into its eventually-consistent ancestor account sets, plus — when the
+    /// leaf is an EC plain account (in `ec_leaves`) — the leaf's own balance.
+    /// A synchronous leaf is left to the inline poster; an EC leaf is skipped
+    /// by the poster, so the rollup is its sole writer.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.from_ec_entries",
@@ -167,8 +164,6 @@ impl Snapshots {
             {
                 fold.apply(set, entry);
             }
-            // EC plain-account leaf: the inline poster skips it, so fold the
-            // entry into the leaf's own balance here.
             if ec_leaves.contains(&entry.account_id) {
                 fold.apply(entry.account_id, entry);
             }

@@ -306,28 +306,6 @@ impl Balances {
             .await
     }
 
-    /// Of `account_ids`, the ones that are **eventually-consistent
-    /// set-backing accounts** — accounts backing an account set whose
-    /// balance is maintained by the streaming rollup. A direct entry to
-    /// such an account is rejected on posting (#802): its balance is
-    /// derived from members, so a direct entry would be folded nowhere.
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.balance.ec_set_backing_accounts_in_op",
-        skip(self, op, account_ids),
-        fields(account_ids_count = account_ids.len()),
-        err(level = "warn")
-    )]
-    pub(crate) async fn ec_set_backing_accounts_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
-    ) -> Result<Vec<AccountId>, BalanceError> {
-        self.repo
-            .fetch_ec_set_backing_accounts(op, account_ids)
-            .await
-    }
-
     /// Streaming EC rollup for a batch of committed transactions.
     ///
     /// Mirror of [`Self::update_balances_in_op`] but for the ancestor
@@ -387,9 +365,7 @@ impl Balances {
             .repo
             .fetch_ec_set_mappings(op, journal_id, &member_account_ids)
             .await?;
-        // EC plain-account leaves among the posted accounts: the inline
-        // poster skips their balances, so the rollup folds their entries
-        // into the leaf itself in addition to any EC ancestor sets.
+        // EC leaves the inline poster skips, folded here into their own balance.
         let ec_leaves = self
             .repo
             .fetch_ec_leaf_accounts(op, &member_account_ids)

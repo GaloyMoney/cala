@@ -504,36 +504,49 @@ async fn streaming_rollup_maintains_ec_plain_leaf_effective_balance() -> anyhow:
     Ok(())
 }
 
-/// #802 guard: a direct entry to an EC set-backing account is rejected —
+/// #802 guard: a direct entry to an account-set backing account is rejected —
 /// its balance is derived from members, so the entry would be folded nowhere.
+/// The composite FK enforces this for **any** set, EC or synchronous.
 #[tokio::test]
-async fn rejects_direct_entry_to_ec_set_backing_account() -> anyhow::Result<()> {
+async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
     let pool = helpers::init_isolated_pool().await?;
     let (fixture, _jobs) = setup(pool, helpers::test_journal()).await?;
 
     let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "guard EC set").await?;
-    let ec_set_account = AccountId::from(&ec_set.id());
-
-    let mut params = Params::new();
-    params.insert("journal_id", fixture.journal_id.to_string());
-    params.insert("sender", fixture.sender.id());
-    params.insert("recipient", ec_set_account);
-    params.insert("amount", POST_AMOUNT);
-    // `Transaction` isn't `Debug`, so match on the result by reference
-    // (avoids `expect_err`'s `T: Debug` bound).
-    let result = fixture
+    let sync_set = fixture
         .cala
-        .post_transaction(TransactionId::new(), &fixture.tx_code, params)
-        .await;
-    assert!(
-        matches!(
-            &result,
-            Err(LedgerError::EntriesTargetEventuallyConsistentAccountSet { account_id })
-                if *account_id == ec_set_account
-        ),
-        "expected EntriesTargetEventuallyConsistentAccountSet, got {:?}",
-        result.err(),
-    );
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("guard sync set")
+                .journal_id(fixture.journal_id)
+                .balance_rollup(BalanceRollup::Synchronous)
+                .build()?,
+        )
+        .await?;
+
+    for set_account in [
+        AccountId::from(&ec_set.id()),
+        AccountId::from(&sync_set.id()),
+    ] {
+        let mut params = Params::new();
+        params.insert("journal_id", fixture.journal_id.to_string());
+        params.insert("sender", fixture.sender.id());
+        params.insert("recipient", set_account);
+        params.insert("amount", POST_AMOUNT);
+        // `Transaction` isn't `Debug`, so match on the result by reference
+        // (avoids `expect_err`'s `T: Debug` bound).
+        let result = fixture
+            .cala
+            .post_transaction(TransactionId::new(), &fixture.tx_code, params)
+            .await;
+        assert!(
+            matches!(&result, Err(LedgerError::EntryTargetsAccountSet)),
+            "posting to set-backing account {set_account} must be rejected, got {:?}",
+            result.err(),
+        );
+    }
     Ok(())
 }
 

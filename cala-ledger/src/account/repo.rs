@@ -26,6 +26,7 @@ use super::{entity::*, error::AccountError};
         ),
         status(ty = "Status", update(accessor = "values().status")),
         eventually_consistent(ty = "bool", update(persist = false)),
+        is_account_set(ty = "bool", update(persist = false)),
         velocity_context_values(
             ty = "VelocityContextAccountValues",
             create(accessor = "context_values()"),
