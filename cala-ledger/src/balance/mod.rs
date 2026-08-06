@@ -369,9 +369,6 @@ impl Balances {
             return Ok(());
         }
 
-        // Distinct (EC set-account, currency) pairs touched by the group.
-        // Iteration order is not load-bearing: lock-acquisition ordering is
-        // `find_ec_balances_for_update`'s concern (SQL-side `ORDER BY`).
         let empty = Vec::new();
         let mut involved: HashSet<(AccountId, Currency)> = HashSet::new();
         for entry in group.iter().flat_map(|tx| tx.entries.iter()) {
@@ -385,15 +382,11 @@ impl Balances {
         let (account_ids, currencies): (Vec<AccountId>, Vec<&str>) =
             involved.into_iter().map(|(a, c)| (a, c.code())).unzip();
 
-        // One sorted shared-lock acquisition + one read for the whole group.
         let mut current_balances = self
             .repo
             .find_ec_balances_for_update(op, journal_id, &(account_ids, currencies))
             .await?;
 
-        // Chain the per-transaction folds in landing order: each fold reads
-        // the map as left by its predecessors, so versions increment across
-        // transactions exactly as they would with per-transaction reads.
         let mut all_new = Vec::new();
         for tx in group.iter() {
             let new_balances = Snapshots::from_ec_entries(
@@ -421,8 +414,6 @@ impl Balances {
         let journal = self.journals.find(journal_id).await?;
         if journal.insert_effective_balances() {
             for tx in group {
-                // Keep the effective read narrow: only the pairs this
-                // transaction touches.
                 let mut tx_involved: HashSet<(AccountId, Currency)> = HashSet::new();
                 for entry in tx.entries.iter() {
                     for set_id in ec_mappings.get(&entry.account_id).unwrap_or(&empty) {

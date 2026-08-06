@@ -166,9 +166,6 @@ impl EcRollupBatch {
             .map(|tx| {
                 let mut entry_values = entries.remove(&tx.id).unwrap_or_default();
                 if entry_values.len() != tx.entry_ids.len() {
-                    // `fetched` holds exactly the ids missing from the
-                    // stream, so this fills the gaps without duplicating
-                    // what was collected.
                     entry_values.extend(
                         tx.entry_ids
                             .iter()
@@ -195,8 +192,6 @@ struct EcBalanceRollupHandler {
 }
 
 impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
-    // cala only publishes persistent events; never subscribe the
-    // ephemeral stream.
     const SUBSCRIPTION: EventSubscription = EventSubscription::PersistentOnly;
 
     type Batch = EcRollupBatch;
@@ -225,16 +220,6 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         }
     }
 
-    // Why collect/flush rather than `consume_in_batch`/`defer`: the
-    // transaction/checkpoint economics are the same (one commit per
-    // landing either way), but with collect the per-event path is a pure
-    // memory write — no batch transaction is open (and no EC advisory
-    // locks are held) while the backlog drains through the handler — and
-    // flush sees the whole batch at once, which is what enables sourcing
-    // entries from the stream itself and handing the applier the entire
-    // batch (one lock/read/insert pass per journal instead of one per
-    // transaction). `defer` is structurally one-event-at-a-time and can
-    // do neither.
     #[tracing::instrument(
         name = "cala_ledger.ec_rollup.flush",
         skip_all,
@@ -246,9 +231,6 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         op: &mut FlushOp<'_>,
         batch: Self::Batch,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // One read for every transaction whose event group straddled a
-        // landing boundary (the entries committed atomically with the
-        // `TransactionCreated` event, so they are always visible).
         let missing_ids = batch.missing_entry_ids();
         let fetched = if missing_ids.is_empty() {
             HashMap::new()
