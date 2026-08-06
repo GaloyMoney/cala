@@ -303,6 +303,49 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .await;
     assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
 
+    // Descendant-path overlap, all sets empty: a *descendant* of the
+    // member already reaches the target chain through an edge that
+    // bypasses the member. A ⊃ B, B ⊃ D, X ⊃ D — attaching X under A
+    // would give D two paths to A, so it must be rejected even though X
+    // itself has no ancestors and no accounts exist anywhere yet.
+    let set_a2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC A"))
+        .await
+        .unwrap();
+    let set_b2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC B"))
+        .await
+        .unwrap();
+    let set_d2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC D"))
+        .await
+        .unwrap();
+    let set_x2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC X"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_a2.id(), set_b2.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_b2.id(), set_d2.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_x2.id(), set_d2.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(set_a2.id(), set_x2.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
     // Subtree-account overlap: attaching a set whose accounts already live
     // under the target chain is rejected.
     let outside = cala

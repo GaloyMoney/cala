@@ -710,11 +710,18 @@ impl AccountSetRepo {
             });
         }
 
-        // Path uniqueness, set level (see ADDVISORY_LOCK_ID): the member
-        // must not already reach the target or any of the target's
-        // ancestors — otherwise the new edge would give it (and every
-        // account below it) a second path there. Also catches a
-        // duplicate direct edge before the unique constraint does.
+        // Path uniqueness, set level (see ADDVISORY_LOCK_ID): neither the
+        // member nor any set below it may already reach the target or any
+        // of the target's ancestors — the new edge would give that set
+        // (and every account below it) a second path there. The walk must
+        // cover the member's whole subtree, not just the member: a
+        // descendant can reach the target chain through an edge that
+        // bypasses the member entirely (e.g. `A⊃B`, `B⊃D`, `X⊃D` — then
+        // attaching X under A would double-contain D). Seeding the reach
+        // walk with the subtree itself also catches a duplicate direct
+        // edge before the unique constraint does; the subtree cannot
+        // legitimately intersect the target chain (the cycle check above
+        // already rejected that).
         let set_conflict = sqlx::query!(
             r#"
           WITH RECURSIVE target_chain AS (
@@ -725,20 +732,25 @@ impl AccountSetRepo {
             JOIN cala_account_set_member_account_sets e
                 ON e.member_account_set_id = t.set_id
           ),
-          member_ancestors AS (
-            SELECT e.account_set_id AS set_id
-            FROM cala_account_set_member_account_sets e
-            WHERE e.member_account_set_id = $2
-
+          member_subtree AS (
+            SELECT $2::uuid AS set_id
+            UNION
+            SELECT e.member_account_set_id
+            FROM member_subtree s
+            JOIN cala_account_set_member_account_sets e
+                ON e.account_set_id = s.set_id
+          ),
+          subtree_reach AS (
+            SELECT set_id FROM member_subtree
             UNION
             SELECT e.account_set_id
-            FROM member_ancestors m
+            FROM subtree_reach r
             JOIN cala_account_set_member_account_sets e
-                ON e.member_account_set_id = m.set_id
+                ON e.member_account_set_id = r.set_id
           )
           SELECT EXISTS (
-            SELECT 1 FROM target_chain t
-            JOIN member_ancestors m ON t.set_id = m.set_id
+            SELECT 1 FROM subtree_reach r
+            JOIN target_chain t ON r.set_id = t.set_id
           ) AS "conflict!"
           "#,
             account_set_id as AccountSetId,
