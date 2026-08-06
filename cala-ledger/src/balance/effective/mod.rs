@@ -6,11 +6,9 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use cala_types::{balance::EffectiveBalanceSnapshot, entry::EntryValues, primitives::*};
+use cala_types::{entry::EntryValues, primitives::*};
 
 use crate::{outbox::OutboxPublisher, primitives::JournalId};
-
-use data::EffectiveBalanceData;
 
 use super::{
     account_balance::*,
@@ -129,7 +127,13 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
-        Ok(Self::balance_ranges_from_snapshots(ranges))
+        Ok(ranges
+            .into_iter()
+            .filter_map(|(id, (start, start_version, end, end_version))| {
+                BalanceRange::from_bounds(start, start_version, end, end_version)
+                    .map(|range| (id, range))
+            })
+            .collect())
     }
 
     #[instrument(
@@ -173,21 +177,6 @@ impl EffectiveBalances {
             .await
     }
 
-    fn balance_ranges_from_snapshots(
-        ranges: HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
-    ) -> HashMap<BalanceId, BalanceRange> {
-        let mut res = HashMap::new();
-        for (id, (start, start_version, end, end_version)) in ranges {
-            if let Some(end) = end {
-                res.insert(
-                    id,
-                    BalanceRange::new(start, end, end_version - start_version),
-                );
-            }
-        }
-        res
-    }
-
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn update_cumulative_balances_in_op(
         &self,
@@ -221,7 +210,10 @@ impl EffectiveBalances {
             data.re_calculate_snapshots(created_at);
         }
 
-        let new_balances = Self::new_effective_snapshots(journal_id, all_data);
+        let new_balances = all_data
+            .into_values()
+            .flat_map(|data| data.into_snapshots(journal_id))
+            .collect();
         self.repo
             .insert_new_snapshots(op, journal_id, new_balances)
             .await?;
@@ -270,38 +262,14 @@ impl EffectiveBalances {
             data.re_calculate_snapshots(created_at);
         }
 
-        let new_balances = Self::new_effective_snapshots(journal_id, all_data);
+        let new_balances = all_data
+            .into_values()
+            .flat_map(|data| data.into_snapshots(journal_id))
+            .collect();
         self.repo
             .insert_new_snapshots(op, journal_id, new_balances)
             .await?;
 
         Ok(())
-    }
-
-    fn new_effective_snapshots(
-        journal_id: JournalId,
-        data: HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>,
-    ) -> Vec<EffectiveBalanceSnapshot> {
-        data.into_values()
-            .flat_map(|d| d.into_updates())
-            .map(
-                |(account_id, currency, effective, snapshot, all_time_version)| {
-                    EffectiveBalanceSnapshot {
-                        journal_id,
-                        account_id,
-                        currency,
-                        effective,
-                        version: snapshot.version,
-                        all_time_version,
-                        created_at: snapshot.created_at,
-                        modified_at: snapshot.modified_at,
-                        entry_id: snapshot.entry_id,
-                        settled: snapshot.settled,
-                        pending: snapshot.pending,
-                        encumbrance: snapshot.encumbrance,
-                    }
-                },
-            )
-            .collect()
     }
 }
