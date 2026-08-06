@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id AS \"id!: AccountId\"\n            FROM cala_accounts a\n            WHERE a.id = ANY($1)\n              AND a.eventually_consistent = TRUE\n              AND a.is_account_set = FALSE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e5383997efe857b136361ca82dee390eb2a3c6e7d79d6e6ac204ab6ec5d96ec6"
+}

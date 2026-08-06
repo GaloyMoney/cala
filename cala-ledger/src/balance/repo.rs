@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -453,8 +453,20 @@ impl BalanceRepo {
     /// Under a SHARED lock on `parent_account_id` and an EXCLUSIVE
     /// lock on `member_id` (both in the 2-arg EC-set lock namespace,
     /// acquired in a single canonically-ordered SQL statement), return
-    /// `true` iff `member_id` has any row in `cala_balance_history`
-    /// for `journal_id`.
+    /// `true` iff `member_id` has any settled activity in `journal_id` —
+    /// a row in `cala_balance_history` **or** a posted `cala_entries` row.
+    ///
+    /// The `cala_entries` check is load-bearing for eventually-consistent
+    /// leaves: an EC leaf writes no `cala_balance_history` inline (the
+    /// streaming rollup writes it later), but it writes `cala_entries`
+    /// synchronously in the posting transaction — under the same SHARED
+    /// member lock. Checking only history would let an EC leaf join or
+    /// leave a set *after* posting but *before* the rollup materializes its
+    /// history, and the rollup would then fold those pre-/post-membership
+    /// entries into the wrong sets. Checking entries closes that window,
+    /// bringing EC leaves to parity with synchronous accounts (which write
+    /// both). Account sets carry no entries (the #802 FK forbids it), so
+    /// the history check still covers set members.
     ///
     /// The EXCLUSIVE on the member is what makes the existence check
     /// stable: any in-flight poster on `member_id` takes SHARED on it
@@ -505,10 +517,15 @@ impl BalanceRepo {
 
         let row = sqlx::query!(
             r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM cala_balance_history
-                WHERE journal_id = $1 AND account_id = $2
+            SELECT (
+                EXISTS (
+                    SELECT 1 FROM cala_balance_history
+                    WHERE journal_id = $1 AND account_id = $2
+                )
+                OR EXISTS (
+                    SELECT 1 FROM cala_entries
+                    WHERE journal_id = $1 AND account_id = $2
+                )
             ) AS "exists!"
             "#,
             journal_id as JournalId,
@@ -522,8 +539,10 @@ impl BalanceRepo {
     /// Batch variant of [`member_has_balance_history_in_op`]: takes the
     /// same locks (SHARED on parents, FOR_UPDATE-style EXCLUSIVE on
     /// members) in a single canonically-ordered statement and returns
-    /// every member that already has balance history in its journal,
-    /// instead of checking pair by pair.
+    /// every member that already has settled activity in its journal —
+    /// balance history **or** a posted entry — instead of checking pair by
+    /// pair. See the single-pair method for why entries are checked (EC
+    /// leaves write entries synchronously but history only via the rollup).
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.members_with_balance_history_in_op",
@@ -583,10 +602,16 @@ impl BalanceRepo {
 
         let rows = sqlx::query!(
             r#"
-            SELECT DISTINCT h.account_id AS "account_id!"
-            FROM cala_balance_history h
-            JOIN UNNEST($1::uuid[], $2::uuid[]) AS v(journal_id, member_id)
-                ON h.journal_id = v.journal_id AND h.account_id = v.member_id
+            SELECT DISTINCT v.member_id AS "account_id!"
+            FROM UNNEST($1::uuid[], $2::uuid[]) AS v(journal_id, member_id)
+            WHERE EXISTS (
+                SELECT 1 FROM cala_balance_history h
+                WHERE h.journal_id = v.journal_id AND h.account_id = v.member_id
+            )
+            OR EXISTS (
+                SELECT 1 FROM cala_entries e
+                WHERE e.journal_id = v.journal_id AND e.account_id = v.member_id
+            )
             "#,
             &journal_ids as &[JournalId],
             &member_ids as &[AccountId],
@@ -735,6 +760,38 @@ impl BalanceRepo {
                 .push(row.account_set_id);
         }
         Ok(result)
+    }
+
+    /// Of `account_ids`, the ones that are **eventually-consistent plain
+    /// accounts** (postable leaves): `eventually_consistent = TRUE` and not
+    /// backing an account set. These are the leaves the inline poster path
+    /// skips (`find_for_update` filters `eventually_consistent = FALSE`), so
+    /// the streaming rollup must fold each entry into the leaf's own balance
+    /// in addition to its EC ancestor sets.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.fetch_ec_leaf_accounts",
+        skip_all
+    )]
+    pub(crate) async fn fetch_ec_leaf_accounts(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashSet<AccountId>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT a.id AS "id!: AccountId"
+            FROM cala_accounts a
+            WHERE a.id = ANY($1)
+              AND a.eventually_consistent = TRUE
+              AND a.is_account_set = FALSE
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.id).collect())
     }
 
     /// Take the **shared** EC-set advisory lock on `account_ids` (the same

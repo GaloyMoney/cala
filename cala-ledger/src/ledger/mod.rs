@@ -191,15 +191,25 @@ impl CalaLedger {
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
 
-        let entries = self
+        // Entries may not target an account set (enforced by the
+        // cala_entries composite FK, #802); surface it as a typed error.
+        let entries = match self
             .entries
             .create_all_in_op(&mut db, prepared_tx.entries)
-            .await?;
+            .await
+        {
+            Ok(entries) => entries,
+            Err(e) if LedgerError::is_entry_account_set_violation(&e) => {
+                return Err(LedgerError::EntryTargetsAccountSet)
+            }
+            Err(e) => return Err(e.into()),
+        };
 
         let account_ids = entries
             .iter()
             .map(|entry| entry.account_id)
             .collect::<Vec<_>>();
+
         let mappings = self
             .account_sets
             .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &account_ids)

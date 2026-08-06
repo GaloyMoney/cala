@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT v.member_id AS \"account_id!\"\n            FROM UNNEST($1::uuid[], $2::uuid[]) AS v(journal_id, member_id)\n            WHERE EXISTS (\n                SELECT 1 FROM cala_balance_history h\n                WHERE h.journal_id = v.journal_id AND h.account_id = v.member_id\n            )\n            OR EXISTS (\n                SELECT 1 FROM cala_entries e\n                WHERE e.journal_id = v.journal_id AND e.account_id = v.member_id\n            )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "d466a2106008d68cdbd88019047533717033e0e67feee83d7f3e4b2fa86819fc"
+}

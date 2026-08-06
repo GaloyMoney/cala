@@ -14,10 +14,13 @@
 //! is the member side of the membership guard
 //! (`member_has_balance_history_in_op`): adding or removing an EC-set
 //! member takes an EXCLUSIVE lock on that member, so a concurrent poster's
-//! SHARED lock on the same member blocks until the guard's history check
+//! SHARED lock on the same member blocks until the guard's activity check
 //! has committed. That keeps a member from ever joining or leaving a set
-//! while it has balance history, which is what makes EC sets
-//! incremental-from-birth for the streaming rollup.
+//! while it has settled activity, which is what makes EC sets
+//! incremental-from-birth for the streaming rollup. The guard checks
+//! `cala_entries` as well as `cala_balance_history` so an
+//! eventually-consistent leaf — whose history is written only later by the
+//! rollup, but whose entries land synchronously — cannot slip through.
 
 mod account_balance;
 mod cursor;
@@ -365,7 +368,12 @@ impl Balances {
             .repo
             .fetch_ec_set_mappings(op, journal_id, &member_account_ids)
             .await?;
-        if ec_mappings.is_empty() {
+        // EC leaves the inline poster skips, folded here into their own balance.
+        let ec_leaves = self
+            .repo
+            .fetch_ec_leaf_accounts(op, &member_account_ids)
+            .await?;
+        if ec_mappings.is_empty() && ec_leaves.is_empty() {
             return Ok(());
         }
 
@@ -374,6 +382,9 @@ impl Balances {
         for entry in group.iter().flat_map(|tx| tx.entries.iter()) {
             for set_id in ec_mappings.get(&entry.account_id).unwrap_or(&empty) {
                 involved.insert((AccountId::from(set_id), entry.currency));
+            }
+            if ec_leaves.contains(&entry.account_id) {
+                involved.insert((entry.account_id, entry.currency));
             }
         }
         if involved.is_empty() {
@@ -394,6 +405,7 @@ impl Balances {
                 current_balances.clone(),
                 &tx.entries,
                 &ec_mappings,
+                &ec_leaves,
             );
             for snapshot in new_balances.iter() {
                 // Per pair the highest version lands last, so last-write-wins
@@ -419,6 +431,9 @@ impl Balances {
                     for set_id in ec_mappings.get(&entry.account_id).unwrap_or(&empty) {
                         tx_involved.insert((AccountId::from(set_id), entry.currency));
                     }
+                    if ec_leaves.contains(&entry.account_id) {
+                        tx_involved.insert((entry.account_id, entry.currency));
+                    }
                 }
                 if tx_involved.is_empty() {
                     continue;
@@ -434,6 +449,7 @@ impl Balances {
                         tx.created_at,
                         ec_mappings.clone(),
                         (account_ids, currencies),
+                        &ec_leaves,
                     )
                     .await?;
             }

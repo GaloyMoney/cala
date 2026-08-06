@@ -3,7 +3,7 @@ mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 use cala_types::{entry::EntryValues, primitives::*};
@@ -221,10 +221,12 @@ impl EffectiveBalances {
         Ok(())
     }
 
-    /// EC-set counterpart of [`Self::update_cumulative_balances_in_op`]
-    /// used by the streaming rollup: fans each entry into its EC ancestor
-    /// sets only (never the leaf account), reading via `find_ec_for_update`
-    /// which keeps the `eventually_consistent = TRUE` rows.
+    /// EC counterpart of [`Self::update_cumulative_balances_in_op`] used by
+    /// the streaming rollup: fans each entry into its EC ancestor sets and,
+    /// for an entry whose leaf is an EC plain account (listed in
+    /// `ec_leaves`), into that leaf's own cumulative-effective balance too.
+    /// Reads via `find_ec_for_update`, which keeps the
+    /// `eventually_consistent = TRUE` rows (both EC sets and EC leaves).
     #[allow(clippy::too_many_arguments)]
     #[instrument(
         level = "debug",
@@ -241,6 +243,7 @@ impl EffectiveBalances {
         created_at: DateTime<Utc>,
         ec_mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
+        ec_leaves: &HashSet<AccountId>,
     ) -> Result<(), BalanceError> {
         let mut all_data = self
             .repo
@@ -253,6 +256,7 @@ impl EffectiveBalances {
                 .unwrap_or(&empty)
                 .iter()
                 .map(AccountId::from)
+                .chain(ec_leaves.get(&entry.account_id).copied())
             {
                 if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {
                     data.push(effective, entry);

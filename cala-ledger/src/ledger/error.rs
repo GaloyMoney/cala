@@ -8,6 +8,9 @@ use crate::{
     velocity::error::VelocityError,
 };
 
+/// Composite FK forbidding a `cala_entries` row from targeting an account set.
+pub(crate) const ENTRY_ACCOUNT_SET_FK: &str = "cala_entries_account_not_account_set_fkey";
+
 #[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("LedgerError - Sqlx: {0}")]
@@ -36,6 +39,30 @@ pub enum LedgerError {
     VelocityError(#[from] VelocityError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
+    #[error(
+        "LedgerError - EntryTargetsAccountSet: an entry may not be posted directly to an \
+         account-set backing account; an account set's balance is derived from its members"
+    )]
+    EntryTargetsAccountSet,
+}
+
+impl LedgerError {
+    /// Whether `err`'s source chain carries the [`ENTRY_ACCOUNT_SET_FK`] violation.
+    pub(crate) fn is_entry_account_set_violation(err: &(dyn std::error::Error + 'static)) -> bool {
+        let mut current = Some(err);
+        while let Some(source) = current {
+            if let Some(db) = source
+                .downcast_ref::<sqlx::Error>()
+                .and_then(|e| e.as_database_error())
+            {
+                if db.constraint() == Some(ENTRY_ACCOUNT_SET_FK) {
+                    return true;
+                }
+            }
+            current = source.source();
+        }
+        false
+    }
 }
 
 impl From<sqlx::Error> for LedgerError {

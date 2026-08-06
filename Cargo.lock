@@ -897,9 +897,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.11.11"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e04f482c921722d22e7a38e643f9f7b7bf2ea73e6ed332eb5d310178c09ea8cb"
+checksum = "5eaffadefdf3b88dc6b00398313b2689bed1517bd0ed9cb2fa64761e8d7f2d70"
 dependencies = [
  "async-stream",
  "chrono",
@@ -925,17 +925,18 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.11.11"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd79ab1377c58e50b68a026e29704c16f24a045b18a00a2dc1b5a3fa93e2b9c8"
+checksum = "c58fe4c10966dffe8e62a4fd7def3806bdae30abf8cfdda5dde9f9918073a620"
 dependencies = [
  "convert_case",
- "darling 0.23.0",
+ "darling 0.24.0",
  "pluralizer",
  "proc-macro2",
  "quote",
  "regex",
- "syn 2.0.117",
+ "sqlparser",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -1439,9 +1440,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.6.36"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93ffe26564dd2b2b32870479459f619c90147d0e2843c525c6699ec38888638f"
+checksum = "26d220979c9eaed27c3862d42b0a1cb26b6a0ce6dfea03c5504554a666924ca0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1645,9 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5f6e0714ebcfdd1ab4ab249ca5915971dd6f252a001918c86041fbcdf696cdf"
+checksum = "b4e2a8ecd01e8344ac400773dcc524af1b048cb860e86a5eda2d4065b1d1223c"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1668,9 +1669,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a61e88f9b2411876a1bc2513d40c32534dddd060319e95de007cf98c82a8307"
+checksum = "f4a58f727fab358ca6d610ac157e21520c89b3b51d4b6094cb8a7e5880e47f6b"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -2568,6 +2569,15 @@ checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
+]
+
+[[package]]
+name = "sqlparser"
+version = "0.62.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c6d1b651dc4edf07eead2a0c6c78016ce971bc2c10da5266861b13f25e7cec"
+dependencies = [
+ "log",
 ]
 
 [[package]]
