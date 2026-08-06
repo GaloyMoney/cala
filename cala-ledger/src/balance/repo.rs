@@ -734,17 +734,36 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
+        // Adjacency-only membership: walk up the set->set edge table from
+        // each account's direct memberships, then keep only EC ancestor
+        // sets (the streaming rollup's targets). Mirrors
+        // `AccountSetRepo::fetch_mappings_in_op` plus the EC filter; UNION
+        // dedups and keeps the walk terminating. There is no materialized
+        // transitive closure — EC *leaf* accounts are resolved separately
+        // by `fetch_ec_leaf_accounts`; this returns only EC ancestor sets.
         let rows = sqlx::query!(
             r#"
+            WITH RECURSIVE seed AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                WHERE m.member_account_id = ANY($2)
+            ),
+            ancestors AS (
+                SELECT account_id, account_set_id FROM seed
+                UNION
+                SELECT a.account_id, e.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets e
+                  ON e.member_account_set_id = a.account_set_id
+            )
             SELECT
-                m.account_set_id AS "account_set_id!: AccountSetId",
-                m.member_account_id AS "member_account_id!: AccountId"
-            FROM cala_account_set_member_accounts m
+                a.account_set_id AS "account_set_id!: AccountSetId",
+                a.account_id AS "member_account_id!: AccountId"
+            FROM ancestors a
             JOIN cala_account_sets s
-              ON m.account_set_id = s.id AND s.journal_id = $1
-            JOIN cala_accounts a
-              ON a.id = m.account_set_id AND a.eventually_consistent = TRUE
-            WHERE m.member_account_id = ANY($2)
+              ON s.id = a.account_set_id AND s.journal_id = $1
+            JOIN cala_accounts acc
+              ON acc.id = a.account_set_id AND acc.eventually_consistent = TRUE
             "#,
             journal_id as JournalId,
             account_ids as &[AccountId],

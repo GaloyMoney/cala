@@ -71,7 +71,10 @@ CREATE TABLE cala_account_set_events (
 CREATE TABLE cala_account_set_member_accounts (
   account_set_id UUID NOT NULL REFERENCES cala_account_sets(id),
   member_account_id UUID NOT NULL REFERENCES cala_accounts(id),
-  transitive BOOLEAN NOT NULL DEFAULT FALSE,
+  -- Only **direct** account->set edges live here. Ancestor sets are
+  -- resolved at read time by an upward recursive walk over
+  -- cala_account_set_member_account_sets (see fetch_mappings_in_op /
+  -- fetch_ec_set_mappings); there is no materialized transitive closure.
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Lead the uniqueness constraint on the random member_account_id: all
   -- concurrent attaches insert into the same few hot account_set_id key

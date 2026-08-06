@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE target_chain AS (\n            SELECT $1::uuid AS set_id\n            UNION\n            SELECT e.account_set_id\n            FROM target_chain t\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = t.set_id\n          ),\n          member_ancestors AS (\n            SELECT e.account_set_id AS set_id\n            FROM cala_account_set_member_account_sets e\n            WHERE e.member_account_set_id = $2\n\n            UNION\n            SELECT e.account_set_id\n            FROM member_ancestors m\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = m.set_id\n          )\n          SELECT EXISTS (\n            SELECT 1 FROM target_chain t\n            JOIN member_ancestors m ON t.set_id = m.set_id\n          ) AS \"conflict!\"\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conflict!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9c220f3426d31e2f5146ddcad31576b5fad0df2bcb95587bea9cb94c6600a2ee"
+}

@@ -1,10 +1,13 @@
 //! Concurrency tests for the account-set membership lock protocol.
 //!
-//! Account-member mutations (add/remove an *account* to/from a set) take
-//! the coarse membership lock SHARED plus an exclusive per-member lock,
-//! so mutations for different members run concurrently. Set-structure
-//! mutations (add/remove a member *set*) take the coarse lock EXCLUSIVE
-//! and fence everything.
+//! Membership is stored as **direct edges only** (no transitive closure),
+//! but every mutation validates **path uniqueness** — no account may be
+//! contained in the same set via two paths — before writing, and that
+//! read-then-write must be fenced. Account-member mutations (add/remove
+//! an *account* to/from a set) take the coarse membership lock SHARED
+//! plus an exclusive per-member lock, so mutations for different members
+//! run concurrently. Set-structure mutations (add/remove a member *set*)
+//! take the coarse lock EXCLUSIVE and fence everything.
 //!
 //! The blocking assertions work by holding one operation's transaction
 //! open and observing whether a second operation completes (bounded by a
@@ -25,10 +28,10 @@ use rand::distr::{Alphanumeric, SampleString};
 
 use cala_ledger::{account_set::*, *};
 
-/// Generous bound for "this must not block": under the old global
-/// exclusive lock the future would stay pending until the other
-/// transaction commits, so a completion within this window proves the
-/// operations do not exclude each other.
+/// Generous bound for "this must not block": under a global exclusive
+/// lock the future would stay pending until the other transaction
+/// commits, so a completion within this window proves the operations do
+/// not exclude each other.
 const MUST_COMPLETE: Duration = Duration::from_secs(5);
 /// Observation window for "this must block": long enough to rule out
 /// scheduling noise, short enough to keep the suite fast.
@@ -140,7 +143,9 @@ async fn account_member_ops_for_same_member_serialize() -> anyhow::Result<()> {
         .await?;
 
     // An add of the *same* member elsewhere must wait for the open
-    // transaction (per-member exclusive lock).
+    // transaction (per-member exclusive lock): its path-uniqueness check
+    // must not run against a graph another add is mid-way through
+    // changing.
     let cala2 = cala.clone();
     let set_two_id = set_two.id();
     let member_id = one.id();
@@ -186,7 +191,8 @@ async fn structure_ops_fence_account_member_ops() -> anyhow::Result<()> {
         .await?;
 
     // ...any account-member mutation must wait for it, even on an
-    // unrelated set: structure changes fence the whole membership graph.
+    // unrelated set: structure changes mutate the edges every
+    // path-uniqueness walk reads, so they fence the whole graph.
     let cala2 = cala.clone();
     let unrelated_id = unrelated.id();
     let member_id = one.id();
@@ -209,10 +215,58 @@ async fn structure_ops_fence_account_member_ops() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Write-skew guard: many concurrent account-member adds into a shared
-/// deep hierarchy must leave a complete transitive closure.
 #[tokio::test]
-async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
+async fn structure_ops_serialize() -> anyhow::Result<()> {
+    let cala = init_cala().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+
+    let parent_a = cala
+        .account_sets()
+        .create(new_set(journal.id(), "struct-serialize-parent-a"))
+        .await?;
+    let child_a = cala
+        .account_sets()
+        .create(new_set(journal.id(), "struct-serialize-child-a"))
+        .await?;
+    let parent_b = cala
+        .account_sets()
+        .create(new_set(journal.id(), "struct-serialize-parent-b"))
+        .await?;
+    let child_b = cala
+        .account_sets()
+        .create(new_set(journal.id(), "struct-serialize-child-b"))
+        .await?;
+
+    // Hold an uncommitted structure mutation open (exclusive coarse lock)...
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, parent_a.id(), child_a.id())
+        .await?;
+
+    // ...a second, disjoint structure mutation must wait for the coarse
+    // lock: structure ops serialize globally.
+    let cala2 = cala.clone();
+    let (p_b, c_b) = (parent_b.id(), child_b.id());
+    let mut blocked = tokio::spawn(async move { cala2.account_sets().add_member(p_b, c_b).await });
+
+    assert!(
+        tokio::time::timeout(MUST_STILL_BE_PENDING, &mut blocked)
+            .await
+            .is_err(),
+        "a second set-structure mutation must block while the first is open"
+    );
+
+    op.commit().await?;
+    blocked.await??;
+    Ok(())
+}
+
+/// Adjacency-only membership: many concurrent account-member adds into a
+/// shared deep hierarchy each write exactly one direct edge on the leaf
+/// (no closure rows on ancestors), and the read-time upward walk resolves
+/// every account to all of its ancestor sets.
+#[tokio::test]
+async fn concurrent_adds_resolve_all_ancestors() -> anyhow::Result<()> {
     const N_MEMBERS: usize = 16;
 
     let pool = init_isolated_pool(20).await?;
@@ -227,15 +281,15 @@ async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
     // grandparent <- parent <- leaf
     let grandparent = cala
         .account_sets()
-        .create(new_set(journal.id(), "closure-grandparent"))
+        .create(new_set(journal.id(), "walk-grandparent"))
         .await?;
     let parent = cala
         .account_sets()
-        .create(new_set(journal.id(), "closure-parent"))
+        .create(new_set(journal.id(), "walk-parent"))
         .await?;
     let leaf = cala
         .account_sets()
-        .create(new_set(journal.id(), "closure-leaf"))
+        .create(new_set(journal.id(), "walk-leaf"))
         .await?;
     cala.account_sets()
         .add_member(grandparent.id(), parent.id())
@@ -263,9 +317,29 @@ async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
         handle.await??;
     }
 
-    // Every account must have its direct row on the leaf and transitive
-    // rows on every ancestor.
-    for set_id in [leaf.id(), parent.id(), grandparent.id()] {
+    let account_ids = accounts
+        .iter()
+        .map(|a| uuid::Uuid::from(a.id()))
+        .collect::<Vec<_>>();
+
+    // The leaf holds exactly one direct row per account.
+    let leaf_count = sqlx::query_scalar::<_, i64>(
+        r#"
+        SELECT COUNT(*) FROM cala_account_set_member_accounts
+        WHERE account_set_id = $1 AND member_account_id = ANY($2)
+        "#,
+    )
+    .bind(uuid::Uuid::from(leaf.id()))
+    .bind(&account_ids)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        leaf_count as usize, N_MEMBERS,
+        "direct rows missing on leaf"
+    );
+
+    // Ancestors hold NO rows: there is no materialized transitive closure.
+    for set_id in [parent.id(), grandparent.id()] {
         let count = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT COUNT(*) FROM cala_account_set_member_accounts
@@ -273,17 +347,51 @@ async fn concurrent_adds_maintain_transitive_closure() -> anyhow::Result<()> {
             "#,
         )
         .bind(uuid::Uuid::from(set_id))
-        .bind(
-            accounts
-                .iter()
-                .map(|a| uuid::Uuid::from(a.id()))
-                .collect::<Vec<_>>(),
-        )
+        .bind(&account_ids)
         .fetch_one(&pool)
         .await?;
+        assert_eq!(count, 0, "unexpected closure rows on ancestor set {set_id}");
+    }
+
+    // The production upward walk resolves each account to exactly its three
+    // ancestor sets {leaf, parent, grandparent}.
+    let expected = {
+        let mut e = [
+            uuid::Uuid::from(leaf.id()),
+            uuid::Uuid::from(parent.id()),
+            uuid::Uuid::from(grandparent.id()),
+        ];
+        e.sort();
+        e.to_vec()
+    };
+    for account in &accounts {
+        let mut sets = sqlx::query_scalar::<_, uuid::Uuid>(
+            r#"
+            WITH RECURSIVE seed AS (
+                SELECT account_set_id
+                FROM cala_account_set_member_accounts
+                WHERE member_account_id = $1
+            ),
+            ancestors AS (
+                SELECT account_set_id FROM seed
+                UNION
+                SELECT e.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets e
+                  ON e.member_account_set_id = a.account_set_id
+            )
+            SELECT account_set_id FROM ancestors
+            "#,
+        )
+        .bind(uuid::Uuid::from(account.id()))
+        .fetch_all(&pool)
+        .await?;
+        sets.sort();
         assert_eq!(
-            count as usize, N_MEMBERS,
-            "closure rows missing on set {set_id}"
+            sets,
+            expected,
+            "walk did not resolve all ancestors for account {}",
+            account.id()
         );
     }
 

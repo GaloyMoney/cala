@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE ancestors AS (\n            SELECT m.account_set_id, 1 AS depth\n            FROM cala_account_set_member_account_sets m\n            WHERE m.member_account_set_id = $1\n\n            UNION\n            SELECT m.account_set_id, a.depth + 1\n            FROM ancestors a\n            JOIN cala_account_set_member_account_sets m\n                ON m.member_account_set_id = a.account_set_id\n            WHERE a.depth < $3\n          ),\n          descendants AS (\n            SELECT m.member_account_set_id, 1 AS depth\n            FROM cala_account_set_member_account_sets m\n            WHERE m.account_set_id = $2\n\n            UNION\n            SELECT m.member_account_set_id, d.depth + 1\n            FROM descendants d\n            JOIN cala_account_set_member_account_sets m\n                ON m.account_set_id = d.member_account_set_id\n            WHERE d.depth < $3\n          )\n          SELECT\n            COALESCE((SELECT MAX(depth) FROM ancestors), 0)\n            + 1\n            + COALESCE((SELECT MAX(depth) FROM descendants), 0) AS \"depth!\"\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "depth!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cee696663fa9358fc92fd5a92be451c6a9fe3b3fec8cd1ae528facdf05c3b64f"
+}

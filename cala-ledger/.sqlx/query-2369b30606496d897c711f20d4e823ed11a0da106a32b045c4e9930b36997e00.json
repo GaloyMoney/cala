@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE new_containments AS (\n            SELECT v.account_id, v.account_set_id\n            FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)\n\n            UNION ALL\n            SELECT nc.account_id, e.account_set_id\n            FROM new_containments nc\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = nc.account_set_id\n        ),\n        existing_containments AS (\n            SELECT m.member_account_id AS account_id, m.account_set_id\n            FROM cala_account_set_member_accounts m\n            WHERE m.member_account_id = ANY($2)\n\n            UNION ALL\n            SELECT ec.account_id, e.account_set_id\n            FROM existing_containments ec\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = ec.account_set_id\n        )\n        SELECT EXISTS (\n            SELECT 1 FROM (\n                SELECT account_id, account_set_id FROM new_containments\n                UNION ALL\n                SELECT account_id, account_set_id FROM existing_containments\n            ) AS all_containments\n            GROUP BY account_id, account_set_id\n            HAVING COUNT(*) > 1\n        ) AS \"conflict!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conflict!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2369b30606496d897c711f20d4e823ed11a0da106a32b045c4e9930b36997e00"
+}
