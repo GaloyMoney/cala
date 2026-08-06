@@ -248,11 +248,10 @@ impl AccountSets {
 
     /// Batch variant of [`add_member_in_op`](Self::add_member_in_op) for
     /// account members: resolves all target sets, runs the
-    /// no-balance-history check for every pair, and inserts all
-    /// memberships — including the transitive ancestor rows — with a
-    /// single recursive walk, instead of one walk per account. Callers
-    /// attaching many accounts at once should prefer this over looping
-    /// `add_member_in_op`.
+    /// no-balance-history check for every pair, and inserts all direct
+    /// memberships in a single statement, instead of one insert per
+    /// account. Callers attaching many accounts at once should prefer
+    /// this over looping `add_member_in_op`.
     #[instrument(
         level = "debug",
         name = "cala_ledger.account_sets.add_members_in_op",

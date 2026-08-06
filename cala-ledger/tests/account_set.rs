@@ -89,6 +89,290 @@ async fn errors_on_collision() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
+async fn errors_on_membership_cycle() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let set_a = cala.account_sets().create(new_set("SET A")).await.unwrap();
+    let set_b = cala.account_sets().create(new_set("SET B")).await.unwrap();
+    let set_c = cala.account_sets().create(new_set("SET C")).await.unwrap();
+
+    // B becomes a member of A, C a member of B
+    let res = cala.account_sets().add_member(set_a.id(), set_b.id()).await;
+    assert!(res.is_ok());
+    let res = cala.account_sets().add_member(set_b.id(), set_c.id()).await;
+    assert!(res.is_ok());
+
+    // A is an ancestor of B: adding A to B would close a cycle
+    let res = cala.account_sets().add_member(set_b.id(), set_a.id()).await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::MembershipCycleDetected { .. })
+    ));
+
+    // A is a (transitive) ancestor of C: adding A to C would close a cycle
+    let res = cala.account_sets().add_member(set_c.id(), set_a.id()).await;
+    assert!(matches!(
+        res,
+        Err(AccountSetError::MembershipCycleDetected { .. })
+    ));
+
+    // A set can never be its own member
+    let res = cala.account_sets().add_member(set_a.id(), set_a.id()).await;
+    assert!(res.is_err());
+
+    // C is already transitively under A (via B): a direct A<-C edge is not
+    // a cycle, but it would give C a second path to A — double membership,
+    // rejected. (#800's original test allowed this edge; the old closure
+    // only collided once accounts were involved, and the edge then made
+    // any later account-add under C fail. Walk-only rejects it up front.)
+    let res = cala.account_sets().add_member(set_a.id(), set_c.id()).await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Genuinely independent additions still work
+    let set_d = cala.account_sets().create(new_set("SET D")).await.unwrap();
+    let res = cala.account_sets().add_member(set_a.id(), set_d.id()).await;
+    assert!(res.is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn errors_on_membership_depth_exceeded() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    // A chain of 18 sets: s0 <- s1 <- ... <- s17. Building it top-down,
+    // edge s(i)->s(i+1) sits at depth i+1; MAX_MEMBERSHIP_DEPTH is 16.
+    let mut sets = Vec::new();
+    for i in 0..18 {
+        let set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("depth-set-{i}"))
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap();
+        sets.push(cala.account_sets().create(set).await.unwrap());
+    }
+
+    // 16 edges (s0->s1 .. s15->s16) reach the maximum depth and are allowed.
+    for i in 0..16 {
+        let res = cala
+            .account_sets()
+            .add_member(sets[i].id(), sets[i + 1].id())
+            .await;
+        assert!(res.is_ok(), "edge {i} within the depth cap must be allowed");
+    }
+
+    // The next edge (s16->s17) would make a 17-deep chain, past the cap.
+    let res = cala
+        .account_sets()
+        .add_member(sets[16].id(), sets[17].id())
+        .await;
+    assert!(
+        matches!(res, Err(AccountSetError::MembershipDepthExceeded { .. })),
+        "an edge past MAX_MEMBERSHIP_DEPTH must be rejected"
+    );
+
+    Ok(())
+}
+
+/// Path uniqueness: an account may be contained in any given set via at
+/// most one membership path. The old materialized closure enforced this
+/// through its unique constraint; walk-only must enforce it explicitly.
+#[tokio::test]
+async fn errors_on_double_membership() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    // grandparent <- {branch_a, branch_b}
+    let grandparent = cala
+        .account_sets()
+        .create(new_set("DOUBLE GP"))
+        .await
+        .unwrap();
+    let branch_a = cala
+        .account_sets()
+        .create(new_set("DOUBLE BRANCH A"))
+        .await
+        .unwrap();
+    let branch_b = cala
+        .account_sets()
+        .create(new_set("DOUBLE BRANCH B"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(grandparent.id(), branch_a.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(grandparent.id(), branch_b.id())
+        .await
+        .unwrap();
+
+    // Diamond via shared ancestor: an account in branch_a would reach the
+    // grandparent twice if also added to branch_b.
+    let (acct, other) = helpers::test_accounts();
+    let acct = cala.accounts().create(acct).await.unwrap();
+    let other = cala.accounts().create(other).await.unwrap();
+    cala.account_sets()
+        .add_member(branch_a.id(), acct.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(branch_b.id(), acct.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Same rule inside one batch: two pairs giving one account two paths
+    // to the grandparent must be rejected atomically.
+    let res = cala
+        .account_sets()
+        .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), other.id())])
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Set-level diamond: a set under branch_a cannot also be attached
+    // under branch_b (it — and every account below it — would reach the
+    // grandparent twice), even while it has no accounts yet.
+    let nested = cala
+        .account_sets()
+        .create(new_set("DOUBLE NESTED"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(branch_a.id(), nested.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(branch_b.id(), nested.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Descendant-path overlap, all sets empty: a *descendant* of the
+    // member already reaches the target chain through an edge that
+    // bypasses the member. A ⊃ B, B ⊃ D, X ⊃ D — attaching X under A
+    // would give D two paths to A, so it must be rejected even though X
+    // itself has no ancestors and no accounts exist anywhere yet.
+    let set_a2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC A"))
+        .await
+        .unwrap();
+    let set_b2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC B"))
+        .await
+        .unwrap();
+    let set_d2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC D"))
+        .await
+        .unwrap();
+    let set_x2 = cala
+        .account_sets()
+        .create(new_set("DOUBLE DESC X"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_a2.id(), set_b2.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_b2.id(), set_d2.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(set_x2.id(), set_d2.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(set_a2.id(), set_x2.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Subtree-account overlap: attaching a set whose accounts already live
+    // under the target chain is rejected.
+    let outside = cala
+        .account_sets()
+        .create(new_set("DOUBLE OUTSIDE"))
+        .await
+        .unwrap();
+    let (overlap, _) = helpers::test_accounts();
+    let overlap = cala.accounts().create(overlap).await.unwrap();
+    cala.account_sets()
+        .add_member(outside.id(), overlap.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(grandparent.id(), overlap.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(branch_b.id(), outside.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn add_members_batch() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 

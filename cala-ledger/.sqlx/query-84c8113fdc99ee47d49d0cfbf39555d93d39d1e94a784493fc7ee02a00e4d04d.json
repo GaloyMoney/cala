@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH RECURSIVE target_ancestors AS (\n            SELECT e.account_set_id AS set_id, 1 AS depth\n            FROM cala_account_set_member_account_sets e\n            WHERE e.member_account_set_id = $1\n\n            UNION\n            SELECT e.account_set_id, a.depth + 1\n            FROM target_ancestors a\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = a.set_id\n            WHERE a.depth < $3\n          ),\n          target_chain AS (\n            SELECT $1::uuid AS set_id\n            UNION\n            SELECT set_id FROM target_ancestors\n          ),\n          member_subtree AS (\n            SELECT $2::uuid AS set_id, 0 AS depth\n            UNION\n            SELECT e.member_account_set_id, s.depth + 1\n            FROM member_subtree s\n            JOIN cala_account_set_member_account_sets e\n                ON e.account_set_id = s.set_id\n            WHERE s.depth < $3\n          ),\n          subtree_reach AS (\n            SELECT set_id FROM member_subtree\n            UNION\n            SELECT e.account_set_id\n            FROM subtree_reach r\n            JOIN cala_account_set_member_account_sets e\n                ON e.member_account_set_id = r.set_id\n          ),\n          target_reach AS (\n            SELECT set_id FROM target_chain\n            UNION\n            SELECT e.member_account_set_id\n            FROM target_reach r\n            JOIN cala_account_set_member_account_sets e\n                ON e.account_set_id = r.set_id\n          )\n          SELECT\n            EXISTS (\n                SELECT 1 FROM target_ancestors WHERE set_id = $2\n            ) AS \"cycle!\",\n            EXISTS (\n                SELECT 1 FROM subtree_reach r\n                JOIN target_chain t ON r.set_id = t.set_id\n            ) AS \"set_conflict!\",\n            EXISTS (\n                SELECT 1\n                FROM cala_account_set_member_accounts ma\n                JOIN member_subtree ms ON ma.account_set_id = ms.set_id\n                JOIN cala_account_set_member_accounts ta\n                    ON ta.member_account_id = ma.member_account_id\n                JOIN target_reach tr ON ta.account_set_id = tr.set_id\n            ) AS \"account_conflict!\",\n            COALESCE((SELECT MAX(depth) FROM target_ancestors), 0)\n            + 1\n            + COALESCE((SELECT MAX(depth) FROM member_subtree), 0) AS \"depth!\"\n          ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "cycle!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "set_conflict!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "account_conflict!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "depth!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "84c8113fdc99ee47d49d0cfbf39555d93d39d1e94a784493fc7ee02a00e4d04d"
+}

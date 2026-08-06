@@ -15,31 +15,33 @@ use super::{entity::*, error::*};
 /// (`cala_account_set_member_accounts` and
 /// `cala_account_set_member_account_sets`).
 ///
-/// Membership maintenance is a read-then-write over the whole ancestor
-/// chain: each mutation walks the set-to-set edges (the recursive
-/// `parents` CTE) and then writes the transitive-closure rows the walk
-/// justifies. Two concurrent mutations that each miss the other's
-/// uncommitted writes would leave the closure table inconsistent
-/// (write-skew), so the walk's snapshot has to stay valid until the
-/// writes commit — which is why every lock here is transaction-scoped
-/// and held to commit; releasing earlier would reopen the race.
-///
-/// Lock protocol:
+/// Membership is stored as **direct edges only** — ancestor sets are
+/// resolved at read time by an upward recursive walk
+/// (`fetch_mappings_in_op`, `fetch_ec_set_mappings`); there is no
+/// materialized transitive closure. The graph still carries a
+/// load-bearing invariant that every mutation must validate before
+/// writing: **path uniqueness** — an account may be contained in any
+/// given set via at most one membership path (double membership is
+/// prohibited). The old closure enforced this incidentally through its
+/// unique constraint; walk-only enforces it explicitly
+/// (`assert_no_double_membership` and the set-level checks in
+/// `add_member_set`). Each check is a read-then-write over the graph,
+/// so it must be fenced against concurrent writers — which is why the
+/// closure-era lock protocol survives walk-only unchanged:
 ///
 /// - Set-structure mutations (`add_member_set` / `remove_member_set`)
 ///   take this lock EXCLUSIVE. They mutate the edges that every walk
 ///   reads, and read the member rows that account-member mutations
 ///   write, so they must exclude everything.
-/// - Account-member mutations (`add_member_account` /
+/// - Account-member mutations (`add_member_account(s)` /
 ///   `remove_member_account`) take this lock SHARED plus an EXCLUSIVE
 ///   per-member lock (`MEMBER_LOCK_CLASS`, keyed on the member account
 ///   id). Shared-vs-exclusive fences them against structure mutations,
 ///   while account-member mutations for *different* members run
-///   concurrently — their closure writes are disjoint rows. The
-///   per-member lock serializes mutations touching the *same* member
-///   (e.g. an add and a remove in overlapping hierarchies), whose
-///   interleaved inserts/deletes on shared ancestors would otherwise
-///   tear the closure.
+///   concurrently — each validation involves only its own member's
+///   paths. The per-member lock serializes mutations touching the
+///   *same* member, whose interleaved check-then-write sequences could
+///   otherwise commit a double membership.
 ///
 /// Ordering: the coarse lock is always acquired before the per-member
 /// lock. An operation must never wait on the coarse lock while holding
@@ -52,26 +54,11 @@ const ADDVISORY_LOCK_ID: i64 = 123456;
 /// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
 const MEMBER_LOCK_CLASS: i32 = 2;
 
-/// Takes the account-member half of the membership lock protocol (see
-/// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
-/// per-member lock. Two statements so the acquisition order is
-/// guaranteed.
-async fn lock_for_account_member_op(
-    db: &mut impl es_entity::AtomicOperation,
-    account_id: AccountId,
-) -> Result<(), AccountSetError> {
-    sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
-        .execute(db.as_executor())
-        .await?;
-    sqlx::query!(
-        "SELECT pg_advisory_xact_lock($1, hashtext($2))",
-        MEMBER_LOCK_CLASS,
-        account_id.to_string(),
-    )
-    .execute(db.as_executor())
-    .await?;
-    Ok(())
-}
+/// Maximum depth (in set->set edges) of any root-to-leaf membership
+/// chain. Enforced in `add_member_set`: rejecting edges past this bound
+/// keeps the read-time ancestor walk cheap and terminating. Real
+/// hierarchies are <=10 deep; 16 leaves headroom.
+const MAX_MEMBERSHIP_DEPTH: i32 = 16;
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -147,6 +134,92 @@ impl AccountSetRepo {
         }
     }
 
+    /// Takes the account-member half of the membership lock protocol (see
+    /// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
+    /// per-member lock. Two statements so the acquisition order is
+    /// guaranteed.
+    async fn lock_for_account_member_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_id: AccountId,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+            .execute(db.as_executor())
+            .await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock($1, hashtext($2))",
+            MEMBER_LOCK_CLASS,
+            account_id.to_string(),
+        )
+        .execute(db.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    /// Rejects account-member additions that would give an account a second
+    /// membership path to any set (double membership — see
+    /// [`ADDVISORY_LOCK_ID`]). For every `(account_set_id, account_id)`
+    /// pair it expands the containments the new direct edge would create
+    /// (the target set plus all of its ancestors) and combines them with
+    /// the account's existing containments; any set the same account would
+    /// reach twice — via an existing path, via the new edge, or across two
+    /// pairs of the same batch — is a violation. Surfaced as
+    /// [`AccountSetError::MemberAlreadyAdded`], the same error the old
+    /// closure's unique-constraint collision produced.
+    ///
+    /// Must run under the account-member lock protocol: the walk is a read
+    /// over the set graph and the account's direct edges, and the insert
+    /// that follows relies on its result staying valid until commit.
+    async fn assert_no_double_membership(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+        account_ids: &[AccountId],
+    ) -> Result<(), AccountSetError> {
+        let row = sqlx::query!(
+            r#"
+            WITH RECURSIVE new_containments AS (
+                SELECT v.account_id, v.account_set_id
+                FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
+
+                UNION ALL
+                SELECT nc.account_id, e.account_set_id
+                FROM new_containments nc
+                JOIN cala_account_set_member_account_sets e
+                    ON e.member_account_set_id = nc.account_set_id
+            ),
+            existing_containments AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                WHERE m.member_account_id = ANY($2)
+
+                UNION ALL
+                SELECT ec.account_id, e.account_set_id
+                FROM existing_containments ec
+                JOIN cala_account_set_member_account_sets e
+                    ON e.member_account_set_id = ec.account_set_id
+            )
+            SELECT EXISTS (
+                SELECT 1 FROM (
+                    SELECT account_id, account_set_id FROM new_containments
+                    UNION ALL
+                    SELECT account_id, account_set_id FROM existing_containments
+                ) AS all_containments
+                GROUP BY account_id, account_set_id
+                HAVING COUNT(*) > 1
+            ) AS "conflict!"
+            "#,
+            account_set_ids as &[AccountSetId],
+            account_ids as &[AccountId],
+        )
+        .fetch_one(db.as_executor())
+        .await?;
+        if row.conflict {
+            return Err(AccountSetError::MemberAlreadyAdded);
+        }
+        Ok(())
+    }
+
     pub async fn list_children_by_created_at(
         &self,
         id: AccountSetId,
@@ -201,8 +274,7 @@ impl AccountSetRepo {
                 created_at
               FROM cala_account_set_member_accounts
               WHERE
-                transitive IS FALSE
-                AND account_set_id = $4
+                account_set_id = $4
                 AND (COALESCE((created_at, member_account_id) < ($3, $2), $2 IS NULL))
               ORDER BY created_at DESC, member_account_id DESC
               LIMIT $1
@@ -329,8 +401,7 @@ impl AccountSetRepo {
               FROM cala_account_set_member_accounts m
               LEFT JOIN cala_accounts a ON m.member_account_id = a.id
               WHERE
-                transitive IS FALSE
-                AND m.account_set_id = $4
+                m.account_set_id = $4
                 AND (
                   ($3::varchar IS NULL) OR
                   (a.external_id IS NULL AND $3::varchar IS NOT NULL) OR
@@ -428,26 +499,15 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
-        lock_for_account_member_op(db, account_id).await?;
-        sqlx::query!(r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
-
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          ),
-          non_transitive_insert AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-            VALUES ($1, $2)
-          )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, $2, TRUE
-          FROM parents p
+        self.lock_for_account_member_op(db, account_id).await?;
+        self.assert_no_double_membership(db, &[account_set_id], &[account_id])
+            .await?;
+        // A single direct edge: ancestor sets are resolved by the
+        // read-time walk, so there is no closure to materialize.
+        sqlx::query!(
+            r#"
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+          VALUES ($1, $2)
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
@@ -469,10 +529,11 @@ impl AccountSetRepo {
     }
 
     /// Batch variant of [`add_member_account`]: attaches every
-    /// `(account_set_id, account_id)` pair in one statement, so a single
-    /// recursive ancestor walk covers all pairs instead of one walk per
-    /// pair. Callers creating many accounts (e.g. a chart-of-accounts
-    /// expansion per business entity) should prefer this over looping
+    /// `(account_set_id, account_id)` pair in one direct-edge insert, with
+    /// a single path-uniqueness validation walk covering all pairs (and
+    /// their interactions with each other) instead of one per pair.
+    /// Callers creating many accounts (e.g. a chart-of-accounts expansion
+    /// per business entity) should prefer this over looping
     /// `add_member_account`.
     ///
     /// Lock protocol matches the single-pair path (SHARED coarse lock,
@@ -521,31 +582,16 @@ impl AccountSetRepo {
         .execute(db.as_executor())
         .await?;
 
+        self.assert_no_double_membership(db, &account_set_ids, &account_ids)
+            .await?;
+
+        // Direct edges only: one insert covers every pair; ancestor sets
+        // are resolved by the read-time walk.
         sqlx::query!(
             r#"
-          WITH RECURSIVE input_pairs AS (
-            SELECT * FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
-          ),
-          parents AS (
-            SELECT i.account_id, m.member_account_set_id, m.account_set_id
-            FROM input_pairs i
-            JOIN cala_account_set_member_account_sets m
-                ON m.member_account_set_id = i.account_set_id
-
-            UNION ALL
-
-            SELECT p.account_id, p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          ),
-          non_transitive_insert AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-            SELECT account_set_id, account_id FROM input_pairs
-          )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, p.account_id, TRUE
-          FROM parents p
+          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
+          SELECT account_set_id, account_id
+          FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
           "#,
             &account_set_ids as &[AccountSetId],
             &account_ids as &[AccountId],
@@ -580,23 +626,14 @@ impl AccountSetRepo {
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
-        lock_for_account_member_op(db, account_id).await?;
+        self.lock_for_account_member_op(db, account_id).await?;
+        // Delete the single direct edge; there are no materialized
+        // ancestor rows to scrub. The lock keeps same-member add/remove
+        // interleavings serialized (see ADDVISORY_LOCK_ID).
         sqlx::query!(
             r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
-
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          )
           DELETE FROM cala_account_set_member_accounts
-          WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
-          AND member_account_id = $2
+          WHERE account_set_id = $1 AND member_account_id = $2
           "#,
             account_set_id as AccountSetId,
             account_id as AccountId,
@@ -630,36 +667,154 @@ impl AccountSetRepo {
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
         // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
+        // Held across the validation query and the insert below, so the
+        // graph it validated cannot change before the new edge commits.
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
-        sqlx::query!(r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
 
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
+        // A set can never be its own member; the recursive cycle check
+        // below catches the transitive case.
+        if account_set_id == member_account_set_id {
+            return Err(AccountSetError::MembershipCycleDetected {
+                account_set_id,
+                member_account_set_id,
+            });
+        }
+
+        // Validate the edge in a single round trip. The checks share
+        // their walks, so they run as one statement over four CTEs:
+        //
+        // - `target_ancestors`: the target's ancestors with their
+        //   distance from it, capped at MAX_MEMBERSHIP_DEPTH (complete,
+        //   since the cap is enforced on every edge; the bound also
+        //   keeps the walk terminating even on a corrupted graph).
+        // - `member_subtree`: the member and its descendants with their
+        //   distance below it, same cap.
+        // - `subtree_reach`: every set any subtree member already
+        //   reaches upward.
+        // - `target_reach`: every set whose accounts already live under
+        //   the target chain (down-walk from target + ancestors).
+        //
+        // Verdicts, in error-precedence order:
+        //
+        // 1. `cycle` (#800): the member is already an ancestor of the
+        //    target — the edge would close a cycle and make membership
+        //    resolution non-terminating.
+        // 2. `set_conflict` (path uniqueness, set level): the member —
+        //    or any set below it — already reaches the target or one of
+        //    the target's ancestors, so the edge would give that set
+        //    (and every account below it) a second path there. The walk
+        //    covers the member's whole subtree, not just the member: a
+        //    descendant can reach the target chain through an edge that
+        //    bypasses the member entirely (`A⊃B`, `B⊃D`, `X⊃D` — then
+        //    attaching X under A would double-contain D). Seeding the
+        //    reach walk with the subtree itself also catches a duplicate
+        //    direct edge before the unique constraint does; the subtree
+        //    cannot legitimately intersect the target chain (that is the
+        //    cycle case, rejected first).
+        // 3. `account_conflict` (path uniqueness, account level): an
+        //    account somewhere under the member set is already contained
+        //    somewhere under the target chain — the edge would
+        //    double-contain it.
+        // 4. `depth`: the deepest root->leaf chain through the new edge
+        //    ((edges above the target) + 1 + (edges below the member))
+        //    must stay within MAX_MEMBERSHIP_DEPTH so the read-time
+        //    ancestor walk stays cheap and bounded.
+        let checks = sqlx::query!(
+            r#"
+          WITH RECURSIVE target_ancestors AS (
+            SELECT e.account_set_id AS set_id, 1 AS depth
+            FROM cala_account_set_member_account_sets e
+            WHERE e.member_account_set_id = $1
+
+            UNION
+            SELECT e.account_set_id, a.depth + 1
+            FROM target_ancestors a
+            JOIN cala_account_set_member_account_sets e
+                ON e.member_account_set_id = a.set_id
+            WHERE a.depth < $3
           ),
-          set_insert AS (
-            INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
-            VALUES ($1, $2)
+          target_chain AS (
+            SELECT $1::uuid AS set_id
+            UNION
+            SELECT set_id FROM target_ancestors
           ),
-          new_members AS (
-            INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-            SELECT $1, m.member_account_id, TRUE
-            FROM cala_account_set_member_accounts m
-            WHERE m.account_set_id = $2
-            RETURNING member_account_id
+          member_subtree AS (
+            SELECT $2::uuid AS set_id, 0 AS depth
+            UNION
+            SELECT e.member_account_set_id, s.depth + 1
+            FROM member_subtree s
+            JOIN cala_account_set_member_account_sets e
+                ON e.account_set_id = s.set_id
+            WHERE s.depth < $3
+          ),
+          subtree_reach AS (
+            SELECT set_id FROM member_subtree
+            UNION
+            SELECT e.account_set_id
+            FROM subtree_reach r
+            JOIN cala_account_set_member_account_sets e
+                ON e.member_account_set_id = r.set_id
+          ),
+          target_reach AS (
+            SELECT set_id FROM target_chain
+            UNION
+            SELECT e.member_account_set_id
+            FROM target_reach r
+            JOIN cala_account_set_member_account_sets e
+                ON e.account_set_id = r.set_id
           )
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id, transitive)
-          SELECT p.account_set_id, n.member_account_id, TRUE
-          FROM parents p
-          CROSS JOIN new_members n
+          SELECT
+            EXISTS (
+                SELECT 1 FROM target_ancestors WHERE set_id = $2
+            ) AS "cycle!",
+            EXISTS (
+                SELECT 1 FROM subtree_reach r
+                JOIN target_chain t ON r.set_id = t.set_id
+            ) AS "set_conflict!",
+            EXISTS (
+                SELECT 1
+                FROM cala_account_set_member_accounts ma
+                JOIN member_subtree ms ON ma.account_set_id = ms.set_id
+                JOIN cala_account_set_member_accounts ta
+                    ON ta.member_account_id = ma.member_account_id
+                JOIN target_reach tr ON ta.account_set_id = tr.set_id
+            ) AS "account_conflict!",
+            COALESCE((SELECT MAX(depth) FROM target_ancestors), 0)
+            + 1
+            + COALESCE((SELECT MAX(depth) FROM member_subtree), 0) AS "depth!"
+          "#,
+            account_set_id as AccountSetId,
+            member_account_set_id as AccountSetId,
+            MAX_MEMBERSHIP_DEPTH,
+        )
+        .fetch_one(db.as_executor())
+        .await?;
+        if checks.cycle {
+            return Err(AccountSetError::MembershipCycleDetected {
+                account_set_id,
+                member_account_set_id,
+            });
+        }
+        if checks.set_conflict || checks.account_conflict {
+            return Err(AccountSetError::MemberAlreadyAdded);
+        }
+        if checks.depth > MAX_MEMBERSHIP_DEPTH {
+            return Err(AccountSetError::MembershipDepthExceeded {
+                account_set_id,
+                member_account_set_id,
+                depth: checks.depth,
+                max: MAX_MEMBERSHIP_DEPTH,
+            });
+        }
+
+        // Insert the single direct set->set edge. Ancestor membership is
+        // resolved by the read-time walk; there is no closure to propagate.
+        sqlx::query!(
+            r#"
+          INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
+          VALUES ($1, $2)
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
@@ -698,28 +853,12 @@ impl AccountSetRepo {
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
+        // Delete the single direct set->set edge. There are no
+        // materialized ancestor/member rows to scrub.
         sqlx::query!(
             r#"
-          WITH RECURSIVE parents AS (
-            SELECT m.member_account_set_id, m.account_set_id
-            FROM cala_account_set_member_account_sets m
-            WHERE m.member_account_set_id = $1
-
-            UNION ALL
-            SELECT p.member_account_set_id, m.account_set_id
-            FROM parents p
-            JOIN cala_account_set_member_account_sets m
-                ON p.account_set_id = m.member_account_set_id
-          ),
-          member_accounts_deletion AS (
-            DELETE FROM cala_account_set_member_accounts
-            WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
-            AND member_account_id IN (SELECT member_account_id FROM cala_account_set_member_accounts
-                                      WHERE account_set_id = $2)
-          )
           DELETE FROM cala_account_set_member_account_sets
-          WHERE account_set_id IN (SELECT account_set_id FROM parents UNION SELECT $1)
-          AND member_account_set_id = $2
+          WHERE account_set_id = $1 AND member_account_set_id = $2
           "#,
             account_set_id as AccountSetId,
             member_account_set_id as AccountSetId,
@@ -765,7 +904,7 @@ impl AccountSetRepo {
               FROM cala_account_sets a
               JOIN cala_account_set_member_accounts asm
               ON asm.account_set_id = a.id
-              WHERE asm.member_account_id = $1 AND transitive IS FALSE
+              WHERE asm.member_account_id = $1
               AND ((a.name, a.id) > ($3, $2) OR ($3 IS NULL AND $2 IS NULL))
               ORDER BY a.name, a.id
               LIMIT $4"#,
@@ -851,13 +990,30 @@ impl AccountSetRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        // Adjacency-only membership: resolve each account's ancestor sets
+        // by an upward recursive walk over the (tiny) set->set edge table,
+        // seeded from the account's direct set memberships. UNION (not
+        // UNION ALL) dedups and keeps the walk terminating even if a stray
+        // edge slipped past the write-side cycle check.
         let rows = op.into_executor().fetch_all(sqlx::query!(
             r#"
-          SELECT m.account_set_id AS "set_id!: AccountSetId", m.member_account_id AS "account_id!: AccountId"
-          FROM cala_account_set_member_accounts m
+          WITH RECURSIVE seed AS (
+              SELECT m.member_account_id AS account_id, m.account_set_id
+              FROM cala_account_set_member_accounts m
+              WHERE m.member_account_id = ANY($2)
+          ),
+          ancestors AS (
+              SELECT account_id, account_set_id FROM seed
+              UNION
+              SELECT a.account_id, e.account_set_id
+              FROM ancestors a
+              JOIN cala_account_set_member_account_sets e
+                ON e.member_account_set_id = a.account_set_id
+          )
+          SELECT a.account_id AS "account_id!: AccountId", a.account_set_id AS "set_id!: AccountSetId"
+          FROM ancestors a
           JOIN cala_account_sets s
-          ON m.account_set_id = s.id AND s.journal_id = $1
-          WHERE m.member_account_id = ANY($2)
+            ON s.id = a.account_set_id AND s.journal_id = $1
           "#,
             journal_id as JournalId,
             account_ids as &[AccountId]

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE seed AS (\n                SELECT m.member_account_id AS account_id, m.account_set_id\n                FROM cala_account_set_member_accounts m\n                WHERE m.member_account_id = ANY($2)\n            ),\n            ancestors AS (\n                SELECT account_id, account_set_id FROM seed\n                UNION\n                SELECT a.account_id, e.account_set_id\n                FROM ancestors a\n                JOIN cala_account_set_member_account_sets e\n                  ON e.member_account_set_id = a.account_set_id\n            )\n            SELECT\n                a.account_set_id AS \"account_set_id!: AccountSetId\",\n                a.account_id AS \"member_account_id!: AccountId\"\n            FROM ancestors a\n            JOIN cala_account_sets s\n              ON s.id = a.account_set_id AND s.journal_id = $1\n            JOIN cala_accounts acc\n              ON acc.id = a.account_set_id AND acc.eventually_consistent = TRUE\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "762ba8f5e9a678493268c64cff397f82294017d2f894d1ae72b27fe64e16a6f4"
+}
