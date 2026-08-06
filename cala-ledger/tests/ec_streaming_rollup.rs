@@ -550,6 +550,37 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Regression (PR #813 review): a direct entry to a *nonexistent* account must
+/// fail as a plain referential-integrity error, NOT be misreported as targeting
+/// an account set. The plain account-id FK is checked before the set-guard FK,
+/// so a missing account trips it first and never reaches the set-guard mapping.
+#[tokio::test]
+async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> {
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, _jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let missing = AccountId::new(); // never created
+
+    let mut params = Params::new();
+    params.insert("journal_id", fixture.journal_id.to_string());
+    params.insert("sender", fixture.sender.id());
+    params.insert("recipient", missing);
+    params.insert("amount", POST_AMOUNT);
+    let result = fixture
+        .cala
+        .post_transaction(TransactionId::new(), &fixture.tx_code, params)
+        .await;
+
+    match result {
+        Err(LedgerError::EntryTargetsAccountSet) => {
+            panic!("a missing account was misreported as targeting an account set")
+        }
+        Err(_) => {} // a referential-integrity / not-found error — correct
+        Ok(_) => panic!("posting to a nonexistent account must fail"),
+    }
+    Ok(())
+}
+
 /// Regression: a default (Synchronous) plain account is written inline and is
 /// readable immediately after posting — the rollup job is irrelevant to it.
 #[tokio::test]
