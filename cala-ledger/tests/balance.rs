@@ -64,11 +64,12 @@ fn balances_by_id<C>(
 #[tokio::test]
 async fn list_current_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -124,11 +125,12 @@ async fn list_current_balances_for_account() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -181,11 +183,12 @@ async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -312,12 +315,13 @@ async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow::Result<()> {
-    let pool = helpers::init_pool().await?;
+    let pool = helpers::init_isolated_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -381,7 +385,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
     cala.post_transaction(TransactionId::new(), &tx_code, params)
         .await?;
 
-    let ec_before_recalc = cala
+    let ec_before_rollup = cala
         .balances()
         .list_for_account(
             journal.id(),
@@ -389,12 +393,31 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
             all_balances_query(),
         )
         .await?;
-    let ec_before_recalc = balances_by_currency(ec_before_recalc);
-    assert!(ec_before_recalc.is_empty());
+    let ec_before_rollup = balances_by_currency(ec_before_rollup);
+    assert!(ec_before_rollup.is_empty());
 
-    cala.account_sets()
-        .recalculate_balances(ec_set.id())
+    // The streaming rollup populates the EC set asynchronously.
+    jobs.start_poll().await?;
+
+    let inline_balances = cala
+        .balances()
+        .list_for_account(
+            journal.id(),
+            AccountId::from(inline_set.id()),
+            all_balances_query(),
+        )
         .await?;
+    let inline_balances = balances_by_currency(inline_balances);
+    for currency in [Currency::BTC, Currency::USD] {
+        helpers::wait_for_settled(
+            &cala,
+            journal.id(),
+            ec_set.id(),
+            currency,
+            inline_balances[&currency].settled(),
+        )
+        .await?;
+    }
 
     let ec_balances = cala
         .balances()
@@ -428,15 +451,6 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
     );
     assert_eq!(ec_balances[&Currency::USD].details, ec_usd.details);
 
-    let inline_balances = cala
-        .balances()
-        .list_for_account(
-            journal.id(),
-            AccountId::from(inline_set.id()),
-            all_balances_query(),
-        )
-        .await?;
-    let inline_balances = balances_by_currency(inline_balances);
     for currency in [Currency::BTC, Currency::USD] {
         assert_balance_amounts_eq(&ec_balances[&currency], &inline_balances[&currency]);
     }

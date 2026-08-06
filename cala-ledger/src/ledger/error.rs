@@ -34,6 +34,8 @@ pub enum LedgerError {
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
     VelocityError(#[from] VelocityError),
+    #[error("LedgerError - EcRollupRegistration: {0}")]
+    EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
 }
 
 impl From<sqlx::Error> for LedgerError {

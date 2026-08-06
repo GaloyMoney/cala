@@ -113,6 +113,53 @@ impl<'a> BalanceWithDirection<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+
+    use super::*;
+
+    fn account_balance() -> AccountBalance {
+        let entry_id = EntryId::new();
+        let time = Utc::now();
+        let amount = BalanceAmount {
+            dr_balance: Decimal::ZERO,
+            cr_balance: Decimal::ZERO,
+            entry_id,
+            modified_at: time,
+        };
+        AccountBalance::new(
+            DebitOrCredit::Credit,
+            BalanceSnapshot {
+                journal_id: JournalId::new(),
+                account_id: AccountId::new(),
+                entry_id,
+                currency: Currency::USD,
+                settled: amount.clone(),
+                pending: amount.clone(),
+                encumbrance: amount,
+                version: 0,
+                modified_at: time,
+                created_at: time,
+            },
+        )
+    }
+
+    #[test]
+    fn from_bounds_sets_period_version_to_the_diff() {
+        let range =
+            BalanceRange::from_bounds(Some(account_balance()), 3, Some(account_balance()), 10)
+                .expect("a close balance yields a range");
+        assert_eq!(range.period.details.version, 7);
+    }
+
+    #[test]
+    fn from_bounds_without_close_is_none() {
+        assert!(BalanceRange::from_bounds(Some(account_balance()), 3, None, 10).is_none());
+        assert!(BalanceRange::from_bounds(None, 0, None, 0).is_none());
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BalanceRange {
     pub open: AccountBalance,
@@ -164,5 +211,17 @@ impl BalanceRange {
                 }
             }
         }
+    }
+
+    /// Build a range from its `(open, close)` bounds. Returns `None` when
+    /// there is no closing balance — i.e. the account had no activity in
+    /// the window, so there is no range to report.
+    pub fn from_bounds(
+        start: Option<AccountBalance>,
+        start_version: u32,
+        end: Option<AccountBalance>,
+        end_version: u32,
+    ) -> Option<Self> {
+        end.map(|end| Self::new(start, end, end_version - start_version))
     }
 }

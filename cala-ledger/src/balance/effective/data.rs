@@ -5,9 +5,9 @@ use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 use cala_types::{
-    balance::{BalanceAmount, BalanceSnapshot},
+    balance::{BalanceAmount, BalanceSnapshot, EffectiveBalanceSnapshot},
     entry::EntryValues,
-    primitives::{AccountId, Currency, EntryId},
+    primitives::{AccountId, Currency, EntryId, JournalId},
 };
 
 use crate::balance::snapshot::Snapshots;
@@ -76,22 +76,29 @@ impl<'a> EffectiveBalanceData<'a> {
         }
     }
 
-    pub fn into_updates(
+    pub fn into_snapshots(
         self,
-    ) -> impl Iterator<Item = (AccountId, Currency, NaiveDate, BalanceSnapshot, u32)> + use<'a>
-    {
+        journal_id: JournalId,
+    ) -> impl Iterator<Item = EffectiveBalanceSnapshot> + use<'a> {
         self.updates
             .into_iter()
             .enumerate()
             .map(move |(idx, update)| {
-                let (values, effective) = update.snapshot();
-                (
-                    self.account_id,
-                    self.currency,
+                let (snapshot, effective) = update.snapshot();
+                EffectiveBalanceSnapshot {
+                    journal_id,
+                    account_id: self.account_id,
+                    currency: self.currency,
                     effective,
-                    values,
-                    idx as u32 + 1 + self.latest_all_time_version,
-                )
+                    version: snapshot.version,
+                    all_time_version: idx as u32 + 1 + self.latest_all_time_version,
+                    created_at: snapshot.created_at,
+                    modified_at: snapshot.modified_at,
+                    entry_id: snapshot.entry_id,
+                    settled: snapshot.settled,
+                    pending: snapshot.pending,
+                    encumbrance: snapshot.encumbrance,
+                }
             })
     }
 
@@ -347,6 +354,40 @@ mod tests {
         assert_eq!(snapshot.entry_id, entry.id);
         assert_eq!(snapshot.version, 1);
         assert_eq!(snapshot.settled.cr_balance, Decimal::ONE);
+    }
+
+    #[test]
+    fn into_snapshots_stamps_journal_and_all_time_version() {
+        let account_id = AccountId::new();
+        let latest_all_time_version = 5;
+        let mut data = EffectiveBalanceData::new(
+            account_id,
+            Currency::USD,
+            None,
+            latest_all_time_version,
+            Vec::new(),
+        );
+
+        let day_one = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
+        let day_two = NaiveDate::from_ymd_opt(2023, 10, 2).unwrap();
+        let entry_one = entry_values();
+        let entry_two = entry_values();
+        data.push(day_one, &entry_one);
+        data.push(day_two, &entry_two);
+        data.re_calculate_snapshots(Utc::now());
+
+        let journal_id = JournalId::new();
+        let snapshots: Vec<EffectiveBalanceSnapshot> = data.into_snapshots(journal_id).collect();
+
+        assert_eq!(snapshots.len(), 2);
+        assert!(snapshots.iter().all(|s| s.journal_id == journal_id));
+        assert!(snapshots.iter().all(|s| s.account_id == account_id));
+        assert!(snapshots.iter().all(|s| s.currency == Currency::USD));
+        // all_time_version = enumerate idx + 1 + latest_all_time_version
+        assert_eq!(snapshots[0].all_time_version, latest_all_time_version + 1);
+        assert_eq!(snapshots[1].all_time_version, latest_all_time_version + 2);
+        assert_eq!(snapshots[0].effective, day_one);
+        assert_eq!(snapshots[1].effective, day_two);
     }
 
     #[test]

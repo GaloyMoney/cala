@@ -22,11 +22,19 @@ pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
 
 pub async fn init_cala() -> anyhow::Result<CalaLedger> {
     let pool = init_pool().await?;
+    // The perf harness never polls jobs; the EC rollup stays dormant.
+    let mut jobs = job::Jobs::init(
+        job::JobSvcConfig::builder()
+            .pool(pool.clone())
+            .build()
+            .map_err(anyhow::Error::msg)?,
+    )
+    .await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(true)
         .build()?;
-    let ledger = CalaLedger::init(cala_config).await?;
+    let ledger = CalaLedger::init(cala_config, &mut jobs).await?;
     Ok(ledger)
 }
 

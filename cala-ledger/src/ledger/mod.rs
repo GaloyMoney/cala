@@ -38,8 +38,14 @@ pub struct CalaLedger {
 }
 
 impl CalaLedger {
+    /// Initialize the ledger.
+    ///
+    /// The streaming EC account-set balance rollup is registered against the
+    /// caller-owned `jobs` here; the caller drives its lifecycle (call
+    /// `start_poll` to run it, and shut it down). The rollup only runs once
+    /// `jobs` is polled.
     #[instrument(name = "cala_ledger.init", skip_all)]
-    pub async fn init(config: CalaLedgerConfig) -> Result<Self, LedgerError> {
+    pub async fn init(config: CalaLedgerConfig, jobs: &mut job::Jobs) -> Result<Self, LedgerError> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
             (None, Some(pg_con)) => {
@@ -72,6 +78,10 @@ impl CalaLedger {
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+
+        crate::ec_rollup::register_ec_balance_rollup(jobs, publisher.inner(), &balances, &entries)
+            .await?;
+
         Ok(Self {
             accounts,
             account_sets,

@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                m.account_set_id AS \"account_set_id!: AccountSetId\",\n                m.member_account_id AS \"member_account_id!: AccountId\"\n            FROM cala_account_set_member_accounts m\n            JOIN cala_account_sets s\n              ON m.account_set_id = s.id AND s.journal_id = $1\n            JOIN cala_accounts a\n              ON a.id = m.account_set_id AND a.eventually_consistent = TRUE\n            WHERE m.member_account_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "member_account_id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a9268b870e432048da53ecf38e78f99e3209cb9a5915025f3a748c796a7d6caa"
+}

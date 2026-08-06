@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -19,10 +19,10 @@ use super::{
 const EC_SET_LOCK_CLASS: i32 = 1;
 
 /// Maximum balance snapshots written per `INSERT` in
-/// [`BalanceRepo::insert_new_snapshots`]. A deep account-set recalc can produce
-/// one history row per member event; flushing in bounded sub-batches (within
-/// the same transaction) keeps any single statement's working set small so it
-/// cannot OOM-crash a Postgres backend.
+/// [`BalanceRepo::insert_new_snapshots`]. A single streaming-rollup batch
+/// can fan many transactions into deep ancestor chains; flushing in
+/// bounded sub-batches (within the same transaction) keeps any single
+/// statement's working set small so it cannot OOM-crash a Postgres backend.
 const INSERT_SNAPSHOT_BATCH_SIZE: usize = 5_000;
 
 #[derive(Debug, Clone)]
@@ -338,16 +338,13 @@ impl BalanceRepo {
     ///
     /// - SHARED lock (2-arg `pg_advisory_xact_lock_shared`, classid
     ///   `EC_SET_LOCK_CLASS`) keyed on `account_id`, taken on *every*
-    ///   row — leaves and ancestors, EC and non-EC alike. This is the
-    ///   lock that recalcs take EXCLUSIVE on for whichever set they
-    ///   are recalculating; holding SHARED on every ancestor while
-    ///   the poster runs ensures any concurrent recalc on any of them
-    ///   waits for the poster to commit before reading history. That
-    ///   in turn lets the watermark be maintained as a side-effect of
-    ///   `insert_new_snapshots` (rather than via an explicit advance
-    ///   from a "max input seq" computation), because there can be no
-    ///   uncommitted-then-committed rows whose seqs sit between the
-    ///   recalc's input max and its output max.
+    ///   row — leaves and ancestors, EC and non-EC alike. Its
+    ///   load-bearing role is the member side of the membership guard:
+    ///   `member_has_balance_history_in_op` takes EXCLUSIVE on a member
+    ///   before it is added to / removed from a set, so a concurrent
+    ///   poster holding SHARED on that member blocks until the guard's
+    ///   history check commits. That is what keeps a member from
+    ///   joining or leaving a set while it has balance history.
     /// - FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`) keyed on
     ///   `(journal_id, account_id, currency)`, taken only on non-EC
     ///   rows via `CASE WHEN`. Serializes concurrent posters that
@@ -453,46 +450,6 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.balances.lock_accounts_exclusive_in_op",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub(super) async fn lock_accounts_exclusive_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        account_ids: &HashSet<AccountId>,
-    ) -> Result<(), BalanceError> {
-        if account_ids.is_empty() {
-            return Ok(());
-        }
-        // Sort at the Rust level so every caller acquires the
-        // `pg_advisory_xact_lock` locks in canonical `AccountId`
-        // order, which is what lets concurrent callers with
-        // overlapping inputs serialize without deadlock. This
-        // statement is join-free, so the bare UNNEST scan emits rows
-        // in array order and the lock call is evaluated per row in
-        // exactly that order — array order IS the acquisition order.
-        // (An `ORDER BY` would also work — PostgreSQL >= 9.6
-        // evaluates volatile SELECT-list expressions after the Sort —
-        // but it would only add a pointless Sort node here; see the
-        // ordering notes on `find_for_update`.)
-        let mut account_ids: Vec<AccountId> = account_ids.iter().copied().collect();
-        account_ids.sort();
-        sqlx::query!(
-            r#"
-            SELECT pg_advisory_xact_lock($1::int4, hashtext(account_id::text))
-            FROM UNNEST($2::uuid[]) AS v(account_id)
-            "#,
-            EC_SET_LOCK_CLASS,
-            &account_ids as &[AccountId],
-        )
-        .execute(op.as_executor())
-        .await?;
-        Ok(())
-    }
-
     /// Under a SHARED lock on `parent_account_id` and an EXCLUSIVE
     /// lock on `member_id` (both in the 2-arg EC-set lock namespace,
     /// acquired in a single canonically-ordered SQL statement), return
@@ -505,13 +462,10 @@ impl BalanceRepo {
     /// our EXCLUSIVE, so committed state is fully visible by the time
     /// the `EXISTS` runs.
     ///
-    /// The parent lock is SHARED because the only thing it needs to
-    /// coordinate is add-vs-recalc on the same set: recalc takes
-    /// EXCLUSIVE on the parent, so SHARED/EXCLUSIVE still serializes
-    /// those two. SHARED/SHARED is compatible with concurrent
-    /// posters on the same parent, which is what keeps multi-call
-    /// `add_member_in_op` transactions from contending with posters
-    /// on hot parent sets.
+    /// The parent lock is SHARED (not EXCLUSIVE) so it stays compatible
+    /// with concurrent posters on the same parent — SHARED/SHARED does not
+    /// block — which is what keeps multi-call `add_member_in_op`
+    /// transactions from contending with posters on hot parent sets.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.member_has_balance_history_in_op",
@@ -529,7 +483,7 @@ impl BalanceRepo {
         // the sort done in Rust: the statement is join-free, so the
         // bare UNNEST scan emits rows in array order and array order
         // IS the lock acquisition order (see
-        // lock_accounts_exclusive_in_op).
+        // find_ec_balances_for_update).
         let mut lock_ids = [parent_account_id, member_id];
         lock_ids.sort();
         sqlx::query!(
@@ -594,7 +548,7 @@ impl BalanceRepo {
         // parent (EXCLUSIVE wins when an id is both). The list is
         // built, deduped and sorted in Rust; the lock statement is
         // join-free, so the UNNEST array order is the acquisition
-        // order (see lock_accounts_exclusive_in_op). Locking pair-wise (SHARED
+        // order (see find_ec_balances_for_update). Locking pair-wise (SHARED
         // parent, then EXCLUSIVE member) instead would invert the
         // acquisition order against the single-pair path whenever
         // member_id < parent_account_id, and concurrent single- and
@@ -663,9 +617,10 @@ impl BalanceRepo {
         );
 
         // Flush in bounded sub-batches within the caller's transaction so a
-        // single set's recalc (which can emit one history row per member event)
-        // never becomes one multi-million-row INSERT + outbox publish large
-        // enough to OOM-crash a Postgres backend. Each sub-batch is a
+        // large streaming-rollup batch (which can fan many transactions into
+        // deep ancestor chains) never becomes one multi-million-row INSERT +
+        // outbox publish large enough to OOM-crash a Postgres backend. Each
+        // sub-batch is a
         // self-contained statement (history insert + current_balances upsert),
         // so the balance-history FK is satisfied per sub-batch; the whole set
         // still commits atomically as one transaction.
@@ -705,15 +660,14 @@ impl BalanceRepo {
             RETURNING *
         )
         INSERT INTO cala_current_balances AS c (
-            journal_id, account_id, currency, latest_version, latest_values, latest_seq
+            journal_id, account_id, currency, latest_version, latest_values
         )
         SELECT
             journal_id,
             account_id,
             currency,
             MAX(version) as latest_version,
-            (array_agg(values ORDER BY version DESC))[1] as latest_values,
-            MAX(seq) as latest_seq
+            (array_agg(values ORDER BY version DESC))[1] as latest_values
         FROM new_snapshots
         GROUP BY journal_id, account_id, currency
         ON CONFLICT (account_id, journal_id, currency)
@@ -723,8 +677,7 @@ impl BalanceRepo {
                 WHEN c.latest_version < EXCLUDED.latest_version
                 THEN EXCLUDED.latest_values
                 ELSE c.latest_values
-            END,
-            latest_seq = GREATEST(c.latest_seq, EXCLUDED.latest_seq)
+            END
         "#,
                 &journal_ids as &[JournalId],
                 &account_ids as &[AccountId],
@@ -740,149 +693,36 @@ impl BalanceRepo {
         Ok(())
     }
 
+    /// For each of `account_ids`, the **eventually-consistent** ancestor
+    /// account sets that own it — the streaming rollup's targets. Mirrors
+    /// the inline `AccountSetRepo::fetch_mappings_in_op` but keeps only EC
+    /// sets: exactly the ones the synchronous poster path deliberately
+    /// skips (`find_for_update` filters `eventually_consistent = FALSE`).
     #[instrument(
         level = "debug",
-        name = "balance.load_account_set_balances_batch",
-        skip_all,
-        err(level = "warn")
+        name = "cala_ledger.balances.fetch_ec_set_mappings",
+        skip_all
     )]
-    pub(crate) async fn load_account_set_balances_batch(
+    pub(crate) async fn fetch_ec_set_mappings(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, AccountSetBalanceState>, BalanceError> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT account_id AS "account_id!: AccountId", latest_values, latest_seq
-            FROM cala_current_balances
-            WHERE account_id = ANY($1) AND journal_id = $2
-            ORDER BY account_id
-            FOR UPDATE
-            "#,
-            account_ids as &[AccountId],
-            journal_id as JournalId,
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-
-        let mut result: HashMap<AccountId, (HashMap<Currency, BalanceSnapshot>, Option<i64>)> =
-            HashMap::new();
-        for row in rows {
-            let snap: BalanceSnapshot = serde_json::from_value(row.latest_values)
-                .expect("Failed to deserialize balance snapshot");
-            let currency = snap.currency;
-            let seq = row.latest_seq;
-
-            let entry = result
-                .entry(row.account_id)
-                .or_insert_with(|| (HashMap::new(), None));
-            entry.0.insert(currency, snap);
-            entry.1 = Some(entry.1.map_or(seq, |cur: i64| cur.max(seq)));
-        }
-
-        // Normalize watermarks: 0 → None
-        for (_, watermark) in result.values_mut() {
-            *watermark = watermark.filter(|&s| s > 0);
-        }
-
-        // Ensure every requested account_id is present in the map
-        for id in account_ids {
-            result.entry(*id).or_insert_with(|| (HashMap::new(), None));
-        }
-
-        Ok(result)
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "balance.fetch_batch_member_history",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub(crate) async fn fetch_batch_member_history(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_set_ids: &[AccountSetId],
-        min_watermark: Option<i64>,
-    ) -> Result<Vec<MemberBalanceHistoryRow>, BalanceError> {
-        let rows = sqlx::query!(
-            r#"
-            WITH member_accounts AS (
-                SELECT DISTINCT m.member_account_id
-                FROM cala_account_set_member_accounts m
-                LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
-                WHERE m.account_set_id = ANY($1)
-                  AND s.id IS NULL
-            ),
-            all_history AS (
-                SELECT h.values, h.account_id, h.currency, h.version, h.seq
-                FROM cala_balance_history h
-                JOIN member_accounts ma ON ma.member_account_id = h.account_id
-                WHERE h.journal_id = $2
-            ),
-            with_prev AS (
-                SELECT values,
-                       LAG(values) OVER (
-                           PARTITION BY account_id, currency ORDER BY version
-                       ) as prev_values,
-                       seq,
-                       account_id
-                FROM all_history
-            )
-            SELECT values, prev_values, seq
-            FROM with_prev
-            WHERE ($3::bigint IS NULL OR seq > $3)
-            ORDER BY seq, account_id
-            "#,
-            account_set_ids as &[AccountSetId],
-            journal_id as JournalId,
-            min_watermark,
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-
-        let mut result = Vec::with_capacity(rows.len());
-        for row in rows {
-            let snapshot: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
-            let prev_snapshot: Option<BalanceSnapshot> = row.prev_values.map(|v| {
-                serde_json::from_value(v).expect("Failed to deserialize previous balance snapshot")
-            });
-
-            result.push(MemberBalanceHistoryRow {
-                snapshot,
-                prev_snapshot,
-                seq: row.seq,
-            });
-        }
-
-        Ok(result)
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "balance.fetch_member_account_mappings",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub(crate) async fn fetch_member_account_mappings(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
             SELECT
-                account_set_id AS "account_set_id!: AccountSetId",
-                member_account_id AS "member_account_id!: AccountId"
+                m.account_set_id AS "account_set_id!: AccountSetId",
+                m.member_account_id AS "member_account_id!: AccountId"
             FROM cala_account_set_member_accounts m
-            LEFT JOIN cala_account_sets s ON s.id = m.member_account_id
-            WHERE m.account_set_id = ANY($1)
-              AND s.id IS NULL
+            JOIN cala_account_sets s
+              ON m.account_set_id = s.id AND s.journal_id = $1
+            JOIN cala_accounts a
+              ON a.id = m.account_set_id AND a.eventually_consistent = TRUE
+            WHERE m.member_account_id = ANY($2)
             "#,
-            account_set_ids as &[AccountSetId],
+            journal_id as JournalId,
+            account_ids as &[AccountId],
         )
         .fetch_all(op.as_executor())
         .await?;
@@ -896,16 +736,80 @@ impl BalanceRepo {
         }
         Ok(result)
     }
+
+    /// Take the **shared** EC-set advisory lock on `account_ids` (the same
+    /// class + ordering as the poster path) and read the current balances
+    /// for the requested EC set-accounts. The streaming rollup is the sole
+    /// EC-set writer (`spawn_unique`), so this lock is a cheap, defensive
+    /// serialization point rather than a hard requirement. Unlike
+    /// `find_for_update` this keeps `eventually_consistent = TRUE` rows —
+    /// those are exactly the sets the streaming rollup owns.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.find_ec_balances_for_update",
+        skip_all
+    )]
+    pub(crate) async fn find_ec_balances_for_update(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
+        // Acquire the shared advisory locks in canonical `AccountId` order
+        // so overlapping callers serialize without deadlock. The `ORDER BY`
+        // makes acquisition order canonical regardless of input order (see
+        // the ordering notes on `find_for_update`; duplicate ids re-acquire
+        // the same lock, which is a no-op within one transaction).
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
+            FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
+            "#,
+            EC_SET_LOCK_CLASS,
+            account_ids as &[AccountId],
+        )
+        .execute(op.as_executor())
+        .await?;
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                v.account_id AS "account_id!: AccountId",
+                v.currency AS "currency!",
+                b.latest_values,
+                a.status AS "status!: Status"
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = v.account_id AND a.eventually_consistent = TRUE
+            LEFT JOIN cala_current_balances b
+                ON b.journal_id = $1
+                AND b.account_id = v.account_id
+                AND b.currency = v.currency
+            "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+            currencies as &[&str],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut ret = HashMap::new();
+        for row in rows {
+            if row.status == Status::Locked {
+                return Err(BalanceError::AccountLocked(row.account_id));
+            }
+            let snapshot = row.latest_values.map(|v| {
+                serde_json::from_value::<BalanceSnapshot>(v)
+                    .expect("Failed to deserialize balance snapshot")
+            });
+            ret.insert(
+                (
+                    row.account_id,
+                    row.currency.parse().expect("Could not parse currency"),
+                ),
+                snapshot,
+            );
+        }
+        Ok(ret)
+    }
 }
-
-pub(crate) struct MemberBalanceHistoryRow {
-    pub(crate) snapshot: BalanceSnapshot,
-    pub(crate) prev_snapshot: Option<BalanceSnapshot>,
-    pub(crate) seq: i64,
-}
-
-/// Per-account-set balance state: currency balances + watermark.
-pub(crate) type AccountSetBalanceState = (HashMap<Currency, BalanceSnapshot>, Option<i64>);
-
-/// Per-set recalculation state used by `replay_member_deltas_batch`.
-pub(crate) type SetRecalcState = (AccountId, HashMap<Currency, BalanceSnapshot>, Option<i64>);

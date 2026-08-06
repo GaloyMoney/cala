@@ -13,11 +13,12 @@ use cala_ledger::{
 
 async fn init_test() -> anyhow::Result<(CalaLedger, JournalId, String)> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await.unwrap();
