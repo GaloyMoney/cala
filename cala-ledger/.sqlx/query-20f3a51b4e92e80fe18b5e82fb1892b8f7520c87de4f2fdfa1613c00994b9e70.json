@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE subtree AS (\n            SELECT v.target_id AS target_id, v.target_id AS set_id\n            FROM UNNEST($1::uuid[]) AS v(target_id)\n            UNION\n            SELECT s.target_id, e.member_account_set_id\n            FROM subtree s\n            JOIN cala_account_set_member_account_sets e\n                ON e.account_set_id = s.set_id\n        )\n        SELECT\n            s.target_id AS \"target_id!: AccountId\",\n            m.member_account_id AS \"leaf_id!: AccountId\"\n        FROM subtree s\n        JOIN cala_account_set_member_accounts m\n            ON m.account_set_id = s.set_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "target_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "leaf_id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "20f3a51b4e92e80fe18b5e82fb1892b8f7520c87de4f2fdfa1613c00994b9e70"
+}

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            a.id AS \"id!: AccountId\",\n            a.eventually_consistent,\n            a.is_account_set\n        FROM cala_accounts a\n        WHERE a.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "eventually_consistent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_account_set",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d8677b857e8de4dbdf7b3e6c50250307313d1bff574a5cf9f5dea5a8921fc9f6"
+}

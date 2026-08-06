@@ -33,6 +33,7 @@ mod account_balance;
 mod cursor;
 mod effective;
 pub mod error;
+mod reconcile;
 mod repo;
 mod snapshot;
 
@@ -53,6 +54,7 @@ pub use account_balance::*;
 pub use cursor::*;
 use effective::*;
 use error::BalanceError;
+pub use reconcile::{EcDriftReport, LayerDrift};
 use repo::*;
 pub(crate) use snapshot::*;
 
@@ -70,7 +72,7 @@ pub struct Balances {
     repo: BalanceRepo,
     journals: Journals,
     effective: EffectiveBalances,
-    _pool: PgPool,
+    pool: PgPool,
 }
 
 impl Balances {
@@ -79,7 +81,7 @@ impl Balances {
             repo: BalanceRepo::new(pool),
             effective: EffectiveBalances::new(pool, publisher),
             journals: journals.clone(),
-            _pool: pool.clone(),
+            pool: pool.clone(),
         }
     }
 

@@ -14,4 +14,8 @@ pub enum BalanceError {
     JournalLocked(JournalId),
     #[error("BalanceError - AccountLocked: Cannot update balances. The account {0} is locked")]
     AccountLocked(AccountId),
+    #[error(
+        "BalanceError - NotEventuallyConsistent: account {0} is not an eventually-consistent account"
+    )]
+    NotEventuallyConsistent(AccountId),
 }

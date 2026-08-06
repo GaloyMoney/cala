@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            h.account_id AS \"account_id!: AccountId\",\n            h.currency,\n            MAX(h.version) AS \"max_version!\"\n        FROM cala_balance_history h\n        WHERE h.journal_id = $1\n          AND h.account_id = ANY($2)\n        GROUP BY h.account_id, h.currency\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_version!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "4a0128d8f973225f1df2fa7cd478e4da10bf4287242c026e49088810ff6cb9af"
+}

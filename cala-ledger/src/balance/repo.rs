@@ -16,7 +16,7 @@ use super::{
     error::BalanceError,
 };
 
-const EC_SET_LOCK_CLASS: i32 = 1;
+pub(super) const EC_SET_LOCK_CLASS: i32 = 1;
 
 /// Maximum balance snapshots written per `INSERT` in
 /// [`BalanceRepo::insert_new_snapshots`]. A single streaming-rollup batch

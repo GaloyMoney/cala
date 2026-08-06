@@ -6,7 +6,7 @@ use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-use cala_types::{entry::EntryValues, primitives::*};
+use cala_types::{balance::EffectiveBalanceSnapshot, entry::EntryValues, primitives::*};
 
 use crate::{outbox::OutboxPublisher, primitives::JournalId};
 
@@ -275,6 +275,36 @@ impl EffectiveBalances {
             .insert_new_snapshots(op, journal_id, new_balances)
             .await?;
 
+        Ok(())
+    }
+
+    /// Repair path used by the EC reconciler (`Balances::repair_ec`):
+    /// drop every cumulative-effective row of the drifted
+    /// `(account, currency)` pairs and reinsert the rebuilt series. The
+    /// cumulative table is a projection (the inline back-dating path
+    /// already deletes future-dated rows), so a wholesale rebuild is
+    /// legitimate; reinserted rows publish through the normal
+    /// `insert_new_snapshots` outbox path.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.rebuild_ec_series_in_op",
+        skip_all,
+        fields(pairs = pairs.len(), snapshots = snapshots.len()),
+        err(level = "warn")
+    )]
+    pub(crate) async fn rebuild_ec_series_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        pairs: &[(AccountId, Currency)],
+        snapshots: Vec<EffectiveBalanceSnapshot>,
+    ) -> Result<(), BalanceError> {
+        self.repo.delete_for_pairs(op, journal_id, pairs).await?;
+        if !snapshots.is_empty() {
+            self.repo
+                .insert_new_snapshots(op, journal_id, snapshots)
+                .await?;
+        }
         Ok(())
     }
 }

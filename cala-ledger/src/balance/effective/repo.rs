@@ -1034,6 +1034,46 @@ impl EffectiveBalanceRepo {
         Ok(ret)
     }
 
+    /// Delete every cumulative-effective row of the given
+    /// `(account, currency)` pairs — the destructive half of the EC
+    /// reconciler's series rebuild. Callers hold the exclusive EC-class
+    /// advisory locks on the accounts, so no applier write can interleave.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.delete_for_pairs",
+        skip(self, op, pairs),
+        fields(pairs = pairs.len())
+    )]
+    pub(super) async fn delete_for_pairs(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        pairs: &[(AccountId, Currency)],
+    ) -> Result<(), BalanceError> {
+        let mut account_ids = Vec::with_capacity(pairs.len());
+        let mut currencies = Vec::with_capacity(pairs.len());
+        for (account_id, currency) in pairs {
+            account_ids.push(*account_id);
+            currencies.push(currency.code());
+        }
+        sqlx::query!(
+            r#"
+            DELETE FROM cala_cumulative_effective_balances
+            WHERE journal_id = $1
+              AND (account_id, currency) IN (
+                SELECT account_id, currency
+                FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+              )
+            "#,
+            journal_id as JournalId,
+            &account_ids as &[AccountId],
+            &currencies as &[&str],
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.effective.insert_new_snapshots",

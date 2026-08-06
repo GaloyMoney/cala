@@ -62,7 +62,12 @@ use crate::{
     primitives::{EntryId, JournalId, TransactionId},
 };
 
-const EC_BALANCE_ROLLUP_JOB: JobType = JobType::new("cala.ec_balance_rollup");
+/// Job-type name of the streaming rollup's unique instance. Shared with
+/// the reconciler ([`crate::balance`]'s `verify_ec`/`repair_ec`), which
+/// reads the job's persisted checkpoint as its consistency anchor.
+pub(crate) const EC_BALANCE_ROLLUP_JOB_NAME: &str = "cala.ec_balance_rollup";
+
+const EC_BALANCE_ROLLUP_JOB: JobType = JobType::new(EC_BALANCE_ROLLUP_JOB_NAME);
 
 /// Maximum number of collected events (transactions + their entries)
 /// folded into a single commit. Bounds per-transaction memory/WAL/lock
