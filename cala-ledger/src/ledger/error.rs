@@ -4,8 +4,8 @@ use thiserror::Error;
 use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
-    transaction::error::TransactionError, tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    primitives::AccountId, transaction::error::TransactionError,
+    tx_template::error::TxTemplateError, velocity::error::VelocityError,
 };
 
 #[derive(Error, Debug)]
@@ -36,6 +36,12 @@ pub enum LedgerError {
     VelocityError(#[from] VelocityError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
+    #[error(
+        "LedgerError - EntriesTargetEventuallyConsistentAccountSet: entries may not be posted \
+         directly to eventually-consistent set-backing account {account_id}; its balance is \
+         derived from members via the streaming rollup"
+    )]
+    EntriesTargetEventuallyConsistentAccountSet { account_id: AccountId },
 }
 
 impl From<sqlx::Error> for LedgerError {

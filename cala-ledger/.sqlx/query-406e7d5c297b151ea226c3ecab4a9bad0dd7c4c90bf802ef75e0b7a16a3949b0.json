@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.id AS \"id!: AccountId\"\n            FROM cala_accounts a\n            WHERE a.id = ANY($1)\n              AND a.eventually_consistent = TRUE\n              AND NOT EXISTS (\n                  SELECT 1 FROM cala_account_sets s WHERE s.id = a.id\n              )\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: AccountId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "406e7d5c297b151ea226c3ecab4a9bad0dd7c4c90bf802ef75e0b7a16a3949b0"
+}

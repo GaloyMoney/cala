@@ -282,6 +282,25 @@ impl NewAccountBuilder {
         self.eventually_consistent = Some(eventually_consistent);
         self
     }
+
+    /// Choose how this account's balance is maintained.
+    ///
+    /// - [`BalanceRollup::Synchronous`] (the default): the balance is
+    ///   written inline in every posting transaction under the poster lock,
+    ///   so it is immediately readable (read-your-write).
+    /// - [`BalanceRollup::EventuallyConsistent`]: posting takes no balance
+    ///   lock and writes no balance inline; the balance is maintained
+    ///   asynchronously by the streaming rollup job. `Balances::find`
+    ///   therefore *lags* until the rollup catches up. Only pick this for
+    ///   accounts no flow reads synchronously right after posting (e.g.
+    ///   product omnibus summary accounts).
+    pub fn balance_rollup(&mut self, balance_rollup: BalanceRollup) -> &mut Self {
+        self.eventually_consistent = Some(matches!(
+            balance_rollup,
+            BalanceRollup::EventuallyConsistent
+        ));
+        self
+    }
 }
 
 #[cfg(test)]
@@ -308,6 +327,38 @@ mod tests {
     fn fails_when_mandatory_fields_are_missing() {
         let new_account = NewAccount::builder().build();
         assert!(new_account.is_err());
+    }
+
+    #[test]
+    fn defaults_to_synchronous_balance_rollup() {
+        let new_account = NewAccount::builder()
+            .id(uuid::Uuid::now_v7())
+            .code("code")
+            .name("name")
+            .build()
+            .unwrap();
+        assert!(!new_account.eventually_consistent);
+    }
+
+    #[test]
+    fn balance_rollup_setter_toggles_eventually_consistent() {
+        let ec = NewAccount::builder()
+            .id(uuid::Uuid::now_v7())
+            .code("ec-code")
+            .name("name")
+            .balance_rollup(BalanceRollup::EventuallyConsistent)
+            .build()
+            .unwrap();
+        assert!(ec.eventually_consistent);
+
+        let sync = NewAccount::builder()
+            .id(uuid::Uuid::now_v7())
+            .code("sync-code")
+            .name("name")
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap();
+        assert!(!sync.eventually_consistent);
     }
 
     #[test]

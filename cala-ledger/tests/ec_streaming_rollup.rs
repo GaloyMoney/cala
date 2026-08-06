@@ -27,6 +27,7 @@ use cala_ledger::{
     account::{Account, NewAccount},
     account_set::{AccountSet, AccountSetId, NewAccountSet},
     balance::error::BalanceError,
+    error::LedgerError,
     job::Jobs,
     journal::NewJournal,
     primitives::BalanceRollup,
@@ -106,6 +107,19 @@ async fn create_ec_set(
         .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()?;
     Ok(cala.account_sets().create(set).await?)
+}
+
+/// A **plain** (non-set) account opted into eventually-consistent balance
+/// maintenance via the new public `balance_rollup` setter.
+async fn create_ec_plain_account(cala: &CalaLedger, name: &str) -> anyhow::Result<Account> {
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let account = NewAccount::builder()
+        .id(uuid::Uuid::now_v7())
+        .name(format!("{name} {code}"))
+        .code(code)
+        .balance_rollup(BalanceRollup::EventuallyConsistent)
+        .build()?;
+    Ok(cala.accounts().create(account).await?)
 }
 
 async fn post_round_robin(fixture: &Fixture, n_posts: usize) -> anyhow::Result<()> {
@@ -388,5 +402,160 @@ async fn streaming_rollup_maintains_effective_balances() -> anyhow::Result<()> {
         expected,
     )
     .await?;
+    Ok(())
+}
+
+/// An **eventually-consistent plain account** (not a set) takes no inline
+/// balance write on posting: `Balances::find` is `NotFound` until the rollup
+/// runs, after which the leaf's own balance equals the summed entries.
+#[tokio::test]
+async fn streaming_rollup_maintains_ec_plain_account_leaf() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let leaf = create_ec_plain_account(&fixture.cala, "EC plain leaf").await?;
+
+    let n_posts = 9;
+    post_to(&fixture, leaf.id(), n_posts).await?;
+    let expected = POST_AMOUNT * Decimal::from(n_posts);
+
+    // EC leaf: nothing is written inline while the poller is stopped.
+    assert!(
+        matches!(
+            fixture
+                .cala
+                .balances()
+                .find(fixture.journal_id, leaf.id(), usd)
+                .await,
+            Err(BalanceError::NotFound(..))
+        ),
+        "EC plain account must have no inline balance before the rollup runs",
+    );
+
+    jobs.start_poll().await?;
+
+    helpers::wait_for_settled(&fixture.cala, fixture.journal_id, leaf.id(), usd, expected).await?;
+    Ok(())
+}
+
+/// An EC plain leaf that is also a member of an EC set: the rollup folds each
+/// entry into the leaf's own balance *and* the ancestor set, independently —
+/// both converge to the same total with no double count.
+#[tokio::test]
+async fn streaming_rollup_folds_ec_plain_leaf_and_its_ec_set() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let leaf = create_ec_plain_account(&fixture.cala, "EC plain member leaf").await?;
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "parent of EC leaf").await?;
+    fixture
+        .cala
+        .account_sets()
+        .add_member(ec_set.id(), leaf.id())
+        .await?;
+
+    let n_posts = 7;
+    post_to(&fixture, leaf.id(), n_posts).await?;
+    let expected = POST_AMOUNT * Decimal::from(n_posts);
+
+    jobs.start_poll().await?;
+
+    helpers::wait_for_settled(&fixture.cala, fixture.journal_id, leaf.id(), usd, expected).await?;
+    helpers::wait_for_settled(
+        &fixture.cala,
+        fixture.journal_id,
+        ec_set.id(),
+        usd,
+        expected,
+    )
+    .await?;
+    Ok(())
+}
+
+/// With effective balances enabled, the rollup maintains an EC plain leaf's
+/// cumulative-effective balance too.
+#[tokio::test]
+async fn streaming_rollup_maintains_ec_plain_leaf_effective_balance() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal_with_effective_balances()).await?;
+
+    let leaf = create_ec_plain_account(&fixture.cala, "EC plain effective leaf").await?;
+
+    let n_posts = 6;
+    post_to(&fixture, leaf.id(), n_posts).await?;
+    let expected = POST_AMOUNT * Decimal::from(n_posts);
+
+    jobs.start_poll().await?;
+
+    helpers::wait_for_settled(&fixture.cala, fixture.journal_id, leaf.id(), usd, expected).await?;
+    let today = fixture.cala.clock().now().date_naive();
+    helpers::wait_for_effective(
+        &fixture.cala,
+        fixture.journal_id,
+        leaf.id(),
+        usd,
+        today,
+        expected,
+    )
+    .await?;
+    Ok(())
+}
+
+/// #802 guard: a direct entry to an EC set-backing account is rejected —
+/// its balance is derived from members, so the entry would be folded nowhere.
+#[tokio::test]
+async fn rejects_direct_entry_to_ec_set_backing_account() -> anyhow::Result<()> {
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, _jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "guard EC set").await?;
+    let ec_set_account = AccountId::from(&ec_set.id());
+
+    let mut params = Params::new();
+    params.insert("journal_id", fixture.journal_id.to_string());
+    params.insert("sender", fixture.sender.id());
+    params.insert("recipient", ec_set_account);
+    params.insert("amount", POST_AMOUNT);
+    // `Transaction` isn't `Debug`, so match on the result by reference
+    // (avoids `expect_err`'s `T: Debug` bound).
+    let result = fixture
+        .cala
+        .post_transaction(TransactionId::new(), &fixture.tx_code, params)
+        .await;
+    assert!(
+        matches!(
+            &result,
+            Err(LedgerError::EntriesTargetEventuallyConsistentAccountSet { account_id })
+                if *account_id == ec_set_account
+        ),
+        "expected EntriesTargetEventuallyConsistentAccountSet, got {:?}",
+        result.err(),
+    );
+    Ok(())
+}
+
+/// Regression: a default (Synchronous) plain account is written inline and is
+/// readable immediately after posting — the rollup job is irrelevant to it.
+#[tokio::test]
+async fn synchronous_plain_account_is_readable_immediately() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, _jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let recipient = fixture.members[0].id();
+    let n_posts = 4;
+    post_to(&fixture, recipient, n_posts).await?;
+    let expected = POST_AMOUNT * Decimal::from(n_posts);
+
+    // No `start_poll` — read-your-write holds for a synchronous account.
+    let bal = fixture
+        .cala
+        .balances()
+        .find(fixture.journal_id, recipient, usd)
+        .await?;
+    assert_eq!(bal.settled(), expected);
     Ok(())
 }

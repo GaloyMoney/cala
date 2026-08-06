@@ -10,7 +10,7 @@ use cala_types::{
 use tracing::instrument;
 
 use crate::primitives::{AccountId, AccountSetId, Currency, EntryId};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub(super) const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 
@@ -137,10 +137,14 @@ impl Snapshots {
         fold.into_snapshots()
     }
 
-    /// Like [`Self::from_entries`] but fans each entry **only** into its
-    /// eventually-consistent ancestor account sets. The leaf account itself
-    /// is skipped because it is already maintained synchronously by the
-    /// inline poster path.
+    /// Like [`Self::from_entries`] but for the streaming rollup: fans each
+    /// entry into its eventually-consistent ancestor account sets, and — for
+    /// an entry whose leaf account is itself **eventually-consistent** (an
+    /// EC plain account, listed in `ec_leaves`) — into that leaf's own
+    /// balance too. A *synchronous* leaf is skipped here because it is
+    /// already maintained by the inline poster path; an EC leaf is skipped
+    /// by the poster (`find_for_update` filters `eventually_consistent =
+    /// FALSE`), so the rollup is its sole writer.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.from_ec_entries",
@@ -151,10 +155,10 @@ impl Snapshots {
         current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
         entries: &[EntryValues],
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        ec_leaves: &HashSet<AccountId>,
     ) -> Vec<BalanceSnapshot> {
         let mut fold = SnapshotFold::new(time, current_balances);
         for entry in entries.iter() {
-            // EC ancestor sets only — the leaf is owned by the inline poster.
             for set in ec_mappings
                 .get(&entry.account_id)
                 .into_iter()
@@ -162,6 +166,11 @@ impl Snapshots {
                 .map(AccountId::from)
             {
                 fold.apply(set, entry);
+            }
+            // EC plain-account leaf: the inline poster skips it, so fold the
+            // entry into the leaf's own balance here.
+            if ec_leaves.contains(&entry.account_id) {
+                fold.apply(entry.account_id, entry);
             }
         }
         fold.into_snapshots()
@@ -457,7 +466,7 @@ mod tests {
 
         use chrono::Utc;
         use rust_decimal::Decimal;
-        use std::collections::HashMap;
+        use std::collections::{HashMap, HashSet};
 
         use cala_types::{
             entry::EntryValues,
@@ -465,6 +474,10 @@ mod tests {
         };
 
         use crate::primitives::{AccountSetId, Currency, EntryId, JournalId, TransactionId};
+
+        fn no_leaves() -> HashSet<AccountId> {
+            HashSet::new()
+        }
 
         fn credit_entry(units: Decimal, account_id: AccountId) -> EntryValues {
             EntryValues {
@@ -543,7 +556,13 @@ mod tests {
                 HashMap::new();
             current.insert((set_account, usd), None);
 
-            let snapshots = Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings);
+            let snapshots = Snapshots::from_ec_entries(
+                Utc::now(),
+                current,
+                &entries,
+                &ec_mappings,
+                &no_leaves(),
+            );
 
             // Only the EC set is written — never the leaf accounts.
             assert!(snapshots.iter().all(|s| s.account_id == set_account));
@@ -573,7 +592,13 @@ mod tests {
             prior.settled.cr_balance = Decimal::from(50);
             current.insert((set_account, usd), Some(prior));
 
-            let snapshots = Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings);
+            let snapshots = Snapshots::from_ec_entries(
+                Utc::now(),
+                current,
+                &entries,
+                &ec_mappings,
+                &no_leaves(),
+            );
 
             assert_eq!(snapshots.len(), 1);
             let snapshot = &snapshots[0];
@@ -602,7 +627,13 @@ mod tests {
             current.insert((set_a_account, usd), None);
             current.insert((set_b_account, usd), None);
 
-            let snapshots = Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings);
+            let snapshots = Snapshots::from_ec_entries(
+                Utc::now(),
+                current,
+                &entries,
+                &ec_mappings,
+                &no_leaves(),
+            );
 
             assert_eq!(snapshots.len(), 2);
             assert!(snapshots.iter().all(|s| s.version == 1));
@@ -620,8 +651,81 @@ mod tests {
             let ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
             let current: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> = HashMap::new();
 
-            let snapshots = Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings);
+            let snapshots = Snapshots::from_ec_entries(
+                Utc::now(),
+                current,
+                &entries,
+                &ec_mappings,
+                &no_leaves(),
+            );
             assert!(snapshots.is_empty());
+        }
+
+        #[test]
+        fn folds_ec_leaf_and_its_ec_ancestor() {
+            let usd: Currency = "USD".parse().unwrap();
+            let set_id = AccountSetId::new();
+            let set_account = AccountId::from(&set_id);
+            // An EC plain-account leaf that is also a member of an EC set.
+            let leaf = AccountId::new();
+
+            let entries = vec![
+                credit_entry(Decimal::from(40), leaf),
+                credit_entry(Decimal::from(60), leaf),
+            ];
+
+            let mut ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+            ec_mappings.insert(leaf, vec![set_id]);
+            let ec_leaves: HashSet<AccountId> = [leaf].into_iter().collect();
+
+            let mut current: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> =
+                HashMap::new();
+            current.insert((set_account, usd), None);
+            current.insert((leaf, usd), None);
+
+            let snapshots =
+                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves);
+
+            // Both the leaf and its EC ancestor are written — and only those.
+            let leaf_final = snapshots
+                .iter()
+                .filter(|s| s.account_id == leaf)
+                .max_by_key(|s| s.version)
+                .expect("leaf balance must be folded");
+            let set_final = snapshots
+                .iter()
+                .filter(|s| s.account_id == set_account)
+                .max_by_key(|s| s.version)
+                .expect("EC ancestor balance must be folded");
+            assert_eq!(leaf_final.settled.cr_balance, Decimal::from(100));
+            assert_eq!(leaf_final.version, 2);
+            assert_eq!(set_final.settled.cr_balance, Decimal::from(100));
+            assert_eq!(set_final.version, 2);
+            assert!(snapshots
+                .iter()
+                .all(|s| s.account_id == leaf || s.account_id == set_account));
+        }
+
+        #[test]
+        fn folds_standalone_ec_leaf_without_ancestors() {
+            let usd: Currency = "USD".parse().unwrap();
+            let leaf = AccountId::new();
+            let entries = vec![credit_entry(Decimal::from(25), leaf)];
+
+            // No EC ancestor sets at all — only the leaf itself is EC.
+            let ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+            let ec_leaves: HashSet<AccountId> = [leaf].into_iter().collect();
+
+            let mut current: HashMap<(AccountId, Currency), Option<BalanceSnapshot>> =
+                HashMap::new();
+            current.insert((leaf, usd), None);
+
+            let snapshots =
+                Snapshots::from_ec_entries(Utc::now(), current, &entries, &ec_mappings, &ec_leaves);
+
+            assert_eq!(snapshots.len(), 1);
+            assert_eq!(snapshots[0].account_id, leaf);
+            assert_eq!(snapshots[0].settled.cr_balance, Decimal::from(25));
         }
     }
 }

@@ -200,6 +200,24 @@ impl CalaLedger {
             .iter()
             .map(|entry| entry.account_id)
             .collect::<Vec<_>>();
+
+        // #802 guard: reject direct entries to an eventually-consistent
+        // set-backing account. Such a set's balance is derived from its
+        // members by the streaming rollup, so a direct entry would be
+        // folded nowhere and silently vanish. Entries to EC *plain*
+        // accounts are the whole point of EC leaves, so the guard is
+        // scoped to set-backing accounts only. Runs before any balance or
+        // velocity write so the whole op rolls back on rejection.
+        if let Some(account_id) = self
+            .balances
+            .ec_set_backing_accounts_in_op(&mut db, &account_ids)
+            .await?
+            .into_iter()
+            .next()
+        {
+            return Err(LedgerError::EntriesTargetEventuallyConsistentAccountSet { account_id });
+        }
+
         let mappings = self
             .account_sets
             .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &account_ids)

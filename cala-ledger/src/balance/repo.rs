@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -735,6 +735,75 @@ impl BalanceRepo {
                 .push(row.account_set_id);
         }
         Ok(result)
+    }
+
+    /// Of `account_ids`, the ones that are **eventually-consistent plain
+    /// accounts** (postable leaves): `eventually_consistent = TRUE` and not
+    /// backing an account set. These are the leaves the inline poster path
+    /// skips (`find_for_update` filters `eventually_consistent = FALSE`), so
+    /// the streaming rollup must fold each entry into the leaf's own balance
+    /// in addition to its EC ancestor sets.
+    ///
+    /// Set-backing is decided by existence in `cala_account_sets` (whose
+    /// `id` is a plain account id) rather than a column — `cala_accounts`
+    /// has no `is_account_set` flag.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.fetch_ec_leaf_accounts",
+        skip_all
+    )]
+    pub(crate) async fn fetch_ec_leaf_accounts(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashSet<AccountId>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT a.id AS "id!: AccountId"
+            FROM cala_accounts a
+            WHERE a.id = ANY($1)
+              AND a.eventually_consistent = TRUE
+              AND NOT EXISTS (
+                  SELECT 1 FROM cala_account_sets s WHERE s.id = a.id
+              )
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.id).collect())
+    }
+
+    /// Of `account_ids`, the ones that are **eventually-consistent
+    /// set-backing accounts** (`eventually_consistent = TRUE` and backing an
+    /// account set). Posting a direct entry to such an account is rejected
+    /// (#802): its balance is derived from members via the rollup, so a
+    /// direct entry would be folded nowhere and silently vanish.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.fetch_ec_set_backing_accounts",
+        skip_all
+    )]
+    pub(crate) async fn fetch_ec_set_backing_accounts(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<Vec<AccountId>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT a.id AS "id!: AccountId"
+            FROM cala_accounts a
+            JOIN cala_account_sets s ON s.id = a.id
+            WHERE a.id = ANY($1)
+              AND a.eventually_consistent = TRUE
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        Ok(rows.into_iter().map(|row| row.id).collect())
     }
 
     /// Take the **shared** EC-set advisory lock on `account_ids` (the same
