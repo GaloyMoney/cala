@@ -102,6 +102,13 @@ impl NewEntry {
     pub fn builder() -> NewEntryBuilder {
         NewEntryBuilder::default()
     }
+
+    /// The account this entry will be booked against. Exposed so the
+    /// posting flow can take its attach-fence locks on the distinct
+    /// entry accounts *before* the entry rows are inserted.
+    pub(crate) fn account_id(&self) -> AccountId {
+        self.account_id
+    }
 }
 
 impl IntoEvents<EntryEvent> for NewEntry {
