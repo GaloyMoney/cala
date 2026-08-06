@@ -8,11 +8,12 @@ use cala_ledger::{balance::error::BalanceError, error::LedgerError, tx_template:
 #[tokio::test]
 async fn blocks_transactions() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool.clone())
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await?;

@@ -20,11 +20,20 @@
 //! async fn init_cala(journal_id: JournalId) -> anyhow::Result<CalaLedger, anyhow::Error> {
 //!     let pg_con = std::env::var("PG_CON")
 //!         .unwrap_or_else(|_| "postgres://user:password@localhost:5432/pg".to_string());
+//!     let pool = sqlx::PgPool::connect(&pg_con).await?;
+//!     // The caller owns the `Jobs` and drives the EC rollup by polling it.
+//!     let mut jobs = job::Jobs::init(
+//!         job::JobSvcConfig::builder()
+//!             .pool(pool.clone())
+//!             .build()
+//!             .map_err(anyhow::Error::msg)?,
+//!     )
+//!     .await?;
 //!     let cala_config = CalaLedgerConfig::builder()
-//!         .pg_con(&pg_con)
+//!         .pool(pool)
 //!         // .exec_migrations(true) # commented out for execution in CI
 //!         .build()?;
-//!     let cala = CalaLedger::init(cala_config, None).await?;
+//!     let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 //!
 //!     // Initialize the journal - all entities are constructed via builders
 //!     let new_journal = NewJournal::builder()

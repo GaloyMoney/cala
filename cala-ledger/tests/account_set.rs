@@ -9,11 +9,12 @@ use cala_ledger::{
 #[tokio::test]
 async fn errors_on_collision() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let (one, two) = helpers::test_accounts();
     let one = cala.accounts().create(one).await.unwrap();
@@ -92,11 +93,12 @@ async fn add_members_batch() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -221,11 +223,12 @@ async fn balances() -> anyhow::Result<()> {
     let btc: Currency = "BTC".parse().unwrap();
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await.unwrap();
@@ -362,11 +365,12 @@ async fn balances() -> anyhow::Result<()> {
 #[tokio::test]
 async fn account_set_update() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await.unwrap();
@@ -397,11 +401,12 @@ async fn account_set_update() -> anyhow::Result<()> {
 #[tokio::test]
 async fn members_pagination() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
     let new_journal = helpers::test_journal();
     let journal = cala.journals().create(new_journal).await.unwrap();
 
@@ -518,12 +523,13 @@ async fn members_pagination() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_members_by_external_id() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 
@@ -616,11 +622,12 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
 #[tokio::test]
 async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -706,11 +713,12 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
 #[tokio::test]
 async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()

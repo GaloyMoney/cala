@@ -5,11 +5,12 @@ use cala_ledger::{tx_template::error::TxTemplateError, *};
 #[tokio::test]
 async fn duplicate_code() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_template = helpers::currency_conversion_template("tx_template_code");
     let _ = cala.tx_templates().create(new_template).await;

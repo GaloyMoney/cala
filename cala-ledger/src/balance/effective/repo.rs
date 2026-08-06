@@ -927,7 +927,11 @@ impl EffectiveBalanceRepo {
     /// rollup: identical delete-future / re-read-last logic, but keeps
     /// `eventually_consistent = TRUE` rows (the sets the inline poster path
     /// excludes).
-    #[instrument(name = "effective_balance.find_ec_for_update", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "effective_balance.find_ec_for_update",
+        skip_all
+    )]
     pub(super) async fn find_ec_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,

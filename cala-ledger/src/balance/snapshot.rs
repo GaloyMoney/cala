@@ -141,7 +141,11 @@ impl Snapshots {
     /// eventually-consistent ancestor account sets. The leaf account itself
     /// is skipped because it is already maintained synchronously by the
     /// inline poster path.
-    #[instrument(name = "cala_ledger.balances.from_ec_entries", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.from_ec_entries",
+        skip_all
+    )]
     pub(crate) fn from_ec_entries(
         time: DateTime<Utc>,
         current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,

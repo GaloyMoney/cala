@@ -13,13 +13,14 @@ async fn transaction_effective_date_uses_clock() -> anyhow::Result<()> {
     let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 
@@ -53,13 +54,14 @@ async fn clock_advancement_changes_effective_date() -> anyhow::Result<()> {
     let (clock_handle, clock_ctrl) = ClockHandle::manual_at(time_1);
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 
@@ -109,13 +111,14 @@ async fn transaction_created_at_uses_clock_time() -> anyhow::Result<()> {
     let (clock_handle, clock_ctrl) = ClockHandle::manual_at(first_time);
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 
@@ -166,13 +169,14 @@ async fn begin_operation_attaches_clock_time() -> anyhow::Result<()> {
     let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 
@@ -190,13 +194,14 @@ async fn clock_propagates_through_atomic_operations() -> anyhow::Result<()> {
     let (clock_handle, _clock_ctrl) = ClockHandle::manual_at(fixed_time);
 
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala = CalaLedger::init(
         CalaLedgerConfig::builder()
             .pool(pool)
             .exec_migrations(false)
             .clock(clock_handle)
             .build()?,
-        None,
+        &mut jobs,
     )
     .await?;
 

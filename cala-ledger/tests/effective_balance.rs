@@ -124,11 +124,12 @@ fn ranges_by_id<C>(
 #[tokio::test]
 async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let new_journal = helpers::test_journal_with_effective_balances();
     let journal = cala.journals().create(new_journal).await.unwrap();
@@ -244,11 +245,12 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -318,11 +320,12 @@ async fn list_cumulative_balances_for_account() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_cumulative_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -391,7 +394,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -580,11 +583,12 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_range_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -681,11 +685,12 @@ async fn list_range_balances_for_account() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_range_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -764,7 +769,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()
@@ -1000,7 +1005,7 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala
         .journals()

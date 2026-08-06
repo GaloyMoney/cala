@@ -147,8 +147,9 @@ mod tests {
 
     #[test]
     fn from_bounds_sets_period_version_to_the_diff() {
-        let range = BalanceRange::from_bounds(Some(account_balance()), 3, Some(account_balance()), 10)
-            .expect("a close balance yields a range");
+        let range =
+            BalanceRange::from_bounds(Some(account_balance()), 3, Some(account_balance()), 10)
+                .expect("a close balance yields a range");
         assert_eq!(range.period.details.version, 7);
     }
 

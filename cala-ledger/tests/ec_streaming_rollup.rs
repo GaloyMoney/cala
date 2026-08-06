@@ -53,7 +53,7 @@ async fn setup(pool: sqlx::PgPool, journal: NewJournal) -> anyhow::Result<(Fixtu
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(journal).await?;
 

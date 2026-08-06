@@ -5,11 +5,12 @@ use cala_ledger::{account::error::AccountError, *};
 #[tokio::test]
 async fn find_returns_not_found_by_id() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let id = AccountId::new();
     match cala.accounts().find(id).await {

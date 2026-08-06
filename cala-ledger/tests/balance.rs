@@ -64,11 +64,12 @@ fn balances_by_id<C>(
 #[tokio::test]
 async fn list_current_balances_for_account() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -124,11 +125,12 @@ async fn list_current_balances_for_account() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -181,11 +183,12 @@ async fn list_current_balances_for_accounts() -> anyhow::Result<()> {
 #[tokio::test]
 async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
@@ -318,7 +321,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, Some(&mut jobs)).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
 
     let journal = cala.journals().create(helpers::test_journal()).await?;
 

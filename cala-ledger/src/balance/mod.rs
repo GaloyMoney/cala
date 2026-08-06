@@ -323,6 +323,7 @@ impl Balances {
     /// its reads are effective-date-dependent (back-dating replay), so
     /// batching it would mean replaying across dates in memory.
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.apply_ec_rollup_in_op",
         skip_all,
         fields(txns_count = txns.len()),

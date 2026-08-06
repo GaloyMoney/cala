@@ -45,7 +45,7 @@
 
 use chrono::{DateTime, NaiveDate, Utc};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use job::{JobType, Jobs};
 use obix::out::{
@@ -57,7 +57,7 @@ use cala_types::entry::EntryValues;
 
 use crate::{
     balance::{Balances, EcRollupTxn},
-    entry::Entries,
+    entry::{Entries, Entry},
     outbox::{ObixOutbox, OutboxEventPayload},
     primitives::{EntryId, JournalId, TransactionId},
 };
@@ -79,7 +79,7 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), crate::ledger::error::LedgerError> {
     outbox
         .register_event_handler(
             jobs,
@@ -91,6 +91,7 @@ pub(crate) async fn register_ec_balance_rollup(
             },
         )
         .await
+        .map_err(crate::ledger::error::LedgerError::EcRollupRegistration)
 }
 
 /// A transaction pulled from a `TransactionCreated` event, carrying just
@@ -124,6 +125,70 @@ struct EcRollupBatch {
     entries: HashMap<TransactionId, Vec<EntryValues>>,
 }
 
+impl EcRollupBatch {
+    fn push_tx(&mut self, tx: PendingTx) {
+        self.txns.push(tx);
+    }
+
+    fn push_entry(&mut self, entry: EntryValues) {
+        self.entries
+            .entry(entry.transaction_id)
+            .or_default()
+            .push(entry);
+    }
+
+    /// Entry ids that were *not* collected from the stream in this landing
+    /// (their event group straddled a landing boundary) — the ones the
+    /// flush must load from the DB.
+    fn missing_entry_ids(&self) -> Vec<EntryId> {
+        self.txns
+            .iter()
+            .flat_map(|tx| {
+                let collected: HashSet<EntryId> = self
+                    .entries
+                    .get(&tx.id)
+                    .map(|entries| entries.iter().map(|e| e.id).collect())
+                    .unwrap_or_default();
+                tx.entry_ids
+                    .iter()
+                    .copied()
+                    .filter(move |id| !collected.contains(id))
+            })
+            .collect()
+    }
+
+    /// Assemble the applier's input in landing order: each transaction's
+    /// stream-collected entries, topped up from the DB-`fetched` map where
+    /// the group straddled a landing boundary, sorted by entry sequence.
+    fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
+        let EcRollupBatch { txns, mut entries } = self;
+        txns.into_iter()
+            .map(|tx| {
+                let mut entry_values = entries.remove(&tx.id).unwrap_or_default();
+                if entry_values.len() != tx.entry_ids.len() {
+                    // `fetched` holds exactly the ids missing from the
+                    // stream, so this fills the gaps without duplicating
+                    // what was collected.
+                    entry_values.extend(
+                        tx.entry_ids
+                            .iter()
+                            .filter_map(|id| fetched.remove(id))
+                            .map(Entry::into_values),
+                    );
+                }
+                entry_values.sort_by_key(|e| e.sequence);
+
+                EcRollupTxn {
+                    journal_id: tx.journal_id,
+                    effective: tx.effective,
+                    created_at: tx.created_at,
+                    entries: entry_values,
+                }
+            })
+            .collect()
+    }
+}
+
 struct EcBalanceRollupHandler {
     balances: Balances,
     entries: Entries,
@@ -150,17 +215,11 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
                     created_at: transaction.created_at,
                     entry_ids: transaction.entry_ids.clone(),
                 };
-                Ok(ctx.collect_with(|batch| batch.txns.push(tx)))
+                Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
             }
             Some(OutboxEventPayload::EntryCreated { entry }) => {
                 let entry = entry.clone();
-                Ok(ctx.collect_with(|batch| {
-                    batch
-                        .entries
-                        .entry(entry.transaction_id)
-                        .or_default()
-                        .push(entry)
-                }))
+                Ok(ctx.collect_with(|batch| batch.push_entry(entry)))
             }
             _ => Ok(ctx.skip()),
         }
@@ -187,45 +246,17 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         op: &mut FlushOp<'_>,
         batch: Self::Batch,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let EcRollupBatch { txns, mut entries } = batch;
-
         // One read for every transaction whose event group straddled a
         // landing boundary (the entries committed atomically with the
         // `TransactionCreated` event, so they are always visible).
-        let missing_ids: Vec<EntryId> = txns
-            .iter()
-            .filter(|tx| entries.get(&tx.id).map_or(0, Vec::len) != tx.entry_ids.len())
-            .flat_map(|tx| tx.entry_ids.iter().copied())
-            .collect();
-        let mut fetched = if missing_ids.is_empty() {
+        let missing_ids = batch.missing_entry_ids();
+        let fetched = if missing_ids.is_empty() {
             HashMap::new()
         } else {
             self.entries.find_all_in_op(op, &missing_ids).await?
         };
 
-        let mut rollup_txns = Vec::with_capacity(txns.len());
-        for tx in txns {
-            let collected = entries.remove(&tx.id).unwrap_or_default();
-            let mut entry_values = if collected.len() == tx.entry_ids.len() {
-                // The whole event group landed in this batch — no DB read.
-                collected
-            } else {
-                tx.entry_ids
-                    .iter()
-                    .filter_map(|id| fetched.remove(id))
-                    .map(|entry| entry.into_values())
-                    .collect()
-            };
-            entry_values.sort_by_key(|e| e.sequence);
-
-            rollup_txns.push(EcRollupTxn {
-                journal_id: tx.journal_id,
-                effective: tx.effective,
-                created_at: tx.created_at,
-                entries: entry_values,
-            });
-        }
-
+        let rollup_txns = batch.into_rollup_txns(fetched);
         self.balances.apply_ec_rollup_in_op(op, rollup_txns).await?;
         Ok(())
     }

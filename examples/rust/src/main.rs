@@ -34,11 +34,19 @@ async fn main() -> anyhow::Result<()> {
         .include_cala_migrations()
         .run(&pool)
         .await?;
+    // The example never polls jobs; the EC rollup stays dormant.
+    let mut jobs = job::Jobs::init(
+        job::JobSvcConfig::builder()
+            .pool(pool.clone())
+            .build()
+            .map_err(anyhow::Error::msg)?,
+    )
+    .await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)
         .build()?;
-    let cala = CalaLedger::init(cala_config, None).await?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
     let code_string = format!("USERS.{example_suffix}");
     let new_account = NewAccount::builder()
         .id(AccountId::new())

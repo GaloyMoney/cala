@@ -698,7 +698,11 @@ impl BalanceRepo {
     /// the inline `AccountSetRepo::fetch_mappings_in_op` but keeps only EC
     /// sets: exactly the ones the synchronous poster path deliberately
     /// skips (`find_for_update` filters `eventually_consistent = FALSE`).
-    #[instrument(name = "cala_ledger.balances.fetch_ec_set_mappings", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.fetch_ec_set_mappings",
+        skip_all
+    )]
     pub(crate) async fn fetch_ec_set_mappings(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -740,7 +744,11 @@ impl BalanceRepo {
     /// serialization point rather than a hard requirement. Unlike
     /// `find_for_update` this keeps `eventually_consistent = TRUE` rows —
     /// those are exactly the sets the streaming rollup owns.
-    #[instrument(name = "cala_ledger.balances.find_ec_balances_for_update", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.find_ec_balances_for_update",
+        skip_all
+    )]
     pub(crate) async fn find_ec_balances_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,

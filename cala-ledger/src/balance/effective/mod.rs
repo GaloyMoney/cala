@@ -227,6 +227,7 @@ impl EffectiveBalances {
     /// which keeps the `eventually_consistent = TRUE` rows.
     #[allow(clippy::too_many_arguments)]
     #[instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.apply_ec_rollup_in_op",
         skip_all,
         err(level = "warn")
