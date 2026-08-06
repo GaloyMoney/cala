@@ -127,7 +127,13 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
-        Ok(Self::balance_ranges_from_snapshots(ranges))
+        Ok(ranges
+            .into_iter()
+            .filter_map(|(id, (start, start_version, end, end_version))| {
+                BalanceRange::from_bounds(start, start_version, end, end_version)
+                    .map(|range| (id, range))
+            })
+            .collect())
     }
 
     #[instrument(
@@ -169,21 +175,6 @@ impl EffectiveBalances {
         self.repo
             .list_range_for_accounts(journal_id, account_ids, from, until, args)
             .await
-    }
-
-    fn balance_ranges_from_snapshots(
-        ranges: HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>,
-    ) -> HashMap<BalanceId, BalanceRange> {
-        let mut res = HashMap::new();
-        for (id, (start, start_version, end, end_version)) in ranges {
-            if let Some(end) = end {
-                res.insert(
-                    id,
-                    BalanceRange::new(start, end, end_version - start_version),
-                );
-            }
-        }
-        res
     }
 
     #[allow(clippy::too_many_arguments)]
