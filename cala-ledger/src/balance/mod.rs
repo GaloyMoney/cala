@@ -14,10 +14,13 @@
 //! is the member side of the membership guard
 //! (`member_has_balance_history_in_op`): adding or removing an EC-set
 //! member takes an EXCLUSIVE lock on that member, so a concurrent poster's
-//! SHARED lock on the same member blocks until the guard's history check
+//! SHARED lock on the same member blocks until the guard's activity check
 //! has committed. That keeps a member from ever joining or leaving a set
-//! while it has balance history, which is what makes EC sets
-//! incremental-from-birth for the streaming rollup.
+//! while it has settled activity, which is what makes EC sets
+//! incremental-from-birth for the streaming rollup. The guard checks
+//! `cala_entries` as well as `cala_balance_history` so an
+//! eventually-consistent leaf — whose history is written only later by the
+//! rollup, but whose entries land synchronously — cannot slip through.
 
 mod account_balance;
 mod cursor;

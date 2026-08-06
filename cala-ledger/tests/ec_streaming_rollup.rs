@@ -25,7 +25,7 @@ use rust_decimal_macros::dec;
 
 use cala_ledger::{
     account::{Account, NewAccount},
-    account_set::{AccountSet, AccountSetId, NewAccountSet},
+    account_set::{error::AccountSetError, AccountSet, AccountSetId, NewAccountSet},
     balance::error::BalanceError,
     error::LedgerError,
     job::Jobs,
@@ -547,6 +547,47 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
             result.err(),
         );
     }
+    Ok(())
+}
+
+/// Regression (PR #813 review, High severity): an EC plain leaf writes balance
+/// history only when the rollup runs, but its entries land synchronously. The
+/// membership guard must see those entries — otherwise a leaf that has already
+/// posted could still be attached to a set, and the rollup would later fold its
+/// pre-membership entries into the set, corrupting the set balance.
+#[tokio::test]
+async fn ec_leaf_with_posted_entries_cannot_join_a_set() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, _jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let leaf = create_ec_plain_account(&fixture.cala, "EC membership-guard leaf").await?;
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "membership guard set").await?;
+
+    // Post to the EC leaf. The rollup is not started, so the leaf has entries
+    // but no materialized balance history yet.
+    post_to(&fixture, leaf.id(), 1).await?;
+    assert!(
+        fixture
+            .cala
+            .balances()
+            .find(fixture.journal_id, leaf.id(), usd)
+            .await
+            .is_err(),
+        "EC leaf must have no materialized balance before the rollup runs",
+    );
+
+    // Attaching the leaf to a set must be rejected: it already has activity
+    // (entries), even though its balance history is not yet materialized.
+    let add = fixture
+        .cala
+        .account_sets()
+        .add_member(ec_set.id(), leaf.id())
+        .await;
+    assert!(
+        matches!(add, Err(AccountSetError::MemberHasBalanceHistory { .. })),
+        "EC leaf with posted entries must not be attachable to a set",
+    );
     Ok(())
 }
 

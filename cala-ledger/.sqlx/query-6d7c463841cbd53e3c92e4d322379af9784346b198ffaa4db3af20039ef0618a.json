@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT (\n                EXISTS (\n                    SELECT 1 FROM cala_balance_history\n                    WHERE journal_id = $1 AND account_id = $2\n                )\n                OR EXISTS (\n                    SELECT 1 FROM cala_entries\n                    WHERE journal_id = $1 AND account_id = $2\n                )\n            ) AS \"exists!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "6d7c463841cbd53e3c92e4d322379af9784346b198ffaa4db3af20039ef0618a"
+}
