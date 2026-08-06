@@ -1,3 +1,21 @@
+# [cala release v0.21.0](https://github.com/GaloyMoney/cala/releases/tag/0.21.0)
+
+
+
+### Documentation
+
+- Correct advisory-lock ordering doctrine; velocity lock cleanup + window-scoped lock key (refs #779) (#810)
+
+### Features
+
+- [**breaking**] Adjacency-only membership walk (drops transitive closure, closes #800) (#814)
+- [**breaking**] Eventually_consistent plain accounts + FK-forbid entries to account sets (closes #802) (#813)
+- Stream EC account-set balance rollup from the outbox (#811)
+
+### Miscellaneous Tasks
+
+- Bump schemars in the all-dependencies group (#815)
+
 # [cala release v0.20.3](https://github.com/GaloyMoney/cala/releases/tag/0.20.3)
 
 
