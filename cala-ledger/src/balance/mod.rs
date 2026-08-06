@@ -10,17 +10,24 @@
 //! writer is the only maintainer of EC-set balances.
 //!
 //! Posters take a shared advisory lock (`EC_SET_LOCK_CLASS`) on every
-//! account they touch — leaves and ancestors alike. Its load-bearing role
-//! is the member side of the membership guard
-//! (`member_has_balance_history_in_op`): adding or removing an EC-set
-//! member takes an EXCLUSIVE lock on that member, so a concurrent poster's
-//! SHARED lock on the same member blocks until the guard's activity check
-//! has committed. That keeps a member from ever joining or leaving a set
-//! while it has settled activity, which is what makes EC sets
-//! incremental-from-birth for the streaming rollup. The guard checks
-//! `cala_entries` as well as `cala_balance_history` so an
-//! eventually-consistent leaf — whose history is written only later by the
-//! rollup, but whose entries land synchronously — cannot slip through.
+//! **non-EC** account they touch; EC accounts take none, so a posting
+//! into an EC-rooted subtree acquires zero advisory locks on the EC
+//! nodes. The lock's load-bearing role is the member side of the
+//! membership guard (`member_has_balance_history_in_op`): adding or
+//! removing a member takes an EXCLUSIVE lock on that member, so a
+//! concurrent poster's SHARED lock on the same member blocks until the
+//! guard's activity check has committed. On non-EC accounts the poster
+//! writes the balance rows the guard checks *under* that lock, making
+//! the fence complete; on EC accounts the poster writes no balance rows
+//! (the streaming rollup does, in its own transaction), so a SHARED
+//! lock there fenced nothing and is skipped. The guard checks
+//! `cala_entries` as well as `cala_balance_history` so committed
+//! activity on an eventually-consistent account — whose history is
+//! written only later by the rollup, but whose entries land
+//! synchronously — cannot slip through; an *in-flight uncommitted*
+//! first posting can still race the guard (entries are inserted before
+//! the poster's lock prelude, so that window predates the gating — see
+//! `find_for_update`'s doc for the follow-up that closes it).
 
 mod account_balance;
 mod cursor;

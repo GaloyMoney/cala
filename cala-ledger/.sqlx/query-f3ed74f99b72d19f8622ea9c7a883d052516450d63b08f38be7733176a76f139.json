@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                CASE WHEN NOT a.eventually_consistent THEN\n                    pg_advisory_xact_lock_shared(\n                        $1::int4, hashtext(v.account_id::text)\n                    )\n                END,\n                CASE WHEN NOT a.eventually_consistent THEN\n                    pg_advisory_xact_lock(\n                        hashtext(concat($2::text, v.account_id::text, v.currency))\n                    )\n                END\n            FROM UNNEST($3::uuid[], $4::text[]) AS v(account_id, currency)\n            JOIN cala_accounts a ON a.id = v.account_id\n            ORDER BY v.account_id, v.currency\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "case",
+        "type_info": "Void"
+      },
+      {
+        "ordinal": 1,
+        "name": "case",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f3ed74f99b72d19f8622ea9c7a883d052516450d63b08f38be7733176a76f139"
+}

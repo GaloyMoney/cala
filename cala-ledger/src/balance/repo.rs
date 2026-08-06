@@ -334,23 +334,32 @@ impl BalanceRepo {
     /// snapshots in two SQL statements (one combined lock query plus a
     /// pure data fetch).
     ///
-    /// Two locks are taken per input row:
+    /// Two locks are taken per **non-EC** input row; EC rows take
+    /// neither, so a posting that touches only EC nodes acquires zero
+    /// advisory locks:
     ///
     /// - SHARED lock (2-arg `pg_advisory_xact_lock_shared`, classid
-    ///   `EC_SET_LOCK_CLASS`) keyed on `account_id`, taken on *every*
-    ///   row — leaves and ancestors, EC and non-EC alike. Its
-    ///   load-bearing role is the member side of the membership guard:
+    ///   `EC_SET_LOCK_CLASS`) keyed on `account_id`. Its load-bearing
+    ///   role is the member side of the membership guard:
     ///   `member_has_balance_history_in_op` takes EXCLUSIVE on a member
     ///   before it is added to / removed from a set, so a concurrent
     ///   poster holding SHARED on that member blocks until the guard's
-    ///   history check commits. That is what keeps a member from
-    ///   joining or leaving a set while it has balance history.
+    ///   activity check commits. On non-EC accounts the poster writes
+    ///   the balance rows the guard checks *under this lock*, so the
+    ///   fence there is complete. On EC accounts the poster writes no
+    ///   balance rows (the streaming rollup does, in its own tx), so
+    ///   the lock fenced nothing and is skipped. Known gap, unchanged
+    ///   in kind by the gating: the guard's `cala_entries` EXISTS can
+    ///   race an in-flight *first* posting to an EC member — entries
+    ///   are inserted before this lock prelude runs, so the window
+    ///   existed pre-gating (insert -> lock) and is now the full poster
+    ///   tx; properly closed by routing entries vs membership by
+    ///   outbox seq in the rollup applier (planned follow-up).
     /// - FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`) keyed on
-    ///   `(journal_id, account_id, currency)`, taken only on non-EC
-    ///   rows via `CASE WHEN`. Serializes concurrent posters that
-    ///   touch the same balance row. Skipped on EC rows because
-    ///   posters never write `cala_current_balances` rows for EC
-    ///   accounts at all (`find_for_update`'s data fetch filters
+    ///   `(journal_id, account_id, currency)`. Serializes concurrent
+    ///   posters that touch the same balance row. Skipped on EC rows
+    ///   because posters never write `cala_current_balances` rows for
+    ///   EC accounts at all (`find_for_update`'s data fetch filters
     ///   them out), so the lock would always be uncontended there.
     ///
     /// The 2-arg and 1-arg `pg_advisory_xact_lock` namespaces are
@@ -390,9 +399,11 @@ impl BalanceRepo {
         sqlx::query!(
             r#"
             SELECT
-                pg_advisory_xact_lock_shared(
-                    $1::int4, hashtext(v.account_id::text)
-                ),
+                CASE WHEN NOT a.eventually_consistent THEN
+                    pg_advisory_xact_lock_shared(
+                        $1::int4, hashtext(v.account_id::text)
+                    )
+                END,
                 CASE WHEN NOT a.eventually_consistent THEN
                     pg_advisory_xact_lock(
                         hashtext(concat($2::text, v.account_id::text, v.currency))
