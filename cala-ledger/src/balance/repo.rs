@@ -356,10 +356,11 @@ impl BalanceRepo {
     ///   membership — inline fan-out for synchronous parents, the
     ///   walk for EC ones).
     ///
-    /// Rust-sorted, join-free UNNEST (post-#810 doctrine): the bare
-    /// UNNEST scan emits rows in array order, so the sorted input array
-    /// IS the lock acquisition order; duplicate ids are deduped (a
-    /// re-acquisition within one tx would be a no-op anyway).
+    /// The ORDER BY makes acquisition order canonical regardless of
+    /// input order (see the ordering notes on
+    /// [`Self::find_for_update`], established in #810); duplicate ids
+    /// re-acquire the same lock, which is a no-op within one
+    /// transaction.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.lock_entry_accounts_in_op",
@@ -375,16 +376,14 @@ impl BalanceRepo {
         if account_ids.is_empty() {
             return Ok(());
         }
-        let mut lock_ids: Vec<AccountId> = account_ids.to_vec();
-        lock_ids.sort_unstable();
-        lock_ids.dedup();
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
             FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
             "#,
             EC_SET_LOCK_CLASS,
-            &lock_ids as &[AccountId],
+            account_ids as &[AccountId],
         )
         .execute(op.as_executor())
         .await?;
@@ -599,21 +598,19 @@ impl BalanceRepo {
 
         // Canonical lock protocol, shared with the single-pair
         // member_has_balance_history_in_op: every member id is locked
-        // EXCLUSIVE in ascending AccountId order. The list is deduped
-        // and sorted in Rust; the lock statement is join-free, so the
-        // UNNEST array order is the acquisition order (see
-        // lock_entry_accounts_in_op).
-        let mut lock_ids: Vec<AccountId> = member_ids.clone();
-        lock_ids.sort_unstable();
-        lock_ids.dedup();
-
+        // EXCLUSIVE in ascending AccountId order. The ORDER BY makes
+        // acquisition order canonical regardless of input order (see
+        // the ordering notes on find_for_update); duplicate ids
+        // re-acquire the same lock, which is a no-op within one
+        // transaction.
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
             FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
             "#,
             EC_SET_LOCK_CLASS,
-            &lock_ids as &[AccountId],
+            &member_ids as &[AccountId],
         )
         .execute(op.as_executor())
         .await?;
