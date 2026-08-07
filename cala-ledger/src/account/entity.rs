@@ -278,7 +278,28 @@ impl NewAccountBuilder {
         self
     }
 
-    pub(crate) fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
+    /// Marks the account as eventually consistent: posters skip the
+    /// exclusive per-(journal, account, currency) advisory lock and do not
+    /// maintain its balance inline. The streaming EC rollup job
+    /// (`cala.ec_balance_rollup`, registered in `CalaLedger::init`) is then
+    /// the sole writer of its balance, folding the account's entries into
+    /// `cala_current_balances` and `cala_balance_history` from the outbox
+    /// stream.
+    ///
+    /// Sound for rollup-only counterparty accounts (e.g. product omnibus
+    /// accounts that exist so double-entry postings share a counterparty),
+    /// **including account-set members** — the rollup resolves set closure
+    /// from live membership, not member history. Constraints:
+    ///
+    /// - **Attach before first entry.** A member may only join a set with
+    ///   zero balance history (the attach guard rejects the rest, EC or
+    ///   not): the rollup folds a member's activity from the point it
+    ///   joins, so pre-join balance would be silently dropped.
+    /// - **Readers must tolerate rollup lag.** The balance is eventually
+    ///   consistent — do not read it in post-time enforcement paths.
+    /// - **The rollup job must be running.** If it stalls, EC balances
+    ///   drift silently behind the entry stream.
+    pub fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
         self.eventually_consistent = Some(eventually_consistent);
         self
     }
