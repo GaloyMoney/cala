@@ -12,7 +12,7 @@
 //! Class-1 advisory-lock doctrine (`EC_SET_LOCK_CLASS`), in full:
 //! SHARED = the poster, on its distinct **entry accounts** (leaves
 //! only, EC and non-EC alike — never ancestors), held from *before its
-//! first entry insert* to commit (`lock_entry_accounts_in_op`);
+//! first entry insert* to commit (`lock_entry_balances_in_op`);
 //! EXCLUSIVE = the membership guard on the member being added/removed
 //! (`member_has_balance_history_in_op`); the streaming rollup applier
 //! takes SHARED on the EC accounts it writes
@@ -269,22 +269,34 @@ impl Balances {
         Ok(())
     }
 
-    /// The poster's attach fence: SHARED-lock the distinct entry
-    /// accounts of a posting before its first entry row is inserted —
-    /// see [`BalanceRepo::lock_entry_accounts_in_op`] for the doctrine.
+    /// The poster's combined lock prelude: in one statement, the attach
+    /// fence (class-1 SHARED on every distinct entry account) plus the
+    /// per-balance FOR_UPDATE locks for the non-EC entry pairs — taken
+    /// before the posting's first entry row is inserted. Extracts the
+    /// distinct `(account, currency)` pairs from the prepared entries.
+    /// See [`BalanceRepo::lock_entry_balances_in_op`] for the doctrine.
     #[instrument(
         level = "debug",
-        name = "cala_ledger.balance.lock_entry_accounts_in_op",
-        skip(self, op, account_ids),
-        fields(count = account_ids.len()),
+        name = "cala_ledger.balance.lock_entry_balances_in_op",
+        skip(self, op, entries),
+        fields(count = entries.len()),
         err(level = "warn")
     )]
-    pub(crate) async fn lock_entry_accounts_in_op(
+    pub(crate) async fn lock_entry_balances_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
+        journal_id: JournalId,
+        entries: &[crate::entry::NewEntry],
     ) -> Result<(), BalanceError> {
-        self.repo.lock_entry_accounts_in_op(op, account_ids).await
+        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
+            .iter()
+            .map(|entry| (entry.account_id(), entry.currency().code()))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .unzip();
+        self.repo
+            .lock_entry_balances_in_op(op, journal_id, &entry_balances)
+            .await
     }
 
     /// Return `true` iff `member_id` has any row in

@@ -9,6 +9,8 @@ use tracing::Instrument;
 pub use config::*;
 use error::*;
 
+use std::collections::HashSet;
+
 use crate::{
     account::Accounts,
     account_set::AccountSets,
@@ -191,13 +193,21 @@ impl CalaLedger {
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
 
+        let journal_id = transaction.values().journal_id;
         let entry_account_ids = prepared_tx
             .entries
             .iter()
             .map(|entry| entry.account_id())
             .collect::<Vec<_>>();
+        let currencies: Vec<&str> = prepared_tx
+            .entries
+            .iter()
+            .map(|entry| entry.currency().code())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
         self.balances
-            .lock_entry_accounts_in_op(&mut db, &entry_account_ids)
+            .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
             .await?;
 
         let entries = self
@@ -207,7 +217,7 @@ impl CalaLedger {
 
         let mappings = self
             .account_sets
-            .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &entry_account_ids)
+            .fetch_mappings_in_op(&mut db, journal_id, &entry_account_ids, &currencies)
             .await?;
 
         self.velocities

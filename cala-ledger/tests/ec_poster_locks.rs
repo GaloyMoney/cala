@@ -3,7 +3,7 @@
 //! The posting flow takes the class-1 (`EC_SET_LOCK_CLASS`) SHARED
 //! membership-guard lock on every distinct **entry account** — EC and
 //! non-EC alike — *before* inserting its first entry row
-//! (`Balances::lock_entry_accounts_in_op`), and holds it to commit.
+//! (`Balances::lock_entry_balances_in_op`), and holds it to commit.
 //! Ancestor account sets are never locked in that namespace: the
 //! membership guard's EXCLUSIVE is taken on the *member* being
 //! attached, so leaf locks are all the fence needs.

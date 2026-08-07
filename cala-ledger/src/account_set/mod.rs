@@ -607,9 +607,10 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
+        currencies: &[&str],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         self.repo
-            .fetch_mappings_in_op(op, journal_id, account_ids)
+            .fetch_mappings_in_op(op, journal_id, account_ids, currencies)
             .await
     }
 }

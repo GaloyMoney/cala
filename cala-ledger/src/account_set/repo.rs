@@ -984,11 +984,31 @@ impl AccountSetRepo {
         skip_all,
         err(level = "warn")
     )]
+    /// Resolve each account's ancestor sets AND take the poster's
+    /// per-balance FOR_UPDATE locks on the non-EC ancestors' balance
+    /// rows, in the same statement and round trip.
+    ///
+    /// The ancestors are unknowable before this walk runs, so their
+    /// per-balance locks cannot join the poster's pre-insert lock
+    /// prelude (`BalanceRepo::lock_entry_balances_in_op`, which covers
+    /// the entry accounts). Taking them here is sound because this
+    /// statement reads only the membership graph — never balance
+    /// values; the balance read happens in a *later* statement
+    /// (`find_for_update`'s data fetch), so lock-before-read holds
+    /// across statements. The `locks` CTE is forced to execute by the
+    /// scalar subquery in the outer WHERE; its ORDER BY makes
+    /// acquisition order canonical (volatile lock calls are postponed
+    /// until after the Sort — see the ordering doctrine on
+    /// `BalanceRepo::lock_entry_balances_in_op`). Entry accounts and
+    /// ancestor sets are disjoint key classes (#802 FK), and every
+    /// poster acquires the two phases in the same order, so the split
+    /// acquisition cannot deadlock posters against each other.
     pub async fn fetch_mappings_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_ids: &[AccountId],
+        currencies: &[&str],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         // Adjacency-only membership: resolve each account's ancestor sets
         // by an upward recursive walk over the (tiny) set->set edge table,
@@ -1009,14 +1029,34 @@ impl AccountSetRepo {
               FROM ancestors a
               JOIN cala_account_set_member_account_sets e
                 ON e.member_account_set_id = a.account_set_id
+          ),
+          resolved AS (
+              SELECT a.account_id, a.account_set_id
+              FROM ancestors a
+              JOIN cala_account_sets s
+                ON s.id = a.account_set_id AND s.journal_id = $1
+          ),
+          locks AS (
+              SELECT pg_advisory_xact_lock(
+                  hashtext(concat($1::text, t.account_set_id::text, c.currency))
+              )
+              FROM (
+                  SELECT DISTINCT r.account_set_id
+                  FROM resolved r
+                  JOIN cala_accounts acc
+                    ON acc.id = r.account_set_id
+                   AND NOT acc.eventually_consistent
+              ) t
+              CROSS JOIN UNNEST($3::text[]) AS c(currency)
+              ORDER BY t.account_set_id, c.currency
           )
-          SELECT a.account_id AS "account_id!: AccountId", a.account_set_id AS "set_id!: AccountSetId"
-          FROM ancestors a
-          JOIN cala_account_sets s
-            ON s.id = a.account_set_id AND s.journal_id = $1
+          SELECT r.account_id AS "account_id!: AccountId", r.account_set_id AS "set_id!: AccountSetId"
+          FROM resolved r
+          WHERE (SELECT COUNT(*) FROM locks) IS NOT NULL
           "#,
             journal_id as JournalId,
-            account_ids as &[AccountId]
+            account_ids as &[AccountId],
+            currencies as &[&str],
         ))
         .await?;
         let mut mappings = HashMap::new();

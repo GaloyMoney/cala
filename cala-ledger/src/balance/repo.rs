@@ -329,11 +329,24 @@ impl BalanceRepo {
         })
     }
 
-    /// The poster's attach fence: take the class-1 SHARED advisory lock
-    /// (`EC_SET_LOCK_CLASS`) on every distinct entry account of a
-    /// posting — leaves only, EC and non-EC alike; ancestor sets are
-    /// never locked — BEFORE the first entry row is inserted and BEFORE
-    /// the account-set mappings are read.
+    /// The poster's combined lock prelude — attach fence plus leaf
+    /// per-balance locks, in a single statement and round trip:
+    ///
+    /// - class-1 SHARED advisory lock (`EC_SET_LOCK_CLASS`) on every
+    ///   distinct entry account — leaves only, EC and non-EC alike;
+    ///   ancestor sets are never locked in this namespace — taken
+    ///   BEFORE the first entry row is inserted and BEFORE the
+    ///   account-set mappings are read. This is the attach fence.
+    /// - per-balance FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`,
+    ///   keyed on `(journal_id, account_id, currency)`) on the non-EC
+    ///   entry pairs — the poster-vs-poster serializer for the balance
+    ///   rows this posting writes inline. EC pairs take none (posters
+    ///   never write `cala_current_balances` rows for EC accounts).
+    ///   Non-EC *ancestor* pairs are unknowable before the mappings
+    ///   read; their per-balance locks are acquired inside the
+    ///   membership walk (`AccountSetRepo::fetch_mappings_in_op`),
+    ///   which reads only the membership graph — never balance values —
+    ///   so lock-before-read still holds across statements.
     ///
     /// Class-1 doctrine: SHARED = the poster, on its entry accounts,
     /// from before first entry insert to commit; EXCLUSIVE = the
@@ -356,60 +369,6 @@ impl BalanceRepo {
     ///   membership — inline fan-out for synchronous parents, the
     ///   walk for EC ones).
     ///
-    /// The ORDER BY makes acquisition order canonical regardless of
-    /// input order (see the ordering notes on
-    /// [`Self::find_for_update`], established in #810); duplicate ids
-    /// re-acquire the same lock, which is a no-op within one
-    /// transaction.
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.balances.lock_entry_accounts_in_op",
-        skip(self, op, account_ids),
-        fields(count = account_ids.len()),
-        err(level = "warn")
-    )]
-    pub(super) async fn lock_entry_accounts_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
-    ) -> Result<(), BalanceError> {
-        if account_ids.is_empty() {
-            return Ok(());
-        }
-        sqlx::query!(
-            r#"
-            SELECT pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
-            FROM UNNEST($2::uuid[]) AS v(account_id)
-            ORDER BY v.account_id
-            "#,
-            EC_SET_LOCK_CLASS,
-            account_ids as &[AccountId],
-        )
-        .execute(op.as_executor())
-        .await?;
-        Ok(())
-    }
-
-    /// Take the poster's per-balance FOR_UPDATE locks for a batch of
-    /// `(account_id, currency)` pairs and load the current balance
-    /// snapshots in two SQL statements (one lock query plus a pure
-    /// data fetch).
-    ///
-    /// One lock is taken per **non-EC** input row: the 1-arg
-    /// `pg_advisory_xact_lock` keyed on `(journal_id, account_id,
-    /// currency)`, serializing concurrent posters that touch the same
-    /// balance row. EC rows take none — posters never write
-    /// `cala_current_balances` rows for EC accounts at all (this fn's
-    /// data fetch filters them out), so the lock would always be
-    /// uncontended there.
-    ///
-    /// The class-1 SHARED membership-guard fence that used to be taken
-    /// here lives in [`Self::lock_entry_accounts_in_op`], which the
-    /// posting flow runs *before* inserting its first entry row — see
-    /// that fn for the fence doctrine. The 1-arg lock namespace used
-    /// here is disjoint from the 2-arg class-keyed namespace, so the
-    /// two cannot collide.
-    ///
     /// Lock-ordering invariant: the `ORDER BY` is what makes lock
     /// acquisition order canonical here — do not remove it. It is
     /// *required* because the JOIN lets the planner produce rows in
@@ -421,18 +380,73 @@ impl BalanceRepo {
     /// volatile SELECT-list expressions until after the Sort
     /// (`make_sort_input_target` — the same mechanism that makes
     /// `nextval()` follow `ORDER BY`), so the lock calls run row by
-    /// row in sorted order. Verified empirically during the #779
-    /// investigation: `EXPLAIN (VERBOSE)` shows the lock calls in a
-    /// `Result` node *above* the Sort across nested-loop, hash-join,
-    /// merge-join and forced-generic prepared plans. The caller
-    /// (`Balances::update_balances_in_op`) only dedups the input
-    /// pairs; its iteration order is not load-bearing.
+    /// row in sorted order; verified empirically with `EXPLAIN
+    /// (VERBOSE)` across plan shapes during the #779 investigation.
+    /// Duplicate pairs re-acquire the same locks — a no-op within one
+    /// transaction. Deadlock-freedom across the two lock sites: entry
+    /// accounts are never account sets (#802 FK), so this statement
+    /// and the walk's ancestor locks cover disjoint key classes, and
+    /// every poster acquires them in the same phase order.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.lock_entry_balances_in_op",
+        skip(self, op, account_ids, currencies),
+        fields(count = account_ids.len()),
+        err(level = "warn")
+    )]
+    pub(super) async fn lock_entry_balances_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<(), BalanceError> {
+        if account_ids.is_empty() {
+            return Ok(());
+        }
+        sqlx::query!(
+            r#"
+            SELECT
+                pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text)),
+                CASE WHEN NOT a.eventually_consistent THEN
+                    pg_advisory_xact_lock(
+                        hashtext(concat($2::text, v.account_id::text, v.currency))
+                    )
+                END
+            FROM UNNEST($3::uuid[], $4::text[]) AS v(account_id, currency)
+            JOIN cala_accounts a ON a.id = v.account_id
+            ORDER BY v.account_id, v.currency
+            "#,
+            EC_SET_LOCK_CLASS,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+            currencies as &[&str],
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    /// Load the current balance snapshots (and account status) for a
+    /// batch of `(account_id, currency)` pairs — a pure data fetch, no
+    /// locks.
     ///
-    /// Note this only guarantees ordering *within* this statement. A
-    /// transaction that runs several postings (repeated
-    /// `post_transaction_in_op` calls in one op) acquires locks
-    /// across multiple statements with no global ordering, and can
-    /// still deadlock against other lockers — see #779.
+    /// By the time this runs, every non-EC row it reads is already
+    /// covered by the poster's locks, all acquired in earlier
+    /// statements: class-1 SHARED + per-balance exclusives on the entry
+    /// accounts before the first entry insert
+    /// ([`Self::lock_entry_balances_in_op`]), and per-balance
+    /// exclusives on the non-EC ancestor sets inside the membership
+    /// walk (`AccountSetRepo::fetch_mappings_in_op`). EC rows are
+    /// filtered out here (posters never write them; the streaming
+    /// rollup owns them).
+    ///
+    /// Note the poster's lock acquisition spans multiple statements
+    /// with a fixed phase order (entry pairs, then ancestor pairs —
+    /// disjoint key classes per the #802 FK). A transaction that runs
+    /// several postings (repeated `post_transaction_in_op` calls in
+    /// one op) still acquires locks across posting boundaries with no
+    /// global ordering and can deadlock against other lockers — see
+    /// #779.
     #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
@@ -440,24 +454,6 @@ impl BalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
-        sqlx::query!(
-            r#"
-            SELECT
-                CASE WHEN NOT a.eventually_consistent THEN
-                    pg_advisory_xact_lock(
-                        hashtext(concat($1::text, v.account_id::text, v.currency))
-                    )
-                END
-            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-            JOIN cala_accounts a ON a.id = v.account_id
-            ORDER BY v.account_id, v.currency
-            "#,
-            journal_id as JournalId,
-            account_ids as &[AccountId],
-            currencies as &[&str],
-        )
-        .execute(op.as_executor())
-        .await?;
         let rows = sqlx::query!(
             r#"
             SELECT
