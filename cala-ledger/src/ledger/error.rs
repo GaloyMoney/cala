@@ -36,6 +36,17 @@ pub enum LedgerError {
     VelocityError(#[from] VelocityError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
+    #[error("LedgerError - EcRollupStateDecode: {0}")]
+    EcRollupStateDecode(serde_json::Error),
+    #[error(
+        "LedgerError - EcCaughtUpTimeout: EC rollup checkpoint {applied} had not reached the \
+         outbox frontier {frontier} after waiting {waited:?}"
+    )]
+    EcCaughtUpTimeout {
+        applied: obix::EventSequence,
+        frontier: obix::EventSequence,
+        waited: std::time::Duration,
+    },
     #[error(
         "LedgerError - EntryTargetsAccountSet: an entry may not be posted directly to an \
          account-set backing account; an account set's balance is derived from its members"

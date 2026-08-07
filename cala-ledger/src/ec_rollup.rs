@@ -48,9 +48,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 use std::collections::{HashMap, HashSet};
 
 use job::{JobType, Jobs};
-use obix::out::{
-    EventCtx, EventSubscription, FlushOp, Handled, OutboxEventHandler, OutboxEventJobConfig,
-    PersistentOutboxEvent,
+use obix::{
+    out::{
+        EventCtx, EventSubscription, FlushOp, Handled, OutboxEventHandler, OutboxEventJobConfig,
+        PersistentOutboxEvent,
+    },
+    EventSequence, MailboxTables as _,
 };
 
 use cala_types::entry::EntryValues;
@@ -58,7 +61,8 @@ use cala_types::entry::EntryValues;
 use crate::{
     balance::{Balances, EcRollupTxn},
     entry::{Entries, Entry},
-    outbox::{ObixOutbox, OutboxEventPayload},
+    ledger::error::LedgerError,
+    outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
     primitives::{EntryId, JournalId, TransactionId},
 };
 
@@ -241,5 +245,132 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         let rollup_txns = batch.into_rollup_txns(fetched);
         self.balances.apply_ec_rollup_in_op(op, rollup_txns).await?;
         Ok(())
+    }
+}
+
+/// A point-in-time snapshot of the streaming EC-balance rollup's position:
+/// the committed checkpoint (`applied`) against the persistent outbox
+/// frontier (`frontier`). Every outbox event with sequence ≤ `applied` is
+/// folded into EC balances (settled and effective) and committed.
+///
+/// [`lag`](Self::lag) doubles as the stream-lag SLO metric.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EcRollupStatus {
+    /// The rollup job's committed checkpoint.
+    pub applied: EventSequence,
+    /// The highest outbox sequence assigned at snapshot time.
+    pub frontier: EventSequence,
+}
+
+impl EcRollupStatus {
+    /// Number of outbox sequence positions the rollup has yet to consume.
+    ///
+    /// Counts *all* outbox events — including the `BalanceUpdated` events
+    /// the rollup itself publishes when it applies a batch, which it later
+    /// crosses as skips (checkpointed lazily, bounded by the obix
+    /// checkpoint interval). A healthy, fully-applied stream can therefore
+    /// transiently report a small nonzero lag; alert on lag that is large
+    /// or not shrinking, not on `!= 0`.
+    pub fn lag(&self) -> u64 {
+        u64::from(self.frontier).saturating_sub(u64::from(self.applied))
+    }
+
+    pub fn is_caught_up(&self) -> bool {
+        self.applied >= self.frontier
+    }
+}
+
+/// The rollup job's persisted execution state, written by the obix
+/// event-handler runner (`{"sequence": <i64>}`). The runner commits the
+/// checkpoint atomically with each applied batch, and over skip-only
+/// stretches persists it lazily (bounded by the obix checkpoint interval)
+/// — so the persisted value only ever *trails* the applied state, never
+/// leads it.
+#[derive(serde::Deserialize)]
+struct RollupExecutionState {
+    sequence: EventSequence,
+}
+
+/// Read the rollup job's committed checkpoint from the jobs table.
+///
+/// Deliberately a database read, not in-process state: the rollup is
+/// `spawn_unique` — cluster-wide it runs on one node, while the caller
+/// (an EOD orchestrator, a metrics poller) may be on another. A missing
+/// row or a not-yet-persisted state both read as [`EventSequence::BEGIN`]:
+/// a rollup that is not registered or has never checkpointed reports its
+/// honest position, and [`await_caught_up`] surfaces it as a timeout
+/// rather than a hang.
+async fn applied_checkpoint(pool: &sqlx::PgPool) -> Result<EventSequence, LedgerError> {
+    // Bind the `const` before borrowing: `as_str` on the constant itself
+    // would borrow from a temporary that does not outlive the query.
+    let job_type = EC_BALANCE_ROLLUP_JOB;
+    let row = sqlx::query!(
+        r#"
+        SELECT execution_state_json
+        FROM job_executions
+        WHERE job_type = $1
+        "#,
+        job_type.as_str()
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(row
+        .and_then(|row| row.execution_state_json)
+        .map(serde_json::from_value::<RollupExecutionState>)
+        .transpose()
+        .map_err(LedgerError::EcRollupStateDecode)?
+        .map(|state| state.sequence)
+        .unwrap_or(EventSequence::BEGIN))
+}
+
+/// Snapshot the outbox frontier from the persistent outbox's sequence
+/// *generator* (not `MAX(sequence)` over the table): it covers sequences
+/// already assigned to still-uncommitted (or aborted) postings, which is
+/// what makes the close-books fence airtight — and it is invariant under
+/// partition rotation or archival. Aborted sequences cannot wedge the
+/// wait: obix gap-fill resolves them to placeholder deliveries the
+/// checkpoint advances over.
+async fn outbox_frontier(pool: &sqlx::PgPool) -> Result<EventSequence, LedgerError> {
+    Ok(CalaMailboxTables::highest_known_persistent_sequence(pool).await?)
+}
+
+pub(crate) async fn rollup_status(pool: &sqlx::PgPool) -> Result<EcRollupStatus, LedgerError> {
+    // Frontier first: a checkpoint read racing past a stale frontier can
+    // only over-report progress relative to the snapshot, never lag that
+    // is not there.
+    let frontier = outbox_frontier(pool).await?;
+    let applied = applied_checkpoint(pool).await?;
+    Ok(EcRollupStatus { applied, frontier })
+}
+
+const INITIAL_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+const MAX_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// Await `applied ≥ frontier(call time)` by polling the persisted
+/// checkpoint with backoff. See `CalaLedger::await_ec_caught_up` for the
+/// semantics.
+pub(crate) async fn await_caught_up(
+    pool: &sqlx::PgPool,
+    timeout: std::time::Duration,
+) -> Result<(), LedgerError> {
+    let started = tokio::time::Instant::now();
+    let deadline = started + timeout;
+    let frontier = outbox_frontier(pool).await?;
+    let mut interval = INITIAL_POLL_INTERVAL;
+    loop {
+        let applied = applied_checkpoint(pool).await?;
+        if applied >= frontier {
+            return Ok(());
+        }
+        let now = tokio::time::Instant::now();
+        if now >= deadline {
+            return Err(LedgerError::EcCaughtUpTimeout {
+                applied,
+                frontier,
+                waited: started.elapsed(),
+            });
+        }
+        tokio::time::sleep(interval.min(deadline - now)).await;
+        interval = (interval * 2).min(MAX_POLL_INTERVAL);
     }
 }
