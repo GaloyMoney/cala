@@ -191,29 +191,28 @@ impl CalaLedger {
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
 
-        // Entries may not target an account set (enforced by the
-        // cala_entries composite FK, #802); surface it as a typed error.
-        let entries = match self
+        let journal_id = transaction.values().journal_id;
+        self.balances
+            .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
+            .await?;
+
+        // The walk reads only the membership graph, so it can run before
+        // the entry insert; it also takes the per-balance locks for the
+        // non-EC ancestors it resolves.
+        let mappings = self
+            .account_sets
+            .fetch_mappings_in_op(&mut db, journal_id, &prepared_tx.entries)
+            .await?;
+
+        let entries = self
             .entries
             .create_all_in_op(&mut db, prepared_tx.entries)
-            .await
-        {
-            Ok(entries) => entries,
-            Err(e) if LedgerError::is_entry_account_set_violation(&e) => {
-                return Err(LedgerError::EntryTargetsAccountSet)
-            }
-            Err(e) => return Err(e.into()),
-        };
+            .await?;
 
         let account_ids = entries
             .iter()
             .map(|entry| entry.account_id)
             .collect::<Vec<_>>();
-
-        let mappings = self
-            .account_sets
-            .fetch_mappings_in_op(&mut db, transaction.values().journal_id, &account_ids)
-            .await?;
 
         self.velocities
             .update_balances_with_limit_enforcement_in_op(

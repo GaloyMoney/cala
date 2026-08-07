@@ -8,9 +8,6 @@ use crate::{
     velocity::error::VelocityError,
 };
 
-/// Composite FK forbidding a `cala_entries` row from targeting an account set.
-pub(crate) const ENTRY_ACCOUNT_SET_FK: &str = "cala_entries_account_not_account_set_fkey";
-
 #[derive(Error, Debug)]
 pub enum LedgerError {
     #[error("LedgerError - Sqlx: {0}")]
@@ -32,7 +29,7 @@ pub enum LedgerError {
     #[error("LedgerError - TransactionError: {0}")]
     TransactionError(#[from] TransactionError),
     #[error("LedgerError - EntryError: {0}")]
-    EntryError(#[from] EntryError),
+    EntryError(EntryError),
     #[error("LedgerError - BalanceError: {0}")]
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
@@ -46,22 +43,14 @@ pub enum LedgerError {
     EntryTargetsAccountSet,
 }
 
-impl LedgerError {
-    /// Whether `err`'s source chain carries the [`ENTRY_ACCOUNT_SET_FK`] violation.
-    pub(crate) fn is_entry_account_set_violation(err: &(dyn std::error::Error + 'static)) -> bool {
-        let mut current = Some(err);
-        while let Some(source) = current {
-            if let Some(db) = source
-                .downcast_ref::<sqlx::Error>()
-                .and_then(|e| e.as_database_error())
-            {
-                if db.constraint() == Some(ENTRY_ACCOUNT_SET_FK) {
-                    return true;
-                }
-            }
-            current = source.source();
+impl From<EntryError> for LedgerError {
+    fn from(e: EntryError) -> Self {
+        match e {
+            // Surface the posting-flow domain error at the top level so
+            // callers don't have to dig through the entry-error nesting.
+            EntryError::EntryTargetsAccountSet => Self::EntryTargetsAccountSet,
+            other => Self::EntryError(other),
         }
-        false
     }
 }
 

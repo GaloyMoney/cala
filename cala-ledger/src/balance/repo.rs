@@ -329,42 +329,45 @@ impl BalanceRepo {
         })
     }
 
-    /// Take the poster's per-row locks for a batch of
-    /// `(account_id, currency)` pairs and load the current balance
-    /// snapshots in two SQL statements (one combined lock query plus a
-    /// pure data fetch).
+    /// The poster's combined lock prelude — attach fence plus leaf
+    /// per-balance locks, in a single statement and round trip:
     ///
-    /// Two locks are taken per **non-EC** input row; EC rows take
-    /// neither, so a posting that touches only EC nodes acquires zero
-    /// advisory locks:
+    /// - class-1 SHARED advisory lock (`EC_SET_LOCK_CLASS`) on every
+    ///   distinct entry account — leaves only, EC and non-EC alike;
+    ///   ancestor sets are never locked in this namespace — taken
+    ///   BEFORE the first entry row is inserted and BEFORE the
+    ///   account-set mappings are read. This is the attach fence.
+    /// - per-balance FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`,
+    ///   keyed on `(journal_id, account_id, currency)`) on the non-EC
+    ///   entry pairs — the poster-vs-poster serializer for the balance
+    ///   rows this posting writes inline. EC pairs take none (posters
+    ///   never write `cala_current_balances` rows for EC accounts).
+    ///   Non-EC *ancestor* pairs are unknowable before the mappings
+    ///   read; their per-balance locks are acquired inside the
+    ///   membership walk (`AccountSetRepo::fetch_mappings_in_op`),
+    ///   which reads only the membership graph — never balance values —
+    ///   so lock-before-read still holds across statements.
     ///
-    /// - SHARED lock (2-arg `pg_advisory_xact_lock_shared`, classid
-    ///   `EC_SET_LOCK_CLASS`) keyed on `account_id`. Its load-bearing
-    ///   role is the member side of the membership guard:
-    ///   `member_has_balance_history_in_op` takes EXCLUSIVE on a member
-    ///   before it is added to / removed from a set, so a concurrent
-    ///   poster holding SHARED on that member blocks until the guard's
-    ///   activity check commits. On non-EC accounts the poster writes
-    ///   the balance rows the guard checks *under this lock*, so the
-    ///   fence there is complete. On EC accounts the poster writes no
-    ///   balance rows (the streaming rollup does, in its own tx), so
-    ///   the lock fenced nothing and is skipped. Known gap, unchanged
-    ///   in kind by the gating: the guard's `cala_entries` EXISTS can
-    ///   race an in-flight *first* posting to an EC member — entries
-    ///   are inserted before this lock prelude runs, so the window
-    ///   existed pre-gating (insert -> lock) and is now the full poster
-    ///   tx; properly closed by routing entries vs membership by
-    ///   outbox seq in the rollup applier (planned follow-up).
-    /// - FOR_UPDATE lock (1-arg `pg_advisory_xact_lock`) keyed on
-    ///   `(journal_id, account_id, currency)`. Serializes concurrent
-    ///   posters that touch the same balance row. Skipped on EC rows
-    ///   because posters never write `cala_current_balances` rows for
-    ///   EC accounts at all (`find_for_update`'s data fetch filters
-    ///   them out), so the lock would always be uncontended there.
+    /// Class-1 doctrine: SHARED = the poster, on its entry accounts,
+    /// from before first entry insert to commit; EXCLUSIVE = the
+    /// membership guard on the member being added/removed
+    /// ([`Self::member_has_balance_history_in_op`]); the streaming
+    /// rollup applier takes SHARED on the EC accounts it writes
+    /// ([`Self::find_ec_balances_for_update`]).
     ///
-    /// The 2-arg and 1-arg `pg_advisory_xact_lock` namespaces are
-    /// disjoint in PostgreSQL, so the two locks cannot collide with
-    /// each other.
+    /// Holding SHARED from before the first insert makes the guard's
+    /// EXCLUSIVE-on-member a fence over the poster's *entire*
+    /// transaction, closing both attach-vs-in-flight-posting races:
+    ///
+    /// - the guard's `EXISTS` can no longer miss an in-flight first
+    ///   posting's uncommitted entries (an attach of an EC leaf blocks
+    ///   on this lock until the poster commits, then sees its
+    ///   committed `cala_entries` rows and rejects), and
+    /// - a poster can no longer fan out over set mappings that an
+    ///   attach commits past mid-transaction (the poster blocks here
+    ///   *before* `fetch_mappings_in_op` and resumes seeing the new
+    ///   membership — inline fan-out for synchronous parents, the
+    ///   walk for EC ones).
     ///
     /// Lock-ordering invariant: the `ORDER BY` is what makes lock
     /// acquisition order canonical here — do not remove it. It is
@@ -377,33 +380,33 @@ impl BalanceRepo {
     /// volatile SELECT-list expressions until after the Sort
     /// (`make_sort_input_target` — the same mechanism that makes
     /// `nextval()` follow `ORDER BY`), so the lock calls run row by
-    /// row in sorted order. Verified empirically during the #779
-    /// investigation: `EXPLAIN (VERBOSE)` shows the lock calls in a
-    /// `Result` node *above* the Sort across nested-loop, hash-join,
-    /// merge-join and forced-generic prepared plans. The caller
-    /// (`Balances::update_balances_in_op`) only dedups the input
-    /// pairs; its iteration order is not load-bearing.
-    ///
-    /// Note this only guarantees ordering *within* this statement. A
-    /// transaction that runs several postings (repeated
-    /// `post_transaction_in_op` calls in one op) acquires locks
-    /// across multiple statements with no global ordering, and can
-    /// still deadlock against other lockers — see #779.
-    #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
-    pub(super) async fn find_for_update(
+    /// row in sorted order; verified empirically with `EXPLAIN
+    /// (VERBOSE)` across plan shapes during the #779 investigation.
+    /// Duplicate pairs re-acquire the same locks — a no-op within one
+    /// transaction. Deadlock-freedom across the two lock sites: entry
+    /// accounts are never account sets (#802 FK), so this statement
+    /// and the walk's ancestor locks cover disjoint key classes, and
+    /// every poster acquires them in the same phase order.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.lock_entry_balances_in_op",
+        skip(self, op, account_ids, currencies),
+        fields(count = account_ids.len()),
+        err(level = "warn")
+    )]
+    pub(super) async fn lock_entry_balances_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
+    ) -> Result<(), BalanceError> {
+        if account_ids.is_empty() {
+            return Ok(());
+        }
         sqlx::query!(
             r#"
             SELECT
-                CASE WHEN NOT a.eventually_consistent THEN
-                    pg_advisory_xact_lock_shared(
-                        $1::int4, hashtext(v.account_id::text)
-                    )
-                END,
+                pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text)),
                 CASE WHEN NOT a.eventually_consistent THEN
                     pg_advisory_xact_lock(
                         hashtext(concat($2::text, v.account_id::text, v.currency))
@@ -420,6 +423,37 @@ impl BalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
+        Ok(())
+    }
+
+    /// Load the current balance snapshots (and account status) for a
+    /// batch of `(account_id, currency)` pairs — a pure data fetch, no
+    /// locks.
+    ///
+    /// By the time this runs, every non-EC row it reads is already
+    /// covered by the poster's locks, all acquired in earlier
+    /// statements: class-1 SHARED + per-balance exclusives on the entry
+    /// accounts before the first entry insert
+    /// ([`Self::lock_entry_balances_in_op`]), and per-balance
+    /// exclusives on the non-EC ancestor sets inside the membership
+    /// walk (`AccountSetRepo::fetch_mappings_in_op`). EC rows are
+    /// filtered out here (posters never write them; the streaming
+    /// rollup owns them).
+    ///
+    /// Note the poster's lock acquisition spans multiple statements
+    /// with a fixed phase order (entry pairs, then ancestor pairs —
+    /// disjoint key classes per the #802 FK). A transaction that runs
+    /// several postings (repeated `post_transaction_in_op` calls in
+    /// one op) still acquires locks across posting boundaries with no
+    /// global ordering and can deadlock against other lockers — see
+    /// #779.
+    #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
+    pub(super) async fn find_for_update(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -461,11 +495,10 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    /// Under a SHARED lock on `parent_account_id` and an EXCLUSIVE
-    /// lock on `member_id` (both in the 2-arg EC-set lock namespace,
-    /// acquired in a single canonically-ordered SQL statement), return
-    /// `true` iff `member_id` has any settled activity in `journal_id` —
-    /// a row in `cala_balance_history` **or** a posted `cala_entries` row.
+    /// Under an EXCLUSIVE lock on `member_id` (2-arg EC-set lock
+    /// namespace), return `true` iff `member_id` has any settled
+    /// activity in `journal_id` — a row in `cala_balance_history`
+    /// **or** a posted `cala_entries` row.
     ///
     /// The `cala_entries` check is load-bearing for eventually-consistent
     /// leaves: an EC leaf writes no `cala_balance_history` inline (the
@@ -480,15 +513,18 @@ impl BalanceRepo {
     /// the history check still covers set members.
     ///
     /// The EXCLUSIVE on the member is what makes the existence check
-    /// stable: any in-flight poster on `member_id` takes SHARED on it
-    /// via `find_for_update`'s combined lock query and blocks against
-    /// our EXCLUSIVE, so committed state is fully visible by the time
-    /// the `EXISTS` runs.
+    /// stable: any in-flight poster on `member_id` holds SHARED on it
+    /// from *before its first entry insert*
+    /// ([`Self::lock_entry_accounts_in_op`]) and blocks against our
+    /// EXCLUSIVE, so committed state — including a first posting's
+    /// entries — is fully visible by the time the `EXISTS` runs. It
+    /// only ever waits on real in-flight activity of the account being
+    /// attached, never on unrelated posters.
     ///
-    /// The parent lock is SHARED (not EXCLUSIVE) so it stays compatible
-    /// with concurrent posters on the same parent — SHARED/SHARED does not
-    /// block — which is what keeps multi-call `add_member_in_op`
-    /// transactions from contending with posters on hot parent sets.
+    /// No lock is taken on the parent set: the SHARED-on-parent half
+    /// that used to be acquired here fenced against the deleted
+    /// watermark recalc's EXCLUSIVE-on-parent, and nothing takes an
+    /// EXCLUSIVE on a parent set in the streaming design.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.member_has_balance_history_in_op",
@@ -499,29 +535,14 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        parent_account_id: AccountId,
         member_id: AccountId,
     ) -> Result<bool, BalanceError> {
-        // Lock both ids in canonical ascending AccountId order, with
-        // the sort done in Rust: the statement is join-free, so the
-        // bare UNNEST scan emits rows in array order and array order
-        // IS the lock acquisition order (see
-        // find_ec_balances_for_update).
-        let mut lock_ids = [parent_account_id, member_id];
-        lock_ids.sort();
         sqlx::query!(
             r#"
-            SELECT
-                CASE WHEN v.account_id = $2 THEN
-                    pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
-                ELSE
-                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
-                END
-            FROM UNNEST($3::uuid[]) AS v(account_id)
+            SELECT pg_advisory_xact_lock($1::int4, hashtext(($2::uuid)::text))
             "#,
             EC_SET_LOCK_CLASS,
             member_id as AccountId,
-            &lock_ids as &[AccountId],
         )
         .execute(op.as_executor())
         .await?;
@@ -548,12 +569,12 @@ impl BalanceRepo {
     }
 
     /// Batch variant of [`member_has_balance_history_in_op`]: takes the
-    /// same locks (SHARED on parents, FOR_UPDATE-style EXCLUSIVE on
-    /// members) in a single canonically-ordered statement and returns
-    /// every member that already has settled activity in its journal —
-    /// balance history **or** a posted entry — instead of checking pair by
-    /// pair. See the single-pair method for why entries are checked (EC
-    /// leaves write entries synchronously but history only via the rollup).
+    /// same EXCLUSIVE member locks in a single canonically-ordered
+    /// statement and returns every member that already has settled
+    /// activity in its journal — balance history **or** a posted entry —
+    /// instead of checking pair by pair. See the single-pair method for
+    /// why entries are checked (EC leaves write entries synchronously
+    /// but history only via the rollup) and why parents are not locked.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balances.members_with_balance_history_in_op",
@@ -563,50 +584,29 @@ impl BalanceRepo {
     pub(super) async fn members_with_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        pairs: &[(JournalId, AccountId, AccountId)],
+        pairs: &[(JournalId, AccountId)],
     ) -> Result<Vec<AccountId>, BalanceError> {
         if pairs.is_empty() {
             return Ok(Vec::new());
         }
-        let journal_ids: Vec<JournalId> = pairs.iter().map(|(j, _, _)| *j).collect();
-        let member_ids: Vec<AccountId> = pairs.iter().map(|(_, _, m)| *m).collect();
+        let journal_ids: Vec<JournalId> = pairs.iter().map(|(j, _)| *j).collect();
+        let member_ids: Vec<AccountId> = pairs.iter().map(|(_, m)| *m).collect();
 
         // Canonical lock protocol, shared with the single-pair
-        // member_has_balance_history_in_op: every id is locked in
-        // ascending AccountId order — EXCLUSIVE where the id is a
-        // member in any pair, SHARED where it only ever appears as a
-        // parent (EXCLUSIVE wins when an id is both). The list is
-        // built, deduped and sorted in Rust; the lock statement is
-        // join-free, so the UNNEST array order is the acquisition
-        // order (see find_ec_balances_for_update). Locking pair-wise (SHARED
-        // parent, then EXCLUSIVE member) instead would invert the
-        // acquisition order against the single-pair path whenever
-        // member_id < parent_account_id, and concurrent single- and
-        // batch-path transactions on the same pair could deadlock.
-        let mut lock_modes: HashMap<AccountId, bool> = HashMap::new();
-        for (_, parent, member) in pairs {
-            lock_modes.entry(*parent).or_insert(false);
-            lock_modes.insert(*member, true);
-        }
-        let mut lock_modes: Vec<(AccountId, bool)> = lock_modes.into_iter().collect();
-        lock_modes.sort_by_key(|(id, _)| *id);
-        let lock_ids: Vec<AccountId> = lock_modes.iter().map(|(id, _)| *id).collect();
-        let lock_exclusive: Vec<bool> =
-            lock_modes.iter().map(|(_, exclusive)| *exclusive).collect();
-
+        // member_has_balance_history_in_op: every member id is locked
+        // EXCLUSIVE in ascending AccountId order. The ORDER BY makes
+        // acquisition order canonical regardless of input order (see
+        // the ordering notes on find_for_update); duplicate ids
+        // re-acquire the same lock, which is a no-op within one
+        // transaction.
         sqlx::query!(
             r#"
-            SELECT
-                CASE WHEN v.is_exclusive THEN
-                    pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
-                ELSE
-                    pg_advisory_xact_lock_shared($1::int4, hashtext(v.account_id::text))
-                END
-            FROM UNNEST($2::uuid[], $3::bool[]) AS v(account_id, is_exclusive)
+            SELECT pg_advisory_xact_lock($1::int4, hashtext(v.account_id::text))
+            FROM UNNEST($2::uuid[]) AS v(account_id)
+            ORDER BY v.account_id
             "#,
             EC_SET_LOCK_CLASS,
-            &lock_ids as &[AccountId],
-            &lock_exclusive as &[bool],
+            &member_ids as &[AccountId],
         )
         .execute(op.as_executor())
         .await?;

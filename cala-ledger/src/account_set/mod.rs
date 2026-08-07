@@ -216,7 +216,6 @@ impl AccountSets {
             op,
             account_set_id,
             account_set.values().journal_id,
-            AccountId::from(&account_set.id()),
             member_id,
         )
         .await?;
@@ -280,11 +279,7 @@ impl AccountSets {
             let set = sets
                 .get(account_set_id)
                 .ok_or(AccountSetError::CouldNotFindById(*account_set_id))?;
-            check_pairs.push((
-                set.values().journal_id,
-                AccountId::from(set.id()),
-                *member_id,
-            ));
+            check_pairs.push((set.values().journal_id, *member_id));
         }
         let with_history = self
             .balances
@@ -313,21 +308,21 @@ impl AccountSets {
     /// symmetric remove case has no safe unfold path either, so we forbid
     /// both.
     ///
-    /// The check itself is run under exclusive locks on the parent set
-    /// and the candidate member in the EC-set lock namespace, so the
-    /// existence query reflects committed state even with concurrent
-    /// posters in flight.
+    /// The check itself is run under an EXCLUSIVE lock on the candidate
+    /// member in the EC-set lock namespace — the guard side of the
+    /// attach fence (posters hold SHARED on their entry accounts from
+    /// before the first entry insert) — so the existence query reflects
+    /// committed state even with concurrent posters in flight.
     async fn assert_member_history_empty_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         journal_id: JournalId,
-        target_account_id: AccountId,
         member_id: AccountId,
     ) -> Result<(), AccountSetError> {
         if self
             .balances
-            .member_has_balance_history_in_op(op, journal_id, target_account_id, member_id)
+            .member_has_balance_history_in_op(op, journal_id, member_id)
             .await?
         {
             return Err(AccountSetError::MemberHasBalanceHistory {
@@ -396,7 +391,6 @@ impl AccountSets {
             op,
             account_set_id,
             account_set.values().journal_id,
-            AccountId::from(&account_set.id()),
             member_id,
         )
         .await?;
@@ -608,14 +602,24 @@ impl AccountSets {
             .await
     }
 
+    /// Resolve the ancestor-set mappings for a posting's entry accounts
+    /// and take the per-balance locks on the non-EC ancestors — see
+    /// [`AccountSetRepo::fetch_mappings_in_op`]. Extracts the distinct
+    /// `(account, currency)` pairs from the prepared entries.
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_ids: &[AccountId],
+        entries: &[crate::entry::NewEntry],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
+            .iter()
+            .map(|entry| (entry.account_id(), entry.currency().code()))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .unzip();
         self.repo
-            .fetch_mappings_in_op(op, journal_id, account_ids)
+            .fetch_mappings_in_op(op, journal_id, &entry_balances)
             .await
     }
 }

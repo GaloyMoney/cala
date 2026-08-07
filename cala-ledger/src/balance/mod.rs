@@ -9,25 +9,24 @@
 //! deltas into its ancestor EC sets. That single, ordered, `spawn_unique`
 //! writer is the only maintainer of EC-set balances.
 //!
-//! Posters take a shared advisory lock (`EC_SET_LOCK_CLASS`) on every
-//! **non-EC** account they touch; EC accounts take none, so a posting
-//! into an EC-rooted subtree acquires zero advisory locks on the EC
-//! nodes. The lock's load-bearing role is the member side of the
-//! membership guard (`member_has_balance_history_in_op`): adding or
-//! removing a member takes an EXCLUSIVE lock on that member, so a
-//! concurrent poster's SHARED lock on the same member blocks until the
-//! guard's activity check has committed. On non-EC accounts the poster
-//! writes the balance rows the guard checks *under* that lock, making
-//! the fence complete; on EC accounts the poster writes no balance rows
-//! (the streaming rollup does, in its own transaction), so a SHARED
-//! lock there fenced nothing and is skipped. The guard checks
-//! `cala_entries` as well as `cala_balance_history` so committed
-//! activity on an eventually-consistent account — whose history is
-//! written only later by the rollup, but whose entries land
-//! synchronously — cannot slip through; an *in-flight uncommitted*
-//! first posting can still race the guard (entries are inserted before
-//! the poster's lock prelude, so that window predates the gating — see
-//! `find_for_update`'s doc for the follow-up that closes it).
+//! Class-1 advisory-lock doctrine (`EC_SET_LOCK_CLASS`), in full:
+//! SHARED = the poster, on its distinct **entry accounts** (leaves
+//! only, EC and non-EC alike — never ancestors), held from *before its
+//! first entry insert* to commit (`lock_entry_balances_in_op`);
+//! EXCLUSIVE = the membership guard on the member being added/removed
+//! (`member_has_balance_history_in_op`); the streaming rollup applier
+//! takes SHARED on the EC accounts it writes
+//! (`find_ec_balances_for_update`).
+//!
+//! That poster-SHARED vs guard-EXCLUSIVE pair is the attach fence, and
+//! taking the SHARED side before the first entry insert (and before the
+//! mappings read) makes it cover the poster's entire transaction: an
+//! attach of an account with an in-flight first posting blocks until
+//! the poster commits and is then correctly rejected (the guard checks
+//! `cala_entries` as well as `cala_balance_history`, so EC activity —
+//! whose history is only written later by the rollup — still counts),
+//! while a poster that starts after an attach took its EXCLUSIVE blocks
+//! *before* reading set mappings and resumes seeing the new membership.
 
 mod account_balance;
 mod cursor;
@@ -270,6 +269,36 @@ impl Balances {
         Ok(())
     }
 
+    /// The poster's combined lock prelude: in one statement, the attach
+    /// fence (class-1 SHARED on every distinct entry account) plus the
+    /// per-balance FOR_UPDATE locks for the non-EC entry pairs — taken
+    /// before the posting's first entry row is inserted. Extracts the
+    /// distinct `(account, currency)` pairs from the prepared entries.
+    /// See [`BalanceRepo::lock_entry_balances_in_op`] for the doctrine.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.lock_entry_balances_in_op",
+        skip(self, op, entries),
+        fields(count = entries.len()),
+        err(level = "warn")
+    )]
+    pub(crate) async fn lock_entry_balances_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        entries: &[crate::entry::NewEntry],
+    ) -> Result<(), BalanceError> {
+        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
+            .iter()
+            .map(|entry| (entry.account_id(), entry.currency().code()))
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .unzip();
+        self.repo
+            .lock_entry_balances_in_op(op, journal_id, &entry_balances)
+            .await
+    }
+
     /// Return `true` iff `member_id` has any row in
     /// `cala_balance_history` for `journal_id`, under the lock prelude
     /// described on `BalanceRepo::member_has_balance_history_in_op`.
@@ -279,7 +308,6 @@ impl Balances {
         skip(self, op),
         fields(
             journal_id = %journal_id,
-            parent_account_id = %parent_account_id,
             member_id = %member_id,
         ),
         err(level = "warn")
@@ -288,17 +316,16 @@ impl Balances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        parent_account_id: AccountId,
         member_id: AccountId,
     ) -> Result<bool, BalanceError> {
         self.repo
-            .member_has_balance_history_in_op(op, journal_id, parent_account_id, member_id)
+            .member_has_balance_history_in_op(op, journal_id, member_id)
             .await
     }
 
     /// Batch variant of [`member_has_balance_history_in_op`](Self::member_has_balance_history_in_op):
-    /// returns every member of `pairs` (`(journal_id, parent_account_id,
-    /// member_id)`) that already has balance history in its journal.
+    /// returns every member of `pairs` (`(journal_id, member_id)`) that
+    /// already has balance history in its journal.
     #[instrument(
         level = "debug",
         name = "cala_ledger.balance.members_with_balance_history_in_op",
@@ -309,7 +336,7 @@ impl Balances {
     pub(crate) async fn members_with_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        pairs: &[(JournalId, AccountId, AccountId)],
+        pairs: &[(JournalId, AccountId)],
     ) -> Result<Vec<AccountId>, BalanceError> {
         self.repo
             .members_with_balance_history_in_op(op, pairs)
