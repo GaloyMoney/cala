@@ -602,15 +602,24 @@ impl AccountSets {
             .await
     }
 
+    /// Resolve the ancestor-set mappings for a posting's entry accounts
+    /// and take the per-balance locks on the non-EC ancestors — see
+    /// [`AccountSetRepo::fetch_mappings_in_op`]. Extracts the distinct
+    /// `(account, currency)` pairs from the prepared entries.
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_ids: &[AccountId],
-        currencies: &[&str],
+        entries: &[crate::entry::NewEntry],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
+            .iter()
+            .map(|entry| (entry.account_id(), entry.currency().code()))
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .unzip();
         self.repo
-            .fetch_mappings_in_op(op, journal_id, account_ids, currencies)
+            .fetch_mappings_in_op(op, journal_id, &entry_balances)
             .await
     }
 }

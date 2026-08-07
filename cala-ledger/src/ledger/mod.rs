@@ -9,8 +9,6 @@ use tracing::Instrument;
 pub use config::*;
 use error::*;
 
-use std::collections::HashSet;
-
 use crate::{
     account::Accounts,
     account_set::AccountSets,
@@ -194,20 +192,16 @@ impl CalaLedger {
         span.record("external_id", &transaction.values().external_id);
 
         let journal_id = transaction.values().journal_id;
-        let entry_account_ids = prepared_tx
-            .entries
-            .iter()
-            .map(|entry| entry.account_id())
-            .collect::<Vec<_>>();
-        let currencies: Vec<&str> = prepared_tx
-            .entries
-            .iter()
-            .map(|entry| entry.currency().code())
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
         self.balances
             .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
+            .await?;
+
+        // The walk reads only the membership graph, so it can run before
+        // the entry insert; it also takes the per-balance locks for the
+        // non-EC ancestors it resolves.
+        let mappings = self
+            .account_sets
+            .fetch_mappings_in_op(&mut db, journal_id, &prepared_tx.entries)
             .await?;
 
         let entries = self
@@ -215,10 +209,10 @@ impl CalaLedger {
             .create_all_in_op(&mut db, prepared_tx.entries)
             .await?;
 
-        let mappings = self
-            .account_sets
-            .fetch_mappings_in_op(&mut db, journal_id, &entry_account_ids, &currencies)
-            .await?;
+        let account_ids = entries
+            .iter()
+            .map(|entry| entry.account_id)
+            .collect::<Vec<_>>();
 
         self.velocities
             .update_balances_with_limit_enforcement_in_op(
@@ -226,7 +220,7 @@ impl CalaLedger {
                 transaction.created_at(),
                 transaction.values(),
                 &entries,
-                &entry_account_ids,
+                &account_ids,
                 &mappings,
             )
             .await?;

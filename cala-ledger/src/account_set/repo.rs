@@ -984,9 +984,16 @@ impl AccountSetRepo {
         skip_all,
         err(level = "warn")
     )]
-    /// Resolve each account's ancestor sets AND take the poster's
+    /// Resolve each entry account's ancestor sets AND take the poster's
     /// per-balance FOR_UPDATE locks on the non-EC ancestors' balance
     /// rows, in the same statement and round trip.
+    ///
+    /// Input is the posting's distinct `(account_id, currency)` entry
+    /// pairs (parallel arrays). Each leaf's currencies propagate to
+    /// exactly *its own* ancestors — the locked rows are precisely the
+    /// `(ancestor, currency)` combinations the inline fan-out will
+    /// write, no more (an ancestor reached only by a USD entry is not
+    /// locked for another entry's BTC).
     ///
     /// The ancestors are unknowable before this walk runs, so their
     /// per-balance locks cannot join the poster's pre-insert lock
@@ -1007,8 +1014,7 @@ impl AccountSetRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
-        account_ids: &[AccountId],
-        currencies: &[&str],
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         // Adjacency-only membership: resolve each account's ancestor sets
         // by an upward recursive walk over the (tiny) set->set edge table,
@@ -1018,7 +1024,7 @@ impl AccountSetRepo {
         let rows = op.into_executor().fetch_all(sqlx::query!(
             r#"
           WITH RECURSIVE seed AS (
-              SELECT m.member_account_id AS account_id, m.account_set_id
+              SELECT DISTINCT m.member_account_id AS account_id, m.account_set_id
               FROM cala_account_set_member_accounts m
               WHERE m.member_account_id = ANY($2)
           ),
@@ -1038,19 +1044,20 @@ impl AccountSetRepo {
           ),
           locks AS (
               SELECT pg_advisory_xact_lock(
-                  hashtext(concat($1::text, t.account_set_id::text, c.currency))
+                  hashtext(concat($1::text, t.account_set_id::text, t.currency))
               )
               FROM (
-                  SELECT DISTINCT r.account_set_id
+                  SELECT DISTINCT r.account_set_id, v.currency
                   FROM resolved r
+                  JOIN UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+                    ON v.account_id = r.account_id
                   JOIN cala_accounts acc
                     ON acc.id = r.account_set_id
                    AND NOT acc.eventually_consistent
               ) t
-              CROSS JOIN UNNEST($3::text[]) AS c(currency)
-              ORDER BY t.account_set_id, c.currency
+              ORDER BY t.account_set_id, t.currency
           )
-          SELECT r.account_id AS "account_id!: AccountId", r.account_set_id AS "set_id!: AccountSetId"
+          SELECT DISTINCT r.account_id AS "account_id!: AccountId", r.account_set_id AS "set_id!: AccountSetId"
           FROM resolved r
           WHERE (SELECT COUNT(*) FROM locks) IS NOT NULL
           "#,
