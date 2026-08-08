@@ -299,31 +299,6 @@ impl Balances {
             .await
     }
 
-    /// Take the poster's per-balance FOR_UPDATE locks on the non-EC
-    /// ancestor sets resolved for this posting — invoked by
-    /// `AccountSets::fetch_mappings_in_op` immediately after the
-    /// membership resolution and strictly before `find_for_update`'s
-    /// balance data fetch. Pairs must arrive deduped and Rust-sorted;
-    /// see [`BalanceRepo::lock_ancestor_balances_in_op`] for the
-    /// doctrine.
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.balance.lock_ancestor_balances_in_op",
-        skip(self, op, pairs),
-        fields(count = pairs.0.len()),
-        err(level = "warn")
-    )]
-    pub(crate) async fn lock_ancestor_balances_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        pairs: &(Vec<AccountSetId>, Vec<&str>),
-    ) -> Result<(), BalanceError> {
-        self.repo
-            .lock_ancestor_balances_in_op(op, journal_id, pairs)
-            .await
-    }
-
     /// Return `true` iff `member_id` has any row in
     /// `cala_balance_history` for `journal_id`, under the lock prelude
     /// described on `BalanceRepo::member_has_balance_history_in_op`.

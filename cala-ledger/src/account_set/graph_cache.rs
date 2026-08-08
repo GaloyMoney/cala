@@ -4,10 +4,16 @@
 //! walk over `cala_account_set_member_account_sets` (#814) — measured at
 //! ~40 ms/call at lana scale, the #2 DB-time consumer. This module
 //! replaces it with **two cheap indexed reads** (a direct-membership
-//! probe with a piggybacked epoch check) plus in-memory ancestor
-//! expansion, keeping the walk SQL only as the rare-path fallback.
+//! probe with a piggybacked epoch check, then one lock statement) plus
+//! ancestor expansion in memory, keeping the fused walk+locks SQL only
+//! as the rare-path fallback.
 //!
-//! Why this split is safe — the two inputs have opposite write rates:
+//! Layering: `AccountSets` (service) calls this cache; this cache holds
+//! a handle on `AccountSetRepo` and orchestrates — ALL SQL lives in
+//! `repo.rs`, all cache state and in-memory graph logic lives here.
+//!
+//! Why the split read is safe — the two inputs have opposite write
+//! rates:
 //!
 //! - **Direct memberships** (`cala_account_set_member_accounts`, hot):
 //!   always probed live, in-op. The #816 attach fence's correctness
@@ -28,20 +34,35 @@
 //! structure op committing after S1 was equally invisible to the
 //! atomic walk statement — no correctness delta.
 //!
-//! Fallbacks (all correctness-critical, all rare):
+//! Fallbacks (all correctness-critical, all rare) — each runs the
+//! original fused walk+locks statement
+//! (`AccountSetRepo::walk_mappings_and_lock_in_op`), so a fallback
+//! resolution costs one round trip, exactly like pre-cache #816:
 //!
 //! - **Epoch mismatch** (structure op committed since the last refresh,
-//!   or a same-op `add_member_set` bumped it locally): run the walk
-//!   op-locally and separately trigger a background refresh from the
-//!   **pool**. Op-local results are NEVER installed into the shared
-//!   snapshot — an in-op read can see the op's own uncommitted writes,
-//!   and installing them would poison other transactions.
+//!   or a same-op `add_member_set` bumped it locally): walk op-locally
+//!   and separately trigger a background refresh from the **pool**.
+//!   Op-local results are NEVER installed into the shared snapshot — an
+//!   in-op read can see the op's own uncommitted writes, and installing
+//!   them would poison other transactions.
 //! - **Unknown seed set id** (set created after the last refresh —
 //!   including lana's same-op create+attach+post pattern, which bumps
 //!   no epoch): fetch the missing ids' meta and edges in-op as an
 //!   op-local supplement; don't install. Fresh sets normally have no
 //!   upward edges (adding one bumps the epoch), so this stays a single
 //!   indexed read.
+//!
+//! Locking: every posting takes exactly ONE Rust-or-SQL-sorted ancestor
+//! lock batch — the memory path computes the non-EC `(set, currency)`
+//! pairs from cached meta and takes them via
+//! `AccountSetRepo::lock_resolved_ancestors_in_op` immediately after
+//! expansion; the fallback takes the identical keys inside its walk
+//! statement. Locks are never taken from guessed/assumed ancestors in
+//! the probe round trip: an advisory-lock wait inside a statement does
+//! not refresh that statement's snapshot (the stale-read class #816
+//! closed), and a wrong guess would force a second corrective batch,
+//! breaking the single-sorted-batch acquisition that poster-vs-poster
+//! deadlock-freedom rests on (#684/#810).
 //!
 //! Multi-instance: each process has its own cache; the per-op epoch
 //! check makes cross-instance staleness harmless (worst case = one
@@ -50,7 +71,6 @@
 //! it. Memory: the whole graph is ~thousands of edges + meta — trivial,
 //! no eviction needed.
 
-use sqlx::PgPool;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, RwLock},
@@ -58,6 +78,11 @@ use std::{
 use tracing::instrument;
 
 use crate::primitives::{AccountId, AccountSetId, JournalId};
+
+use super::{
+    error::AccountSetError,
+    repo::{AccountSetRepo, SetGraphNode},
+};
 
 /// Interval of the belt-and-braces timer refresh. Correctness never
 /// depends on it (the epoch check catches staleness per op); it only
@@ -97,31 +122,6 @@ impl GraphSnapshot {
     }
 }
 
-/// Result of one ancestor resolution — the shared output of the memory
-/// path and the walk fallback, consumed by the poster
-/// (`AccountSets::fetch_mappings_in_op`).
-pub(crate) struct GraphResolution {
-    /// account -> its ancestor sets in the resolution journal (all
-    /// consistency modes). Accounts with no ancestors in the journal
-    /// have no entry. Per-account: each leaf's ancestors are exactly
-    /// *its own* — this is what per-leaf-currency lock computation and
-    /// balance fan-out key off.
-    pub mappings: HashMap<AccountId, Vec<AccountSetId>>,
-    /// The eventually-consistent subset of every set appearing in
-    /// `mappings`. Posters lock and fan out inline over the complement;
-    /// the streaming rollup owns these.
-    pub ec_sets: HashSet<AccountSetId>,
-}
-
-impl GraphResolution {
-    fn empty() -> Self {
-        Self {
-            mappings: HashMap::new(),
-            ec_sets: HashSet::new(),
-        }
-    }
-}
-
 /// Op-local supplement for seed set ids unknown to the shared snapshot
 /// (sets created after the last refresh). Never installed.
 struct Overlay {
@@ -129,20 +129,43 @@ struct Overlay {
     meta: HashMap<AccountSetId, SetMeta>,
 }
 
-/// Shared handle to the per-process set-graph cache — an internal
-/// detail of the `account_set` module, constructed by
-/// `AccountSets::new` and shared across its clones. (The streaming EC
-/// rollup applier's per-batch resolution deliberately stays a plain
-/// walk in `BalanceRepo::fetch_ec_set_mappings`: `Balances` cannot
-/// depend on this module without a cycle, and one walk per outbox
-/// batch is amortized far below the poster's per-posting rate.)
+fn index_nodes(
+    nodes: Vec<SetGraphNode>,
+) -> (
+    HashMap<AccountSetId, Vec<AccountSetId>>,
+    HashMap<AccountSetId, SetMeta>,
+) {
+    let mut parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+    let mut meta = HashMap::new();
+    for node in nodes {
+        meta.insert(
+            node.id,
+            SetMeta {
+                journal_id: node.journal_id,
+                eventually_consistent: node.eventually_consistent,
+            },
+        );
+        if let Some(parent_id) = node.parent_id {
+            parents.entry(node.id).or_default().push(parent_id);
+        }
+    }
+    (parents, meta)
+}
+
+/// The per-process set-graph cache — an internal detail of the
+/// `account_set` module, constructed by `AccountSets::new` and shared
+/// across its clones. (The streaming EC rollup applier's per-batch
+/// resolution deliberately stays a plain walk in
+/// `BalanceRepo::fetch_ec_set_mappings`: `Balances` cannot depend on
+/// this module without a cycle, and one walk per outbox batch is
+/// amortized far below the poster's per-posting rate.)
 #[derive(Clone)]
-pub(crate) struct SetGraphCache {
+pub(super) struct SetGraphCache {
     inner: Arc<SetGraphCacheInner>,
 }
 
 struct SetGraphCacheInner {
-    pool: PgPool,
+    repo: AccountSetRepo,
     /// Immutable snapshot; readers take a brief uncontended read lock,
     /// clone the `Arc`, and release before any await. Refreshes build a
     /// fresh snapshot and swap it in whole.
@@ -161,9 +184,9 @@ impl std::fmt::Debug for SetGraphCache {
 }
 
 impl SetGraphCache {
-    pub(crate) fn new(pool: &PgPool) -> Self {
+    pub(super) fn new(repo: AccountSetRepo) -> Self {
         let inner = Arc::new(SetGraphCacheInner {
-            pool: pool.clone(),
+            repo,
             snapshot: RwLock::new(Arc::new(GraphSnapshot::cold())),
             refresh_lock: tokio::sync::Mutex::new(()),
         });
@@ -187,58 +210,58 @@ impl SetGraphCache {
         Self { inner }
     }
 
-    /// Resolve each account's ancestor sets for `journal_id`.
+    /// Resolve each entry account's ancestor sets for `journal_id` AND
+    /// take the poster's per-balance locks on the non-EC ancestors.
+    /// Input is the posting's distinct `(account_id, currency)` entry
+    /// pairs (parallel arrays), exactly like the pre-cache walk.
     ///
-    /// One statement on the op executor — the direct-membership probe
-    /// with the graph epoch piggybacked into the same snapshot S1 —
-    /// then, when the cached snapshot matches S1's epoch and all seed
-    /// sets are known, pure in-memory expansion. Otherwise falls back
-    /// op-locally (see the module doc). Reads only the membership
-    /// graph, never balance values, so callers may take balance locks
-    /// derived from the result *after* this returns while preserving
-    /// lock-before-read (see
-    /// `BalanceRepo::lock_ancestor_balances_in_op`).
+    /// Hot path: one probe statement (live direct memberships + epoch in
+    /// the same snapshot), in-memory expansion against the cached edge
+    /// graph, then one lock statement for the resolved non-EC ancestor
+    /// pairs. Rare paths fall back to the fused walk+locks statement —
+    /// see the module doc. Every path reads only the membership graph,
+    /// never balance values, and completes its single ancestor lock
+    /// batch strictly before `find_for_update`'s balance data fetch, so
+    /// the #816 lock-before-read doctrine holds unchanged.
     #[instrument(
         level = "debug",
-        name = "cala_ledger.set_graph_cache.resolve",
-        skip(self, op, account_ids),
-        fields(accounts = account_ids.len(), path = tracing::field::Empty),
+        name = "account_set.fetch_mappings_in_op",
+        skip(self, op, entry_pairs),
+        fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty),
         err(level = "warn")
     )]
-    pub(crate) async fn resolve_in_op(
+    pub(super) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<GraphResolution, sqlx::Error> {
+        entry_pairs: &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let span = tracing::Span::current();
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                m.member_account_id AS "account_id!: AccountId",
-                m.account_set_id AS "set_id!: AccountSetId",
-                (SELECT epoch FROM cala_account_set_graph_epoch) AS "epoch!"
-            FROM cala_account_set_member_accounts m
-            WHERE m.member_account_id = ANY($1)
-            "#,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(op.as_executor())
-        .await?;
 
-        // No direct memberships => no ancestors; the epoch is irrelevant.
-        let Some(epoch) = rows.first().map(|row| row.epoch) else {
+        let account_ids: Vec<AccountId> = {
+            let mut ids = entry_pairs.0.clone();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        };
+        let Some(probe) = self
+            .inner
+            .repo
+            .probe_direct_memberships_in_op(op, &account_ids)
+            .await?
+        else {
+            // No direct memberships => no ancestors, no locks to take.
             span.record("path", "no_memberships");
-            return Ok(GraphResolution::empty());
+            return Ok(HashMap::new());
         };
 
         let snapshot = self.load();
-        if snapshot.epoch != epoch {
+        if snapshot.epoch != probe.epoch {
             // Structure change committed since the last refresh (or this
             // op bumped the epoch itself). Resolve op-locally — the walk
-            // sees S1-adjacent state including the op's own writes — and
-            // let a background refresh (committed data only) update the
-            // shared snapshot.
+            // sees the op's own writes and takes the ancestor locks in
+            // the same statement — and let a background refresh
+            // (committed data only) update the shared snapshot.
             span.record(
                 "path",
                 if snapshot.epoch == COLD_EPOCH {
@@ -248,19 +271,19 @@ impl SetGraphCache {
                 },
             );
             self.spawn_refresh();
-            return Self::walk_in_op(op, journal_id, account_ids).await;
+            return self
+                .inner
+                .repo
+                .walk_mappings_and_lock_in_op(&mut *op, journal_id, entry_pairs)
+                .await;
         }
-
-        let seeds: Vec<(AccountId, AccountSetId)> = rows
-            .into_iter()
-            .map(|row| (row.account_id, row.set_id))
-            .collect();
 
         // Seed sets are not epoch-guarded (attaching an account bumps
         // nothing), so a set created after the last refresh can appear
         // here — fetch it op-locally as an overlay.
         let missing: Vec<AccountSetId> = {
-            let mut missing: Vec<_> = seeds
+            let mut missing: Vec<_> = probe
+                .seeds
                 .iter()
                 .map(|(_, set_id)| *set_id)
                 .filter(|set_id| !snapshot.meta.contains_key(set_id))
@@ -272,11 +295,23 @@ impl SetGraphCache {
         let overlay = if missing.is_empty() {
             None
         } else {
-            Some(Self::fetch_overlay_in_op(op, &missing).await?)
+            let nodes = self
+                .inner
+                .repo
+                .fetch_set_graph_nodes_in_op(op, &missing)
+                .await?;
+            let (parents, meta) = index_nodes(nodes);
+            Some(Overlay { parents, meta })
         };
 
-        match Self::expand(&snapshot, overlay.as_ref(), journal_id, &seeds) {
-            Some(resolution) => {
+        match Self::expand(
+            &snapshot,
+            overlay.as_ref(),
+            journal_id,
+            &probe.seeds,
+            entry_pairs,
+        ) {
+            Some((mappings, lock_pairs)) => {
                 span.record(
                     "path",
                     if overlay.is_some() {
@@ -285,16 +320,24 @@ impl SetGraphCache {
                         "memory"
                     },
                 );
-                Ok(resolution)
+                self.inner
+                    .repo
+                    .lock_resolved_ancestors_in_op(op, journal_id, &lock_pairs)
+                    .await?;
+                Ok(mappings)
             }
             // Expansion hit a set unknown to snapshot + overlay. With a
             // matching epoch this should be unreachable (every committed
             // edge's endpoints were seen by the refresh; new edges bump
             // the epoch) — but the walk is always correct, so fall back
-            // rather than reason about it.
+            // rather than reason about it. No locks were taken yet, so
+            // the walk's in-statement batch stays the posting's only one.
             None => {
                 span.record("path", "fallback_unknown");
-                Self::walk_in_op(op, journal_id, account_ids).await
+                self.inner
+                    .repo
+                    .walk_mappings_and_lock_in_op(&mut *op, journal_id, entry_pairs)
+                    .await
             }
         }
     }
@@ -307,17 +350,27 @@ impl SetGraphCache {
             .clone()
     }
 
-    /// In-memory BFS expansion of `seeds` over snapshot + overlay.
-    /// Mirrors the walk SQL exactly: ancestors are walked across ALL
-    /// journals (a set in another journal is walked *through*), and only
-    /// sets whose `journal_id` matches are included in the result.
-    /// Returns `None` if any set id is unknown — caller falls back.
-    fn expand(
+    /// In-memory BFS expansion of the probed seeds over snapshot +
+    /// overlay. Mirrors the walk SQL exactly: ancestors are walked
+    /// across ALL journals (a set in another journal is walked
+    /// *through*), and only sets whose `journal_id` matches are included
+    /// in the result. Also computes the fallback CTE's lock list — the
+    /// distinct non-EC `(ancestor, currency)` pairs with per-leaf
+    /// currency semantics (each leaf's currencies propagate to exactly
+    /// *its own* ancestors), returned deduped and Rust-sorted for
+    /// canonical acquisition. Returns `None` if any set id is unknown —
+    /// caller falls back to the walk.
+    #[allow(clippy::type_complexity)]
+    fn expand<'c>(
         snapshot: &GraphSnapshot,
         overlay: Option<&Overlay>,
         journal_id: JournalId,
         seeds: &[(AccountId, AccountSetId)],
-    ) -> Option<GraphResolution> {
+        (entry_account_ids, entry_currencies): &(Vec<AccountId>, Vec<&'c str>),
+    ) -> Option<(
+        HashMap<AccountId, Vec<AccountSetId>>,
+        (Vec<AccountSetId>, Vec<&'c str>),
+    )> {
         let meta_of = |set_id: &AccountSetId| -> Option<SetMeta> {
             snapshot
                 .meta
@@ -340,11 +393,12 @@ impl SetGraphCache {
         }
 
         let mut mappings = HashMap::new();
-        let mut ec_sets = HashSet::new();
+        let mut non_ec: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
         for (account_id, seed_sets) in per_account {
             let mut visited: HashSet<AccountSetId> = HashSet::new();
             let mut queue: VecDeque<AccountSetId> = seed_sets.into();
             let mut ancestors = Vec::new();
+            let mut non_ec_ancestors = Vec::new();
             while let Some(set_id) = queue.pop_front() {
                 if !visited.insert(set_id) {
                     continue;
@@ -352,120 +406,35 @@ impl SetGraphCache {
                 let meta = meta_of(&set_id)?;
                 if meta.journal_id == journal_id {
                     ancestors.push(set_id);
-                    if meta.eventually_consistent {
-                        ec_sets.insert(set_id);
+                    if !meta.eventually_consistent {
+                        non_ec_ancestors.push(set_id);
                     }
                 }
                 queue.extend(parents_of(&set_id));
+            }
+            if !non_ec_ancestors.is_empty() {
+                non_ec.insert(account_id, non_ec_ancestors);
             }
             if !ancestors.is_empty() {
                 mappings.insert(account_id, ancestors);
             }
         }
-        Some(GraphResolution { mappings, ec_sets })
-    }
 
-    /// The rare-path resolution: the #814 recursive walk, minus the
-    /// old locks CTE (ancestor locks are computed app-side from the
-    /// resolution — see `BalanceRepo::lock_ancestor_balances_in_op`).
-    /// Runs on the op executor so it sees the op's own uncommitted
-    /// membership writes, exactly like the pre-cache statement did.
-    async fn walk_in_op(
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<GraphResolution, sqlx::Error> {
-        // UNION (not UNION ALL) dedups and keeps the walk terminating
-        // even if a stray edge slipped past the write-side cycle check.
-        let rows = sqlx::query!(
-            r#"
-            WITH RECURSIVE seed AS (
-                SELECT m.member_account_id AS account_id, m.account_set_id
-                FROM cala_account_set_member_accounts m
-                WHERE m.member_account_id = ANY($2)
-            ),
-            ancestors AS (
-                SELECT account_id, account_set_id FROM seed
-                UNION
-                SELECT a.account_id, e.account_set_id
-                FROM ancestors a
-                JOIN cala_account_set_member_account_sets e
-                  ON e.member_account_set_id = a.account_set_id
-            )
-            SELECT
-                a.account_id AS "account_id!: AccountId",
-                a.account_set_id AS "set_id!: AccountSetId",
-                acc.eventually_consistent AS "eventually_consistent!"
-            FROM ancestors a
-            JOIN cala_account_sets s
-              ON s.id = a.account_set_id AND s.journal_id = $1
-            JOIN cala_accounts acc
-              ON acc.id = a.account_set_id
-            "#,
-            journal_id as JournalId,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(op.as_executor())
-        .await?;
+        let mut lock_pairs: Vec<(AccountSetId, &str)> = entry_account_ids
+            .iter()
+            .zip(entry_currencies.iter())
+            .flat_map(|(account_id, currency)| {
+                non_ec
+                    .get(account_id)
+                    .into_iter()
+                    .flatten()
+                    .map(move |set_id| (*set_id, *currency))
+            })
+            .collect();
+        lock_pairs.sort_unstable();
+        lock_pairs.dedup();
 
-        let mut mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        let mut ec_sets = HashSet::new();
-        for row in rows {
-            mappings.entry(row.account_id).or_default().push(row.set_id);
-            if row.eventually_consistent {
-                ec_sets.insert(row.set_id);
-            }
-        }
-        Ok(GraphResolution { mappings, ec_sets })
-    }
-
-    /// Fetch meta + upward edges for seed set ids unknown to the shared
-    /// snapshot, on the op executor (sees the op's own uncommitted set
-    /// creations). The result stays op-local — see the module doc.
-    async fn fetch_overlay_in_op(
-        op: &mut impl es_entity::AtomicOperation,
-        set_ids: &[AccountSetId],
-    ) -> Result<Overlay, sqlx::Error> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                s.id AS "set_id!: AccountSetId",
-                s.journal_id AS "journal_id!: JournalId",
-                acc.eventually_consistent AS "eventually_consistent!",
-                e.account_set_id AS "parent_id?: AccountSetId"
-            FROM cala_account_sets s
-            JOIN cala_accounts acc
-              ON acc.id = s.id
-            LEFT JOIN cala_account_set_member_account_sets e
-              ON e.member_account_set_id = s.id
-            WHERE s.id = ANY($1)
-            "#,
-            set_ids as &[AccountSetId],
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-
-        let mut overlay = Overlay {
-            parents: HashMap::new(),
-            meta: HashMap::new(),
-        };
-        for row in rows {
-            overlay.meta.insert(
-                row.set_id,
-                SetMeta {
-                    journal_id: row.journal_id,
-                    eventually_consistent: row.eventually_consistent,
-                },
-            );
-            if let Some(parent_id) = row.parent_id {
-                overlay
-                    .parents
-                    .entry(row.set_id)
-                    .or_default()
-                    .push(parent_id);
-            }
-        }
-        Ok(overlay)
+        Some((mappings, lock_pairs.into_iter().unzip()))
     }
 
     fn spawn_refresh(&self) {
@@ -477,11 +446,10 @@ impl SetGraphCache {
         });
     }
 
-    /// Rebuild the shared snapshot from **committed** data (the pool —
-    /// never an op executor, so uncommitted writes can't leak in). One
-    /// statement, so epoch and graph come from a single snapshot. The
-    /// epoch-monotonic install guard makes a slow refresh racing a
-    /// faster one harmless.
+    /// Rebuild the shared snapshot from **committed** data (the repo's
+    /// pool-side read — never an op executor, so uncommitted writes
+    /// can't leak in). The epoch-monotonic install guard makes a slow
+    /// refresh racing a faster one harmless.
     #[instrument(
         level = "debug",
         name = "cala_ledger.set_graph_cache.refresh",
@@ -489,52 +457,14 @@ impl SetGraphCache {
         fields(epoch = tracing::field::Empty, sets = tracing::field::Empty),
         err(level = "warn")
     )]
-    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), sqlx::Error> {
+    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), AccountSetError> {
         let Ok(_guard) = inner.refresh_lock.try_lock() else {
             return Ok(());
         };
-        // Anchoring on the always-present epoch row guarantees >=1 row
-        // even with zero account sets.
-        let rows = sqlx::query!(
-            r#"
-            SELECT
-                g.epoch AS "epoch!",
-                s.id AS "set_id?: AccountSetId",
-                s.journal_id AS "journal_id?: JournalId",
-                acc.eventually_consistent AS "eventually_consistent?",
-                e.account_set_id AS "parent_id?: AccountSetId"
-            FROM cala_account_set_graph_epoch g
-            LEFT JOIN cala_account_sets s ON TRUE
-            LEFT JOIN cala_accounts acc ON acc.id = s.id
-            LEFT JOIN cala_account_set_member_account_sets e
-              ON e.member_account_set_id = s.id
-            "#
-        )
-        .fetch_all(&inner.pool)
-        .await?;
-
-        let epoch = rows.first().map(|row| row.epoch).unwrap_or(COLD_EPOCH);
-        let mut parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-        let mut meta = HashMap::new();
-        for row in rows {
-            let (Some(set_id), Some(journal_id), Some(eventually_consistent)) =
-                (row.set_id, row.journal_id, row.eventually_consistent)
-            else {
-                continue;
-            };
-            meta.insert(
-                set_id,
-                SetMeta {
-                    journal_id,
-                    eventually_consistent,
-                },
-            );
-            if let Some(parent_id) = row.parent_id {
-                parents.entry(set_id).or_default().push(parent_id);
-            }
-        }
+        let data = inner.repo.fetch_set_graph().await?;
+        let (parents, meta) = index_nodes(data.nodes);
         let new = GraphSnapshot {
-            epoch,
+            epoch: data.epoch,
             parents,
             meta,
         };

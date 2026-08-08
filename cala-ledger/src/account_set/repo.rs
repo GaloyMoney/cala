@@ -2,6 +2,8 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
+use std::collections::HashMap;
+
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, JournalId},
@@ -15,12 +17,13 @@ use super::{entity::*, error::*};
 ///
 /// Membership is stored as **direct edges only** — ancestor sets are
 /// resolved at read time by the epoch-validated set-graph cache
-/// (`SetGraphCache::resolve_in_op` in `account_set/graph_cache.rs`:
-/// in-memory expansion over a cached edge snapshot, with an op-local
-/// recursive-walk fallback); there is no materialized transitive
-/// closure. Structure mutations bump `cala_account_set_graph_epoch`
-/// under the exclusive coarse lock so every cached snapshot is
-/// validated per resolution. The graph still carries a
+/// (`SetGraphCache` in `account_set/graph_cache.rs`: in-memory
+/// expansion over a cached edge snapshot, with the op-local
+/// recursive-walk fallback `walk_mappings_and_lock_in_op`); there is
+/// no materialized transitive closure. Structure mutations bump
+/// `cala_account_set_graph_epoch` under the exclusive coarse lock so
+/// every cached snapshot is validated per resolution. The graph still
+/// carries a
 /// load-bearing invariant that every mutation must validate before
 /// writing: **path uniqueness** — an account may be contained in any
 /// given set via at most one membership path (double membership is
@@ -995,6 +998,285 @@ impl AccountSetRepo {
         })
     }
 
+    /// One statement, one snapshot: the entry accounts' **direct** set
+    /// memberships plus the current set-graph epoch. This is the
+    /// set-graph cache's hot-path read — the epoch rides in the same
+    /// statement, so an epoch match proves the cached edge graph equals
+    /// the committed graph at this statement's snapshot.
+    ///
+    /// Returns `None` when the accounts have no direct memberships at
+    /// all (no ancestors to resolve, no locks to take; the epoch is
+    /// irrelevant).
+    ///
+    /// Deliberately takes NO locks: the ancestors are unknowable until
+    /// the seeds come back and are expanded. Locking "assumed" ancestors
+    /// here optimistically would be unsound twice over — an advisory
+    /// lock wait inside a statement does not refresh that statement's
+    /// snapshot (taken at statement start), the stale-read class #816
+    /// closed; and a wrong guess (guaranteed for a freshly created
+    /// account, lana's dominant pattern) would force a second corrective
+    /// lock batch, breaking the single-Rust-sorted-batch acquisition
+    /// that poster-vs-poster deadlock-freedom rests on (#684/#810).
+    pub(super) async fn probe_direct_memberships_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<Option<DirectMembershipProbe>, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                m.member_account_id AS "account_id!: AccountId",
+                m.account_set_id AS "set_id!: AccountSetId",
+                (SELECT epoch FROM cala_account_set_graph_epoch) AS "epoch!"
+            FROM cala_account_set_member_accounts m
+            WHERE m.member_account_id = ANY($1)
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let Some(epoch) = rows.first().map(|row| row.epoch) else {
+            return Ok(None);
+        };
+        Ok(Some(DirectMembershipProbe {
+            epoch,
+            seeds: rows
+                .into_iter()
+                .map(|row| (row.account_id, row.set_id))
+                .collect(),
+        }))
+    }
+
+    /// The set-graph cache's rare-path fallback (cold cache, epoch
+    /// mismatch, unknown set id): resolve each entry account's ancestor
+    /// sets AND take the poster's per-balance FOR_UPDATE locks on the
+    /// non-EC ancestors' balance rows, in the same statement and round
+    /// trip.
+    ///
+    /// Input is the posting's distinct `(account_id, currency)` entry
+    /// pairs (parallel arrays). Each leaf's currencies propagate to
+    /// exactly *its own* ancestors — the locked rows are precisely the
+    /// `(ancestor, currency)` combinations the inline fan-out will
+    /// write, no more (an ancestor reached only by a USD entry is not
+    /// locked for another entry's BTC).
+    ///
+    /// The ancestors are unknowable before this walk runs, so their
+    /// per-balance locks cannot join the poster's pre-insert lock
+    /// prelude (`BalanceRepo::lock_entry_balances_in_op`, which covers
+    /// the entry accounts). Taking them here is sound because this
+    /// statement reads only the membership graph — never balance
+    /// values; the balance read happens in a *later* statement
+    /// (`find_for_update`'s data fetch), so lock-before-read holds
+    /// across statements. The `locks` CTE is forced to execute by the
+    /// scalar subquery in the outer WHERE; its ORDER BY makes
+    /// acquisition order canonical (volatile lock calls are postponed
+    /// until after the Sort — see the ordering doctrine on
+    /// `BalanceRepo::lock_entry_balances_in_op`). Entry accounts and
+    /// ancestor sets are disjoint key classes (#802 FK), and every
+    /// poster acquires the two phases in the same order, so the split
+    /// acquisition cannot deadlock posters against each other.
+    #[instrument(
+        level = "debug",
+        name = "account_set.walk_mappings_and_lock_in_op",
+        skip_all,
+        err(level = "warn")
+    )]
+    pub(super) async fn walk_mappings_and_lock_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+        // Adjacency-only membership: resolve each account's ancestor sets
+        // by an upward recursive walk over the (tiny) set->set edge table,
+        // seeded from the account's direct set memberships. UNION (not
+        // UNION ALL) dedups and keeps the walk terminating even if a stray
+        // edge slipped past the write-side cycle check.
+        let rows = op.into_executor().fetch_all(sqlx::query!(
+            r#"
+          WITH RECURSIVE seed AS (
+              SELECT DISTINCT m.member_account_id AS account_id, m.account_set_id
+              FROM cala_account_set_member_accounts m
+              WHERE m.member_account_id = ANY($2)
+          ),
+          ancestors AS (
+              SELECT account_id, account_set_id FROM seed
+              UNION
+              SELECT a.account_id, e.account_set_id
+              FROM ancestors a
+              JOIN cala_account_set_member_account_sets e
+                ON e.member_account_set_id = a.account_set_id
+          ),
+          resolved AS (
+              SELECT a.account_id, a.account_set_id
+              FROM ancestors a
+              JOIN cala_account_sets s
+                ON s.id = a.account_set_id AND s.journal_id = $1
+          ),
+          locks AS (
+              SELECT pg_advisory_xact_lock(
+                  hashtext(concat($1::text, t.account_set_id::text, t.currency))
+              )
+              FROM (
+                  SELECT DISTINCT r.account_set_id, v.currency
+                  FROM resolved r
+                  JOIN UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+                    ON v.account_id = r.account_id
+                  JOIN cala_accounts acc
+                    ON acc.id = r.account_set_id
+                   AND NOT acc.eventually_consistent
+              ) t
+              ORDER BY t.account_set_id, t.currency
+          )
+          SELECT DISTINCT r.account_id AS "account_id!: AccountId", r.account_set_id AS "set_id!: AccountSetId"
+          FROM resolved r
+          WHERE (SELECT COUNT(*) FROM locks) IS NOT NULL
+          "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+            currencies as &[&str],
+        ))
+        .await?;
+        let mut mappings = HashMap::new();
+        for row in rows {
+            mappings
+                .entry(row.account_id)
+                .or_insert_with(Vec::new)
+                .push(row.set_id);
+        }
+        Ok(mappings)
+    }
+
+    /// The memory path's lock statement: take the poster's per-balance
+    /// FOR_UPDATE locks on the non-EC ancestor `(set, currency)` pairs
+    /// the in-memory expansion resolved — the same keys the fallback's
+    /// `locks` CTE takes, in the same 1-arg advisory namespace as
+    /// `BalanceRepo::lock_entry_balances_in_op`'s entry pairs.
+    ///
+    /// Invoked immediately after expansion and strictly BEFORE
+    /// `find_for_update`'s balance data fetch — sound for the same
+    /// reason as the fallback's in-walk locks: expansion read only the
+    /// membership graph, never balance values, so lock-before-read
+    /// holds across statements.
+    ///
+    /// Lock-ordering invariant: the caller passes the pairs **deduped
+    /// and Rust-sorted** (`(set_id, currency)` — uuid byte order
+    /// matches Postgres uuid comparison, and currency codes are ASCII,
+    /// so this is the same canonical order as the fallback CTE's
+    /// `ORDER BY`). The join-free UNNEST scan evaluates the volatile
+    /// lock calls row by row in array order, so no in-query Sort is
+    /// needed (the #810-preferred form — no join, no planner
+    /// reordering to defend against). Every poster takes exactly ONE
+    /// sorted ancestor lock batch per posting — here or in the
+    /// fallback's CTE, never both — which is what keeps acquisition
+    /// order canonical across posters.
+    pub(super) async fn lock_resolved_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
+    ) -> Result<(), AccountSetError> {
+        if set_ids.is_empty() {
+            return Ok(());
+        }
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock(
+                hashtext(concat($1::text, v.set_id::text, v.currency))
+            )
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(set_id, currency)
+            "#,
+            journal_id as JournalId,
+            set_ids as &[AccountSetId],
+            currencies as &[&str],
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    /// Meta + upward edges for specific sets, on the op executor (sees
+    /// the op's own uncommitted set creations). The set-graph cache's
+    /// op-local supplement for seed ids unknown to its shared snapshot.
+    pub(super) async fn fetch_set_graph_nodes_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        set_ids: &[AccountSetId],
+    ) -> Result<Vec<SetGraphNode>, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                s.id AS "set_id!: AccountSetId",
+                s.journal_id AS "journal_id!: JournalId",
+                acc.eventually_consistent AS "eventually_consistent!",
+                e.account_set_id AS "parent_id?: AccountSetId"
+            FROM cala_account_sets s
+            JOIN cala_accounts acc
+              ON acc.id = s.id
+            LEFT JOIN cala_account_set_member_account_sets e
+              ON e.member_account_set_id = s.id
+            WHERE s.id = ANY($1)
+            "#,
+            set_ids as &[AccountSetId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| SetGraphNode {
+                id: row.set_id,
+                journal_id: row.journal_id,
+                eventually_consistent: row.eventually_consistent,
+                parent_id: row.parent_id,
+            })
+            .collect())
+    }
+
+    /// The whole set graph (every set's meta + upward edges) plus the
+    /// epoch, from the **pool** — committed data only, in one statement
+    /// so epoch and graph come from a single snapshot. The set-graph
+    /// cache's refresh read. Anchoring on the always-present epoch row
+    /// guarantees >=1 row even with zero account sets.
+    pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, AccountSetError> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                g.epoch AS "epoch!",
+                s.id AS "set_id?: AccountSetId",
+                s.journal_id AS "journal_id?: JournalId",
+                acc.eventually_consistent AS "eventually_consistent?",
+                e.account_set_id AS "parent_id?: AccountSetId"
+            FROM cala_account_set_graph_epoch g
+            LEFT JOIN cala_account_sets s ON TRUE
+            LEFT JOIN cala_accounts acc ON acc.id = s.id
+            LEFT JOIN cala_account_set_member_account_sets e
+              ON e.member_account_set_id = s.id
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let epoch = rows.first().map(|row| row.epoch).unwrap_or_default();
+        let nodes = rows
+            .into_iter()
+            .filter_map(|row| {
+                let (Some(id), Some(journal_id), Some(eventually_consistent)) =
+                    (row.set_id, row.journal_id, row.eventually_consistent)
+                else {
+                    return None;
+                };
+                Some(SetGraphNode {
+                    id,
+                    journal_id,
+                    eventually_consistent,
+                    parent_id: row.parent_id,
+                })
+            })
+            .collect();
+        Ok(SetGraphData { epoch, nodes })
+    }
+
     async fn publish(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -1006,4 +1288,28 @@ impl AccountSetRepo {
             .await?;
         Ok(())
     }
+}
+
+/// Result of [`AccountSetRepo::probe_direct_memberships_in_op`]: the
+/// live `(account, direct set)` seed pairs and the set-graph epoch, read
+/// in one snapshot.
+pub(super) struct DirectMembershipProbe {
+    pub epoch: i64,
+    pub seeds: Vec<(AccountId, AccountSetId)>,
+}
+
+/// One set's graph node as stored: its immutable meta plus one upward
+/// edge per row (`parent_id` is `None` for a set with no parents).
+pub(super) struct SetGraphNode {
+    pub id: AccountSetId,
+    pub journal_id: JournalId,
+    pub eventually_consistent: bool,
+    pub parent_id: Option<AccountSetId>,
+}
+
+/// A single-snapshot read of the whole set graph
+/// ([`AccountSetRepo::fetch_set_graph`]).
+pub(super) struct SetGraphData {
+    pub epoch: i64,
+    pub nodes: Vec<SetGraphNode>,
 }
