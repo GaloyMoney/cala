@@ -11,7 +11,9 @@ core types that come from API input and the DB.
 | ------------------ | ----------------- |
 | `cel_compile`      | `CelExpression::try_from` on arbitrary strings — the upstream `cel` ANTLR parser, cala's dedicated big-stack compile thread and the compilation cache. |
 | `cel_evaluate`     | Compile + evaluate against a production-like context (tx-template `params`, velocity `entry`/`time`, layer/direction constants), plus all `TryFrom<CelResult>` coercions (`bool`, `String`, `Decimal`, `Uuid`, dates, `serde_json::Value`, `Currency`, `Layer`, `DebitOrCredit`). Hits the `date`/`uuid`/`decimal.*`/`format` builtins. |
-| `core_types_json`  | `serde_json` round-trips of `ParamDefinition`, `VelocityLimitValues`, `TxTemplateValues`, `EntryValues`, `Layer`, and the hand-rolled `Currency` string parser. CEL fields use `#[serde(try_from = "String")]`, so this also drives compilation through the serde path. |
+| `core_types_json`  | `serde_json` round-trips of every core `*Values`/snapshot type (`AccountValues`, `AccountSetValues`, `JournalValues`, `TransactionValues`, `EntryValues`, `BalanceSnapshot`, `EffectiveBalanceSnapshot`, `VelocityControlValues`, `VelocityLimitValues`, `TxTemplateValues`, `ParamDefinition`, `OutboxEventPayload`, `Layer`) and the hand-rolled `Currency` string parser. CEL fields use `#[serde(try_from = "String")]`, so this also drives compilation through the serde path. |
+| `param_coerce`     | Builds structurally-arbitrary `CelValue`s from the fuzz input by hand (scalars, nested maps/lists, and lossy-UTF8 strings) and runs `ParamDataType::coerce_value` for all eight types — exercises the `String`→`Uuid`/`Decimal`/`Date` parsers with adversarial values. |
+| `balance_math`     | Deserializes `BalanceSnapshot` (incl. decimals near `Decimal::MAX`) and drives `BalanceSnapshot::available`/`rollup` and `AccountBalance`'s `settled`/`pending`/`encumbrance`/`available` accessors. Validates the arithmetic-overflow hardening surface. |
 
 ## Running
 
@@ -21,7 +23,7 @@ toolchain):
 
 ```sh
 # one-time: bootstrap the corpus from the committed seeds
-for t in cel_compile cel_evaluate core_types_json; do
+for t in cel_compile cel_evaluate core_types_json param_coerce balance_math; do
   mkdir -p fuzz/corpus/$t && cp fuzz/seeds/$t/* fuzz/corpus/$t/
 done
 
@@ -29,6 +31,16 @@ done
 cargo fuzz run -s none cel_compile
 cargo fuzz run -s none cel_evaluate
 cargo fuzz run -s none core_types_json
+cargo fuzz run -s none param_coerce
+cargo fuzz run -s none balance_math
+```
+
+`balance_math` depends on `cala-ledger`, which compiles without a database
+via the committed SQLx offline cache but needs `SQLX_OFFLINE=true` in the
+environment:
+
+```sh
+SQLX_OFFLINE=true cargo fuzz run -s none balance_math
 ```
 
 `fuzz/corpus/` is gitignored — it is the working corpus the fuzzer grows.
@@ -79,3 +91,10 @@ cargo fuzz run -s none cel_compile -- \
    serde_json::Value` ended in `unimplemented!()` for `CelValue::Bytes`
    (e.g. `{'a': b'x'}`). Now a `ResultCoercionError` (regression test:
    `bytes_to_json_is_error_not_panic`).
+5. **`BalanceSnapshot` arithmetic overflow panic** (found, not fixed here —
+   scope of [#804](https://github.com/GaloyMoney/cala/pull/804)).
+   `BalanceSnapshot::available` → `BalanceAmount::rollup` does unchecked `+`
+   on `Decimal`; `rust_decimal`'s `Add` panics with "Addition overflowed"
+   when layer balances sum past `Decimal::MAX` (~7.9e28). Reproduces from the
+   fuzzer in seconds. The fix is `checked_add` in `rollup`, which is what #804
+   covers.

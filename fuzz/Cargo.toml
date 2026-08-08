@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+arbitrary = "1"
 chrono = { version = "0.4", default-features = false }
 rust_decimal = "1"
 serde_json = "1.0"
@@ -21,6 +22,11 @@ package = "cala-cel-interpreter"
 [dependencies.cala-types]
 path = "../cala-ledger-core-types"
 package = "cala-ledger-core-types"
+
+# cala-ledger compiles without a database via the committed SQLx offline
+# cache, but requires SQLX_OFFLINE=true in the environment when building.
+[dependencies.cala-ledger]
+path = "../cala-ledger"
 
 # Keep this crate out of the main workspace.
 [workspace]
@@ -58,6 +64,20 @@ bench = false
 [[bin]]
 name = "core_types_json"
 path = "fuzz_targets/core_types_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "param_coerce"
+path = "fuzz_targets/param_coerce.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "balance_math"
+path = "fuzz_targets/balance_math.rs"
 test = false
 doc = false
 bench = false
