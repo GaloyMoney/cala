@@ -1,3 +1,19 @@
+# [cala release v0.22.0](https://github.com/GaloyMoney/cala/releases/tag/0.22.0)
+
+
+
+### Bug Fixes
+
+- Sqlx-prepare
+
+### Miscellaneous Tasks
+
+- Bump obix
+
+### Performance
+
+- [**breaking**] Epoch-validated set-graph cache — kill the #814 walk-CTE hot path (#822)
+
 # [cala release v0.21.2](https://github.com/GaloyMoney/cala/releases/tag/0.21.2)
 
 
