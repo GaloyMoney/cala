@@ -738,7 +738,8 @@ impl BalanceRepo {
     /// locks in [`Self::lock_entry_balances_in_op`].
     ///
     /// The ancestors are unknowable before the membership resolution
-    /// runs (`SetGraphCache::resolve_in_op`), so these locks cannot join
+    /// runs (`AccountSets::fetch_mappings_in_op`, backed by the
+    /// account_set module's set-graph cache), so these locks cannot join
     /// the poster's pre-insert prelude. Taking them immediately *after*
     /// resolution and strictly *before* [`Self::find_for_update`]'s
     /// balance data fetch is sound because resolution reads only the
@@ -787,6 +788,74 @@ impl BalanceRepo {
         .execute(op.as_executor())
         .await?;
         Ok(())
+    }
+
+    /// For each of `account_ids`, the **eventually-consistent** ancestor
+    /// account sets that own it — the streaming rollup's targets. Mirrors
+    /// the poster's membership resolution but keeps only EC sets: exactly
+    /// the ones the synchronous poster path deliberately skips
+    /// (`find_for_update` filters `eventually_consistent = FALSE`).
+    ///
+    /// Deliberately NOT routed through the set-graph cache: the cache is
+    /// an internal detail of the `account_set` module (which `Balances`
+    /// cannot depend on without a cycle), and this resolution runs once
+    /// per outbox *batch* — amortized far below the poster's per-posting
+    /// rate, so the walk is not a hot path here.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.fetch_ec_set_mappings",
+        skip_all
+    )]
+    pub(crate) async fn fetch_ec_set_mappings(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
+        // Adjacency-only membership: walk up the set->set edge table from
+        // each account's direct memberships, then keep only EC ancestor
+        // sets (the streaming rollup's targets). UNION dedups and keeps
+        // the walk terminating. There is no materialized transitive
+        // closure — EC *leaf* accounts are resolved separately by
+        // `fetch_ec_leaf_accounts`; this returns only EC ancestor sets.
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE seed AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                WHERE m.member_account_id = ANY($2)
+            ),
+            ancestors AS (
+                SELECT account_id, account_set_id FROM seed
+                UNION
+                SELECT a.account_id, e.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets e
+                  ON e.member_account_set_id = a.account_set_id
+            )
+            SELECT
+                a.account_set_id AS "account_set_id!: AccountSetId",
+                a.account_id AS "member_account_id!: AccountId"
+            FROM ancestors a
+            JOIN cala_account_sets s
+              ON s.id = a.account_set_id AND s.journal_id = $1
+            JOIN cala_accounts acc
+              ON acc.id = a.account_set_id AND acc.eventually_consistent = TRUE
+            "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+        for row in rows {
+            result
+                .entry(row.member_account_id)
+                .or_default()
+                .push(row.account_set_id);
+        }
+        Ok(result)
     }
 
     /// Of `account_ids`, the ones that are **eventually-consistent plain

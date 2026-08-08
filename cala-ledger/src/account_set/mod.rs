@@ -12,7 +12,7 @@ use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
 
 pub use entity::*;
 use error::*;
-pub(crate) use graph_cache::SetGraphCache;
+use graph_cache::SetGraphCache;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
@@ -21,6 +21,9 @@ pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
     balances: Balances,
+    /// Internal detail of this module: the epoch-validated in-process
+    /// cache backing the posting hot path's ancestor resolution
+    /// (`fetch_mappings_in_op`). Shared across clones.
     set_graph_cache: SetGraphCache,
     clock: ClockHandle,
 }
@@ -31,14 +34,13 @@ impl AccountSets {
         publisher: &OutboxPublisher,
         accounts: &Accounts,
         balances: &Balances,
-        set_graph_cache: &SetGraphCache,
         clock: &ClockHandle,
     ) -> Self {
         Self {
             repo: AccountSetRepo::new(pool, publisher),
             accounts: accounts.clone(),
             balances: balances.clone(),
-            set_graph_cache: set_graph_cache.clone(),
+            set_graph_cache: SetGraphCache::new(pool),
             clock: clock.clone(),
         }
     }

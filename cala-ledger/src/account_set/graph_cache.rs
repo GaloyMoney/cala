@@ -98,9 +98,8 @@ impl GraphSnapshot {
 }
 
 /// Result of one ancestor resolution — the shared output of the memory
-/// path and the walk fallback, consumed by both the poster
-/// (`AccountSets::fetch_mappings_in_op`) and the streaming EC rollup
-/// applier (`Balances::apply_ec_rollup_in_op`).
+/// path and the walk fallback, consumed by the poster
+/// (`AccountSets::fetch_mappings_in_op`).
 pub(crate) struct GraphResolution {
     /// account -> its ancestor sets in the resolution journal (all
     /// consistency modes). Accounts with no ancestors in the journal
@@ -130,9 +129,13 @@ struct Overlay {
     meta: HashMap<AccountSetId, SetMeta>,
 }
 
-/// Shared handle to the per-process set-graph cache. Owned by
-/// `CalaLedger::init` and cloned into `AccountSets` (poster resolution)
-/// and `Balances` (EC rollup applier resolution).
+/// Shared handle to the per-process set-graph cache — an internal
+/// detail of the `account_set` module, constructed by
+/// `AccountSets::new` and shared across its clones. (The streaming EC
+/// rollup applier's per-batch resolution deliberately stays a plain
+/// walk in `BalanceRepo::fetch_ec_set_mappings`: `Balances` cannot
+/// depend on this module without a cycle, and one walk per outbox
+/// batch is amortized far below the poster's per-posting rate.)
 #[derive(Clone)]
 pub(crate) struct SetGraphCache {
     inner: Arc<SetGraphCacheInner>,
