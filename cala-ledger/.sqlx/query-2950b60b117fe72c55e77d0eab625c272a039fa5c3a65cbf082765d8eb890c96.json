@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                s.id AS \"set_id!: AccountSetId\",\n                s.journal_id AS \"journal_id!: JournalId\",\n                acc.eventually_consistent AS \"eventually_consistent!\",\n                e.account_set_id AS \"parent_id?: AccountSetId\"\n            FROM cala_account_sets s\n            JOIN cala_accounts acc\n              ON acc.id = s.id\n            LEFT JOIN cala_account_set_member_account_sets e\n              ON e.member_account_set_id = s.id\n            WHERE s.id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "set_id!: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "journal_id!: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "eventually_consistent!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id?: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "2950b60b117fe72c55e77d0eab625c272a039fa5c3a65cbf082765d8eb890c96"
+}

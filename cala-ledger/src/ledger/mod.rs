@@ -196,9 +196,11 @@ impl CalaLedger {
             .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
             .await?;
 
-        // The walk reads only the membership graph, so it can run before
-        // the entry insert; it also takes the per-balance locks for the
-        // non-EC ancestors it resolves.
+        // The membership resolution reads only the membership graph, so
+        // it can run before the entry insert; it also takes the
+        // per-balance locks for the non-EC ancestors it resolves
+        // (strictly before `find_for_update`'s balance data fetch —
+        // lock-before-read).
         let mappings = self
             .account_sets
             .fetch_mappings_in_op(&mut db, journal_id, &prepared_tx.entries)

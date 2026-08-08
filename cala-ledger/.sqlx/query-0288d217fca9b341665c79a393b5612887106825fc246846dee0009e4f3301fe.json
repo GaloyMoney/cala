@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                g.epoch AS \"epoch!\",\n                s.id AS \"set_id?: AccountSetId\",\n                s.journal_id AS \"journal_id?: JournalId\",\n                acc.eventually_consistent AS \"eventually_consistent?\",\n                e.account_set_id AS \"parent_id?: AccountSetId\"\n            FROM cala_account_set_graph_epoch g\n            LEFT JOIN cala_account_sets s ON TRUE\n            LEFT JOIN cala_accounts acc ON acc.id = s.id\n            LEFT JOIN cala_account_set_member_account_sets e\n              ON e.member_account_set_id = s.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "epoch!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "set_id?: AccountSetId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "journal_id?: JournalId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "eventually_consistent?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_id?: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "0288d217fca9b341665c79a393b5612887106825fc246846dee0009e4f3301fe"
+}

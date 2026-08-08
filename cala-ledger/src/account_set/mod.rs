@@ -1,5 +1,6 @@
 mod entity;
 pub mod error;
+mod graph_cache;
 mod repo;
 
 use es_entity::clock::ClockHandle;
@@ -11,6 +12,7 @@ use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
 
 pub use entity::*;
 use error::*;
+use graph_cache::SetGraphCache;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
@@ -19,6 +21,12 @@ pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
     balances: Balances,
+    /// Internal detail of this module: the epoch-validated in-process
+    /// cache backing the posting hot path's ancestor resolution
+    /// (`fetch_mappings_in_op`). Holds its own handle on the repo — all
+    /// SQL stays in `repo.rs`; the cache orchestrates. Shared across
+    /// clones.
+    set_graph_cache: SetGraphCache,
     clock: ClockHandle,
 }
 
@@ -30,8 +38,10 @@ impl AccountSets {
         balances: &Balances,
         clock: &ClockHandle,
     ) -> Self {
+        let repo = AccountSetRepo::new(pool, publisher);
         Self {
-            repo: AccountSetRepo::new(pool, publisher),
+            set_graph_cache: SetGraphCache::new(repo.clone()),
+            repo,
             accounts: accounts.clone(),
             balances: balances.clone(),
             clock: clock.clone(),
@@ -602,10 +612,11 @@ impl AccountSets {
             .await
     }
 
-    /// Resolve the ancestor-set mappings for a posting's entry accounts
-    /// and take the per-balance locks on the non-EC ancestors — see
-    /// [`AccountSetRepo::fetch_mappings_in_op`]. Extracts the distinct
-    /// `(account, currency)` pairs from the prepared entries.
+    /// Resolve each entry account's ancestor-set mappings AND take the
+    /// poster's per-balance locks on the non-EC ancestors, via the
+    /// epoch-validated set-graph cache — see the `graph_cache` module
+    /// docs for the resolution paths and lock doctrine. Extracts the
+    /// distinct `(account, currency)` pairs from the prepared entries.
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -618,7 +629,7 @@ impl AccountSets {
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
             .unzip();
-        self.repo
+        self.set_graph_cache
             .fetch_mappings_in_op(op, journal_id, &entry_balances)
             .await
     }

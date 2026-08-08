@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pg_advisory_xact_lock(\n                hashtext(concat($1::text, v.set_id::text, v.currency))\n            )\n            FROM UNNEST($2::uuid[], $3::text[]) AS v(set_id, currency)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "40585f82397cea3dce7f5ab8bdbfcc6ecb735be6ecc228df55407a1845e50a06"
+}
