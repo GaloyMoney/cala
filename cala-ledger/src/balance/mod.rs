@@ -46,7 +46,7 @@ pub use cala_types::{
 };
 use cala_types::{entry::EntryValues, primitives::*};
 
-use crate::{journal::Journals, outbox::*, primitives::JournalId};
+use crate::{account_set::SetGraphCache, journal::Journals, outbox::*, primitives::JournalId};
 
 pub use account_balance::*;
 pub use cursor::*;
@@ -69,15 +69,22 @@ pub struct Balances {
     repo: BalanceRepo,
     journals: Journals,
     effective: EffectiveBalances,
+    set_graph_cache: SetGraphCache,
     _pool: PgPool,
 }
 
 impl Balances {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher, journals: &Journals) -> Self {
+    pub(crate) fn new(
+        pool: &PgPool,
+        publisher: &OutboxPublisher,
+        journals: &Journals,
+        set_graph_cache: &SetGraphCache,
+    ) -> Self {
         Self {
             repo: BalanceRepo::new(pool),
             effective: EffectiveBalances::new(pool, publisher),
             journals: journals.clone(),
+            set_graph_cache: set_graph_cache.clone(),
             _pool: pool.clone(),
         }
     }
@@ -299,6 +306,31 @@ impl Balances {
             .await
     }
 
+    /// Take the poster's per-balance FOR_UPDATE locks on the non-EC
+    /// ancestor sets resolved for this posting — invoked by
+    /// `AccountSets::fetch_mappings_in_op` immediately after the
+    /// membership resolution and strictly before `find_for_update`'s
+    /// balance data fetch. Pairs must arrive deduped and Rust-sorted;
+    /// see [`BalanceRepo::lock_ancestor_balances_in_op`] for the
+    /// doctrine.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.lock_ancestor_balances_in_op",
+        skip(self, op, pairs),
+        fields(count = pairs.0.len()),
+        err(level = "warn")
+    )]
+    pub(crate) async fn lock_ancestor_balances_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        pairs: &(Vec<AccountSetId>, Vec<&str>),
+    ) -> Result<(), BalanceError> {
+        self.repo
+            .lock_ancestor_balances_in_op(op, journal_id, pairs)
+            .await
+    }
+
     /// Return `true` iff `member_id` has any row in
     /// `cala_balance_history` for `journal_id`, under the lock prelude
     /// described on `BalanceRepo::member_has_balance_history_in_op`.
@@ -398,10 +430,27 @@ impl Balances {
             .into_iter()
             .collect();
 
-        let ec_mappings = self
-            .repo
-            .fetch_ec_set_mappings(op, journal_id, &member_account_ids)
+        // Resolve ancestors via the epoch-validated set-graph cache and
+        // keep only the EC subset — the streaming rollup's targets:
+        // exactly the sets the synchronous poster path deliberately
+        // skips (`find_for_update` filters `eventually_consistent =
+        // FALSE`). No locks are derived here (the rollup takes its own
+        // shared locks in `find_ec_balances_for_update`).
+        let resolution = self
+            .set_graph_cache
+            .resolve_in_op(op, journal_id, &member_account_ids)
             .await?;
+        let ec_mappings: HashMap<AccountId, Vec<AccountSetId>> = resolution
+            .mappings
+            .into_iter()
+            .filter_map(|(account_id, sets)| {
+                let ec: Vec<AccountSetId> = sets
+                    .into_iter()
+                    .filter(|set_id| resolution.ec_sets.contains(set_id))
+                    .collect();
+                (!ec.is_empty()).then_some((account_id, ec))
+            })
+            .collect();
         // EC leaves the inline poster skips, folded here into their own balance.
         let ec_leaves = self
             .repo

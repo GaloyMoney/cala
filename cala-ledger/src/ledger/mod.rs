@@ -75,9 +75,21 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
         let transactions = Transactions::new(&pool, &publisher);
         let entries = Entries::new(&pool, &publisher);
-        let balances = Balances::new(&pool, &publisher, &journals);
+        // Per-process, epoch-validated cache of the set->set membership
+        // graph, shared by the poster's ancestor resolution (via
+        // `AccountSets`) and the streaming EC rollup applier (via
+        // `Balances`). See account_set/graph_cache.rs.
+        let set_graph_cache = crate::account_set::SetGraphCache::new(&pool);
+        let balances = Balances::new(&pool, &publisher, &journals, &set_graph_cache);
         let velocities = Velocities::new(&pool, &clock);
-        let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+        let account_sets = AccountSets::new(
+            &pool,
+            &publisher,
+            &accounts,
+            &balances,
+            &set_graph_cache,
+            &clock,
+        );
 
         crate::ec_rollup::register_ec_balance_rollup(jobs, publisher.inner(), &balances, &entries)
             .await?;
@@ -196,9 +208,11 @@ impl CalaLedger {
             .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
             .await?;
 
-        // The walk reads only the membership graph, so it can run before
-        // the entry insert; it also takes the per-balance locks for the
-        // non-EC ancestors it resolves.
+        // The membership resolution reads only the membership graph, so
+        // it can run before the entry insert; it also takes the
+        // per-balance locks for the non-EC ancestors it resolves
+        // (strictly before `find_for_update`'s balance data fetch —
+        // lock-before-read).
         let mappings = self
             .account_sets
             .fetch_mappings_in_op(&mut db, journal_id, &prepared_tx.entries)

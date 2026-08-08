@@ -2,8 +2,6 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
-
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, JournalId},
@@ -16,9 +14,13 @@ use super::{entity::*, error::*};
 /// `cala_account_set_member_account_sets`).
 ///
 /// Membership is stored as **direct edges only** — ancestor sets are
-/// resolved at read time by an upward recursive walk
-/// (`fetch_mappings_in_op`, `fetch_ec_set_mappings`); there is no
-/// materialized transitive closure. The graph still carries a
+/// resolved at read time by the epoch-validated set-graph cache
+/// (`SetGraphCache::resolve_in_op` in `account_set/graph_cache.rs`:
+/// in-memory expansion over a cached edge snapshot, with an op-local
+/// recursive-walk fallback); there is no materialized transitive
+/// closure. Structure mutations bump `cala_account_set_graph_epoch`
+/// under the exclusive coarse lock so every cached snapshot is
+/// validated per resolution. The graph still carries a
 /// load-bearing invariant that every mutation must validate before
 /// writing: **path uniqueness** — an account may be contained in any
 /// given set via at most one membership path (double membership is
@@ -822,6 +824,14 @@ impl AccountSetRepo {
         .execute(db.as_executor())
         .await?;
 
+        // Invalidate every in-process set-graph cache snapshot (see
+        // account_set/graph_cache.rs). Serialized with the edge write
+        // under the exclusive coarse lock held above, so a resolution
+        // can never observe the new edge under the old epoch.
+        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
+            .execute(db.as_executor())
+            .await?;
+
         self.publisher
             .publish_all(
                 db,
@@ -865,6 +875,13 @@ impl AccountSetRepo {
         )
         .execute(db.as_executor())
         .await?;
+
+        // Invalidate every in-process set-graph cache snapshot (see
+        // account_set/graph_cache.rs). Serialized with the edge delete
+        // under the exclusive coarse lock held above.
+        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
+            .execute(db.as_executor())
+            .await?;
 
         self.publisher
             .publish_all(
@@ -976,104 +993,6 @@ impl AccountSetRepo {
             has_next_page,
             end_cursor,
         })
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "account_set.fetch_mappings_in_op",
-        skip_all,
-        err(level = "warn")
-    )]
-    /// Resolve each entry account's ancestor sets AND take the poster's
-    /// per-balance FOR_UPDATE locks on the non-EC ancestors' balance
-    /// rows, in the same statement and round trip.
-    ///
-    /// Input is the posting's distinct `(account_id, currency)` entry
-    /// pairs (parallel arrays). Each leaf's currencies propagate to
-    /// exactly *its own* ancestors — the locked rows are precisely the
-    /// `(ancestor, currency)` combinations the inline fan-out will
-    /// write, no more (an ancestor reached only by a USD entry is not
-    /// locked for another entry's BTC).
-    ///
-    /// The ancestors are unknowable before this walk runs, so their
-    /// per-balance locks cannot join the poster's pre-insert lock
-    /// prelude (`BalanceRepo::lock_entry_balances_in_op`, which covers
-    /// the entry accounts). Taking them here is sound because this
-    /// statement reads only the membership graph — never balance
-    /// values; the balance read happens in a *later* statement
-    /// (`find_for_update`'s data fetch), so lock-before-read holds
-    /// across statements. The `locks` CTE is forced to execute by the
-    /// scalar subquery in the outer WHERE; its ORDER BY makes
-    /// acquisition order canonical (volatile lock calls are postponed
-    /// until after the Sort — see the ordering doctrine on
-    /// `BalanceRepo::lock_entry_balances_in_op`). Entry accounts and
-    /// ancestor sets are disjoint key classes (#802 FK), and every
-    /// poster acquires the two phases in the same order, so the split
-    /// acquisition cannot deadlock posters against each other.
-    pub async fn fetch_mappings_in_op(
-        &self,
-        op: impl es_entity::IntoOneTimeExecutor<'_>,
-        journal_id: JournalId,
-        (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        // Adjacency-only membership: resolve each account's ancestor sets
-        // by an upward recursive walk over the (tiny) set->set edge table,
-        // seeded from the account's direct set memberships. UNION (not
-        // UNION ALL) dedups and keeps the walk terminating even if a stray
-        // edge slipped past the write-side cycle check.
-        let rows = op.into_executor().fetch_all(sqlx::query!(
-            r#"
-          WITH RECURSIVE seed AS (
-              SELECT DISTINCT m.member_account_id AS account_id, m.account_set_id
-              FROM cala_account_set_member_accounts m
-              WHERE m.member_account_id = ANY($2)
-          ),
-          ancestors AS (
-              SELECT account_id, account_set_id FROM seed
-              UNION
-              SELECT a.account_id, e.account_set_id
-              FROM ancestors a
-              JOIN cala_account_set_member_account_sets e
-                ON e.member_account_set_id = a.account_set_id
-          ),
-          resolved AS (
-              SELECT a.account_id, a.account_set_id
-              FROM ancestors a
-              JOIN cala_account_sets s
-                ON s.id = a.account_set_id AND s.journal_id = $1
-          ),
-          locks AS (
-              SELECT pg_advisory_xact_lock(
-                  hashtext(concat($1::text, t.account_set_id::text, t.currency))
-              )
-              FROM (
-                  SELECT DISTINCT r.account_set_id, v.currency
-                  FROM resolved r
-                  JOIN UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-                    ON v.account_id = r.account_id
-                  JOIN cala_accounts acc
-                    ON acc.id = r.account_set_id
-                   AND NOT acc.eventually_consistent
-              ) t
-              ORDER BY t.account_set_id, t.currency
-          )
-          SELECT DISTINCT r.account_id AS "account_id!: AccountId", r.account_set_id AS "set_id!: AccountSetId"
-          FROM resolved r
-          WHERE (SELECT COUNT(*) FROM locks) IS NOT NULL
-          "#,
-            journal_id as JournalId,
-            account_ids as &[AccountId],
-            currencies as &[&str],
-        ))
-        .await?;
-        let mut mappings = HashMap::new();
-        for row in rows {
-            mappings
-                .entry(row.account_id)
-                .or_insert_with(Vec::new)
-                .push(row.set_id);
-        }
-        Ok(mappings)
     }
 
     async fn publish(

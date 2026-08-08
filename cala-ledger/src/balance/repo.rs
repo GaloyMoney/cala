@@ -343,10 +343,11 @@ impl BalanceRepo {
     ///   rows this posting writes inline. EC pairs take none (posters
     ///   never write `cala_current_balances` rows for EC accounts).
     ///   Non-EC *ancestor* pairs are unknowable before the mappings
-    ///   read; their per-balance locks are acquired inside the
-    ///   membership walk (`AccountSetRepo::fetch_mappings_in_op`),
-    ///   which reads only the membership graph — never balance values —
-    ///   so lock-before-read still holds across statements.
+    ///   read; their per-balance locks are acquired immediately after
+    ///   the membership resolution ([`Self::lock_ancestor_balances_in_op`]),
+    ///   which runs after a resolution that reads only the membership
+    ///   graph — never balance values — so lock-before-read still holds
+    ///   across statements.
     ///
     /// Class-1 doctrine: SHARED = the poster, on its entry accounts,
     /// from before first entry insert to commit; EXCLUSIVE = the
@@ -365,9 +366,10 @@ impl BalanceRepo {
     ///   committed `cala_entries` rows and rejects), and
     /// - a poster can no longer fan out over set mappings that an
     ///   attach commits past mid-transaction (the poster blocks here
-    ///   *before* `fetch_mappings_in_op` and resumes seeing the new
-    ///   membership — inline fan-out for synchronous parents, the
-    ///   walk for EC ones).
+    ///   *before* the membership resolution
+    ///   (`AccountSets::fetch_mappings_in_op`) and resumes seeing the
+    ///   new membership — inline fan-out for synchronous parents, the
+    ///   streaming rollup for EC ones).
     ///
     /// Lock-ordering invariant: the `ORDER BY` is what makes lock
     /// acquisition order canonical here — do not remove it. It is
@@ -435,8 +437,9 @@ impl BalanceRepo {
     /// statements: class-1 SHARED + per-balance exclusives on the entry
     /// accounts before the first entry insert
     /// ([`Self::lock_entry_balances_in_op`]), and per-balance
-    /// exclusives on the non-EC ancestor sets inside the membership
-    /// walk (`AccountSetRepo::fetch_mappings_in_op`). EC rows are
+    /// exclusives on the non-EC ancestor sets immediately after the
+    /// membership resolution
+    /// ([`Self::lock_ancestor_balances_in_op`]). EC rows are
     /// filtered out here (posters never write them; the streaming
     /// rollup owns them).
     ///
@@ -729,67 +732,61 @@ impl BalanceRepo {
         Ok(())
     }
 
-    /// For each of `account_ids`, the **eventually-consistent** ancestor
-    /// account sets that own it — the streaming rollup's targets. Mirrors
-    /// the inline `AccountSetRepo::fetch_mappings_in_op` but keeps only EC
-    /// sets: exactly the ones the synchronous poster path deliberately
-    /// skips (`find_for_update` filters `eventually_consistent = FALSE`).
+    /// Take the poster's per-balance FOR_UPDATE locks on the **non-EC
+    /// ancestor sets** resolved for this posting — `(journal, set,
+    /// currency)` in the same 1-arg advisory namespace as the entry-pair
+    /// locks in [`Self::lock_entry_balances_in_op`].
+    ///
+    /// The ancestors are unknowable before the membership resolution
+    /// runs (`SetGraphCache::resolve_in_op`), so these locks cannot join
+    /// the poster's pre-insert prelude. Taking them immediately *after*
+    /// resolution and strictly *before* [`Self::find_for_update`]'s
+    /// balance data fetch is sound because resolution reads only the
+    /// membership graph — never balance values — so lock-before-read
+    /// holds across statements.
+    ///
+    /// Lock-ordering invariant: the caller passes the pairs **deduped
+    /// and Rust-sorted** (`(set_id, currency)` — uuid byte order, which
+    /// matches Postgres uuid comparison). The join-free UNNEST scan
+    /// evaluates the volatile lock calls row by row in array order, so
+    /// acquisition order is canonical without an in-query Sort (the
+    /// #810-preferred form: no join, no planner reordering to defend
+    /// against — cf. the ordering doctrine on
+    /// [`Self::lock_entry_balances_in_op`]). Deadlock-freedom across
+    /// the poster's two lock sites: entry accounts are never account
+    /// sets (#802 FK), so this statement and the entry prelude cover
+    /// disjoint key classes, and every poster acquires the two phases
+    /// in the same order.
     #[instrument(
         level = "debug",
-        name = "cala_ledger.balances.fetch_ec_set_mappings",
-        skip_all
+        name = "cala_ledger.balances.lock_ancestor_balances_in_op",
+        skip(self, op, set_ids, currencies),
+        fields(count = set_ids.len()),
+        err(level = "warn")
     )]
-    pub(crate) async fn fetch_ec_set_mappings(
+    pub(crate) async fn lock_ancestor_balances_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
-        // Adjacency-only membership: walk up the set->set edge table from
-        // each account's direct memberships, then keep only EC ancestor
-        // sets (the streaming rollup's targets). Mirrors
-        // `AccountSetRepo::fetch_mappings_in_op` plus the EC filter; UNION
-        // dedups and keeps the walk terminating. There is no materialized
-        // transitive closure — EC *leaf* accounts are resolved separately
-        // by `fetch_ec_leaf_accounts`; this returns only EC ancestor sets.
-        let rows = sqlx::query!(
+        (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
+    ) -> Result<(), BalanceError> {
+        if set_ids.is_empty() {
+            return Ok(());
+        }
+        sqlx::query!(
             r#"
-            WITH RECURSIVE seed AS (
-                SELECT m.member_account_id AS account_id, m.account_set_id
-                FROM cala_account_set_member_accounts m
-                WHERE m.member_account_id = ANY($2)
-            ),
-            ancestors AS (
-                SELECT account_id, account_set_id FROM seed
-                UNION
-                SELECT a.account_id, e.account_set_id
-                FROM ancestors a
-                JOIN cala_account_set_member_account_sets e
-                  ON e.member_account_set_id = a.account_set_id
+            SELECT pg_advisory_xact_lock(
+                hashtext(concat($1::text, v.set_id::text, v.currency))
             )
-            SELECT
-                a.account_set_id AS "account_set_id!: AccountSetId",
-                a.account_id AS "member_account_id!: AccountId"
-            FROM ancestors a
-            JOIN cala_account_sets s
-              ON s.id = a.account_set_id AND s.journal_id = $1
-            JOIN cala_accounts acc
-              ON acc.id = a.account_set_id AND acc.eventually_consistent = TRUE
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(set_id, currency)
             "#,
             journal_id as JournalId,
-            account_ids as &[AccountId],
+            set_ids as &[AccountSetId],
+            currencies as &[&str],
         )
-        .fetch_all(op.as_executor())
+        .execute(op.as_executor())
         .await?;
-
-        let mut result: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for row in rows {
-            result
-                .entry(row.member_account_id)
-                .or_default()
-                .push(row.account_set_id);
-        }
-        Ok(result)
+        Ok(())
     }
 
     /// Of `account_ids`, the ones that are **eventually-consistent plain

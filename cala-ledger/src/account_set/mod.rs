@@ -1,5 +1,6 @@
 mod entity;
 pub mod error;
+mod graph_cache;
 mod repo;
 
 use es_entity::clock::ClockHandle;
@@ -11,6 +12,7 @@ use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
 
 pub use entity::*;
 use error::*;
+pub(crate) use graph_cache::SetGraphCache;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
@@ -19,6 +21,7 @@ pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
     balances: Balances,
+    set_graph_cache: SetGraphCache,
     clock: ClockHandle,
 }
 
@@ -28,12 +31,14 @@ impl AccountSets {
         publisher: &OutboxPublisher,
         accounts: &Accounts,
         balances: &Balances,
+        set_graph_cache: &SetGraphCache,
         clock: &ClockHandle,
     ) -> Self {
         Self {
             repo: AccountSetRepo::new(pool, publisher),
             accounts: accounts.clone(),
             balances: balances.clone(),
+            set_graph_cache: set_graph_cache.clone(),
             clock: clock.clone(),
         }
     }
@@ -603,24 +608,68 @@ impl AccountSets {
     }
 
     /// Resolve the ancestor-set mappings for a posting's entry accounts
-    /// and take the per-balance locks on the non-EC ancestors — see
-    /// [`AccountSetRepo::fetch_mappings_in_op`]. Extracts the distinct
-    /// `(account, currency)` pairs from the prepared entries.
+    /// (via the epoch-validated set-graph cache) and THEN take the
+    /// poster's per-balance FOR_UPDATE locks on the non-EC ancestors.
+    ///
+    /// The ancestors are unknowable before resolution runs, so their
+    /// per-balance locks cannot join the poster's pre-insert lock
+    /// prelude (`Balances::lock_entry_balances_in_op`, which covers the
+    /// entry accounts). Taking them here — immediately after
+    /// resolution, strictly before `find_for_update`'s balance data
+    /// fetch — is sound because resolution reads only the membership
+    /// graph, never balance values, so lock-before-read holds across
+    /// statements. The lock list is computed app-side from the
+    /// resolution with per-leaf-currency semantics: each leaf's
+    /// currencies propagate to exactly *its own* ancestors — the locked
+    /// rows are precisely the `(ancestor, currency)` combinations the
+    /// inline fan-out will write, no more (an ancestor reached only by
+    /// a USD entry is not locked for another entry's BTC). See
+    /// `BalanceRepo::lock_ancestor_balances_in_op` for the ordering
+    /// doctrine and deadlock-freedom argument.
     pub(crate) async fn fetch_mappings_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         entries: &[crate::entry::NewEntry],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
+        let entry_balances: std::collections::HashSet<(AccountId, &str)> = entries
             .iter()
             .map(|entry| (entry.account_id(), entry.currency().code()))
+            .collect();
+        let account_ids: Vec<AccountId> = entry_balances
+            .iter()
+            .map(|(account_id, _)| *account_id)
             .collect::<std::collections::HashSet<_>>()
             .into_iter()
-            .unzip();
-        self.repo
-            .fetch_mappings_in_op(op, journal_id, &entry_balances)
-            .await
+            .collect();
+
+        let resolution = self
+            .set_graph_cache
+            .resolve_in_op(op, journal_id, &account_ids)
+            .await?;
+
+        let mut lock_pairs: Vec<(AccountSetId, &str)> = entry_balances
+            .iter()
+            .flat_map(|(account_id, currency)| {
+                resolution
+                    .mappings
+                    .get(account_id)
+                    .into_iter()
+                    .flatten()
+                    .filter(|set_id| !resolution.ec_sets.contains(set_id))
+                    .map(move |set_id| (*set_id, *currency))
+            })
+            .collect();
+        // Rust-sorted canonical acquisition order (see the doctrine on
+        // `BalanceRepo::lock_ancestor_balances_in_op`).
+        lock_pairs.sort_unstable();
+        lock_pairs.dedup();
+        let lock_pairs: (Vec<AccountSetId>, Vec<&str>) = lock_pairs.into_iter().unzip();
+        self.balances
+            .lock_ancestor_balances_in_op(op, journal_id, &lock_pairs)
+            .await?;
+
+        Ok(resolution.mappings)
     }
 }
 

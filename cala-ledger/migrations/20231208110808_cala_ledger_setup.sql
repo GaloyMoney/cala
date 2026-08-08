@@ -101,6 +101,21 @@ CREATE TABLE cala_account_set_member_account_sets (
 CREATE INDEX idx_cala_account_set_member_account_sets_member_set
   ON cala_account_set_member_account_sets (member_account_set_id, account_set_id);
 
+-- Generation counter for the set->set edge graph, consulted by the
+-- in-process set-graph cache (see account_set/graph_cache.rs). Bumped
+-- ONLY by add_member_set / remove_member_set — the sole mutators of
+-- cala_account_set_member_account_sets — which already hold the
+-- exclusive coarse membership lock, so the bump is serialized with the
+-- edge write it fences. Account-member mutations do not bump (direct
+-- account->set memberships are always probed live); set creation does
+-- not bump either (a fresh set is covered by the cache's unknown-id
+-- fallback).
+CREATE TABLE cala_account_set_graph_epoch (
+  one_row BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (one_row),
+  epoch BIGINT NOT NULL DEFAULT 0
+);
+INSERT INTO cala_account_set_graph_epoch DEFAULT VALUES;
+
 CREATE TABLE cala_tx_templates (
   id UUID PRIMARY KEY,
 
