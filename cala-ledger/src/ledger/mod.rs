@@ -240,6 +240,63 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    /// Snapshot the streaming EC-balance rollup's position: its committed
+    /// checkpoint against the persistent outbox frontier. Read-only and
+    /// cheap — suitable for polling as a stream-lag SLO metric.
+    ///
+    /// Works from any node: both sides are read from the database, not
+    /// from in-process state (the rollup runs on one node cluster-wide).
+    #[instrument(name = "cala_ledger.ec_rollup_status", skip_all)]
+    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
+        crate::ec_rollup::rollup_status(&self.pool).await
+    }
+
+    /// Await the streaming EC-balance rollup catching up to the outbox
+    /// frontier snapshotted at call time.
+    ///
+    /// On `Ok(())`: every transaction committed before this call — and
+    /// every posting that had already been assigned an outbox sequence,
+    /// committed or still in flight — is folded into EC balances (settled
+    /// and effective, same commit) and visible to subsequent reads.
+    ///
+    /// ## Why an argument-less fence suffices after closing a period
+    ///
+    /// - Outbox sequences are assigned early in the posting flow (entry
+    ///   events are published at entry insert, *before* velocity
+    ///   enforcement), so any posting that saw a period as *open* holds a
+    ///   sequence at or below the frontier this fence snapshots.
+    /// - Delivery is gapless: the rollup cannot advance past sequence `N`
+    ///   until `N` is resolved (applied or aborted), so awaiting
+    ///   `checkpoint ≥ frontier` transitively waits for every such
+    ///   in-flight posting.
+    ///
+    /// Consequently `close_books(); await_ec_caught_up(..);` has no
+    /// straggler hole: reports generated from EC balances after the fence
+    /// reflect every posting that passed the pre-close check.
+    ///
+    /// The wait polls the rollup job's persisted checkpoint in the
+    /// database with backoff. The checkpoint only ever *trails* the
+    /// applied state (by up to the obix checkpoint interval over
+    /// skip-only stretches), so the fence may wait marginally longer than
+    /// necessary but never returns early.
+    ///
+    /// Each call anchors to its own call-time frontier. `Ok(())` does
+    /// *not* imply a subsequent [`ec_rollup_status`](Self::ec_rollup_status)
+    /// reports caught-up: applying the awaited batches publishes
+    /// `BalanceUpdated` events of its own, which the rollup crosses as
+    /// skips shortly after (see [`crate::EcRollupStatus::lag`]).
+    ///
+    /// `timeout` is mandatory: a stopped or wedged rollup surfaces as
+    /// [`LedgerError::EcCaughtUpTimeout`] carrying the observed
+    /// checkpoint and frontier — alertable, never a silent hang.
+    #[instrument(name = "cala_ledger.await_ec_caught_up", skip_all, fields(timeout = ?timeout))]
+    pub async fn await_ec_caught_up(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<(), LedgerError> {
+        crate::ec_rollup::await_caught_up(&self.pool, timeout).await
+    }
+
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {
         self.publisher.inner()
     }
