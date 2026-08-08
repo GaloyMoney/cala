@@ -1,3 +1,24 @@
+# [cala release v0.21.1](https://github.com/GaloyMoney/cala/releases/tag/0.21.1)
+
+
+
+### Bug Fixes
+
+- Record balance-key account id in new velocity snapshots (#803)
+- Take poster leaf locks before entry insert — airtight attach fence (#816)
+
+### Documentation
+
+- Add SECURITY.md (#818)
+
+### Features
+
+- Expose eventually_consistent on NewAccount builder (sound with streaming rollup) (#758)
+
+### Miscellaneous Tasks
+
+- Bump es-entity 0.12.0 -> 0.12.2 + typed constraint detection (#820)
+
 # [cala release v0.21.0](https://github.com/GaloyMoney/cala/releases/tag/0.21.0)
 
 
