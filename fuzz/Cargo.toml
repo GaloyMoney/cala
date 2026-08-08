@@ -81,3 +81,10 @@ path = "fuzz_targets/balance_math.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "velocity_enforce"
+path = "fuzz_targets/velocity_enforce.rs"
+test = false
+doc = false
+bench = false

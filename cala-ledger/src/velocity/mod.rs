@@ -21,6 +21,16 @@ pub use control::*;
 use error::*;
 pub use limit::*;
 
+// The enforcement snapshot types and the context builder are exposed so that
+// fuzzing/tooling can drive the pure enforcement logic (`needs_enforcement`,
+// `window_for_enforcement`, `enforce`) without a database. They are already
+// `Serialize`/`Deserialize` (they are persisted), so this is a minimal surface
+// expansion rather than a new data model.
+pub use account_control::{
+    AccountBalanceLimit, AccountLimit, AccountVelocityControl, AccountVelocityLimit,
+};
+pub use context::EvalContext;
+
 #[derive(Clone)]
 pub struct Velocities {
     limits: VelocityLimitRepo,

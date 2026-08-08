@@ -14,6 +14,7 @@ core types that come from API input and the DB.
 | `core_types_json`  | `serde_json` round-trips of every core `*Values`/snapshot type (`AccountValues`, `AccountSetValues`, `JournalValues`, `TransactionValues`, `EntryValues`, `BalanceSnapshot`, `EffectiveBalanceSnapshot`, `VelocityControlValues`, `VelocityLimitValues`, `TxTemplateValues`, `ParamDefinition`, `OutboxEventPayload`, `Layer`) and the hand-rolled `Currency` string parser. CEL fields use `#[serde(try_from = "String")]`, so this also drives compilation through the serde path. |
 | `param_coerce`     | Builds structurally-arbitrary `CelValue`s from the fuzz input by hand (scalars, nested maps/lists, and lossy-UTF8 strings) and runs `ParamDataType::coerce_value` for all eight types — exercises the `String`→`Uuid`/`Decimal`/`Date` parsers with adversarial values. |
 | `balance_math`     | Deserializes `BalanceSnapshot` (incl. decimals near `Decimal::MAX`) and drives `BalanceSnapshot::available`/`rollup` and `AccountBalance`'s `settled`/`pending`/`encumbrance`/`available` accessors. Validates the arithmetic-overflow hardening surface. |
+| `velocity_enforce` | Drives the pure velocity-enforcement logic end to end — `needs_enforcement` → `window_for_enforcement` → `enforce` — against a fuzzed control, entry, balance snapshot, transaction and account. This is where financial limits are actually compared, so it spans CEL evaluation, decimal arithmetic and time-window logic. The input is five JSON documents concatenated with a `0xFF` separator. |
 
 ## Running
 
@@ -23,7 +24,7 @@ toolchain):
 
 ```sh
 # one-time: bootstrap the corpus from the committed seeds
-for t in cel_compile cel_evaluate core_types_json param_coerce balance_math; do
+for t in cel_compile cel_evaluate core_types_json param_coerce balance_math velocity_enforce; do
   mkdir -p fuzz/corpus/$t && cp fuzz/seeds/$t/* fuzz/corpus/$t/
 done
 
@@ -33,14 +34,16 @@ cargo fuzz run -s none cel_evaluate
 cargo fuzz run -s none core_types_json
 cargo fuzz run -s none param_coerce
 cargo fuzz run -s none balance_math
+cargo fuzz run -s none velocity_enforce
 ```
 
-`balance_math` depends on `cala-ledger`, which compiles without a database
-via the committed SQLx offline cache but needs `SQLX_OFFLINE=true` in the
-environment:
+`balance_math` and `velocity_enforce` depend on `cala-ledger`, which compiles
+without a database via the committed SQLx offline cache but needs
+`SQLX_OFFLINE=true` in the environment:
 
 ```sh
 SQLX_OFFLINE=true cargo fuzz run -s none balance_math
+SQLX_OFFLINE=true cargo fuzz run -s none velocity_enforce
 ```
 
 `fuzz/corpus/` is gitignored — it is the working corpus the fuzzer grows.

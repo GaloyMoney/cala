@@ -19,7 +19,7 @@ use crate::{
 use super::error::VelocityError;
 
 use repo::*;
-pub(super) use value::*;
+pub use value::*;
 
 #[derive(Clone)]
 pub struct AccountControls {
