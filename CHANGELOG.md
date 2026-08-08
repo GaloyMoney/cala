@@ -1,3 +1,11 @@
+# [cala release v0.21.2](https://github.com/GaloyMoney/cala/releases/tag/0.21.2)
+
+
+
+### Miscellaneous Tasks
+
+- Bump es-entity 0.12.2 -> 0.12.3, job 0.7.0 -> 0.7.1 (#821)
+
 # [cala release v0.21.1](https://github.com/GaloyMoney/cala/releases/tag/0.21.1)
 
 
