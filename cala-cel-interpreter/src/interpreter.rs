@@ -43,7 +43,18 @@ fn compile_program(source: String) -> Result<Arc<Program>, String> {
         })
         .expect("failed to spawn cel-compile thread")
         .join()
-        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+        .unwrap_or_else(|panic| {
+            // The upstream `cel` parser can panic on adversarial input
+            // (e.g. its RecursionListener depth counter underflows when a
+            // syntax error is followed by deep nesting). A library must not
+            // crash its caller, so surface the panic as a parse error.
+            let msg = panic
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| panic.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "unknown panic".to_string());
+            Err(format!("CEL parser panicked during compilation: {msg}"))
+        });
     tracing::debug!(
         expression = %expression,
         elapsed = ?started.elapsed(),
@@ -136,6 +147,25 @@ impl std::str::FromStr for CelExpression {
 mod tests {
     use super::*;
     use chrono::NaiveDate;
+
+    #[test]
+    fn parser_panic_surfaces_as_error() {
+        // Regression test (found by fuzzing): a leading syntax error followed
+        // by deep nesting makes the upstream `cel` parser's RecursionListener
+        // underflow its depth counter (`exit_expr`: `self.depth -= 1`),
+        // panicking with "attempt to subtract with overflow" in builds with
+        // overflow checks. Compilation must surface this as a parse error,
+        // not propagate the panic to the caller.
+        let mut source = String::from(">");
+        source.push_str(&"{".repeat(63));
+        source.push_str("?[");
+        source.push_str(&"(".repeat(11));
+        source.push_str(&"{".repeat(26));
+        source.push_str("l\u{0}?(-");
+
+        let err = source.parse::<CelExpression>().unwrap_err();
+        assert!(matches!(err, CelError::CelParseError(_)));
+    }
 
     #[test]
     fn literals() {
@@ -271,6 +301,36 @@ mod tests {
             expression.evaluate(&context).unwrap(),
             CelValue::Bool(false)
         );
+    }
+
+    #[test]
+    fn invalid_format_on_timestamp_is_error_not_panic() {
+        // Regression test (found by fuzzing): chrono's `DelayedFormat`
+        // `Display` impl returns `fmt::Error` for unknown specifiers like
+        // `%Q`; formatting must surface a CEL evaluation error, not panic.
+        let expression = "now.format('%Q')".parse::<CelExpression>().unwrap();
+        let mut context = CelContext::new();
+        context.add_variable(
+            "now",
+            chrono::NaiveDate::from_ymd_opt(1940, 12, 21)
+                .unwrap()
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc(),
+        );
+        let err = expression.evaluate(&context).unwrap_err();
+        assert!(matches!(err, CelError::EvaluationError(_, _)));
+    }
+
+    #[test]
+    fn bytes_to_json_is_error_not_panic() {
+        // Regression test (found by fuzzing): coercing a bytes value (e.g.
+        // from `{'a': b': x'}`) to serde_json::Value used to hit
+        // `unimplemented!()`. It must return a coercion error instead.
+        let expression = "{'a': b'x'}".parse::<CelExpression>().unwrap();
+        let context = CelContext::new();
+        let res: Result<serde_json::Value, _> = expression.try_evaluate(&context);
+        assert!(res.is_err());
     }
 
     #[test]
