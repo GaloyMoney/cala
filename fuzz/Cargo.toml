@@ -1,0 +1,63 @@
+[package]
+name = "cala-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+chrono = { version = "0.4", default-features = false }
+rust_decimal = "1"
+serde_json = "1.0"
+uuid = { version = "1", features = ["v7"] }
+
+[dependencies.cel-interpreter]
+path = "../cala-cel-interpreter"
+package = "cala-cel-interpreter"
+
+[dependencies.cala-types]
+path = "../cala-ledger-core-types"
+package = "cala-ledger-core-types"
+
+# Keep this crate out of the main workspace.
+[workspace]
+members = ["."]
+
+# Fuzz builds run in release mode; make sure panics we care about still fire.
+#
+# NOTE: overflow-checks are intentionally off (matching production release
+# builds). The upstream `cel` parser's RecursionListener depth counter
+# underflows on adversarial input (`exit_expr`: `self.depth -= 1`), which
+# panics with overflow checks on and then dies with SIGSEGV while unwinding
+# in the sanitizer-instrumented build. With overflow checks off (production
+# behavior) the counter wraps and the parse simply fails with a recursion
+# error. `cala-cel-interpreter` additionally catches compile-thread panics
+# and converts them to parse errors; the debug-build regression test
+# `parser_panic_surfaces_as_error` covers that path.
+[profile.release]
+debug-assertions = true
+overflow-checks = false
+
+[[bin]]
+name = "cel_compile"
+path = "fuzz_targets/cel_compile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cel_evaluate"
+path = "fuzz_targets/cel_evaluate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "core_types_json"
+path = "fuzz_targets/core_types_json.rs"
+test = false
+doc = false
+bench = false
