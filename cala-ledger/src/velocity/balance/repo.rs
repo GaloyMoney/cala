@@ -110,7 +110,7 @@ impl VelocityBalanceRepo {
         // join-free, so the bare UNNEST scan emits rows in array
         // order and the lock call is evaluated per row in exactly
         // that order. The `ORDER BY` this statement used to carry
-        // (added prophylactically in #684) was redundant with the
+        // (added prophylactically) was redundant with the
         // Rust-side sort and only added a Sort node — see the
         // lock-ordering notes on `balance::BalanceRepo::find_for_update`
         // for when an `ORDER BY` *is* required (lock queries with a JOIN).

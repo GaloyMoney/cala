@@ -703,7 +703,7 @@ impl AccountSetRepo {
         //
         // Verdicts, in error-precedence order:
         //
-        // 1. `cycle` (#800): the member is already an ancestor of the
+        // 1. `cycle`: the member is already an ancestor of the
         //    target — the edge would close a cycle and make membership
         //    resolution non-terminating.
         // 2. `set_conflict` (path uniqueness, set level): the member —
@@ -1012,11 +1012,11 @@ impl AccountSetRepo {
     /// the seeds come back and are expanded. Locking "assumed" ancestors
     /// here optimistically would be unsound twice over — an advisory
     /// lock wait inside a statement does not refresh that statement's
-    /// snapshot (taken at statement start), the stale-read class #816
-    /// closed; and a wrong guess (guaranteed for a freshly created
-    /// account, lana's dominant pattern) would force a second corrective
-    /// lock batch, breaking the single-Rust-sorted-batch acquisition
-    /// that poster-vs-poster deadlock-freedom rests on (#684/#810).
+    /// snapshot (taken at statement start), the stale-read class the
+    /// attach fence closes; and a wrong guess (guaranteed for a freshly
+    /// created account, the dominant posting pattern) would force a
+    /// second corrective lock batch, breaking the single-Rust-sorted-batch
+    /// acquisition that poster-vs-poster deadlock-freedom rests on.
     pub(super) async fn probe_direct_memberships_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
@@ -1073,7 +1073,7 @@ impl AccountSetRepo {
     /// acquisition order canonical (volatile lock calls are postponed
     /// until after the Sort — see the ordering doctrine on
     /// `BalanceRepo::lock_entry_balances_in_op`). Entry accounts and
-    /// ancestor sets are disjoint key classes (#802 FK), and every
+    /// ancestor sets are disjoint key classes (the set-guard FK), and every
     /// poster acquires the two phases in the same order, so the split
     /// acquisition cannot deadlock posters against each other.
     #[instrument(
@@ -1166,7 +1166,7 @@ impl AccountSetRepo {
     /// so this is the same canonical order as the fallback CTE's
     /// `ORDER BY`). The join-free UNNEST scan evaluates the volatile
     /// lock calls row by row in array order, so no in-query Sort is
-    /// needed (the #810-preferred form — no join, no planner
+    /// needed (the join-free form — no join, no planner
     /// reordering to defend against). Every poster takes exactly ONE
     /// sorted ancestor lock batch per posting — here or in the
     /// fallback's CTE, never both — which is what keeps acquisition

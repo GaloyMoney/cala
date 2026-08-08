@@ -4,9 +4,8 @@
 //! whose debug-build frames are enormous: ~350KiB of stack for a trivial
 //! two-operator expression and >8MiB for expressions at its grammar-recursion
 //! cap (96). When compilation ran on the caller's thread it would overflow
-//! whenever the caller sat on top of deep async state machines (stack
-//! overflows in downstream debug tests — see GaloyMoney/lana-bank#8011, which
-//! papered over it with RUST_MIN_STACK=8388608).
+//! whenever the caller sat on top of deep async state machines, and raising
+//! `RUST_MIN_STACK` only papered over it.
 //!
 //! `CelExpression` now compiles on a dedicated thread with a known-large
 //! stack. These tests construct expressions from threads with tiny stacks —
@@ -41,8 +40,8 @@ fn compiles_realistic_velocity_expression_on_small_caller_stack() {
 #[test]
 fn compiles_and_evaluates_deeply_nested_expression_on_small_caller_stack() {
     // Depth 64 is accepted by cel's grammar-recursion cap (96) but needs
-    // >4MiB of parser stack in debug builds — more than lana-bank's 8MiB
-    // RUST_MIN_STACK workaround could guarantee as headroom.
+    // >4MiB of parser stack in debug builds — more headroom than an 8MiB
+    // RUST_MIN_STACK could reliably guarantee on top of a deep caller.
     on_small_stack(|| {
         let source = format!("{}1{}", "(".repeat(64), ")".repeat(64));
         let expression = CelExpression::try_from(source).expect("depth-64 nesting must compile");

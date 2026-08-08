@@ -143,7 +143,7 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
 
     // C is already transitively under A (via B): a direct A<-C edge is not
     // a cycle, but it would give C a second path to A — double membership,
-    // rejected. (#800's original test allowed this edge; the old closure
+    // rejected. (An earlier implementation allowed this edge; the old closure
     // only collided once accounts were involved, and the edge then made
     // any later account-add under C fail. Walk-only rejects it up front.)
     let res = cala.account_sets().add_member(set_a.id(), set_c.id()).await;

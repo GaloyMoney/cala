@@ -10,8 +10,8 @@
 //!
 //! - cold fallback vs warm memory-path posting parity (EC / non-EC /
 //!   multi-journal fixture);
-//! - same-op create+attach+post (unknown-seed supplement path — lana's
-//!   dominant pattern);
+//! - same-op create+attach+post (unknown-seed supplement path — the
+//!   dominant posting pattern);
 //! - same-op `add_member_set` + post (epoch-mismatch op-local path),
 //!   then stale-cache -> refresh -> memory-path sequence;
 //! - rollback of an in-op structure change must not leak into any later
@@ -241,7 +241,7 @@ async fn warm_resolution_matches_walk_fallback() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Lana's dominant pattern: create a set, attach a fresh account, and
+/// A dominant posting pattern: create a set, attach a fresh account, and
 /// post to it — all in one op. No epoch bump happens (account-member
 /// adds don't touch the edge graph), so the warm cache takes the
 /// unknown-seed supplement path and must still resolve the fresh set.

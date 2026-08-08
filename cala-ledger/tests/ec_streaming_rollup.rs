@@ -504,7 +504,7 @@ async fn streaming_rollup_maintains_ec_plain_leaf_effective_balance() -> anyhow:
     Ok(())
 }
 
-/// #802 guard: a direct entry to an account-set backing account is rejected —
+/// Set-guard: a direct entry to an account-set backing account is rejected —
 /// its balance is derived from members, so the entry would be folded nowhere.
 /// The composite FK enforces this for **any** set, EC or synchronous.
 #[tokio::test]
@@ -550,7 +550,7 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Regression (PR #813 review, High severity): an EC plain leaf writes balance
+/// Regression: an EC plain leaf writes balance
 /// history only when the rollup runs, but its entries land synchronously. The
 /// membership guard must see those entries — otherwise a leaf that has already
 /// posted could still be attached to a set, and the rollup would later fold its
@@ -591,7 +591,7 @@ async fn ec_leaf_with_posted_entries_cannot_join_a_set() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Regression (PR #813 review): a direct entry to a *nonexistent* account must
+/// Regression: a direct entry to a *nonexistent* account must
 /// fail as a plain referential-integrity error, NOT be misreported as targeting
 /// an account set. The plain account-id FK is checked before the set-guard FK,
 /// so a missing account trips it first and never reaches the set-guard mapping.

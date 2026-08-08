@@ -374,17 +374,17 @@ impl BalanceRepo {
     /// *required* because the JOIN lets the planner produce rows in
     /// arbitrary order (a hash join probing from a `cala_accounts`
     /// scan emits heap order, not UNNEST array order — observed as
-    /// real deadlocks and fixed by adding the `ORDER BY` in #684). It
+    /// real deadlocks and fixed by adding the `ORDER BY`). It
     /// is also *sufficient*: advisory-lock functions are VOLATILE,
     /// and since PostgreSQL 9.6 the planner unconditionally postpones
     /// volatile SELECT-list expressions until after the Sort
     /// (`make_sort_input_target` — the same mechanism that makes
     /// `nextval()` follow `ORDER BY`), so the lock calls run row by
     /// row in sorted order; verified empirically with `EXPLAIN
-    /// (VERBOSE)` across plan shapes during the #779 investigation.
+    /// (VERBOSE)` across plan shapes.
     /// Duplicate pairs re-acquire the same locks — a no-op within one
     /// transaction. Deadlock-freedom across the two lock sites: entry
-    /// accounts are never account sets (#802 FK), so this statement
+    /// accounts are never account sets (the set-guard FK), so this statement
     /// and the walk's ancestor locks cover disjoint key classes, and
     /// every poster acquires them in the same phase order.
     #[instrument(
@@ -442,11 +442,10 @@ impl BalanceRepo {
     ///
     /// Note the poster's lock acquisition spans multiple statements
     /// with a fixed phase order (entry pairs, then ancestor pairs —
-    /// disjoint key classes per the #802 FK). A transaction that runs
-    /// several postings (repeated `post_transaction_in_op` calls in
-    /// one op) still acquires locks across posting boundaries with no
-    /// global ordering and can deadlock against other lockers — see
-    /// #779.
+    /// disjoint key classes per the set-guard FK). A transaction that
+    /// runs several postings (repeated `post_transaction_in_op` calls
+    /// in one op) still acquires locks across posting boundaries with
+    /// no global ordering and can deadlock against other lockers.
     #[instrument(level = "debug", name = "cala_ledger.balances.find_for_update", skip(self, op, account_ids, currencies), fields(balances_count = account_ids.len()))]
     pub(super) async fn find_for_update(
         &self,
@@ -509,7 +508,7 @@ impl BalanceRepo {
     /// history, and the rollup would then fold those pre-/post-membership
     /// entries into the wrong sets. Checking entries closes that window,
     /// bringing EC leaves to parity with synchronous accounts (which write
-    /// both). Account sets carry no entries (the #802 FK forbids it), so
+    /// both). Account sets carry no entries (the set-guard FK forbids it), so
     /// the history check still covers set members.
     ///
     /// The EXCLUSIVE on the member is what makes the existence check

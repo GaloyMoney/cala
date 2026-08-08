@@ -25,9 +25,9 @@ const COMPILE_STACK_BYTES: usize = 32 * 1024 * 1024;
 /// Compilation runs on a dedicated thread with a fixed, known-large stack so
 /// that success never depends on how much stack the *caller* has left —
 /// compilation regularly runs on top of deep async state machines whose debug
-/// frames leave far less headroom than the parser needs (stack overflows in
-/// downstream debug tests; see GaloyMoney/lana-bank#8011). The spawn cost is
-/// paid once per unique expression thanks to the memoization above.
+/// frames leave far less headroom than the parser needs, so compiling on the
+/// caller's thread can overflow the stack. The spawn cost is paid once per
+/// unique expression thanks to the memoization above.
 #[cached(max_size = 10000, cache_err = true)]
 #[instrument(name = "cel.compile", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
 fn compile_program(source: String) -> Result<Arc<Program>, String> {

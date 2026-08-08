@@ -1,9 +1,10 @@
 //! Epoch-validated in-process cache of the account-set membership graph.
 //!
 //! Ancestor resolution on the posting hot path used to be a recursive
-//! walk over `cala_account_set_member_account_sets` (#814) — measured at
-//! ~40 ms/call at lana scale, the #2 DB-time consumer. This module
-//! replaces it with **two cheap indexed reads** (a direct-membership
+//! walk over `cala_account_set_member_account_sets` — measured at
+//! ~40 ms/call under heavy posting load, one of the largest DB-time
+//! consumers. This module replaces it with **two cheap indexed reads**
+//! (a direct-membership
 //! probe with a piggybacked epoch check, then one lock statement) plus
 //! ancestor expansion in memory, keeping the fused walk+locks SQL only
 //! as the rare-path fallback.
@@ -16,7 +17,7 @@
 //! rates:
 //!
 //! - **Direct memberships** (`cala_account_set_member_accounts`, hot):
-//!   always probed live, in-op. The #816 attach fence's correctness
+//!   always probed live, in-op. The attach fence's correctness
 //!   depends on reading these fresh — an account-attach mutates exactly
 //!   the rows we still read from the DB, never the cache.
 //! - **Set->set edges + per-set metadata** (cold, small; edges mutated
@@ -37,7 +38,7 @@
 //! Fallbacks (all correctness-critical, all rare) — each runs the
 //! original fused walk+locks statement
 //! (`AccountSetRepo::walk_mappings_and_lock_in_op`), so a fallback
-//! resolution costs one round trip, exactly like pre-cache #816:
+//! resolution costs one round trip, exactly like the pre-cache path:
 //!
 //! - **Epoch mismatch** (structure op committed since the last refresh,
 //!   or a same-op `add_member_set` bumped it locally): walk op-locally
@@ -46,7 +47,7 @@
 //!   in-op read can see the op's own uncommitted writes, and installing
 //!   them would poison other transactions.
 //! - **Unknown seed set id** (set created after the last refresh —
-//!   including lana's same-op create+attach+post pattern, which bumps
+//!   including the same-op create+attach+post pattern, which bumps
 //!   no epoch): fetch the missing ids' meta and edges in-op as an
 //!   op-local supplement; don't install. Fresh sets normally have no
 //!   upward edges (adding one bumps the epoch), so this stays a single
@@ -59,10 +60,10 @@
 //! expansion; the fallback takes the identical keys inside its walk
 //! statement. Locks are never taken from guessed/assumed ancestors in
 //! the probe round trip: an advisory-lock wait inside a statement does
-//! not refresh that statement's snapshot (the stale-read class #816
-//! closed), and a wrong guess would force a second corrective batch,
-//! breaking the single-sorted-batch acquisition that poster-vs-poster
-//! deadlock-freedom rests on (#684/#810).
+//! not refresh that statement's snapshot (the stale-read class the
+//! attach fence closes), and a wrong guess would force a second
+//! corrective batch, breaking the single-sorted-batch acquisition that
+//! poster-vs-poster deadlock-freedom rests on.
 //!
 //! Multi-instance: each process has its own cache; the per-op epoch
 //! check makes cross-instance staleness harmless (worst case = one
@@ -222,7 +223,7 @@ impl SetGraphCache {
     /// see the module doc. Every path reads only the membership graph,
     /// never balance values, and completes its single ancestor lock
     /// batch strictly before `find_for_update`'s balance data fetch, so
-    /// the #816 lock-before-read doctrine holds unchanged.
+    /// the lock-before-read doctrine holds unchanged.
     #[instrument(
         level = "debug",
         name = "account_set.fetch_mappings_in_op",

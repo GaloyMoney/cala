@@ -162,7 +162,7 @@ CREATE TABLE cala_entries (
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
   transaction_id UUID NOT NULL,
-  account_is_account_set BOOLEAN NOT NULL GENERATED ALWAYS AS (FALSE) STORED, -- constant FALSE; the set-guard FK below forbids entries to account sets (#802)
+  account_is_account_set BOOLEAN NOT NULL GENERATED ALWAYS AS (FALSE) STORED, -- constant FALSE; the set-guard FK below forbids entries to account sets
 
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Plain existence FK, declared first so its RI check runs before the set
@@ -170,7 +170,7 @@ CREATE TABLE cala_entries (
   -- guard -- keeping "account does not exist" distinct from "account is a set".
   CONSTRAINT cala_entries_account_id_fkey
     FOREIGN KEY (account_id) REFERENCES cala_accounts(id),
-  -- Set guard (#802): only reachable when the account exists but is a set.
+  -- Set guard: only reachable when the account exists but is a set.
   CONSTRAINT cala_entries_account_not_account_set_fkey
     FOREIGN KEY (account_id, account_is_account_set) REFERENCES cala_accounts(id, is_account_set)
 );
