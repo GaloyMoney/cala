@@ -15,6 +15,9 @@ core types that come from API input and the DB.
 | `param_coerce`     | Builds structurally-arbitrary `CelValue`s from the fuzz input by hand (scalars, nested maps/lists, and lossy-UTF8 strings) and runs `ParamDataType::coerce_value` for all eight types — exercises the `String`→`Uuid`/`Decimal`/`Date` parsers with adversarial values. |
 | `balance_math`     | Deserializes `BalanceSnapshot` (incl. decimals near `Decimal::MAX`) and drives `BalanceSnapshot::available`/`rollup` and `AccountBalance`'s `settled`/`pending`/`encumbrance`/`available` accessors. Validates the arithmetic-overflow hardening surface. |
 | `velocity_enforce` | Drives the pure velocity-enforcement logic end to end — `needs_enforcement` → `window_for_enforcement` → `enforce` — against a fuzzed control, entry, balance snapshot, transaction and account. This is where financial limits are actually compared, so it spans CEL evaluation, decimal arithmetic and time-window logic. The input is five JSON documents concatenated with a `0xFF` separator. |
+| `effective_balance` | Drives `EffectiveBalanceData::re_calculate_snapshots`/`into_snapshots` — recomputing date-partitioned balances from a fuzzed mix of entries and prior snapshots (input: four JSON docs joined by `0xFF`). Exercises the sort/comparison + decimal-rollup invariants. |
+| `ec_rollup_batch` | Drives `EcRollupBatch` (push_tx/push_entry/missing_entry_ids/into_rollup_txns) — the pure accumulator behind the streaming EC-balance rollup. Input: two JSON docs (txns, entries) joined by `0xFF`. |
+| `primitives_parse` | `DebitOrCredit`/`Currency` `FromStr` plus serde round-trips of the balance pagination cursors. |
 
 ## Running
 
@@ -24,7 +27,7 @@ toolchain):
 
 ```sh
 # one-time: bootstrap the corpus from the committed seeds
-for t in cel_compile cel_evaluate core_types_json param_coerce balance_math velocity_enforce; do
+for t in cel_compile cel_evaluate core_types_json param_coerce balance_math velocity_enforce effective_balance ec_rollup_batch primitives_parse; do
   mkdir -p fuzz/corpus/$t && cp fuzz/seeds/$t/* fuzz/corpus/$t/
 done
 
@@ -35,15 +38,20 @@ cargo fuzz run -s none core_types_json
 cargo fuzz run -s none param_coerce
 cargo fuzz run -s none balance_math
 cargo fuzz run -s none velocity_enforce
+cargo fuzz run -s none effective_balance
+cargo fuzz run -s none ec_rollup_batch
+cargo fuzz run -s none primitives_parse
 ```
 
-`balance_math` and `velocity_enforce` depend on `cala-ledger`, which compiles
-without a database via the committed SQLx offline cache but needs
-`SQLX_OFFLINE=true` in the environment:
+`balance_math`, `velocity_enforce`, `effective_balance` and `ec_rollup_batch`
+depend on `cala-ledger`, which compiles without a database via the committed
+SQLx offline cache but needs `SQLX_OFFLINE=true` in the environment:
 
 ```sh
 SQLX_OFFLINE=true cargo fuzz run -s none balance_math
 SQLX_OFFLINE=true cargo fuzz run -s none velocity_enforce
+SQLX_OFFLINE=true cargo fuzz run -s none effective_balance
+SQLX_OFFLINE=true cargo fuzz run -s none ec_rollup_batch
 ```
 
 `fuzz/corpus/` is gitignored — it is the working corpus the fuzzer grows.
@@ -101,3 +109,9 @@ cargo fuzz run -s none cel_compile -- \
    when layer balances sum past `Decimal::MAX` (~7.9e28). Reproduces from the
    fuzzer in seconds. The fix is `checked_add` in `rollup`, which is what #804
    covers.
+6. **`EffectiveBalanceData` index-out-of-bounds panic** (found + fixed).
+   `re_calculate_snapshots` indexed `self.updates[0]` to seed the first
+   snapshot, panicking when called with no updates and no prior snapshot.
+   Added an empty-input early return (regression covered by the
+   `effective_balance` target). The deeper `.expect()`/`unreachable!()`
+   invariants in the same function remain to be probed by continued fuzzing.

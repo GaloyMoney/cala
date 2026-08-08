@@ -1,4 +1,4 @@
-mod data;
+pub mod data;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -17,6 +17,8 @@ use super::{
 };
 
 use repo::*;
+
+pub use data::{EffectiveBalanceData, SnapshotOrEntry};
 
 #[derive(Clone)]
 pub struct EffectiveBalances {

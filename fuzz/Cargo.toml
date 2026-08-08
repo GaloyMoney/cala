@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = "1"
+serde = { version = "1", features = ["derive"] }
 chrono = { version = "0.4", default-features = false }
 rust_decimal = "1"
 serde_json = "1.0"
@@ -85,6 +86,27 @@ bench = false
 [[bin]]
 name = "velocity_enforce"
 path = "fuzz_targets/velocity_enforce.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "effective_balance"
+path = "fuzz_targets/effective_balance.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ec_rollup_batch"
+path = "fuzz_targets/ec_rollup_batch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "primitives_parse"
+path = "fuzz_targets/primitives_parse.rs"
 test = false
 doc = false
 bench = false

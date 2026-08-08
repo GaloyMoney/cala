@@ -98,12 +98,12 @@ pub(crate) async fn register_ec_balance_rollup(
 /// what the rollup needs. `entry_ids` is the complete expected entry set,
 /// which is what makes stream-collected entries verifiable (see
 /// [`EcRollupBatch`]).
-struct PendingTx {
-    id: TransactionId,
-    journal_id: JournalId,
-    effective: NaiveDate,
-    created_at: DateTime<Utc>,
-    entry_ids: Vec<EntryId>,
+pub struct PendingTx {
+    pub id: TransactionId,
+    pub journal_id: JournalId,
+    pub effective: NaiveDate,
+    pub created_at: DateTime<Utc>,
+    pub entry_ids: Vec<EntryId>,
 }
 
 /// One batch landing's accumulator.
@@ -120,17 +120,17 @@ struct PendingTx {
 /// dropped — their data is durable in the ledger and was already applied
 /// via that landing's fallback read.
 #[derive(Default)]
-struct EcRollupBatch {
+pub struct EcRollupBatch {
     txns: Vec<PendingTx>,
     entries: HashMap<TransactionId, Vec<EntryValues>>,
 }
 
 impl EcRollupBatch {
-    fn push_tx(&mut self, tx: PendingTx) {
+    pub fn push_tx(&mut self, tx: PendingTx) {
         self.txns.push(tx);
     }
 
-    fn push_entry(&mut self, entry: EntryValues) {
+    pub fn push_entry(&mut self, entry: EntryValues) {
         self.entries
             .entry(entry.transaction_id)
             .or_default()
@@ -140,7 +140,7 @@ impl EcRollupBatch {
     /// Entry ids that were *not* collected from the stream in this landing
     /// (their event group straddled a landing boundary) — the ones the
     /// flush must load from the DB.
-    fn missing_entry_ids(&self) -> Vec<EntryId> {
+    pub fn missing_entry_ids(&self) -> Vec<EntryId> {
         self.txns
             .iter()
             .flat_map(|tx| {
@@ -160,7 +160,7 @@ impl EcRollupBatch {
     /// Assemble the applier's input in landing order: each transaction's
     /// stream-collected entries, topped up from the DB-`fetched` map where
     /// the group straddled a landing boundary, sorted by entry sequence.
-    fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
+    pub fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
         let EcRollupBatch { txns, mut entries } = self;
         txns.into_iter()
             .map(|tx| {

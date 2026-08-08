@@ -136,7 +136,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod cel_context;
-mod ec_rollup;
+pub mod ec_rollup;
 mod param;
 
 pub mod account;

@@ -15,7 +15,7 @@ use crate::balance::snapshot::Snapshots;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
-pub(super) enum SnapshotOrEntry<'a> {
+pub enum SnapshotOrEntry<'a> {
     Snapshot {
         effective: NaiveDate,
         values: BalanceSnapshot,
@@ -51,7 +51,7 @@ impl SnapshotOrEntry<'_> {
 }
 
 #[derive(Debug)]
-pub(super) struct EffectiveBalanceData<'a> {
+pub struct EffectiveBalanceData<'a> {
     account_id: AccountId,
     currency: Currency,
     last_snapshot: Option<(NaiveDate, BalanceSnapshot)>,
@@ -108,6 +108,12 @@ impl<'a> EffectiveBalanceData<'a> {
     }
 
     pub fn re_calculate_snapshots(&mut self, created_at: DateTime<Utc>) {
+        // Nothing to recompute when there are no updates and no prior
+        // snapshot to carry forward (the seeding path below indexes
+        // `self.updates[0]`, which would otherwise panic).
+        if self.updates.is_empty() {
+            return;
+        }
         self.updates.sort();
         let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
             Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),
