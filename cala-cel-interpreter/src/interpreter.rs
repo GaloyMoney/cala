@@ -5,18 +5,51 @@ use cel::Program;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
+/// Stack size for the dedicated CEL compilation thread.
+///
+/// The `cel` crate parses with an ANTLR-generated recursive-descent parser
+/// that carries no stack guard and consumes large amounts of stack in debug
+/// builds: ~350KiB for a trivial two-operator expression and >8MiB for
+/// expressions at its own grammar-recursion cap (96). 32MiB gives the worst
+/// accepted input a >2x margin. The reservation is virtual — only pages that
+/// are actually touched get committed.
+const COMPILE_STACK_BYTES: usize = 32 * 1024 * 1024;
+
 /// Globally memoized CEL program compilation.
 ///
 /// `CelExpression`s are frequently re-created from the same source string
 /// (e.g. velocity controls deserialized from the DB on every transaction),
 /// so compilation results are cached to avoid re-compiling the same
 /// expression multiple times.
+///
+/// Compilation runs on a dedicated thread with a fixed, known-large stack so
+/// that success never depends on how much stack the *caller* has left —
+/// compilation regularly runs on top of deep async state machines whose debug
+/// frames leave far less headroom than the parser needs (stack overflows in
+/// downstream debug tests; see GaloyMoney/lana-bank#8011). The spawn cost is
+/// paid once per unique expression thanks to the memoization above.
 #[cached(max_size = 10000, cache_err = true)]
 #[instrument(name = "cel.compile", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
 fn compile_program(source: String) -> Result<Arc<Program>, String> {
-    Program::compile(&source)
-        .map(Arc::new)
-        .map_err(|e| e.to_string())
+    let started = std::time::Instant::now();
+    let expression = source.clone();
+    let result = std::thread::Builder::new()
+        .name("cel-compile".to_string())
+        .stack_size(COMPILE_STACK_BYTES)
+        .spawn(move || {
+            Program::compile(&source)
+                .map(Arc::new)
+                .map_err(|e| e.to_string())
+        })
+        .expect("failed to spawn cel-compile thread")
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
+    tracing::debug!(
+        expression = %expression,
+        elapsed = ?started.elapsed(),
+        "compiled CEL program on dedicated thread"
+    );
+    result
 }
 
 use crate::{context::*, error::*, value::*};
