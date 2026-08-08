@@ -552,7 +552,13 @@ impl TryFrom<CelResult<'_>> for serde_json::Value {
                 Value::from(res)
             }
             CelValue::Decimal(d) => Value::from(d.to_string()),
-            CelValue::Bytes(_) => unimplemented!(),
+            CelValue::Bytes(_) => {
+                return Err(ResultCoercionError::BadExternalTypeCoercion(
+                    expr.to_string(),
+                    CelType::Bytes,
+                    "serde_json::Value",
+                ));
+            }
         })
     }
 }
