@@ -118,9 +118,25 @@ fn decimal_binary_args(args: &[Value]) -> Result<(rust_decimal::Decimal, rust_de
 
 pub(crate) fn timestamp_format(This(this): This<Value>, format: Arc<String>) -> Result<Value> {
     match this {
-        Value::Timestamp(ts) => Ok(Value::String(
-            ts.with_timezone(&Utc).format(&format).to_string().into(),
-        )),
+        Value::Timestamp(ts) => {
+            // `DelayedFormat`'s `Display` impl returns `fmt::Error` for
+            // invalid format specifiers, and `.to_string()` panics on that
+            // ("a Display implementation returned an error unexpectedly").
+            // Write manually so bad format strings surface as a CEL error
+            // instead of panicking.
+            let mut buf = String::new();
+            std::fmt::Write::write_fmt(
+                &mut buf,
+                format_args!("{}", ts.with_timezone(&Utc).format(&format)),
+            )
+            .map_err(|_| {
+                ExecutionError::function_error(
+                    "format",
+                    format!("invalid timestamp format string: '{format}'"),
+                )
+            })?;
+            Ok(Value::String(buf.into()))
+        }
         v => Err(ExecutionError::function_error(
             "format",
             format!("cannot format {v:?} as timestamp"),
