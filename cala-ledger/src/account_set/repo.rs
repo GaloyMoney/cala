@@ -143,7 +143,7 @@ impl AccountSetRepo {
     /// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
     /// per-member lock. Two statements so the acquisition order is
     /// guaranteed.
-    async fn lock_for_account_member_op(
+    pub(super) async fn lock_for_account_member_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_id: AccountId,
@@ -188,7 +188,13 @@ impl AccountSetRepo {
     /// Must run under the account-member lock protocol: the walk is a read
     /// over the set graph and the account's direct edges, and the insert
     /// that follows relies on its result staying valid until commit.
-    async fn assert_no_double_membership(
+    ///
+    /// This is the check's rare path: the set-graph cache
+    /// (`SetGraphCache::assert_no_double_membership_in_op`) resolves the
+    /// common case with an in-memory path count over its epoch-validated
+    /// edge snapshot and only falls back here on an epoch mismatch or an
+    /// unknown set id.
+    pub(super) async fn assert_no_double_membership(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_ids: &[AccountSetId],
@@ -498,21 +504,54 @@ impl AccountSetRepo {
         })
     }
 
-    #[instrument(
-        level = "debug",
-        name = "account_set.add_member_account",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub async fn add_member_account(
+    /// Batch variant of [`lock_for_account_member_op`
+    /// ](Self::lock_for_account_member_op): SHARED coarse lock, then
+    /// EXCLUSIVE per-member locks for every account, all member locks in
+    /// one id-ordered statement.
+    pub(super) async fn lock_for_account_members_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<(), AccountSetError> {
+        // Sort and dedup the lock ids in Rust so the per-member locks
+        // are always acquired in canonical id order, matching the
+        // single-pair path. A SQL ORDER BY is not a reliable
+        // substitute: the planner is free to evaluate the lock
+        // projection before any sort node.
+        let mut lock_ids = account_ids.to_vec();
+        lock_ids.sort();
+        lock_ids.dedup();
+
+        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
+            .execute(db.as_executor())
+            .await?;
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
+            FROM UNNEST($2::uuid[]) AS v(account_id)
+            "#,
+            MEMBER_LOCK_CLASS,
+            &lock_ids as &[AccountId],
+        )
+        .execute(db.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    /// Single direct-edge account-member insert (plus the outbox event).
+    ///
+    /// Precondition: the caller has taken the account-member lock
+    /// protocol for `account_id` ([`lock_for_account_member_op`
+    /// ](Self::lock_for_account_member_op)) and passed the
+    /// path-uniqueness check
+    /// (`SetGraphCache::assert_no_double_membership_in_op`) in this same
+    /// op — the sequence `AccountSets::add_member_in_op` enforces.
+    pub(super) async fn insert_member_account(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
-        self.lock_for_account_member_op(db, account_id).await?;
-        self.assert_no_double_membership(db, &[account_set_id], &[account_id])
-            .await?;
         // A single direct edge: ancestor sets are resolved by the
         // read-time walk, so there is no closure to materialize.
         sqlx::query!(
@@ -539,25 +578,17 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// Batch variant of [`add_member_account`]: attaches every
-    /// `(account_set_id, account_id)` pair in one direct-edge insert, with
-    /// a single path-uniqueness validation walk covering all pairs (and
-    /// their interactions with each other) instead of one per pair.
-    /// Callers creating many accounts (e.g. a chart-of-accounts expansion
-    /// per business entity) should prefer this over looping
-    /// `add_member_account`.
+    /// Batch variant of [`insert_member_account`
+    /// ](Self::insert_member_account): one direct-edge insert covering
+    /// every `(account_set_id, account_id)` pair, plus their outbox
+    /// events.
     ///
-    /// Lock protocol matches the single-pair path (SHARED coarse lock,
-    /// then EXCLUSIVE per-member locks, in that order) with all member
-    /// locks taken in one id-ordered statement.
-    #[instrument(
-        level = "debug",
-        name = "account_set.add_member_accounts",
-        skip_all,
-        fields(count = members.len()),
-        err(level = "warn")
-    )]
-    pub async fn add_member_accounts(
+    /// Precondition: same as the single-pair form — the caller has taken
+    /// the batch lock protocol ([`lock_for_account_members_op`
+    /// ](Self::lock_for_account_members_op)) and passed the
+    /// path-uniqueness check for all pairs in this same op — the
+    /// sequence `AccountSets::add_members_in_op` enforces.
+    pub(super) async fn insert_member_accounts(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         members: &[(AccountSetId, AccountId)],
@@ -567,34 +598,6 @@ impl AccountSetRepo {
         }
         let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
         let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
-
-        // Sort and dedup the lock ids in Rust so the per-member locks
-        // are always acquired in canonical id order, matching the
-        // single-pair path. A SQL ORDER BY is not a reliable
-        // substitute: the planner is free to evaluate the lock
-        // projection before any sort node. (`account_ids` itself must
-        // stay pair-aligned with `account_set_ids` for the insert
-        // below, hence the separate vector.)
-        let mut lock_ids = account_ids.clone();
-        lock_ids.sort();
-        lock_ids.dedup();
-
-        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
-        sqlx::query!(
-            r#"
-            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
-            FROM UNNEST($2::uuid[]) AS v(account_id)
-            "#,
-            MEMBER_LOCK_CLASS,
-            &lock_ids as &[AccountId],
-        )
-        .execute(db.as_executor())
-        .await?;
-
-        self.assert_no_double_membership(db, &account_set_ids, &account_ids)
-            .await?;
 
         // Direct edges only: one insert covers every pair; ancestor sets
         // are resolved by the read-time walk.
@@ -1004,15 +1007,18 @@ impl AccountSetRepo {
         })
     }
 
-    /// One statement, one snapshot: the entry accounts' **direct** set
+    /// One statement, one snapshot: the given accounts' **direct** set
     /// memberships plus the current set-graph epoch. This is the
-    /// set-graph cache's hot-path read — the epoch rides in the same
+    /// set-graph cache's hot-path read (posting-path ancestor resolution
+    /// AND the double-membership check) — the epoch rides in the same
     /// statement, so an epoch match proves the cached edge graph equals
     /// the committed graph at this statement's snapshot.
     ///
-    /// Returns `None` when the accounts have no direct memberships at
-    /// all (no ancestors to resolve, no locks to take; the epoch is
-    /// irrelevant).
+    /// Anchored on the always-present epoch row: the epoch comes back
+    /// even when the accounts have no direct memberships at all
+    /// (`seeds` empty). The membership check needs exactly that case —
+    /// zero existing memberships is its dominant input, and it still has
+    /// to validate the new pairs against the epoch-matched cached graph.
     ///
     /// Deliberately takes NO locks: the ancestors are unknowable until
     /// the seeds come back and are expanded. Locking "assumed" ancestors
@@ -1027,31 +1033,35 @@ impl AccountSetRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
-    ) -> Result<Option<DirectMembershipProbe>, AccountSetError> {
+    ) -> Result<DirectMembershipProbe, AccountSetError> {
         let rows = sqlx::query!(
             r#"
             SELECT
-                m.member_account_id AS "account_id!: AccountId",
-                m.account_set_id AS "set_id!: AccountSetId",
-                (SELECT epoch FROM cala_account_set_graph_epoch) AS "epoch!"
-            FROM cala_account_set_member_accounts m
-            WHERE m.member_account_id = ANY($1)
+                g.epoch AS "epoch!",
+                m.member_account_id AS "account_id?: AccountId",
+                m.account_set_id AS "set_id?: AccountSetId"
+            FROM cala_account_set_graph_epoch g
+            LEFT JOIN cala_account_set_member_accounts m
+                ON m.member_account_id = ANY($1)
             "#,
             account_ids as &[AccountId],
         )
         .fetch_all(op.as_executor())
         .await?;
 
-        let Some(epoch) = rows.first().map(|row| row.epoch) else {
-            return Ok(None);
-        };
-        Ok(Some(DirectMembershipProbe {
+        // The epoch table's one row is created by the migration; an empty
+        // result cannot legitimately happen. Degrade to a value below
+        // every possible snapshot epoch (DB epochs are >= 0, the cache's
+        // cold sentinel is -1) rather than panic, so every consumer takes
+        // its correct-by-construction fallback on this impossible input.
+        let epoch = rows.first().map(|row| row.epoch).unwrap_or(i64::MIN);
+        Ok(DirectMembershipProbe {
             epoch,
             seeds: rows
                 .into_iter()
-                .map(|row| (row.account_id, row.set_id))
+                .filter_map(|row| Some((row.account_id?, row.set_id?)))
                 .collect(),
-        }))
+        })
     }
 
     /// The set-graph cache's rare-path fallback (cold cache, epoch

@@ -232,8 +232,16 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
+                // Account-member attach sequence: lock protocol first,
+                // then the path-uniqueness check (in-memory on the
+                // set-graph cache, SQL walk fallback), then the
+                // direct-edge insert the check's verdict fences.
+                self.repo.lock_for_account_member_op(&mut *op, id).await?;
+                self.set_graph_cache
+                    .assert_no_double_membership_in_op(op, &[account_set_id], &[id])
+                    .await?;
                 self.repo
-                    .add_member_account(&mut *op, account_set_id, id)
+                    .insert_member_account(&mut *op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -306,7 +314,18 @@ impl AccountSets {
             });
         }
 
-        self.repo.add_member_accounts(op, members).await?;
+        // Batch attach sequence, mirroring the single-pair path: batch
+        // lock protocol, one path-uniqueness check covering all pairs
+        // (and their interactions with each other), one insert.
+        let account_ids: Vec<AccountId> =
+            members.iter().map(|(_, account_id)| *account_id).collect();
+        self.repo
+            .lock_for_account_members_op(op, &account_ids)
+            .await?;
+        self.set_graph_cache
+            .assert_no_double_membership_in_op(op, &account_set_ids, &account_ids)
+            .await?;
+        self.repo.insert_member_accounts(op, members).await?;
 
         Ok(())
     }

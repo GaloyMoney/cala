@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                g.epoch AS \"epoch!\",\n                m.member_account_id AS \"account_id?: AccountId\",\n                m.account_set_id AS \"set_id?: AccountSetId\"\n            FROM cala_account_set_graph_epoch g\n            LEFT JOIN cala_account_set_member_accounts m\n                ON m.member_account_id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "epoch!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id?: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "set_id?: AccountSetId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "814e1e069f0f665a1368144cbb71ec1139d868e6a8d843adeb05bade7a7b44cd"
+}
