@@ -1,3 +1,23 @@
+# [cala release v0.22.2](https://github.com/GaloyMoney/cala/releases/tag/0.22.2)
+
+
+
+### Bug Fixes
+
+- Surface fuzz-found panic paths as errors (#825)
+
+### Documentation
+
+- Keep code comments self-contained
+
+### Performance
+
+- Kill the double-membership walk hot path — merged CTE + epoch-cached check (#833)
+
+### Testing
+
+- Add cargo-fuzz workspace for cel interpreter and core types (#826)
+
 # [cala release v0.22.1](https://github.com/GaloyMoney/cala/releases/tag/0.22.1)
 
 
