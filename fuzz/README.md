@@ -26,21 +26,14 @@ use `-s none` (the default AddressSanitizer build requires a nightly
 toolchain):
 
 ```sh
-# one-time: bootstrap the corpus from the committed seeds
-for t in cel_compile cel_evaluate core_types_json param_coerce balance_math velocity_enforce effective_balance ec_rollup_batch primitives_parse; do
-  mkdir -p fuzz/corpus/$t && cp fuzz/seeds/$t/* fuzz/corpus/$t/
-done
+# fuzz (Ctrl-C to stop). Easiest via the shared runner (handles all targets
+# in parallel, SQLX_OFFLINE, etc.):
+make fuzz
 
-# fuzz (Ctrl-C to stop)
+# or one target at a time:
 cargo fuzz run -s none cel_compile
-cargo fuzz run -s none cel_evaluate
 cargo fuzz run -s none core_types_json
-cargo fuzz run -s none param_coerce
-cargo fuzz run -s none balance_math
-cargo fuzz run -s none velocity_enforce
-cargo fuzz run -s none effective_balance
-cargo fuzz run -s none ec_rollup_batch
-cargo fuzz run -s none primitives_parse
+# ...
 ```
 
 `balance_math`, `velocity_enforce`, `effective_balance` and `ec_rollup_batch`
@@ -54,9 +47,26 @@ SQLX_OFFLINE=true cargo fuzz run -s none effective_balance
 SQLX_OFFLINE=true cargo fuzz run -s none ec_rollup_batch
 ```
 
-`fuzz/corpus/` is gitignored — it is the working corpus the fuzzer grows.
-`fuzz/seeds/` is committed; add interesting inputs there (one expression /
-JSON document per file).
+## Corpus & seeds
+
+Both `fuzz/corpus/` (the working corpus the fuzzer grows) and `fuzz/seeds/`
+(a curated bootstrap set) are **gitignored** — the corpus lives in GCS, not
+ git, matching es-entity. The Concourse `fuzz` job restores the latest
+`corpus-v*.tgz` from `gs://$BUCKET/cala-artifacts/fuzz-corpus/` before each
+run and stores the evolved corpus back, so it accumulates across runs.
+
+To bootstrap the GCS corpus from a local `fuzz/seeds/` set (one-time, from a
+`gcloud`-authed machine; `GCS_BUCKET` is the same `staging-gcp-creds.bucket_name`
+the CI job uses):
+
+```sh
+GCS_BUCKET=<bucket> make fuzz-seed-corpus   # copies seeds -> fuzz/corpus, tars, uploads
+make fuzz-seed-corpus                        # without GCS_BUCKET: just seeds local fuzz/corpus/
+```
+
+The structured multi-document targets (`velocity_enforce` = 5 JSON docs,
+`effective_balance` = 4, `ec_rollup_batch` = 2, joined by `0xFF`) gain coverage
+very slowly from scratch, so seeding the bucket once is recommended.
 
 Crash artifacts land in `fuzz/artifacts/<target>/`. Reproduce one with:
 

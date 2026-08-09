@@ -63,3 +63,27 @@ check-event-schemas: event-schemas
 # parallel for $(FUZZ_TIME)s; the corpus lives in fuzz/corpus/ (gitignored).
 fuzz:
 	SQLX_OFFLINE=true FUZZ_SECONDS=$(FUZZ_TIME) bash ci/vendor/tasks/fuzz.sh
+
+# One-time bootstrap of the GCS fuzz corpus from the local fuzz/seeds/ set
+# (gitignored — the corpus, including seeds, lives in GCS, not git; matches
+# es-entity). Copies seeds into fuzz/corpus/, and when GCS_BUCKET is set
+# (and gcloud is authed) uploads a corpus-v<ts>.tgz to the same prefix the
+# Concourse `fuzz` job reads/writes. Without GCS_BUCKET it just builds the
+# local corpus and prints the upload command.
+fuzz-seed-corpus:
+	@set -e; \
+	for t in $$(cd fuzz && cargo fuzz list); do \
+	  mkdir -p fuzz/corpus/$$t; \
+	  [ -d fuzz/seeds/$$t ] && cp -R fuzz/seeds/$$t/. fuzz/corpus/$$t/ 2>/dev/null || true; \
+	done; \
+	if [ -z "$$GCS_BUCKET" ]; then \
+	  echo "GCS_BUCKET not set — seeded local fuzz/corpus/ from fuzz/seeds/."; \
+	  echo "To bootstrap the CI corpus (needs gcloud auth):"; \
+	  echo "  GCS_BUCKET=<bucket> make fuzz-seed-corpus"; \
+	else \
+	  ts="corpus-v$$(date -u +%Y%m%d-%H%M%S).tgz"; \
+	  tar -czf "$$ts" -C fuzz corpus; \
+	  gsutil cp "$$ts" "gs://$$GCS_BUCKET/cala-artifacts/fuzz-corpus/"; \
+	  rm -f "$$ts"; \
+	  echo "uploaded seed corpus -> gs://$$GCS_BUCKET/cala-artifacts/fuzz-corpus/$$ts"; \
+	fi

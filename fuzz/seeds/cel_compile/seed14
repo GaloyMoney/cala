@@ -1,1 +1,0 @@
-decimal.Cmp(decimal('2'), decimal('1')) > 0

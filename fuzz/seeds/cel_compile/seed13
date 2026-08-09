@@ -1,1 +1,0 @@
-decimal.Mul(decimal('2.5'), decimal('4'))
