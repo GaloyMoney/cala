@@ -108,6 +108,12 @@ impl<'a> EffectiveBalanceData<'a> {
     }
 
     pub fn re_calculate_snapshots(&mut self, created_at: DateTime<Utc>) {
+        // Nothing to recompute when there are no updates and no prior
+        // snapshot to carry forward (the seeding path below indexes
+        // `self.updates[0]`, which would otherwise panic).
+        if self.updates.is_empty() {
+            return;
+        }
         self.updates.sort();
         let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
             Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),

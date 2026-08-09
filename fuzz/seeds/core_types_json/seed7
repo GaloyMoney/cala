@@ -1,0 +1,1 @@
+{"id":"00000000-0000-0000-0000-000000000000","name":"l","description":"d","window":[],"condition":"true","currency":"USD","params":[{"name":"x","type":"Integer","default":null,"description":null}],"limit":{"timestamp_source":null,"balance":[{"limit_type":"available","layer":"SETTLED","amount":"decimal('1')","enforcement_direction":"DEBIT","start":"date()","end":null}]}}

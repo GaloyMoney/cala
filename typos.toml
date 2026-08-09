@@ -1,5 +1,5 @@
 [files]
-extend-exclude = ["CHANGELOG.md"]
+extend-exclude = ["CHANGELOG.md", "fuzz/seeds", "fuzz/corpus", "fuzz/artifacts"]
 
 [default.extend-words]
 accoun = "accoun"
