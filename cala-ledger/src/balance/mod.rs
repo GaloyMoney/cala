@@ -50,10 +50,10 @@ use crate::{journal::Journals, outbox::*, primitives::JournalId};
 
 pub use account_balance::*;
 pub use cursor::*;
-use effective::*;
-use error::BalanceError;
 #[cfg(feature = "fuzz")]
 pub use effective::fuzz_recalculate;
+use effective::*;
+use error::BalanceError;
 use repo::*;
 pub(crate) use snapshot::*;
 

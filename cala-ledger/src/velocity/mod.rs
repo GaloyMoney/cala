@@ -274,9 +274,7 @@ mod __fuzz {
     use super::account_control::AccountVelocityControl;
     use super::context::EvalContext;
     use cala_types::{
-        balance::BalanceSnapshot,
-        entry::EntryValues,
-        transaction::TransactionValues,
+        balance::BalanceSnapshot, entry::EntryValues, transaction::TransactionValues,
         velocity::VelocityContextAccountValues,
     };
     use es_entity::clock::Clock;
@@ -298,9 +296,7 @@ mod __fuzz {
         let Ok(tx) = serde_json::from_slice::<TransactionValues>(parts[3]) else {
             return;
         };
-        let Ok(account) =
-            serde_json::from_slice::<VelocityContextAccountValues>(parts[4])
-        else {
+        let Ok(account) = serde_json::from_slice::<VelocityContextAccountValues>(parts[4]) else {
             return;
         };
 

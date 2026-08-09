@@ -1,7 +1,10 @@
 #![no_main]
 
 use cala_ledger::balance::AccountBalance;
-use cala_types::{balance::BalanceSnapshot, primitives::{DebitOrCredit, Layer}};
+use cala_types::{
+    balance::BalanceSnapshot,
+    primitives::{DebitOrCredit, Layer},
+};
 use libfuzzer_sys::fuzz_target;
 
 // AccountBalance derives layer/direction math (settled - pending +/- encumbrance)
