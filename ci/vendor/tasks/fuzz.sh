@@ -18,12 +18,6 @@
 #!   CORPUS_TARBALL_IN   glob of a corpus tarball to extract before fuzzing
 #!   CORPUS_TARBALL_OUT  path to write the evolved corpus tarball after fuzzing
 #!
-#! A repo may optionally ship a curated seed corpus at `fuzz/seeds/<target>/`
-#! (one input per file). It is merged into `fuzz/corpus/<target>/` before every
-#! run, after the stored corpus is restored — so coverage re-bootstraps even if
-#! the stored corpus is pruned, and seed changes travel with the code. Repos
-#! without `fuzz/seeds/` are unaffected (backward compatible).
-#!
 #! Requires: bash, git, cargo, tar, and cargo-fuzz (auto-installed if missing).
 
 set -euo pipefail
@@ -38,6 +32,13 @@ fi
 
 FUZZ_SECONDS="${FUZZ_SECONDS:-60}"
 
+#! Build with the committed SQLx offline cache (.sqlx/) instead of connecting to
+#! a database — there is no Postgres in a fuzz build, and coverage-guided fuzzing
+#! wants pure, deterministic targets anyway. Harmless for non-SQLx repos (the
+#! var is ignored) and overridable via the environment. Mirrors what each repo's
+#! local `make fuzz` already does.
+export SQLX_OFFLINE="${SQLX_OFFLINE:-true}"
+
 #! Restore the corpus (no-op unless CORPUS_TARBALL_IN is set and matches a file).
 mkdir -p fuzz/corpus
 if [ -n "${CORPUS_TARBALL_IN:-}" ] && ls -d $CORPUS_TARBALL_IN >/dev/null 2>&1; then
@@ -47,21 +48,6 @@ fi
 
 mapfile -t targets < <(cd fuzz && cargo fuzz list)
 echo "discovered ${#targets[@]} target(s): ${targets[*]}"
-
-#! Merge any committed seed corpus (fuzz/seeds/<target>/) into fuzz/corpus/.
-#! Optional + backward compatible: skipped per-target when the dir is absent,
-#! so repos without seeds (e.g. es-entity) are unaffected. Done after the
-#! stored corpus is restored and per discovered target (no phantom corpus dirs
-#! for stale seed folders). libFuzzer de-duplicates, so re-merging each run is
-#! cheap and keeps the curated baseline present even if the corpus is pruned.
-for target in "${targets[@]}"; do
-  seed_dir="fuzz/seeds/$target"
-  [ -d "$seed_dir" ] || continue
-  mkdir -p "fuzz/corpus/$target"
-  # `/.` copies the directory's contents (incl. dotfiles) into the corpus.
-  cp -R "$seed_dir"/. "fuzz/corpus/$target/" 2>/dev/null || true
-done
-[ -d fuzz/seeds ] && echo "merged fuzz/seeds/ into fuzz/corpus/"
 
 (cd fuzz && cargo fuzz build --sanitizer=none)
 

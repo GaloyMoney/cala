@@ -8,9 +8,8 @@ directories:
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'feat(fuzz): merge fuzz/seeds/<target>/ into the corpus before
-        each run...'
-      sha: 0564af2488d0d64fae1f2345b1d23b3b09f65ee6
+      commitTitle: 'feat(fuzz): default SQLX_OFFLINE=true in the fuzz build...'
+      sha: 0cde7c61a95c856565a1a028a876ebaf60df3adc
     path: .
   path: vendor
 kind: LockConfig
