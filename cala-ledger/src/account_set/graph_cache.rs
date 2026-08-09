@@ -9,9 +9,19 @@
 //! ancestor expansion in memory, keeping the fused walk+locks SQL only
 //! as the rare-path fallback.
 //!
+//! The same snapshot also backs the attach path's **double-membership
+//! check** (`assert_no_double_membership_in_op`): under the
+//! account-member lock protocol the SHARED coarse lock excludes set-edge
+//! writers for the whole op, so an epoch-matched snapshot can answer the
+//! path-uniqueness question in memory — one indexed probe instead of the
+//! recursive SQL walk that ran on every account attach (~5x per loan in
+//! lana, ~0.45 DB cores at the 2026-08-08 stress soak).
+//!
 //! Layering: `AccountSets` (service) calls this cache; this cache holds
 //! a handle on `AccountSetRepo` and orchestrates — ALL SQL lives in
-//! `repo.rs`, all cache state and in-memory graph logic lives here.
+//! `repo.rs`, all cache state and in-memory graph logic lives here. The
+//! call graph is strictly service -> cache -> repo; the repo never
+//! calls back up into the cache.
 //!
 //! Why the split read is safe — the two inputs have opposite write
 //! rates:
@@ -245,16 +255,16 @@ impl SetGraphCache {
             ids.dedup();
             ids
         };
-        let Some(probe) = self
+        let probe = self
             .inner
             .repo
             .probe_direct_memberships_in_op(op, &account_ids)
-            .await?
-        else {
+            .await?;
+        if probe.seeds.is_empty() {
             // No direct memberships => no ancestors, no locks to take.
             span.record("path", "no_memberships");
             return Ok(HashMap::new());
-        };
+        }
 
         let snapshot = self.load();
         if snapshot.epoch != probe.epoch {
@@ -341,6 +351,212 @@ impl SetGraphCache {
                     .await
             }
         }
+    }
+
+    /// Path-uniqueness validation for account-member attaches — the
+    /// cache-surface form of
+    /// [`AccountSetRepo::assert_no_double_membership`], which remains the
+    /// rare-path fallback. Returns
+    /// [`AccountSetError::MemberAlreadyAdded`] if any `(account, set)`
+    /// containment would be reachable via more than one membership path.
+    ///
+    /// Hot path: one probe statement (the accounts' live direct
+    /// memberships + the graph epoch, same snapshot), then an in-memory
+    /// path count over the cached edge graph — no recursive SQL. This
+    /// runs ~5x per loan in lana (every facility/collateral/deposit
+    /// account attach); the SQL walk it replaces was ~0.45 DB cores at
+    /// the 2026-08-08 stress soak.
+    ///
+    /// Why the cached graph is sound to check against, given the caller
+    /// holds the account-member lock protocol (SHARED coarse +
+    /// EXCLUSIVE per-member, see `ADDVISORY_LOCK_ID` in `repo.rs`):
+    ///
+    /// - Set->set edges are mutated only under the EXCLUSIVE coarse
+    ///   lock, so no edge change can commit between the probe and this
+    ///   op's own commit — an epoch match therefore proves the cached
+    ///   edge graph equals the committed graph for the *whole op*, not
+    ///   just the probe instant. (Stronger than the posting path's
+    ///   guarantee, which is snapshot-point only.)
+    /// - Direct memberships are read live, in-op: the probe sees this
+    ///   op's own earlier attaches, and the per-member EXCLUSIVE lock
+    ///   serializes concurrent mutations of the same member — the only
+    ///   interleavings that could invalidate the count.
+    /// - A same-op `add_member_set` bumps the epoch in-op, so the probe
+    ///   reads the bumped value, mismatches every shared snapshot, and
+    ///   this method falls back to the SQL walk, which sees the op's
+    ///   uncommitted edge.
+    ///
+    /// Fallbacks (epoch mismatch, unknown set id mid-walk) run the SQL
+    /// walk — one round trip, exactly the pre-cache behavior. Set ids
+    /// unknown only as *seeds* (fresh sets attached in this op, no epoch
+    /// bump) are resolved via the op-local overlay first, mirroring
+    /// `fetch_mappings_in_op`'s supplement path.
+    #[instrument(
+        level = "debug",
+        name = "account_set.assert_no_double_membership",
+        skip(self, op, account_set_ids, account_ids),
+        fields(pairs = account_ids.len(), path = tracing::field::Empty),
+        err(level = "warn")
+    )]
+    pub(super) async fn assert_no_double_membership_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_set_ids: &[AccountSetId],
+        account_ids: &[AccountId],
+    ) -> Result<(), AccountSetError> {
+        let span = tracing::Span::current();
+
+        let distinct_account_ids: Vec<AccountId> = {
+            let mut ids = account_ids.to_vec();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        };
+        let probe = self
+            .inner
+            .repo
+            .probe_direct_memberships_in_op(op, &distinct_account_ids)
+            .await?;
+
+        let snapshot = self.load();
+        if snapshot.epoch != probe.epoch {
+            span.record(
+                "path",
+                if snapshot.epoch == COLD_EPOCH {
+                    "fallback_cold"
+                } else {
+                    "fallback_epoch"
+                },
+            );
+            self.spawn_refresh();
+            return self
+                .inner
+                .repo
+                .assert_no_double_membership(op, account_set_ids, account_ids)
+                .await;
+        }
+
+        // Target sets of the new pairs (and, in principle, seed sets from
+        // the probe) can be unknown to the snapshot when created after the
+        // last refresh — including in this op. Fetch them op-locally as an
+        // overlay; never installed.
+        let missing: Vec<AccountSetId> = {
+            let mut missing: Vec<_> = account_set_ids
+                .iter()
+                .chain(probe.seeds.iter().map(|(_, set_id)| set_id))
+                .copied()
+                .filter(|set_id| !snapshot.meta.contains_key(set_id))
+                .collect();
+            missing.sort_unstable();
+            missing.dedup();
+            missing
+        };
+        let overlay = if missing.is_empty() {
+            None
+        } else {
+            let nodes = self
+                .inner
+                .repo
+                .fetch_set_graph_nodes_in_op(op, &missing)
+                .await?;
+            let (parents, meta) = index_nodes(nodes);
+            Some(Overlay { parents, meta })
+        };
+
+        match Self::count_membership_paths(
+            &snapshot,
+            overlay.as_ref(),
+            account_set_ids,
+            account_ids,
+            &probe.seeds,
+        ) {
+            Some(false) => {
+                span.record(
+                    "path",
+                    if overlay.is_some() {
+                        "supplement"
+                    } else {
+                        "memory"
+                    },
+                );
+                Ok(())
+            }
+            Some(true) => Err(AccountSetError::MemberAlreadyAdded),
+            // A set unknown to snapshot + overlay surfaced mid-walk. With
+            // a matching epoch this should be unreachable — but the SQL
+            // walk is always correct, so fall back rather than reason
+            // about it (mirrors fetch_mappings_in_op).
+            None => {
+                span.record("path", "fallback_unknown");
+                self.inner
+                    .repo
+                    .assert_no_double_membership(op, account_set_ids, account_ids)
+                    .await
+            }
+        }
+    }
+
+    /// The in-memory mirror of the SQL walk's conflict predicate: seed
+    /// each account with its new target sets (pair multiplicity
+    /// preserved) plus its existing direct memberships, expand every
+    /// seed upward over snapshot + overlay counting *paths* (unlike
+    /// [`Self::expand`], which dedups via a visited set — reachability
+    /// is the wrong question here), and report a conflict as soon as any
+    /// `(account, set)` is reached twice.
+    ///
+    /// Returns `None` if a set id is unknown to snapshot + overlay —
+    /// caller falls back to the SQL walk.
+    ///
+    /// Terminates unconditionally: every pop increments some count and
+    /// the second increment of any count returns immediately, so pops
+    /// are bounded by (known sets + 1) per account. A corrupted cyclic
+    /// graph revisits a set and reports a conflict — a conservative
+    /// reject, where the SQL walk's unbounded UNION ALL recursion would
+    /// not terminate at all.
+    fn count_membership_paths(
+        snapshot: &GraphSnapshot,
+        overlay: Option<&Overlay>,
+        new_set_ids: &[AccountSetId],
+        new_account_ids: &[AccountId],
+        existing_seeds: &[(AccountId, AccountSetId)],
+    ) -> Option<bool> {
+        let known = |set_id: &AccountSetId| -> bool {
+            snapshot.meta.contains_key(set_id)
+                || overlay.is_some_and(|o| o.meta.contains_key(set_id))
+        };
+        let parents_of = |set_id: &AccountSetId| -> &[AccountSetId] {
+            snapshot
+                .parents
+                .get(set_id)
+                .or_else(|| overlay.and_then(|o| o.parents.get(set_id)))
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+        };
+
+        let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+        for (set_id, account_id) in new_set_ids.iter().zip(new_account_ids) {
+            per_account.entry(*account_id).or_default().push(*set_id);
+        }
+        for (account_id, set_id) in existing_seeds {
+            per_account.entry(*account_id).or_default().push(*set_id);
+        }
+
+        for seeds in per_account.into_values() {
+            let mut path_counts: HashMap<AccountSetId, u32> = HashMap::new();
+            let mut queue: VecDeque<AccountSetId> = seeds.into();
+            while let Some(set_id) = queue.pop_front() {
+                if !known(&set_id) {
+                    return None;
+                }
+                let count = path_counts.entry(set_id).or_default();
+                *count += 1;
+                if *count > 1 {
+                    return Some(true);
+                }
+                queue.extend(parents_of(&set_id));
+            }
+        }
+        Some(false)
     }
 
     fn load(&self) -> Arc<GraphSnapshot> {

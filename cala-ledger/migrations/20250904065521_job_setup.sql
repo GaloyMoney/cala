@@ -59,12 +59,16 @@ CREATE INDEX idx_job_executions_running_queue_id
 -- cost_delay = 0 removes the vacuum throttle: at this table's churn
 -- rate the default 2ms delay reclaims dead tuples slower than they
 -- accumulate, and the poll query's cost grows with the backlog.
+-- log_autovacuum_min_duration = 0 logs every autovacuum pass on this table
+-- (the residual stress-load bloat is naptime/worker/xmin-bound, not tunable
+-- by the triggers above, which already sit at their floor).
 ALTER TABLE job_executions SET (
   fillfactor = 70,
   autovacuum_vacuum_scale_factor = 0.01,
   autovacuum_vacuum_threshold = 50,
   autovacuum_analyze_scale_factor = 0.02,
-  autovacuum_vacuum_cost_delay = 0
+  autovacuum_vacuum_cost_delay = 0,
+  log_autovacuum_min_duration = 0
 );
 
 CREATE OR REPLACE FUNCTION notify_job_event() RETURNS TRIGGER AS $$

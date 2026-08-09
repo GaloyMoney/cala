@@ -1069,3 +1069,242 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// The double-membership check's in-memory path (epoch-matched set-graph
+/// cache snapshot) must enforce exactly what the SQL walk enforces. The
+/// hierarchy here is fully committed BEFORE the cache warms, so every
+/// attach below runs against a matching epoch and resolves in memory;
+/// the same scenarios in `errors_on_double_membership` run against a
+/// cold or epoch-bumped cache and exercise the fallback walk.
+#[tokio::test]
+async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    // gp <- {branch_a, branch_b}: the shared ancestor that turns a
+    // second attach into a second path.
+    let gp = cala.account_sets().create(new_set("MEM GP")).await.unwrap();
+    let branch_a = cala
+        .account_sets()
+        .create(new_set("MEM BRANCH A"))
+        .await
+        .unwrap();
+    let branch_b = cala
+        .account_sets()
+        .create(new_set("MEM BRANCH B"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(gp.id(), branch_a.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(gp.id(), branch_b.id())
+        .await
+        .unwrap();
+
+    // Warm the cache: the first attach's check runs against a stale
+    // epoch (fallback walk) and triggers the installing refresh.
+    let (warmup, acct) = helpers::test_accounts();
+    let warmup = cala.accounts().create(warmup).await.unwrap();
+    let acct = cala.accounts().create(acct).await.unwrap();
+    cala.account_sets()
+        .add_member(branch_a.id(), warmup.id())
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    // Warm single-pair path: legit attach passes, the diamond is
+    // rejected.
+    cala.account_sets()
+        .add_member(branch_a.id(), acct.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member(branch_b.id(), acct.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Warm batch path: cross-pair conflict rejected, distinct accounts
+    // pass.
+    let (other, third) = helpers::test_accounts();
+    let other = cala.accounts().create(other).await.unwrap();
+    let third = cala.accounts().create(third).await.unwrap();
+    let res = cala
+        .account_sets()
+        .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), other.id())])
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    cala.account_sets()
+        .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), third.id())])
+        .await
+        .unwrap();
+
+    // In-op probe visibility: the first attach's uncommitted row must
+    // count as an existing path for the second attach in the same op.
+    let (fourth, fifth) = helpers::test_accounts();
+    let fourth = cala.accounts().create(fourth).await.unwrap();
+    let fifth = cala.accounts().create(fifth).await.unwrap();
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, branch_a.id(), fourth.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member_in_op(&mut op, branch_b.id(), fourth.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    drop(op);
+
+    // Duplicate direct edge in one op: the second identical attach is
+    // rejected before the unique constraint would fire.
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, branch_a.id(), fifth.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member_in_op(&mut op, branch_a.id(), fifth.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    drop(op);
+
+    Ok(())
+}
+
+/// Same-op structure interactions with the in-memory check: a set
+/// created inside the op (no epoch bump) is unknown to the warm
+/// snapshot and resolves via the op-local overlay; a set->set edge
+/// added inside the op bumps the epoch in-op and pushes the check onto
+/// the SQL fallback, which must see the op's own uncommitted edge.
+#[tokio::test]
+async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal())
+        .await
+        .unwrap();
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let gp = cala
+        .account_sets()
+        .create(new_set("SAMEOP GP"))
+        .await
+        .unwrap();
+    let left = cala
+        .account_sets()
+        .create(new_set("SAMEOP LEFT"))
+        .await
+        .unwrap();
+    let right = cala
+        .account_sets()
+        .create(new_set("SAMEOP RIGHT"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(gp.id(), left.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member(gp.id(), right.id())
+        .await
+        .unwrap();
+
+    let (warmup, acct_a) = helpers::test_accounts();
+    let warmup = cala.accounts().create(warmup).await.unwrap();
+    let acct_a = cala.accounts().create(acct_a).await.unwrap();
+    cala.account_sets()
+        .add_member(left.id(), warmup.id())
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+    // Supplement path: create a set and attach an account to it in one
+    // op — the set is unknown to the warm snapshot and no epoch bump
+    // happens.
+    let mut op = cala.begin_operation().await?;
+    let fresh_set = cala
+        .account_sets()
+        .create_in_op(&mut op, new_set("SAMEOP FRESH"))
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member_in_op(&mut op, fresh_set.id(), acct_a.id())
+        .await
+        .unwrap();
+    op.commit().await?;
+
+    // The committed membership is a countable existing path (the fresh
+    // set still resolves through the overlay until the next refresh).
+    let res = cala
+        .account_sets()
+        .add_member(fresh_set.id(), acct_a.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // Epoch-bump fallback: attach a new set under `left` (bumps the
+    // epoch in-op), give an account a path through it, then try a second
+    // path through `right` — the fallback walk must reject using the
+    // op's own uncommitted edge.
+    let sub = cala
+        .account_sets()
+        .create(new_set("SAMEOP SUB"))
+        .await
+        .unwrap();
+    let (acct_b, _) = helpers::test_accounts();
+    let acct_b = cala.accounts().create(acct_b).await.unwrap();
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, left.id(), sub.id())
+        .await
+        .unwrap();
+    cala.account_sets()
+        .add_member_in_op(&mut op, sub.id(), acct_b.id())
+        .await
+        .unwrap();
+    let res = cala
+        .account_sets()
+        .add_member_in_op(&mut op, right.id(), acct_b.id())
+        .await;
+    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    drop(op);
+
+    Ok(())
+}

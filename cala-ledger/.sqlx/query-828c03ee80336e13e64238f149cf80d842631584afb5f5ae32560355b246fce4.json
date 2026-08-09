@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO cala_persistent_outbox_events (sequence)\n            SELECT unnest($1::bigint[]) AS sequence\n            ON CONFLICT (sequence) DO UPDATE\n            SET sequence = EXCLUDED.sequence\n            RETURNING id, sequence AS \"sequence!: i64\", payload, tracing_context, recorded_at",
+  "query": "\n            INSERT INTO cala_persistent_outbox_events (sequence)\n            SELECT unnest($1::bigint[]) AS sequence\n            ON CONFLICT (sequence) DO NOTHING\n            RETURNING id, sequence AS \"sequence!: i64\", payload, tracing_context, recorded_at",
   "describe": {
     "columns": [
       {
@@ -42,5 +42,5 @@
       false
     ]
   },
-  "hash": "f498a37b758f285f6de7be85b1fc4450b30b26e085b93ed89b6aa91b678e1156"
+  "hash": "828c03ee80336e13e64238f149cf80d842631584afb5f5ae32560355b246fce4"
 }

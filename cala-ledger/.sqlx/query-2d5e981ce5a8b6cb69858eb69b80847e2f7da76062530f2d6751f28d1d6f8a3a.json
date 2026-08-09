@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH RECURSIVE all_seeds AS (\n                SELECT v.account_id, v.account_set_id\n                FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)\n\n                UNION ALL\n                SELECT m.member_account_id AS account_id, m.account_set_id\n                FROM cala_account_set_member_accounts m\n                WHERE m.member_account_id = ANY($2)\n            ),\n            containments AS (\n                SELECT account_id, account_set_id FROM all_seeds\n\n                UNION ALL\n                SELECT c.account_id, e.account_set_id\n                FROM containments c\n                JOIN cala_account_set_member_account_sets e\n                    ON e.member_account_set_id = c.account_set_id\n            )\n            SELECT EXISTS (\n                SELECT 1 FROM containments\n                GROUP BY account_id, account_set_id\n                HAVING COUNT(*) > 1\n            ) AS \"conflict!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "conflict!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "2d5e981ce5a8b6cb69858eb69b80847e2f7da76062530f2d6751f28d1d6f8a3a"
+}

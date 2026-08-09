@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT pg_current_xact_id()::text AS \"marker!\",\n                   (SELECT CASE WHEN is_called THEN last_value ELSE 0 END\n                    FROM cala_persistent_outbox_events_sequence_seq) AS \"head!: i64\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "marker!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "head!: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "9cd08dc9702f6951f1d3df0c07b15c477dbc4d6fcb04bbc87dc8e047ccfaf749"
+}
