@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT pg_snapshot_xmin(pg_current_snapshot()) > $1::text::xid8 AS \"passed!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "passed!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "aa32d159af6a91b2051349fd77e13ea91d6e89dbede021c7e0b20d4389ab9d16"
+}

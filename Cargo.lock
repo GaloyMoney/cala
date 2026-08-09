@@ -897,9 +897,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c87798b941975265c631a0c4eb350bedad86ac4620012d82e21bc67c5dc44d0"
+checksum = "29b51b7a4eb0746ab8f89ebfab855cc24249b0efeb410b1c49c4e3026e73de29"
 dependencies = [
  "async-stream",
  "chrono",
@@ -925,9 +925,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.3"
+version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3af0555969e3acd0f146741b43831761b32d72339e29944eefc581d4e0db3672"
+checksum = "6d090ec1cf62cf6b515a5fb0151df13a6bc7dc4e1c1c9b17cc38de50ab11411b"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1440,9 +1440,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68bf46438d68f1d1497132533e03c69adc87a141c0b9effdcab4f27ba7b8908f"
+checksum = "096b223e2e3c5d3c62d97f4def444206dd2f272d7b0dfd57646fef2df06bf80a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1646,9 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "735fd23fee9b8d68d4be63470e0fbf56cf7c73fb01c8d5cec2378abf44fc561d"
+checksum = "dc0d91a35f0c6791681bcfab75c3a5eb4ded6465ee15fb7b6d73d885ce5962c7"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1669,9 +1669,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.7.1"
+version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c99cc2b1f9f11c16ad9a447f7cdcb150ff3f0bca10bc27353f670f5911ebabe6"
+checksum = "4220bc2166d1425ca0191d91e98e75d0fde4b11309d5103da051fabbde397735"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
