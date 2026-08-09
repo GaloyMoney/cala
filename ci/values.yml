@@ -13,6 +13,7 @@ git_charts_bot_branch: bot-bump-cala-image
 
 gar_registry_user: ((gar-creds.username))
 gar_registry_password: ((gar-creds.password))
+zenduty_webhook_url: ((zenduty.webhook_url))
 osxcross_docker_username: ((osxcross-image.username))
 osxcross_docker_password: ((osxcross-image.password))
 osxcross_repository: ((osxcross-image.repository))

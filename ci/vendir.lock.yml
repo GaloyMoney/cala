@@ -8,8 +8,8 @@ directories:
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #9 from GaloyMoney/chore/migrate-kaniko-to-oci-build-task...'
-      sha: 8653c10a6ed135eea3d26cce9772afa96e0139d6
+      commitTitle: 'Merge pull request #20 from GaloyMoney/feat/fuzz-job...'
+      sha: 9184832cfd4d1cf5ce4ac750dbb73c7090e27576
     path: .
   path: vendor
 kind: LockConfig

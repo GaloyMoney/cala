@@ -1,6 +1,9 @@
 NIX_DEPS_DIR := .nix-deps
 
-.PHONY: next-watch start-deps clean-deps setup-db reset-deps reset-deps-perf rust-example check-code build sqlx-prepare event-schemas check-event-schemas
+# Seconds each fuzz target runs in `make fuzz`.
+FUZZ_TIME := 60
+
+.PHONY: next-watch start-deps clean-deps setup-db reset-deps reset-deps-perf rust-example check-code build sqlx-prepare event-schemas check-event-schemas fuzz
 
 next-watch:
 	cargo watch -s 'cargo nextest run'
@@ -54,3 +57,9 @@ check-event-schemas: event-schemas
 	git diff --exit-code cala-ledger/schemas
 	@# Fail if generator produced untracked files (e.g., when a schema file was missing)
 	@test -z "$$(git ls-files --others --exclude-standard -- cala-ledger/schemas)"
+
+# Coverage-guided fuzzing via the shared script (ci/vendor/tasks/fuzz.sh), also
+# used by `nix run .#fuzz` and the Concourse `fuzz` job. Runs all targets in
+# parallel for $(FUZZ_TIME)s; the corpus lives in fuzz/corpus/ (gitignored).
+fuzz:
+	SQLX_OFFLINE=true FUZZ_SECONDS=$(FUZZ_TIME) bash ci/vendor/tasks/fuzz.sh

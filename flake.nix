@@ -380,6 +380,26 @@
         echo "Performance report generated: $OUTPUT_FILE"
       '';
 
+      # Fuzz runner (cargo-fuzz / libFuzzer). Wraps the shared
+      # ci/vendor/tasks/fuzz.sh (from galoy-concourse-shared) with the Rust
+      # toolchain + cargo-fuzz on PATH so the same script runs locally
+      # (`nix run .#fuzz` / `make fuzz`) and in the Concourse `fuzz` job.
+      # Pure targets — no Postgres. FUZZ_SECONDS etc. are passed through the
+      # environment. cala-ledger targets need SQLX_OFFLINE=true.
+      fuzz-runner = pkgs.writeShellScriptBin "fuzz" ''
+        set -e
+        export SQLX_OFFLINE=true
+        export PATH="${pkgs.lib.makeBinPath [
+          rustToolchain
+          pkgs.cargo-fuzz
+          pkgs.gnutar
+          pkgs.coreutils
+          pkgs.git
+          pkgs.stdenv.cc
+        ]}:$PATH"
+        exec bash ${./ci/vendor/tasks/fuzz.sh} "$@"
+      '';
+
       nextest-runner = pkgs.writeShellScriptBin "nextest-runner" ''
         set -e
 
@@ -418,6 +438,7 @@
         packages = {
           nextest = nextest-runner;
           perf = perf-runner;
+          fuzz = fuzz-runner;
           setup-db-dev = setupDbDev;
           dev-env = devEnv;
           inherit nix-deps-base;
@@ -431,6 +452,11 @@
         apps.dev-env = flake-utils.lib.mkApp {
           drv = devEnv;
           name = "cala-dev-env";
+        };
+
+        apps.fuzz = flake-utils.lib.mkApp {
+          drv = fuzz-runner;
+          name = "fuzz";
         };
 
         checks = {
