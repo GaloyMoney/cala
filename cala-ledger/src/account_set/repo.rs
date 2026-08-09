@@ -163,14 +163,27 @@ impl AccountSetRepo {
 
     /// Rejects account-member additions that would give an account a second
     /// membership path to any set (double membership — see
-    /// [`ADDVISORY_LOCK_ID`]). For every `(account_set_id, account_id)`
-    /// pair it expands the containments the new direct edge would create
-    /// (the target set plus all of its ancestors) and combines them with
-    /// the account's existing containments; any set the same account would
-    /// reach twice — via an existing path, via the new edge, or across two
-    /// pairs of the same batch — is a violation. Surfaced as
+    /// [`ADDVISORY_LOCK_ID`]). Containment paths are counted in ONE
+    /// recursive walk seeded by both the new `(account_set_id, account_id)`
+    /// pairs and the accounts' existing direct memberships: a recursive
+    /// UNION ALL walk from the union of seeds equals the union of the
+    /// per-seed walks, path multiplicity included, so any `(account, set)`
+    /// the same account reaches twice — via an existing path, via the new
+    /// edge, or across two pairs of the same batch — surfaces as a group
+    /// with more than one row. Reported as
     /// [`AccountSetError::MemberAlreadyAdded`], the same error the old
     /// closure's unique-constraint collision produced.
+    ///
+    /// The single-walk form is also what keeps the plan sane once the
+    /// prepared statement flips to a generic plan (PostgreSQL switches
+    /// after five executions): with a merged seed set the planner hashes
+    /// the invariant edge table ONCE per call and probes it with the
+    /// recursion worktable. Split into two walks (the previous form), the
+    /// worktable estimate is small enough that the planner hashes the
+    /// worktable instead and re-scans the whole edge table at every
+    /// recursion level — measured at ~5 full seq scans of
+    /// `cala_account_set_member_account_sets` per call under load, the
+    /// dominant DB cost of the attach path.
     ///
     /// Must run under the account-member lock protocol: the walk is a read
     /// over the set graph and the account's direct edges, and the insert
@@ -183,33 +196,26 @@ impl AccountSetRepo {
     ) -> Result<(), AccountSetError> {
         let row = sqlx::query!(
             r#"
-            WITH RECURSIVE new_containments AS (
+            WITH RECURSIVE all_seeds AS (
                 SELECT v.account_id, v.account_set_id
                 FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
 
                 UNION ALL
-                SELECT nc.account_id, e.account_set_id
-                FROM new_containments nc
-                JOIN cala_account_set_member_account_sets e
-                    ON e.member_account_set_id = nc.account_set_id
-            ),
-            existing_containments AS (
                 SELECT m.member_account_id AS account_id, m.account_set_id
                 FROM cala_account_set_member_accounts m
                 WHERE m.member_account_id = ANY($2)
+            ),
+            containments AS (
+                SELECT account_id, account_set_id FROM all_seeds
 
                 UNION ALL
-                SELECT ec.account_id, e.account_set_id
-                FROM existing_containments ec
+                SELECT c.account_id, e.account_set_id
+                FROM containments c
                 JOIN cala_account_set_member_account_sets e
-                    ON e.member_account_set_id = ec.account_set_id
+                    ON e.member_account_set_id = c.account_set_id
             )
             SELECT EXISTS (
-                SELECT 1 FROM (
-                    SELECT account_id, account_set_id FROM new_containments
-                    UNION ALL
-                    SELECT account_id, account_set_id FROM existing_containments
-                ) AS all_containments
+                SELECT 1 FROM containments
                 GROUP BY account_id, account_set_id
                 HAVING COUNT(*) > 1
             ) AS "conflict!"
