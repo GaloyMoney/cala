@@ -16,7 +16,14 @@
 #!   FUZZ_SECONDS        seconds to fuzz each target (default: 60)
 #!   FUZZ_JOBS           libFuzzer `-jobs` per target; cores ~= #targets * FUZZ_JOBS
 #!   CORPUS_TARBALL_IN   glob of a corpus tarball to extract before fuzzing
-#!   CORPUS_TARBALL_OUT  path to write the evolved corpus tarball after fuzzing
+#!   CORPUS_TARBALL_OUT    path to write the evolved corpus tarball after fuzzing
+#!   ARTIFACTS_TARBALL_OUT path to write a tarball of crash/oom artifacts (if any)
+#!
+#! A repo may optionally ship a curated seed corpus at `fuzz/seeds/<target>/`
+#! (one input per file). It is merged into `fuzz/corpus/<target>/` before every
+#! run, after the stored corpus is restored — so coverage re-bootstraps even if
+#! the stored corpus is pruned, and seed changes travel with the code. Repos
+#! without `fuzz/seeds/` are unaffected (backward compatible).
 #!
 #! Requires: bash, git, cargo, tar, and cargo-fuzz (auto-installed if missing).
 
@@ -49,6 +56,21 @@ fi
 mapfile -t targets < <(cd fuzz && cargo fuzz list)
 echo "discovered ${#targets[@]} target(s): ${targets[*]}"
 
+#! Merge any committed seed corpus (fuzz/seeds/<target>/) into fuzz/corpus/.
+#! Optional + backward compatible: skipped per-target when the dir is absent,
+#! so repos without seeds (e.g. es-entity) are unaffected. Done after the
+#! stored corpus is restored and per discovered target (no phantom corpus dirs
+#! for stale seed folders). libFuzzer de-duplicates, so re-merging each run is
+#! cheap and keeps the curated baseline present even if the corpus is pruned.
+for target in "${targets[@]}"; do
+  seed_dir="fuzz/seeds/$target"
+  [ -d "$seed_dir" ] || continue
+  mkdir -p "fuzz/corpus/$target"
+  # `/.` copies the directory's contents (incl. dotfiles) into the corpus.
+  cp -R "$seed_dir"/. "fuzz/corpus/$target/" 2>/dev/null || true
+done
+[ -d fuzz/seeds ] && echo "merged fuzz/seeds/ into fuzz/corpus/"
+
 (cd fuzz && cargo fuzz build --sanitizer=none)
 
 JOBS_ARG=""
@@ -72,12 +94,23 @@ done
 if [ "$rc" -ne 0 ]; then
   echo "==== FUZZ CRASH DETECTED ===="
   find fuzz/artifacts -type f -print || true
-  exit "$rc"
 fi
 
-#! Package the evolved corpus (no-op unless CORPUS_TARBALL_OUT is set).
+#! Always package the corpus and any crash artifacts — even when a target
+#! crashed. A discovery must not discard the run's coverage gains or the
+#! failing input. Packaging runs before the (possible) non-zero exit so the
+#! job's ensure-steps can still upload both; the script still exits non-zero
+#! so the build surfaces the discovery (e.g. via on_failure).
 if [ -n "${CORPUS_TARBALL_OUT:-}" ]; then
   mkdir -p "$(dirname "$CORPUS_TARBALL_OUT")"
   tar -czf "$CORPUS_TARBALL_OUT" -C fuzz corpus
   echo "packaged corpus -> $CORPUS_TARBALL_OUT"
 fi
+if [ -n "${ARTIFACTS_TARBALL_OUT:-}" ] && [ -d fuzz/artifacts ] && \
+   [ -n "$(find fuzz/artifacts -type f 2>/dev/null | head -1)" ]; then
+  mkdir -p "$(dirname "$ARTIFACTS_TARBALL_OUT")"
+  tar -czf "$ARTIFACTS_TARBALL_OUT" -C fuzz artifacts
+  echo "packaged artifacts -> $ARTIFACTS_TARBALL_OUT"
+fi
+
+exit "$rc"

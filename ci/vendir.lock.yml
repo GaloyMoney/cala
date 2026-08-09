@@ -8,8 +8,8 @@ directories:
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'feat(fuzz): default SQLX_OFFLINE=true in the fuzz build...'
-      sha: 0cde7c61a95c856565a1a028a876ebaf60df3adc
+      commitTitle: 'fix(fuzz): preserve corpus + artifacts when a target crashes...'
+      sha: 1285fea1165e38202ca627ad27d993dcaff4eef5
     path: .
   path: vendor
 kind: LockConfig
