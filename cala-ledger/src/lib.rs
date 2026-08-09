@@ -136,7 +136,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod cel_context;
-pub mod ec_rollup;
+mod ec_rollup;
 mod param;
 
 pub mod account;
@@ -163,3 +163,14 @@ pub mod primitives {
     pub use cala_types::primitives::*;
 }
 pub use primitives::*;
+
+/// Internal fuzz harnesses. Exposed only under the `fuzz` feature so the
+/// out-of-tree cargo-fuzz crate (`fuzz/`) can drive logic that is otherwise
+/// `pub(crate)`. Not part of the public API; no stability guarantees.
+#[cfg(feature = "fuzz")]
+#[doc(hidden)]
+pub mod fuzz {
+    pub use crate::balance::fuzz_recalculate as effective_balance;
+    pub use crate::ec_rollup::fuzz_batch as ec_rollup_batch;
+    pub use crate::velocity::fuzz_enforce as velocity_enforce;
+}

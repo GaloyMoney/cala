@@ -15,7 +15,7 @@ use crate::balance::snapshot::Snapshots;
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(untagged)]
 #[allow(clippy::large_enum_variant)]
-pub enum SnapshotOrEntry<'a> {
+pub(super) enum SnapshotOrEntry<'a> {
     Snapshot {
         effective: NaiveDate,
         values: BalanceSnapshot,
@@ -51,7 +51,7 @@ impl SnapshotOrEntry<'_> {
 }
 
 #[derive(Debug)]
-pub struct EffectiveBalanceData<'a> {
+pub(super) struct EffectiveBalanceData<'a> {
     account_id: AccountId,
     currency: Currency,
     last_snapshot: Option<(NaiveDate, BalanceSnapshot)>,

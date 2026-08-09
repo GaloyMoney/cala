@@ -22,6 +22,9 @@ include = [
 [features]
 
 fail-on-warnings = []
+# Exposes `cala_ledger::fuzz` — internal harnesses that drive pub(crate) logic
+# for the out-of-tree cargo-fuzz crate. Not part of the public API.
+fuzz = []
 json-schema = ["cala-types/json-schema", "job/json-schema", "es-entity/json-schema", "dep:schemars"]
 
 [[bin]]

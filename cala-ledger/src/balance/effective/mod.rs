@@ -1,4 +1,4 @@
-pub mod data;
+mod data;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -17,8 +17,6 @@ use super::{
 };
 
 use repo::*;
-
-pub use data::{EffectiveBalanceData, SnapshotOrEntry};
 
 #[derive(Clone)]
 pub struct EffectiveBalances {
@@ -280,3 +278,83 @@ impl EffectiveBalances {
         Ok(())
     }
 }
+
+#[cfg(feature = "fuzz")]
+mod __fuzz {
+    //! Harness for the out-of-tree `effective_balance` fuzz target. Lives in
+    //! this module so it can reach the `pub(super)` `EffectiveBalanceData`.
+    use super::data::{EffectiveBalanceData, SnapshotOrEntry};
+    use cala_types::{
+        balance::BalanceSnapshot,
+        entry::EntryValues,
+        primitives::{AccountId, Currency, JournalId},
+    };
+    use chrono::NaiveDate;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct DatedSnapshot {
+        effective: NaiveDate,
+        values: BalanceSnapshot,
+    }
+
+    #[derive(Deserialize)]
+    struct PlanOp {
+        effective: NaiveDate,
+        kind: String,
+        idx: usize,
+    }
+
+    pub fn fuzz_recalculate(data: &[u8]) {
+        let parts: Vec<&[u8]> = data.split(|&b| b == 0xFF).collect();
+        if parts.len() < 4 {
+            return;
+        }
+        let Ok(entries) = serde_json::from_slice::<Vec<EntryValues>>(parts[0]) else {
+            return;
+        };
+        let Ok(snapshots) = serde_json::from_slice::<Vec<DatedSnapshot>>(parts[1]) else {
+            return;
+        };
+        let last = serde_json::from_slice::<DatedSnapshot>(parts[2]).ok();
+        let Ok(plan) = serde_json::from_slice::<Vec<PlanOp>>(parts[3]) else {
+            return;
+        };
+
+        let account_id = AccountId::from(uuid::Uuid::nil());
+        let currency = Currency::USD;
+        let last = last.map(|d| (d.effective, d.values));
+
+        let mut updates: Vec<SnapshotOrEntry> = Vec::new();
+        for op in &plan {
+            match op.kind.as_str() {
+                "entry" => {
+                    if let Some(entry) = entries.get(op.idx) {
+                        updates.push(SnapshotOrEntry::Entry {
+                            effective: op.effective,
+                            entry,
+                        });
+                    }
+                }
+                "snapshot" => {
+                    if let Some(snap) = snapshots.get(op.idx) {
+                        updates.push(SnapshotOrEntry::Snapshot {
+                            effective: op.effective,
+                            values: snap.values.clone(),
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut data = EffectiveBalanceData::new(account_id, currency, last, 0, updates);
+        data.re_calculate_snapshots(chrono::Utc::now());
+        let _ = data
+            .into_snapshots(JournalId::from(uuid::Uuid::nil()))
+            .count();
+    }
+}
+
+#[cfg(feature = "fuzz")]
+pub use __fuzz::fuzz_recalculate;

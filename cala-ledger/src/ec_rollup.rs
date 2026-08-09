@@ -98,12 +98,12 @@ pub(crate) async fn register_ec_balance_rollup(
 /// what the rollup needs. `entry_ids` is the complete expected entry set,
 /// which is what makes stream-collected entries verifiable (see
 /// [`EcRollupBatch`]).
-pub struct PendingTx {
-    pub id: TransactionId,
-    pub journal_id: JournalId,
-    pub effective: NaiveDate,
-    pub created_at: DateTime<Utc>,
-    pub entry_ids: Vec<EntryId>,
+struct PendingTx {
+    id: TransactionId,
+    journal_id: JournalId,
+    effective: NaiveDate,
+    created_at: DateTime<Utc>,
+    entry_ids: Vec<EntryId>,
 }
 
 /// One batch landing's accumulator.
@@ -120,17 +120,17 @@ pub struct PendingTx {
 /// dropped — their data is durable in the ledger and was already applied
 /// via that landing's fallback read.
 #[derive(Default)]
-pub struct EcRollupBatch {
+struct EcRollupBatch {
     txns: Vec<PendingTx>,
     entries: HashMap<TransactionId, Vec<EntryValues>>,
 }
 
 impl EcRollupBatch {
-    pub fn push_tx(&mut self, tx: PendingTx) {
+    fn push_tx(&mut self, tx: PendingTx) {
         self.txns.push(tx);
     }
 
-    pub fn push_entry(&mut self, entry: EntryValues) {
+    fn push_entry(&mut self, entry: EntryValues) {
         self.entries
             .entry(entry.transaction_id)
             .or_default()
@@ -140,7 +140,7 @@ impl EcRollupBatch {
     /// Entry ids that were *not* collected from the stream in this landing
     /// (their event group straddled a landing boundary) — the ones the
     /// flush must load from the DB.
-    pub fn missing_entry_ids(&self) -> Vec<EntryId> {
+    fn missing_entry_ids(&self) -> Vec<EntryId> {
         self.txns
             .iter()
             .flat_map(|tx| {
@@ -160,7 +160,7 @@ impl EcRollupBatch {
     /// Assemble the applier's input in landing order: each transaction's
     /// stream-collected entries, topped up from the DB-`fetched` map where
     /// the group straddled a landing boundary, sorted by entry sequence.
-    pub fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
+    fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
         let EcRollupBatch { txns, mut entries } = self;
         txns.into_iter()
             .map(|tx| {
@@ -243,3 +243,53 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         Ok(())
     }
 }
+
+#[cfg(feature = "fuzz")]
+mod __fuzz {
+    //! Harness for the out-of-tree `ec_rollup_batch` fuzz target. Lives in
+    //! this module so it can reach the private `EcRollupBatch`/`PendingTx`.
+    use super::*;
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct FuzzTx {
+        id: TransactionId,
+        journal_id: JournalId,
+        effective: NaiveDate,
+        created_at: DateTime<Utc>,
+        entry_ids: Vec<EntryId>,
+    }
+
+    pub fn fuzz_batch(data: &[u8]) {
+        let parts: Vec<&[u8]> = data.split(|&b| b == 0xFF).collect();
+        if parts.len() < 2 {
+            return;
+        }
+        let Ok(txs) = serde_json::from_slice::<Vec<FuzzTx>>(parts[0]) else {
+            return;
+        };
+        let Ok(entries) = serde_json::from_slice::<Vec<EntryValues>>(parts[1]) else {
+            return;
+        };
+
+        let mut batch = EcRollupBatch::default();
+        for t in &txs {
+            batch.push_tx(PendingTx {
+                id: t.id,
+                journal_id: t.journal_id,
+                effective: t.effective,
+                created_at: t.created_at,
+                entry_ids: t.entry_ids.clone(),
+            });
+        }
+        for e in &entries {
+            batch.push_entry(e.clone());
+        }
+
+        let _missing = batch.missing_entry_ids();
+        let _rollup = batch.into_rollup_txns(HashMap::<EntryId, Entry>::new());
+    }
+}
+
+#[cfg(feature = "fuzz")]
+pub use __fuzz::fuzz_batch;

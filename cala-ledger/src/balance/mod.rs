@@ -30,7 +30,7 @@
 
 mod account_balance;
 mod cursor;
-pub mod effective;
+mod effective;
 pub mod error;
 mod repo;
 mod snapshot;
@@ -52,12 +52,14 @@ pub use account_balance::*;
 pub use cursor::*;
 use effective::*;
 use error::BalanceError;
+#[cfg(feature = "fuzz")]
+pub use effective::fuzz_recalculate;
 use repo::*;
 pub(crate) use snapshot::*;
 
 /// One committed transaction's contribution to a streaming-rollup batch
 /// (see [`Balances::apply_ec_rollup_in_op`]).
-pub struct EcRollupTxn {
+pub(crate) struct EcRollupTxn {
     pub journal_id: JournalId,
     pub effective: NaiveDate,
     pub created_at: DateTime<Utc>,

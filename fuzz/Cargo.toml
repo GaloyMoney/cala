@@ -26,8 +26,12 @@ package = "cala-ledger-core-types"
 
 # cala-ledger compiles without a database via the committed SQLx offline
 # cache, but requires SQLX_OFFLINE=true in the environment when building.
+# The `fuzz` feature exposes `cala_ledger::fuzz` (internal, `#[doc(hidden)]`
+# harness entry points) so these targets can drive pub(crate) logic without
+# the library making its internals public.
 [dependencies.cala-ledger]
 path = "../cala-ledger"
+features = ["fuzz"]
 
 # Keep this crate out of the main workspace.
 [workspace]

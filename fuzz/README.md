@@ -77,6 +77,12 @@ cargo fuzz run -s none cel_compile -- \
 - `overflow-checks` are intentionally off in the fuzz profile, matching
   production release builds (see the comment in `Cargo.toml`).
   `debug-assertions` stay on so assertion-style bugs still fire.
+- The `velocity_enforce`, `effective_balance` and `ec_rollup_batch` targets
+  call harnesses that live **inside** `cala-ledger` (`cala_ledger::fuzz`, under
+  the non-default `fuzz` feature) so they can drive `pub(crate)` logic. The
+  fuzz crate enables that feature; **no internal types are made `pub`** — the
+  harness entry points are `#[doc(hidden)]` functions that don't exist in a
+  default (production) build.
 
 ## Bugs found
 
