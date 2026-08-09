@@ -567,7 +567,7 @@ plan:
           export CARGO_TARGET_DIR=$PWD/../cargo-target-dir
           export CORPUS_TARBALL_IN="../corpus/*.tgz"
           export CORPUS_TARBALL_OUT="../corpus-out/corpus-v$(date -u +%Y%m%d-%H%M%S).tgz"
-          bash pipeline-tasks/ci/vendor/tasks/fuzz.sh
+          bash ci/vendor/tasks/fuzz.sh
         '
     params:
       CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token

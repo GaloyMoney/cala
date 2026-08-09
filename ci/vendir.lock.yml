@@ -8,8 +8,9 @@ directories:
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #20 from GaloyMoney/feat/fuzz-job...'
-      sha: 9184832cfd4d1cf5ce4ac750dbb73c7090e27576
+      commitTitle: 'feat(fuzz): merge fuzz/seeds/<target>/ into the corpus before
+        each run...'
+      sha: 0564af2488d0d64fae1f2345b1d23b3b09f65ee6
     path: .
   path: vendor
 kind: LockConfig

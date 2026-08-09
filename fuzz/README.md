@@ -49,24 +49,19 @@ SQLX_OFFLINE=true cargo fuzz run -s none ec_rollup_batch
 
 ## Corpus & seeds
 
-Both `fuzz/corpus/` (the working corpus the fuzzer grows) and `fuzz/seeds/`
-(a curated bootstrap set) are **gitignored** — the corpus lives in GCS, not
- git, matching es-entity. The Concourse `fuzz` job restores the latest
-`corpus-v*.tgz` from `gs://$BUCKET/cala-artifacts/fuzz-corpus/` before each
-run and stores the evolved corpus back, so it accumulates across runs.
+`fuzz/corpus/` (the working corpus the fuzzer grows) is **gitignored**; the
+Concourse `fuzz` job restores the latest `corpus-v*.tgz` from
+`gs://$BUCKET/cala-artifacts/fuzz-corpus/` before each run and stores the
+evolved corpus back, so it accumulates across runs.
 
-To bootstrap the GCS corpus from a local `fuzz/seeds/` set (one-time, from a
-`gcloud`-authed machine; `GCS_BUCKET` is the same `staging-gcp-creds.bucket_name`
-the CI job uses):
-
-```sh
-GCS_BUCKET=<bucket> make fuzz-seed-corpus   # copies seeds -> fuzz/corpus, tars, uploads
-make fuzz-seed-corpus                        # without GCS_BUCKET: just seeds local fuzz/corpus/
-```
-
-The structured multi-document targets (`velocity_enforce` = 5 JSON docs,
-`effective_balance` = 4, `ec_rollup_batch` = 2, joined by `0xFF`) gain coverage
-very slowly from scratch, so seeding the bucket once is recommended.
+`fuzz/seeds/<target>/` is **committed** — a curated bootstrap set (one input
+per file) that travels with the code. The shared `ci/vendor/tasks/fuzz.sh`
+auto-merges it into `fuzz/corpus/<target>/` before every run (additive over the
+restored GCS corpus; libFuzzer de-duplicates), so coverage re-bootstraps even
+if the stored corpus is pruned and seed changes take effect immediately. This
+is important for the structured multi-document targets (`velocity_enforce` =
+5 JSON docs, `effective_balance` = 4, `ec_rollup_batch` = 2, joined by `0xFF`),
+which gain coverage very slowly from scratch.
 
 Crash artifacts land in `fuzz/artifacts/<target>/`. Reproduce one with:
 
