@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #9 from GaloyMoney/chore/migrate-kaniko-to-oci-build-task...'
-      sha: 8653c10a6ed135eea3d26cce9772afa96e0139d6
+      commitTitle: 'Merge pull request #22 from GaloyMoney/fix/fuzz-corpus-restore-portable...'
+      sha: 26b38b457e1e638fd168a0d4f4c5db49c1bcb47e
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #9 from GaloyMoney/chore/migrate-kaniko-to-oci-build-task...'
-      sha: 8653c10a6ed135eea3d26cce9772afa96e0139d6
+      commitTitle: 'Merge pull request #22 from GaloyMoney/fix/fuzz-corpus-restore-portable...'
+      sha: 26b38b457e1e638fd168a0d4f4c5db49c1bcb47e
     path: .
   path: vendor
 kind: LockConfig
