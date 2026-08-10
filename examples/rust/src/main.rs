@@ -2,9 +2,7 @@ use anyhow::Context;
 use rand::RngExt;
 use std::fs;
 
-use cala_ledger::{
-    account::*, es_entity, journal::*, migrate::IncludeMigrations, tx_template::*, *,
-};
+use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, tx_template::*, *};
 
 pub fn store_server_pid(cala_home: &str, pid: u32) -> anyhow::Result<()> {
     create_cala_dir(cala_home)?;
@@ -68,11 +66,8 @@ async fn main() -> anyhow::Result<()> {
         cala.accounts().persist(&mut account).await?;
     }
 
-    let result = cala
-        .accounts()
-        .list(es_entity::PaginatedQueryArgs::default())
-        .await?;
-    println!("No of accounts: {}", result.entities.len());
+    let account = cala.accounts().find(account.id()).await?;
+    println!("account name: {}", account.values().name);
 
     let journal_id = JournalId::new();
     let new_journal = NewJournal::builder()

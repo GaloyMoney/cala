@@ -17,7 +17,6 @@ CREATE TABLE cala_accounts (
 
   UNIQUE (id, is_account_set) -- FK target: entries reference only non-set accounts
 );
-CREATE INDEX idx_cala_accounts_name ON cala_accounts (name);
 
 CREATE TABLE cala_account_events (
   id UUID NOT NULL REFERENCES cala_accounts(id),
@@ -143,7 +142,6 @@ CREATE TABLE cala_transactions (
   effective DATE NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE INDEX idx_cala_transactions_correlation_id ON cala_transactions (correlation_id);
 CREATE INDEX idx_cala_transactions_effective ON cala_transactions (effective);
 
 CREATE TABLE cala_transaction_events (
@@ -212,7 +210,6 @@ CREATE TABLE cala_balance_history (
   UNIQUE(account_id, journal_id, currency, version),
   FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
-CREATE INDEX idx_cala_balance_history_recorded_at ON cala_balance_history (recorded_at);
 
 CREATE TABLE cala_cumulative_effective_balances (
   journal_id UUID NOT NULL,

@@ -114,14 +114,6 @@ impl Accounts {
         Ok(self.repo.find_by_code(code).await?)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.list", skip(self))]
-    pub async fn list(
-        &self,
-        query: es_entity::PaginatedQueryArgs<AccountByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<Account, AccountByNameCursor>, AccountError> {
-        Ok(self.repo.list_by_name(query, Default::default()).await?)
-    }
-
     #[instrument(
         level = "debug",
         name = "cala_ledger.accounts.lock_in_op",

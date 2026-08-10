@@ -13,7 +13,9 @@ use super::entity::*;
     entity = "Transaction",
     columns(
         external_id(ty = "Option<String>", update(persist = false)),
-        correlation_id(ty = "String", update(persist = false)),
+        // No `find_by`: nothing looks a transaction up by correlation id, and
+        // the index that would back it was dropped from the migration.
+        correlation_id(ty = "String", update(persist = false), find_by = false),
         journal_id(ty = "JournalId", update(persist = false)),
         tx_template_id(ty = "TxTemplateId", update(persist = false), list_for(by(created_at))),
         effective(ty = "chrono::NaiveDate", update(persist = false)),
