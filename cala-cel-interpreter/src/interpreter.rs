@@ -15,6 +15,51 @@ use tracing::instrument;
 /// are actually touched get committed.
 const COMPILE_STACK_BYTES: usize = 32 * 1024 * 1024;
 
+/// Temporary guard against the upstream `cel` parser's unbounded
+/// adaptive-prediction work ([cel-rust#305](https://github.com/cel-rust/cel-rust/issues/305) /
+/// [#306](https://github.com/cel-rust/cel-rust/issues/306)).
+///
+/// Certain short, bracket/brace/bang-dense inputs make the ANTLR parser blow
+/// the stack (#305) or consume exponential memory (#306), crashing the
+/// process. Rust can't cap a thread's heap, and a library can't reliably
+/// locate a helper binary to compile in an isolated address space, so the
+/// practical in-process mitigation is to reject inputs matching the known-bad
+/// shapes *before* they reach the parser — returning a parse error instead of
+/// OOM-killing the process (which would otherwise be a remote DoS for any
+/// deployment that compiles untrusted CEL, e.g. velocity controls / tx
+/// templates).
+///
+/// This is intentionally conservative about false positives (legitimate CEL is
+/// structurally sparse) and may let some adversarial shapes through; the
+/// definitive fix is upstream. Remove once #306 lands.
+pub(crate) fn triggers_cel_parser_blowup(source: &str) -> bool {
+    let mut run = 1usize;
+    let mut prev = '\0';
+    let mut structural = 0usize;
+    for c in source.chars() {
+        if matches!(c, '{' | '}' | '[' | ']' | '(' | ')' | '!') {
+            structural += 1;
+            if c == prev {
+                run += 1;
+                if run > 40 {
+                    return true; // deep single-bracket nesting (#305 shape)
+                }
+            } else {
+                run = 1;
+            }
+        } else {
+            run = 1;
+        }
+        prev = c;
+    }
+    // #306 shape: a short source that is mostly brackets/bangs in repeated
+    // ambiguous sub-patterns. Legitimate CEL is structurally sparse
+    // (e.g. `decimal.Add(a, b)` ≈ 15% brackets); the minimized #306 input is
+    // ~125 bytes at ~80%+ density.
+    let len = source.len();
+    len > 0 && len < 4096 && structural > 48 && structural * 100 / len > 60
+}
+
 /// Globally memoized CEL program compilation.
 ///
 /// `CelExpression`s are frequently re-created from the same source string
@@ -31,6 +76,15 @@ const COMPILE_STACK_BYTES: usize = 32 * 1024 * 1024;
 #[cached(max_size = 10000, cache_err = true)]
 #[instrument(name = "cel.compile", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
 fn compile_program(source: String) -> Result<Arc<Program>, String> {
+    if triggers_cel_parser_blowup(&source) {
+        return Err(
+            "CEL expression rejected: pathological bracket/brace density would \
+             trigger the upstream cel parser's exponential memory blowup \
+             (cel-rust#305/#306); see \
+             https://github.com/cel-rust/cel-rust/issues/306"
+                .to_string(),
+        );
+    }
     let started = std::time::Instant::now();
     let expression = source.clone();
     let result = std::thread::Builder::new()
@@ -163,6 +217,51 @@ mod tests {
         source.push_str(&"{".repeat(26));
         source.push_str("l\u{0}?(-");
 
+        let err = source.parse::<CelExpression>().unwrap_err();
+        assert!(matches!(err, CelError::CelParseError(_)));
+    }
+
+    #[test]
+    fn cel_parser_blowup_guard_rejects_known_bad_shapes() {
+        use super::triggers_cel_parser_blowup as g;
+        // cel-rust#306: short, bracket/bang-dense repeated motif (the shape
+        // that OOM'd the fuzz job across cel_compile/cel_evaluate/
+        // velocity_enforce/core_types_json).
+        let motif = "!!(!!!!!!(!!!!(((((!!(!!(!!!!((".repeat(4);
+        assert!(g(&motif), "cel#306 motif must be rejected");
+        // cel-rust#305: a leading syntax error followed by deep `{` nesting.
+        let mut s305 = String::from(">");
+        s305.push_str(&"{".repeat(63));
+        assert!(g(&s305), "cel#305 deep-brace shape must be rejected");
+        // the actual velocity_enforce OOM input shape (decoded from CI)
+        assert!(g(
+            "1777777[[[[[[[[[[!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\
+             modified_at!!!!!!!!!!!!!!!!!![[[[[[[[[[[[[[[[[["
+        ));
+    }
+
+    #[test]
+    fn cel_parser_blowup_guard_accepts_legitimate_expressions() {
+        use super::triggers_cel_parser_blowup as g;
+        for ok in [
+            "decimal.Add(decimal('1'), decimal('2'))",
+            "params.amount > decimal('100')",
+            "has(params.hello.world)",
+            "now.format('%d/%m/%Y')",
+            "a && b || c && d",
+            "context.vars.entry.units == decimal('100')",
+            // 8-deep nesting is well within the parser's own recursion cap.
+            "((((((((a))))))))",
+        ] {
+            assert!(!g(ok), "legitimate expression falsely rejected: {ok}");
+        }
+    }
+
+    #[test]
+    fn cel_parser_blowup_returns_error_not_crash() {
+        // A cel#306-shaped expression must surface a parse error (not panic /
+        // not OOM) when compiled.
+        let source = "!!(!!!!!!(!!!!(((((!!(!!(!!!!((".repeat(4);
         let err = source.parse::<CelExpression>().unwrap_err();
         assert!(matches!(err, CelError::CelParseError(_)));
     }
