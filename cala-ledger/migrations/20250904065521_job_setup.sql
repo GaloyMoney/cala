@@ -71,43 +71,4 @@ ALTER TABLE job_executions SET (
   log_autovacuum_min_duration = 0
 );
 
-CREATE OR REPLACE FUNCTION notify_job_event() RETURNS TRIGGER AS $$
-BEGIN
-  IF TG_OP = 'INSERT' THEN
-    PERFORM pg_notify('job_events',
-      json_build_object('type', 'execution_ready', 'job_type', NEW.job_type)::text);
-    RETURN NULL;
-  END IF;
-
-  IF TG_OP = 'UPDATE' THEN
-    -- Only wake pollers when a row is (or becomes) eligible in the
-    -- pending set. Transitions out of 'pending' (a poller taking the job
-    -- sets execute_at = NULL, completion, etc.) must not notify: the
-    -- poller's own UPDATE would wake every poller including itself for
-    -- no reason, multiplying poll load with throughput.
-    IF NEW.state = 'pending'
-      AND NEW.execute_at IS DISTINCT FROM OLD.execute_at THEN
-      PERFORM pg_notify('job_events',
-        json_build_object('type', 'execution_ready', 'job_type', NEW.job_type)::text);
-    END IF;
-    RETURN NULL;
-  END IF;
-
-  IF TG_OP = 'DELETE' THEN
-    PERFORM pg_notify('job_events',
-      json_build_object('type', 'job_terminal', 'job_id', OLD.id::text)::text);
-    IF OLD.queue_id IS NOT NULL THEN
-      PERFORM pg_notify('job_events',
-        json_build_object('type', 'execution_ready', 'job_type', OLD.job_type)::text);
-    END IF;
-    RETURN NULL;
-  END IF;
-
-  RETURN NULL;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER job_executions_notify_event_trigger
-AFTER INSERT OR UPDATE OR DELETE ON job_executions
-FOR EACH ROW
-EXECUTE FUNCTION notify_job_event();
+-- `job_executions` deliberately has NO notification trigger.

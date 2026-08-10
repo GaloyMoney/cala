@@ -13,7 +13,13 @@ use super::{entity::*, error::AccountError};
 #[es_repo(
     entity = "Account",
     columns(
-        name(ty = "String", update(accessor = "values().name"), list_by),
+        // No `find_by` / `list_by`: nothing reads accounts by name, and the
+        // index that would back either was dropped from the migration.
+        name(
+            ty = "String",
+            update(accessor = "values().name"),
+            find_by = false
+        ),
         code(ty = "String", update(accessor = "values().code"), list_by),
         external_id(
             ty = "Option<String>",
