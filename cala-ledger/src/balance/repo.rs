@@ -53,17 +53,20 @@ impl BalanceRepo {
         account_id: AccountId,
         currency: Currency,
     ) -> Result<AccountBalance, BalanceError> {
+        // Reads `latest_values` straight off `cala_current_balances` rather
+        // than joining `cala_balance_history` at `latest_version`. The two are
+        // equal by construction: `insert_new_snapshots` writes both in a single
+        // statement, deriving `latest_values` from the history rows it just
+        // inserted, and the ON CONFLICT branch moves `latest_version` and
+        // `latest_values` together. The join could therefore never filter a row
+        // or return a different value -- it only cost buffer reads against a
+        // large, insert-heavy table.
         let row = op
             .into_executor()
             .fetch_optional(sqlx::query!(
                 r#"
-            SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
-            FROM cala_balance_history h
-            JOIN cala_current_balances c
-            ON h.journal_id = c.journal_id
-            AND h.account_id = c.account_id
-            AND h.currency = c.currency
-            AND h.version = c.latest_version
+            SELECT c.latest_values AS "values!", a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
+            FROM cala_current_balances c
             JOIN cala_accounts a
             ON c.account_id = a.id
             WHERE c.journal_id = $1
@@ -154,6 +157,11 @@ impl BalanceRepo {
             currencies.push(currency.code().to_string());
         }
 
+        // Reads `latest_values` directly -- see the note on `find_in_op` for
+        // why the `cala_balance_history` join was redundant. This is the batch
+        // path and was the single largest consumer of database CPU under load,
+        // almost all of it buffer reads probing a multi-hundred-MB history
+        // table for a value already denormalised onto the row being joined.
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
@@ -163,14 +171,9 @@ impl BalanceRepo {
                     AS v(journal_id, account_id, currency)
                 )
                 SELECT
-                    h.values,
+                    c.latest_values as "values!",
                     a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
-                FROM cala_balance_history h
-                JOIN cala_current_balances c
-                    ON h.journal_id = c.journal_id
-                    AND h.account_id = c.account_id
-                    AND h.currency = c.currency
-                    AND h.version = c.latest_version
+                FROM cala_current_balances c
                 JOIN cala_accounts a
                     ON c.account_id = a.id
                 JOIN balance_ids b
