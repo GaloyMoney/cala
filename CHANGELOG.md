@@ -1,3 +1,11 @@
+# [cala release v0.23.0](https://github.com/GaloyMoney/cala/releases/tag/0.23.0)
+
+
+
+### Performance
+
+- [**breaking**] Drop three never-scanned indexes; bump job 0.7.3 (#837)
+
 # [cala release v0.22.4](https://github.com/GaloyMoney/cala/releases/tag/0.22.4)
 
 
