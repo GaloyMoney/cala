@@ -830,24 +830,52 @@ impl EffectiveBalanceRepo {
     ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
-          WITH pairs AS (
-            SELECT account_id, currency
-            FROM (
-              SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-            ) AS v
-            JOIN cala_accounts a
-            ON account_id = a.id
-            WHERE eventually_consistent = FALSE
+          WITH eligible_accounts AS MATERIALIZED (
+            SELECT a.id
+            FROM cala_accounts a
+            WHERE a.id = ANY($2::uuid[])
+              AND a.eventually_consistent = FALSE
+          ),
+          pairs AS MATERIALIZED (
+            SELECT DISTINCT v.account_id, v.currency
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN eligible_accounts a ON a.id = v.account_id
+          ),
+          future_rows AS MATERIALIZED (
+            SELECT b.account_id, b.currency, b.effective, b.version
+            FROM pairs p
+            JOIN LATERAL (
+              SELECT c.account_id, c.currency, c.effective, c.version
+              FROM cala_cumulative_effective_balances c
+              WHERE c.journal_id = $1
+                AND c.account_id = p.account_id
+                AND c.currency = p.currency
+                AND c.effective > $4
+              ORDER BY c.effective, c.version
+            ) b ON TRUE
           ),
           delete_balances AS (
-            DELETE FROM cala_cumulative_effective_balances
-            WHERE journal_id = $1
-              AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)
-              AND effective > $4
-            RETURNING account_id, currency, effective, values
+            DELETE FROM cala_cumulative_effective_balances c
+            USING future_rows f
+            WHERE c.journal_id = $1
+              AND c.account_id = f.account_id
+              AND c.currency = f.currency
+              AND c.effective = f.effective
+              AND c.version = f.version
+            RETURNING c.account_id, c.currency, c.effective, c.values
           ),
-          values AS (
-            SELECT 
+          deleted AS (
+            SELECT
+              account_id,
+              currency,
+              jsonb_agg(
+                jsonb_build_object('effective', effective, 'values', values)
+              ) AS deleted_values
+            FROM delete_balances
+            GROUP BY account_id, currency
+          ),
+          latest AS (
+            SELECT
               p.account_id,
               p.currency,
               b.values,
@@ -855,36 +883,26 @@ impl EffectiveBalanceRepo {
               b.effective
             FROM pairs p
             LEFT JOIN LATERAL (
-              SELECT DISTINCT ON (account_id, currency)
-                account_id,
-                currency,
-                values,
-                all_time_version,
-                effective
+              SELECT values, all_time_version, effective
               FROM cala_cumulative_effective_balances
               WHERE journal_id = $1
-                AND effective <= $4
                 AND account_id = p.account_id
                 AND currency = p.currency
-              ORDER BY account_id, currency, all_time_version DESC
+                AND effective <= $4
+              ORDER BY all_time_version DESC
+              LIMIT 1
             ) b ON TRUE
           )
           SELECT
-            v.account_id AS "account_id!: AccountId",
-            v.currency AS "currency!",
-            v.values AS "values?: serde_json::Value",
-            v.all_time_version AS "all_time_version?: i32",
-            v.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(
-              jsonb_agg(
-                jsonb_build_object('effective', d.effective, 'values', d.values)
-              ) FILTER (WHERE d.values IS NOT NULL),
-              '[]'::jsonb
-            ) AS "deleted_values!: serde_json::Value"
-          FROM values v
-          LEFT JOIN delete_balances d
-            ON v.account_id = d.account_id AND v.currency = d.currency
-          GROUP BY v.account_id, v.currency, v.values, v.all_time_version, v.effective
+            l.account_id AS "account_id!: AccountId",
+            l.currency AS "currency!",
+            l.values AS "values?: serde_json::Value",
+            l.all_time_version AS "all_time_version?: i32",
+            l.effective AS "effective_date?: chrono::NaiveDate",
+            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+          FROM latest l
+          LEFT JOIN deleted d
+            ON l.account_id = d.account_id AND l.currency = d.currency
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -941,23 +959,51 @@ impl EffectiveBalanceRepo {
     ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
         let rows = sqlx::query!(
             r#"
-          WITH pairs AS (
-            SELECT account_id, currency
-            FROM (
-              SELECT * FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
-            ) AS v
-            JOIN cala_accounts a
-            ON account_id = a.id
-            WHERE eventually_consistent = TRUE
+          WITH eligible_accounts AS MATERIALIZED (
+            SELECT a.id
+            FROM cala_accounts a
+            WHERE a.id = ANY($2::uuid[])
+              AND a.eventually_consistent = TRUE
+          ),
+          pairs AS MATERIALIZED (
+            SELECT DISTINCT v.account_id, v.currency
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
+            JOIN eligible_accounts a ON a.id = v.account_id
+          ),
+          future_rows AS MATERIALIZED (
+            SELECT b.account_id, b.currency, b.effective, b.version
+            FROM pairs p
+            JOIN LATERAL (
+              SELECT c.account_id, c.currency, c.effective, c.version
+              FROM cala_cumulative_effective_balances c
+              WHERE c.journal_id = $1
+                AND c.account_id = p.account_id
+                AND c.currency = p.currency
+                AND c.effective > $4
+              ORDER BY c.effective, c.version
+            ) b ON TRUE
           ),
           delete_balances AS (
-            DELETE FROM cala_cumulative_effective_balances
-            WHERE journal_id = $1
-              AND (account_id, currency) IN (SELECT account_id, currency FROM pairs)
-              AND effective > $4
-            RETURNING account_id, currency, effective, values
+            DELETE FROM cala_cumulative_effective_balances c
+            USING future_rows f
+            WHERE c.journal_id = $1
+              AND c.account_id = f.account_id
+              AND c.currency = f.currency
+              AND c.effective = f.effective
+              AND c.version = f.version
+            RETURNING c.account_id, c.currency, c.effective, c.values
           ),
-          values AS (
+          deleted AS (
+            SELECT
+              account_id,
+              currency,
+              jsonb_agg(
+                jsonb_build_object('effective', effective, 'values', values)
+              ) AS deleted_values
+            FROM delete_balances
+            GROUP BY account_id, currency
+          ),
+          latest AS (
             SELECT
               p.account_id,
               p.currency,
@@ -966,36 +1012,26 @@ impl EffectiveBalanceRepo {
               b.effective
             FROM pairs p
             LEFT JOIN LATERAL (
-              SELECT DISTINCT ON (account_id, currency)
-                account_id,
-                currency,
-                values,
-                all_time_version,
-                effective
+              SELECT values, all_time_version, effective
               FROM cala_cumulative_effective_balances
               WHERE journal_id = $1
-                AND effective <= $4
                 AND account_id = p.account_id
                 AND currency = p.currency
-              ORDER BY account_id, currency, all_time_version DESC
+                AND effective <= $4
+              ORDER BY all_time_version DESC
+              LIMIT 1
             ) b ON TRUE
           )
           SELECT
-            v.account_id AS "account_id!: AccountId",
-            v.currency AS "currency!",
-            v.values AS "values?: serde_json::Value",
-            v.all_time_version AS "all_time_version?: i32",
-            v.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(
-              jsonb_agg(
-                jsonb_build_object('effective', d.effective, 'values', d.values)
-              ) FILTER (WHERE d.values IS NOT NULL),
-              '[]'::jsonb
-            ) AS "deleted_values!: serde_json::Value"
-          FROM values v
-          LEFT JOIN delete_balances d
-            ON v.account_id = d.account_id AND v.currency = d.currency
-          GROUP BY v.account_id, v.currency, v.values, v.all_time_version, v.effective
+            l.account_id AS "account_id!: AccountId",
+            l.currency AS "currency!",
+            l.values AS "values?: serde_json::Value",
+            l.all_time_version AS "all_time_version?: i32",
+            l.effective AS "effective_date?: chrono::NaiveDate",
+            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+          FROM latest l
+          LEFT JOIN deleted d
+            ON l.account_id = d.account_id AND l.currency = d.currency
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
