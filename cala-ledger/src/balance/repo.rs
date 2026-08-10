@@ -57,13 +57,8 @@ impl BalanceRepo {
             .into_executor()
             .fetch_optional(sqlx::query!(
                 r#"
-            SELECT h.values, a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
-            FROM cala_balance_history h
-            JOIN cala_current_balances c
-            ON h.journal_id = c.journal_id
-            AND h.account_id = c.account_id
-            AND h.currency = c.currency
-            AND h.version = c.latest_version
+            SELECT c.latest_values AS "values!", a.normal_balance_type AS "normal_balance_type!: DebitOrCredit"
+            FROM cala_current_balances c
             JOIN cala_accounts a
             ON c.account_id = a.id
             WHERE c.journal_id = $1
@@ -163,14 +158,9 @@ impl BalanceRepo {
                     AS v(journal_id, account_id, currency)
                 )
                 SELECT
-                    h.values,
+                    c.latest_values as "values!",
                     a.normal_balance_type as "normal_balance_type!: DebitOrCredit"
-                FROM cala_balance_history h
-                JOIN cala_current_balances c
-                    ON h.journal_id = c.journal_id
-                    AND h.account_id = c.account_id
-                    AND h.currency = c.currency
-                    AND h.version = c.latest_version
+                FROM cala_current_balances c
                 JOIN cala_accounts a
                     ON c.account_id = a.id
                 JOIN balance_ids b

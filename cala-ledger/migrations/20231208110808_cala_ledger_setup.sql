@@ -197,6 +197,9 @@ CREATE TABLE cala_current_balances (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency)
 );
+-- Update-heavy: postings rewrite latest_version + latest_values, neither
+-- indexed. Page headroom is all HOT needs here.
+ALTER TABLE cala_current_balances SET (fillfactor = 70);
 
 CREATE TABLE cala_balance_history (
   journal_id UUID NOT NULL,
@@ -293,6 +296,8 @@ CREATE TABLE cala_velocity_current_balances (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
+-- Same shape as cala_current_balances; wider rows, so it needs it more.
+ALTER TABLE cala_velocity_current_balances SET (fillfactor = 70);
 
 CREATE TABLE cala_velocity_balance_history (
   journal_id UUID NOT NULL,
