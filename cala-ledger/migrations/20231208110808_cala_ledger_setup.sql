@@ -198,15 +198,8 @@ CREATE TABLE cala_current_balances (
   UNIQUE(account_id, journal_id, currency)
 );
 
--- cala_current_balances is update-heavy: every posting rewrites
--- latest_version + latest_values on an existing row. Neither column is
--- indexed (the sole index is the UNIQUE below, over immutable key columns),
--- so HOT updates are possible in principle -- but at the default
--- fillfactor = 100 the ~1KB rows (latest_values JSONB averages ~768 bytes,
--- so ~7 rows fill an 8KB page) leave no room on the page for a new version,
--- forcing a non-HOT update (new heap tuple + index entry + WAL + dead tuple)
--- on every posting. Reserving 30% of each page lets the new version stay
--- on-page and keeps the index untouched.
+-- Update-heavy: postings rewrite latest_version + latest_values, neither
+-- indexed. Page headroom is all HOT needs here.
 ALTER TABLE cala_current_balances SET (fillfactor = 70);
 
 CREATE TABLE cala_balance_history (
@@ -305,12 +298,7 @@ CREATE TABLE cala_velocity_current_balances (
   UNIQUE(account_id, journal_id, currency, velocity_control_id, velocity_limit_id, partition_window)
 );
 
--- Same shape as cala_current_balances above: postings rewrite
--- latest_version + latest_values in place, and the sole index is the UNIQUE
--- below over immutable key columns, so nothing defeats HOT except page space.
--- This table fares worse than cala_current_balances in practice (46% HOT vs
--- 65% measured under load) because partition_window JSONB makes the rows
--- wider still, so fewer fit per page and overflow comes sooner.
+-- Same shape as cala_current_balances; wider rows, so it needs it more.
 ALTER TABLE cala_velocity_current_balances SET (fillfactor = 70);
 
 CREATE TABLE cala_velocity_balance_history (
