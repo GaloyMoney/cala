@@ -1,0 +1,55 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH eligible_accounts AS MATERIALIZED (\n            SELECT a.id\n            FROM cala_accounts a\n            WHERE a.id = ANY($2::uuid[])\n              AND a.eventually_consistent = FALSE\n          ),\n          pairs AS MATERIALIZED (\n            SELECT DISTINCT v.account_id, v.currency\n            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            JOIN eligible_accounts a ON a.id = v.account_id\n          ),\n          future_rows AS MATERIALIZED (\n            SELECT b.account_id, b.currency, b.effective, b.version\n            FROM pairs p\n            JOIN LATERAL (\n              SELECT c.account_id, c.currency, c.effective, c.version\n              FROM cala_cumulative_effective_balances c\n              WHERE c.journal_id = $1\n                AND c.account_id = p.account_id\n                AND c.currency = p.currency\n                AND c.effective > $4\n              ORDER BY c.effective, c.version\n            ) b ON TRUE\n          ),\n          delete_balances AS (\n            DELETE FROM cala_cumulative_effective_balances c\n            USING future_rows f\n            WHERE c.journal_id = $1\n              AND c.account_id = f.account_id\n              AND c.currency = f.currency\n              AND c.effective = f.effective\n              AND c.version = f.version\n            RETURNING c.account_id, c.currency, c.effective, c.values\n          ),\n          deleted AS (\n            SELECT\n              account_id,\n              currency,\n              jsonb_agg(\n                jsonb_build_object('effective', effective, 'values', values)\n              ) AS deleted_values\n            FROM delete_balances\n            GROUP BY account_id, currency\n          ),\n          latest AS (\n            SELECT\n              p.account_id,\n              p.currency,\n              b.values,\n              b.all_time_version,\n              b.effective\n            FROM pairs p\n            LEFT JOIN LATERAL (\n              SELECT values, all_time_version, effective\n              FROM cala_cumulative_effective_balances\n              WHERE journal_id = $1\n                AND account_id = p.account_id\n                AND currency = p.currency\n                AND effective <= $4\n              ORDER BY all_time_version DESC\n              LIMIT 1\n            ) b ON TRUE\n          )\n          SELECT\n            l.account_id AS \"account_id!: AccountId\",\n            l.currency AS \"currency!\",\n            l.values AS \"values?: serde_json::Value\",\n            l.all_time_version AS \"all_time_version?: i32\",\n            l.effective AS \"effective_date?: chrono::NaiveDate\",\n            COALESCE(d.deleted_values, '[]'::jsonb) AS \"deleted_values!: serde_json::Value\"\n          FROM latest l\n          LEFT JOIN deleted d\n            ON l.account_id = d.account_id AND l.currency = d.currency\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values?: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "all_time_version?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_values!: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "d4dabb2502c387b12fcc0a99b251546f85d758bc4a65a26c853a2b9f534465d5"
+}
