@@ -1,3 +1,11 @@
+# [cala release v0.22.3](https://github.com/GaloyMoney/cala/releases/tag/0.22.3)
+
+
+
+### Performance
+
+- Make effective-balance find_for_update plan-stable (#835)
+
 # [cala release v0.22.2](https://github.com/GaloyMoney/cala/releases/tag/0.22.2)
 
 
