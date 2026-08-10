@@ -1,3 +1,11 @@
+# [cala release v0.22.4](https://github.com/GaloyMoney/cala/releases/tag/0.22.4)
+
+
+
+### Performance
+
+- Drop cala_balance_history join from read path + fillfactor/HOT tuning (#836)
+
 # [cala release v0.22.3](https://github.com/GaloyMoney/cala/releases/tag/0.22.3)
 
 
