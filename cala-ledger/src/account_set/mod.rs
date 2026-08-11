@@ -1,6 +1,7 @@
 mod entity;
 pub mod error;
 mod graph_cache;
+mod graph_validation;
 mod repo;
 
 use es_entity::clock::ClockHandle;
