@@ -766,6 +766,260 @@ async fn add_member_sets_batch_rejects_account_conflict_from_interacting_edges(
 }
 
 #[tokio::test]
+async fn add_member_sets_batch_rejects_a_duplicate_of_a_committed_edge() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name)
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let parent = cala
+        .account_sets()
+        .create(new_set("batch-dup-parent"))
+        .await?;
+    let child = cala
+        .account_sets()
+        .create(new_set("batch-dup-child"))
+        .await?;
+    cala.account_sets()
+        .add_member(parent.id(), child.id())
+        .await?;
+
+    // Re-attaching an already-committed edge must be rejected before the
+    // unique constraint fires, matching the single-edge path.
+    let result = cala
+        .account_sets()
+        .add_member_sets(&[(parent.id(), child.id())])
+        .await;
+    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+
+    let edge_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = $1 AND member_account_set_id = $2
+        "#,
+    )
+    .bind(parent.id())
+    .bind(child.id())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(edge_count, 1, "the committed edge must remain exactly once");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_member_sets_batch_rejects_a_path_through_committed_edges() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name)
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let root = cala
+        .account_sets()
+        .create(new_set("batch-committed-root"))
+        .await?;
+    let branch = cala
+        .account_sets()
+        .create(new_set("batch-committed-branch"))
+        .await?;
+    let leaf = cala
+        .account_sets()
+        .create(new_set("batch-committed-leaf"))
+        .await?;
+    // Commit root ⊃ leaf, then propose root ⊃ branch and branch ⊃ leaf.
+    // The second proposed edge gives leaf a second path to root.
+    cala.account_sets().add_member(root.id(), leaf.id()).await?;
+
+    let result = cala
+        .account_sets()
+        .add_member_sets(&[(root.id(), branch.id()), (branch.id(), leaf.id())])
+        .await;
+    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+
+    // The batch must not insert its proposed edges; the committed edge remains.
+    let proposed_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE (account_set_id = $1 AND member_account_set_id = $2)
+           OR (account_set_id = $2 AND member_account_set_id = $3)
+        "#,
+    )
+    .bind(root.id())
+    .bind(branch.id())
+    .bind(leaf.id())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        proposed_count, 0,
+        "a rejected batch must not insert any edge"
+    );
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_member_sets_batch_attributes_depth_overflow_through_existing_edges(
+) -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let mut sets = Vec::new();
+    for i in 0..18 {
+        let set = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(format!("batch-existing-depth-{i}"))
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()?;
+        sets.push(cala.account_sets().create(set).await?);
+    }
+    // Commit a 10-chain, then propose 8 more edges to exceed depth 16.
+    for pair in sets[0..10].windows(2) {
+        cala.account_sets()
+            .add_member(pair[0].id(), pair[1].id())
+            .await?;
+    }
+    let proposed: Vec<_> = sets[9..18]
+        .windows(2)
+        .map(|pair| (pair[0].id(), pair[1].id()))
+        .collect();
+
+    let result = cala.account_sets().add_member_sets(&proposed).await;
+    assert!(matches!(
+        result,
+        Err(AccountSetError::MembershipDepthExceeded {
+            account_set_id,
+            member_account_set_id,
+            depth: 17,
+            max: 16,
+        }) if account_set_id == sets[16].id()
+            && member_account_set_id == sets[17].id()
+    ));
+
+    let ids: Vec<_> = sets[9..18].iter().map(|set| set.id()).collect();
+    let edge_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = ANY($1)
+        "#,
+    )
+    .bind(&ids)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(edge_count, 0, "a rejected batch must not insert any edge");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn add_member_sets_batch_matches_serial_add_member_set() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name)
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    // Two identical trees: one attached in a batch, one edge at a time.
+    let batch_sets: Vec<_> = (0..5)
+        .map(|i| {
+            cala.account_sets()
+                .create(new_set(&format!("diff-batch-{i}")))
+        })
+        .collect();
+    let batch_sets = futures::future::try_join_all(batch_sets).await?;
+    let serial_sets: Vec<_> = (0..5)
+        .map(|i| {
+            cala.account_sets()
+                .create(new_set(&format!("diff-serial-{i}")))
+        })
+        .collect();
+    let serial_sets = futures::future::try_join_all(serial_sets).await?;
+
+    let edges: Vec<_> = batch_sets
+        .windows(2)
+        .map(|pair| (pair[0].id(), pair[1].id()))
+        .collect();
+    cala.account_sets().add_member_sets(&edges).await?;
+    for pair in serial_sets.windows(2) {
+        cala.account_sets()
+            .add_member(pair[0].id(), pair[1].id())
+            .await?;
+    }
+
+    let batch_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = ANY($1)
+        "#,
+    )
+    .bind(batch_sets.iter().map(|set| set.id()).collect::<Vec<_>>())
+    .fetch_one(&pool)
+    .await?;
+    let serial_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = ANY($1)
+        "#,
+    )
+    .bind(serial_sets.iter().map(|set| set.id()).collect::<Vec<_>>())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(batch_count, serial_count);
+    assert_eq!(batch_count, 4);
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn add_member_sets_batch_rejects_dense_duplicate_paths_without_path_explosion(
 ) -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
