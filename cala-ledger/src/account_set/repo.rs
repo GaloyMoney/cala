@@ -9,7 +9,7 @@ use crate::{
     primitives::{AccountId, JournalId},
 };
 
-use super::{entity::*, error::*, graph_cache::MAX_MEMBERSHIP_DEPTH};
+use super::{entity::*, error::*, graph_validation::MAX_MEMBERSHIP_DEPTH};
 
 /// Coarse advisory lock guarding the account-set membership graph
 /// (`cala_account_set_member_accounts` and
