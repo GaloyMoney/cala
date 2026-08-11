@@ -348,8 +348,20 @@ impl AccountSets {
     }
 
     /// Batch variant of [`add_member_in_op`](Self::add_member_in_op) for
-    /// account-set members. The complete proposed graph is validated before
-    /// any edge is inserted, then all direct edges are persisted together.
+    /// account-set hierarchy edges. The complete proposed graph is validated
+    /// before any edge is inserted, then all direct edges, the epoch bump,
+    /// and outbox events are persisted atomically.
+    ///
+    /// **Cost model.** The first consumer is a one-shot chart import that
+    /// builds a fresh hierarchy, so existing edges and account memberships
+    /// are near-empty and validation is dominated by the proposed batch
+    /// itself. Against a mature chart the account read is scoped to the
+    /// descendant closure of the proposed member endpoints, and existing
+    /// edges are served from the epoch-validated in-process cache, so a
+    /// small batch does not re-read or re-validate the whole graph. The
+    /// exclusive membership-graph lock is held for the whole op, so very
+    /// large batches will block other structure and account-member writers
+    /// for the duration of validation and insert.
     #[instrument(
         level = "debug",
         name = "cala_ledger.account_sets.add_member_sets_in_op",
