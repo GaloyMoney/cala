@@ -430,6 +430,18 @@ impl AccountSets {
             });
         }
 
+        // A single edge is cheaper through the existing single-attach path:
+        // one targeted CTE validation and insert, no combined-graph cache
+        // work. This preserves the old cost model for callers that batch a
+        // single pair by accident or for convenience.
+        if members.len() == 1 {
+            let (account_set_id, member_account_set_id) = members[0];
+            return self
+                .repo
+                .add_member_set(op, account_set_id, member_account_set_id)
+                .await;
+        }
+
         self.repo.lock_for_set_membership_op(op).await?;
         self.set_graph_cache
             .assert_valid_set_memberships_in_op(op, members)
