@@ -865,57 +865,47 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// Load the existing graph and direct account memberships needed to
-    /// validate a batch of proposed set-to-set edges.
-    pub(super) async fn fetch_set_membership_validation_data_in_op(
+    /// Read the membership-graph epoch in this operation's snapshot.
+    pub(super) async fn fetch_set_graph_epoch_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountSetId)],
-    ) -> Result<
-        (
-            Vec<(AccountSetId, AccountSetId)>,
-            Vec<(AccountSetId, AccountId)>,
-        ),
-        AccountSetError,
-    > {
-        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(id, _)| *id).collect();
-        let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
+    ) -> Result<i64, AccountSetError> {
+        Ok(
+            sqlx::query_scalar("SELECT epoch FROM cala_account_set_graph_epoch")
+                .fetch_one(db.as_executor())
+                .await?,
+        )
+    }
 
-        // Load only existing edges connected to a proposed endpoint. The
-        // recursive component walk uses UNION (not UNION ALL), so malformed or
-        // adversarial input cannot make database work grow with path count.
-        let existing_edges: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+    /// Load all committed set-to-set edges as an op-local cache fallback.
+    ///
+    /// The graph is intentionally read with one flat query. It is small, and
+    /// this path runs only when the epoch-validated snapshot is cold or stale;
+    /// avoiding a recursive component walk keeps fallback work bounded by the
+    /// edge table rather than graph depth.
+    pub(super) async fn fetch_set_membership_edges_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+    ) -> Result<Vec<(AccountSetId, AccountSetId)>, AccountSetError> {
+        Ok(sqlx::query_as(
             r#"
-          WITH RECURSIVE input_sets AS (
-            SELECT set_id FROM UNNEST($1::uuid[]) AS input(set_id)
-            UNION
-            SELECT set_id FROM UNNEST($2::uuid[]) AS input(set_id)
-          ),
-          relevant_sets AS (
-            SELECT set_id FROM input_sets
-
-            UNION
-
-            SELECT CASE
-                     WHEN edge.account_set_id = relevant.set_id
-                       THEN edge.member_account_set_id
-                     ELSE edge.account_set_id
-                   END
-            FROM relevant_sets relevant
-            JOIN cala_account_set_member_account_sets edge
-              ON edge.account_set_id = relevant.set_id
-              OR edge.member_account_set_id = relevant.set_id
-          )
-          SELECT edge.account_set_id, edge.member_account_set_id
-          FROM cala_account_set_member_account_sets edge
-          JOIN relevant_sets relevant
-            ON relevant.set_id = edge.account_set_id
+          SELECT account_set_id, member_account_set_id
+          FROM cala_account_set_member_account_sets
           "#,
         )
-        .bind(&account_set_ids)
-        .bind(&member_account_set_ids)
         .fetch_all(db.as_executor())
-        .await?;
+        .await?)
+    }
+
+    /// Load only direct account memberships that can participate in a conflict
+    /// introduced by `members` against the supplied existing edge graph.
+    pub(super) async fn fetch_affected_account_memberships_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        existing_edges: &[(AccountSetId, AccountSetId)],
+        members: &[(AccountSetId, AccountSetId)],
+    ) -> Result<Vec<(AccountSetId, AccountId)>, AccountSetError> {
+        let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
 
         // Only accounts below a proposed member endpoint can gain a new
         // containment path. Compute that affected descendant closure over the
@@ -928,7 +918,7 @@ impl AccountSetRepo {
                 .push(*member_account_set_id);
         }
         let mut affected_set_ids = HashSet::new();
-        let mut pending: Vec<AccountSetId> = member_account_set_ids.clone();
+        let mut pending = member_account_set_ids;
         while let Some(account_set_id) = pending.pop() {
             if affected_set_ids.insert(account_set_id) {
                 pending.extend(children.get(&account_set_id).into_iter().flatten().copied());
@@ -953,22 +943,20 @@ impl AccountSetRepo {
         .bind(&affected_set_ids)
         .fetch_all(db.as_executor())
         .await?;
-        let account_members = if candidate_account_ids.is_empty() {
-            Vec::new()
-        } else {
-            sqlx::query_as(
-                r#"
-              SELECT account_set_id, member_account_id
-              FROM cala_account_set_member_accounts
-              WHERE member_account_id = ANY($1)
-              "#,
-            )
-            .bind(&candidate_account_ids)
-            .fetch_all(db.as_executor())
-            .await?
-        };
+        if candidate_account_ids.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        Ok((existing_edges, account_members))
+        Ok(sqlx::query_as(
+            r#"
+          SELECT account_set_id, member_account_id
+          FROM cala_account_set_member_accounts
+          WHERE member_account_id = ANY($1)
+          "#,
+        )
+        .bind(&candidate_account_ids)
+        .fetch_all(db.as_executor())
+        .await?)
     }
 
     /// Insert a validated batch of direct account-set membership edges.
