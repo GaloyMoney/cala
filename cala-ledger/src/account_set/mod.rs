@@ -358,7 +358,9 @@ impl AccountSets {
     /// itself. Against a mature chart the account read is scoped to the
     /// descendant closure of the proposed member endpoints, and existing
     /// edges are served from the epoch-validated in-process cache, so a
-    /// small batch does not re-read or re-validate the whole graph. The
+    /// small batch does not re-read or re-validate the whole graph. A
+    /// single proposed edge routes through the existing single-attach
+    /// path, preserving the old cost model for degenerate batches. The
     /// exclusive membership-graph lock is held for the whole op, so very
     /// large batches will block other structure and account-member writers
     /// for the duration of validation and insert.
