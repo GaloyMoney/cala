@@ -31,8 +31,8 @@
 //!   depends on reading these fresh — an account-attach mutates exactly
 //!   the rows we still read from the DB, never the cache.
 //! - **Set->set edges + per-set metadata** (cold, small; edges mutated
-//!   only by `add_member_set` / `remove_member_set`, both already
-//!   serialized under the exclusive coarse membership lock): cached
+//!   only by `add_member_set` / `add_member_sets` / `remove_member_set`,
+//!   all already serialized under the exclusive coarse membership lock): cached
 //!   in-process, validated by the `cala_account_set_graph_epoch`
 //!   counter read in the SAME statement/snapshot as the probe. Per-set
 //!   metadata (`journal_id`, `eventually_consistent`) is immutable
@@ -51,7 +51,8 @@
 //! resolution costs one round trip, exactly like the pre-cache path:
 //!
 //! - **Epoch mismatch** (structure op committed since the last refresh,
-//!   or a same-op `add_member_set` bumped it locally): walk op-locally
+//!   or a same-op `add_member_set` / `add_member_sets` bumped it
+//!   locally): walk op-locally
 //!   and separately trigger a background refresh from the **pool**.
 //!   Op-local results are NEVER installed into the shared snapshot — an
 //!   in-op read can see the op's own uncommitted writes, and installing
@@ -422,9 +423,9 @@ impl SetGraphCache {
     ///   op's own earlier attaches, and the per-member EXCLUSIVE lock
     ///   serializes concurrent mutations of the same member — the only
     ///   interleavings that could invalidate the count.
-    /// - A same-op `add_member_set` bumps the epoch in-op, so the probe
-    ///   reads the bumped value, mismatches every shared snapshot, and
-    ///   this method falls back to the SQL walk, which sees the op's
+    /// - A same-op `add_member_set` / `add_member_sets` bumps the epoch
+    ///   in-op, so the probe reads the bumped value, mismatches every
+    ///   shared snapshot, and this method falls back to the SQL walk, which sees the op's
     ///   uncommitted edge.
     ///
     /// Fallbacks (epoch mismatch, unknown set id mid-walk) run the SQL

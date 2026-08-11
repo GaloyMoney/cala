@@ -961,14 +961,12 @@ impl AccountSetRepo {
 
     /// Insert a validated batch of direct account-set membership edges.
     ///
-    /// Precondition: the caller holds [`Self::lock_for_set_membership_op`] and
-    /// has passed the graph cache's combined-graph validation in this same op.
-    /// The exclusive graph lock fences the combined-graph validation from all
-    /// membership writers. A deduplicating query loads the affected connected
-    /// components, then bounded in-memory graph validation evaluates existing
-    /// and proposed edges together. Cycles, duplicate paths, account-path
-    /// conflicts, and depth overflow caused by interactions within the batch
-    /// are rejected before the first edge is written.
+    /// Precondition: the caller holds [`Self::lock_for_set_membership_op`]
+    /// and has passed the graph cache's combined-graph validation in this
+    /// same op. This function only persists: it inserts the edges, bumps the
+    /// graph epoch once for the whole batch, and publishes one outbox event
+    /// per edge. All cycle, path, account, and depth checks happen in the
+    /// caller's validation step before this runs.
     #[instrument(
         level = "debug",
         name = "account_set.insert_member_sets",
