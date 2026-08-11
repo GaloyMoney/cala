@@ -2,14 +2,14 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, JournalId},
 };
 
-use super::{entity::*, error::*};
+use super::{entity::*, error::*, graph_cache::MAX_MEMBERSHIP_DEPTH};
 
 /// Coarse advisory lock guarding the account-set membership graph
 /// (`cala_account_set_member_accounts` and
@@ -58,208 +58,6 @@ const ADDVISORY_LOCK_ID: i64 = 123456;
 /// keyed on `hashtext(<member account id>)`. Must stay disjoint from
 /// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
 const MEMBER_LOCK_CLASS: i32 = 2;
-
-/// Maximum depth (in set->set edges) of any root-to-leaf membership
-/// chain. Enforced in single and batched set attachment: rejecting edges past this bound
-/// keeps the read-time ancestor walk cheap and terminating. Real
-/// hierarchies are <=10 deep; 16 leaves headroom.
-const MAX_MEMBERSHIP_DEPTH: i32 = 16;
-
-fn validate_set_membership_batch(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
-    account_members: &[(AccountSetId, AccountId)],
-) -> Result<(), AccountSetError> {
-    let mut nodes = HashSet::new();
-    let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-    let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
-
-    for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
-        nodes.insert(*account_set_id);
-        nodes.insert(*member_account_set_id);
-        adjacency
-            .entry(*account_set_id)
-            .or_default()
-            .push(*member_account_set_id);
-        *indegree.entry(*member_account_set_id).or_default() += 1;
-        indegree.entry(*account_set_id).or_default();
-    }
-    for (account_set_id, _) in account_members {
-        nodes.insert(*account_set_id);
-        indegree.entry(*account_set_id).or_default();
-    }
-
-    let mut queue: VecDeque<AccountSetId> = indegree
-        .iter()
-        .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
-        .collect();
-    let mut topological_order = Vec::with_capacity(nodes.len());
-    while let Some(account_set_id) = queue.pop_front() {
-        topological_order.push(account_set_id);
-        if let Some(children) = adjacency.get(&account_set_id) {
-            for child in children {
-                let degree = indegree
-                    .get_mut(child)
-                    .expect("every child must have an indegree");
-                *degree -= 1;
-                if *degree == 0 {
-                    queue.push_back(*child);
-                }
-            }
-        }
-    }
-
-    if topological_order.len() != nodes.len() {
-        let (account_set_id, member_account_set_id) = proposed_edges
-            .iter()
-            .find(|(account_set_id, member_account_set_id)| {
-                account_set_id == member_account_set_id
-                    || graph_has_path(&adjacency, *member_account_set_id, *account_set_id)
-            })
-            .copied()
-            .unwrap_or(proposed_edges[0]);
-        return Err(AccountSetError::MembershipCycleDetected {
-            account_set_id,
-            member_account_set_id,
-        });
-    }
-
-    // In topological order, every parent's ancestor set is complete before
-    // its contribution reaches a child. An overlap means the child has two
-    // paths to the same ancestor. Hash-set union caps work at O(V^2) in the
-    // worst case instead of enumerating exponentially many paths.
-    let mut ancestors: HashMap<AccountSetId, HashSet<AccountSetId>> = HashMap::new();
-    let mut depth_from_root: HashMap<AccountSetId, i32> = HashMap::new();
-    for account_set_id in &topological_order {
-        let mut contribution = ancestors.get(account_set_id).cloned().unwrap_or_default();
-        contribution.insert(*account_set_id);
-        let parent_depth = *depth_from_root.get(account_set_id).unwrap_or(&0);
-
-        if let Some(children) = adjacency.get(account_set_id) {
-            for child in children {
-                let child_ancestors = ancestors.entry(*child).or_default();
-                if !child_ancestors.is_disjoint(&contribution) {
-                    return Err(AccountSetError::MemberAlreadyAdded);
-                }
-                child_ancestors.extend(contribution.iter().copied());
-                depth_from_root
-                    .entry(*child)
-                    .and_modify(|depth| *depth = (*depth).max(parent_depth + 1))
-                    .or_insert(parent_depth + 1);
-            }
-        }
-    }
-
-    let mut account_paths = HashSet::new();
-    for (account_set_id, account_id) in account_members {
-        if !account_paths.insert((*account_set_id, *account_id)) {
-            return Err(AccountSetError::MemberAlreadyAdded);
-        }
-        if let Some(containers) = ancestors.get(account_set_id) {
-            for container in containers {
-                if !account_paths.insert((*container, *account_id)) {
-                    return Err(AccountSetError::MemberAlreadyAdded);
-                }
-            }
-        }
-    }
-
-    let max_depth = depth_from_root.values().copied().max().unwrap_or(0);
-    if max_depth > MAX_MEMBERSHIP_DEPTH {
-        let (index, depth) = first_depth_overflow(existing_edges, proposed_edges);
-        let (account_set_id, member_account_set_id) = proposed_edges[index];
-        return Err(AccountSetError::MembershipDepthExceeded {
-            account_set_id,
-            member_account_set_id,
-            depth,
-            max: MAX_MEMBERSHIP_DEPTH,
-        });
-    }
-
-    Ok(())
-}
-
-fn graph_has_path(
-    adjacency: &HashMap<AccountSetId, Vec<AccountSetId>>,
-    from: AccountSetId,
-    to: AccountSetId,
-) -> bool {
-    let mut pending = vec![from];
-    let mut visited = HashSet::new();
-    while let Some(current) = pending.pop() {
-        if current == to {
-            return true;
-        }
-        if visited.insert(current) {
-            pending.extend(adjacency.get(&current).into_iter().flatten().copied());
-        }
-    }
-    false
-}
-
-fn first_depth_overflow(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
-) -> (usize, i32) {
-    let mut low = 1;
-    let mut high = proposed_edges.len();
-    while low < high {
-        let middle = (low + high) / 2;
-        if graph_max_depth(existing_edges, &proposed_edges[..middle]) > MAX_MEMBERSHIP_DEPTH {
-            high = middle;
-        } else {
-            low = middle + 1;
-        }
-    }
-    (
-        low - 1,
-        graph_max_depth(existing_edges, &proposed_edges[..low]),
-    )
-}
-
-fn graph_max_depth(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
-) -> i32 {
-    let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-    let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
-    for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
-        adjacency
-            .entry(*account_set_id)
-            .or_default()
-            .push(*member_account_set_id);
-        *indegree.entry(*member_account_set_id).or_default() += 1;
-        indegree.entry(*account_set_id).or_default();
-    }
-
-    let mut queue: VecDeque<AccountSetId> = indegree
-        .iter()
-        .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
-        .collect();
-    let mut depths = HashMap::new();
-    let mut max_depth = 0;
-    while let Some(account_set_id) = queue.pop_front() {
-        let parent_depth = *depths.get(&account_set_id).unwrap_or(&0);
-        if let Some(children) = adjacency.get(&account_set_id) {
-            for child in children {
-                let child_depth = parent_depth + 1;
-                depths
-                    .entry(*child)
-                    .and_modify(|depth| *depth = (*depth).max(child_depth))
-                    .or_insert(child_depth);
-                max_depth = max_depth.max(child_depth);
-                let degree = indegree
-                    .get_mut(child)
-                    .expect("every child must have an indegree");
-                *degree -= 1;
-                if *degree == 0 {
-                    queue.push_back(*child);
-                }
-            }
-        }
-    }
-    max_depth
-}
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -1055,34 +853,31 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// Validates and inserts a batch of direct account-set membership edges.
-    ///
-    /// The exclusive graph lock fences the combined-graph validation from all
-    /// membership writers. A deduplicating query loads the affected connected
-    /// components, then bounded in-memory graph validation evaluates existing
-    /// and proposed edges together. Cycles, duplicate paths, account-path
-    /// conflicts, and depth overflow caused by interactions within the batch
-    /// are rejected before the first edge is written.
-    #[instrument(
-        level = "debug",
-        name = "account_set.insert_member_sets",
-        skip_all,
-        fields(count = members.len()),
-        err(level = "warn")
-    )]
-    pub(super) async fn insert_member_sets(
+    /// Take the exclusive membership-graph lock for a structure mutation.
+    /// Held until `db` commits or rolls back.
+    pub(super) async fn lock_for_set_membership_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountSetId)],
     ) -> Result<(), AccountSetError> {
-        if members.is_empty() {
-            return Ok(());
-        }
-
         sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
+        Ok(())
+    }
 
+    /// Load the existing graph and direct account memberships needed to
+    /// validate a batch of proposed set-to-set edges.
+    pub(super) async fn fetch_set_membership_validation_data_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountSetId)],
+    ) -> Result<
+        (
+            Vec<(AccountSetId, AccountSetId)>,
+            Vec<(AccountSetId, AccountId)>,
+        ),
+        AccountSetError,
+    > {
         let account_set_ids: Vec<AccountSetId> = members.iter().map(|(id, _)| *id).collect();
         let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
 
@@ -1136,7 +931,7 @@ impl AccountSetRepo {
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
-        let account_members: Vec<(AccountSetId, AccountId)> = sqlx::query_as(
+        let account_members = sqlx::query_as(
             r#"
           SELECT account_set_id, member_account_id
           FROM cala_account_set_member_accounts
@@ -1147,7 +942,37 @@ impl AccountSetRepo {
         .fetch_all(db.as_executor())
         .await?;
 
-        validate_set_membership_batch(&existing_edges, members, &account_members)?;
+        Ok((existing_edges, account_members))
+    }
+
+    /// Insert a validated batch of direct account-set membership edges.
+    ///
+    /// Precondition: the caller holds [`Self::lock_for_set_membership_op`] and
+    /// has passed the graph cache's combined-graph validation in this same op.
+    /// The exclusive graph lock fences the combined-graph validation from all
+    /// membership writers. A deduplicating query loads the affected connected
+    /// components, then bounded in-memory graph validation evaluates existing
+    /// and proposed edges together. Cycles, duplicate paths, account-path
+    /// conflicts, and depth overflow caused by interactions within the batch
+    /// are rejected before the first edge is written.
+    #[instrument(
+        level = "debug",
+        name = "account_set.insert_member_sets",
+        skip_all,
+        fields(count = members.len()),
+        err(level = "warn")
+    )]
+    pub(super) async fn insert_member_sets(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountSetId)],
+    ) -> Result<(), AccountSetError> {
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(id, _)| *id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
 
         sqlx::query(
             r#"
