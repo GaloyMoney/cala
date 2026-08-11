@@ -412,6 +412,10 @@ impl AccountSets {
             });
         }
 
+        self.repo.lock_for_set_membership_op(op).await?;
+        self.set_graph_cache
+            .assert_valid_set_memberships_in_op(op, members)
+            .await?;
         self.repo.insert_member_sets(op, members).await?;
 
         Ok(())
