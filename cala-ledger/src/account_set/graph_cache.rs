@@ -106,6 +106,12 @@ const TIMER_REFRESH_INTERVAL: std::time::Duration = std::time::Duration::from_se
 /// takes the op-local fallback (and triggers the installing refresh).
 const COLD_EPOCH: i64 = -1;
 
+/// Maximum depth (in set->set edges) of any root-to-leaf membership
+/// chain. Rejecting edges past this bound keeps the read-time ancestor
+/// walk cheap and terminating. Real hierarchies are <=10 deep; 16 leaves
+/// headroom.
+pub(super) const MAX_MEMBERSHIP_DEPTH: i32 = 16;
+
 #[derive(Debug, Clone, Copy)]
 struct SetMeta {
     journal_id: JournalId,
@@ -535,6 +541,220 @@ impl SetGraphCache {
             }
         }
         Some(false)
+    }
+
+    /// Validate a batch of set-to-set memberships against the graph read
+    /// inside `op`. The caller must hold the exclusive structure lock so the
+    /// graph cannot change between this check and persistence.
+    pub(super) async fn assert_valid_set_memberships_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountSetId)],
+    ) -> Result<(), AccountSetError> {
+        let (existing_edges, account_members) = self
+            .inner
+            .repo
+            .fetch_set_membership_validation_data_in_op(op, members)
+            .await?;
+        Self::validate_set_memberships(&existing_edges, members, &account_members)
+    }
+
+    fn validate_set_memberships(
+        existing_edges: &[(AccountSetId, AccountSetId)],
+        proposed_edges: &[(AccountSetId, AccountSetId)],
+        account_members: &[(AccountSetId, AccountId)],
+    ) -> Result<(), AccountSetError> {
+        let mut nodes = HashSet::new();
+        let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
+
+        for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
+            nodes.insert(*account_set_id);
+            nodes.insert(*member_account_set_id);
+            adjacency
+                .entry(*account_set_id)
+                .or_default()
+                .push(*member_account_set_id);
+            *indegree.entry(*member_account_set_id).or_default() += 1;
+            indegree.entry(*account_set_id).or_default();
+        }
+        for (account_set_id, _) in account_members {
+            nodes.insert(*account_set_id);
+            indegree.entry(*account_set_id).or_default();
+        }
+
+        let mut queue: VecDeque<AccountSetId> = indegree
+            .iter()
+            .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
+            .collect();
+        let mut topological_order = Vec::with_capacity(nodes.len());
+        while let Some(account_set_id) = queue.pop_front() {
+            topological_order.push(account_set_id);
+            if let Some(children) = adjacency.get(&account_set_id) {
+                for child in children {
+                    let degree = indegree
+                        .get_mut(child)
+                        .expect("every child must have an indegree");
+                    *degree -= 1;
+                    if *degree == 0 {
+                        queue.push_back(*child);
+                    }
+                }
+            }
+        }
+
+        if topological_order.len() != nodes.len() {
+            let (account_set_id, member_account_set_id) = proposed_edges
+                .iter()
+                .find(|(account_set_id, member_account_set_id)| {
+                    account_set_id == member_account_set_id
+                        || Self::graph_has_path(&adjacency, *member_account_set_id, *account_set_id)
+                })
+                .copied()
+                .unwrap_or(proposed_edges[0]);
+            return Err(AccountSetError::MembershipCycleDetected {
+                account_set_id,
+                member_account_set_id,
+            });
+        }
+
+        // In topological order, every parent's ancestor set is complete before
+        // its contribution reaches a child. An overlap means the child has two
+        // paths to the same ancestor. Hash-set union caps work at O(V^2) in the
+        // worst case instead of enumerating exponentially many paths.
+        let mut ancestors: HashMap<AccountSetId, HashSet<AccountSetId>> = HashMap::new();
+        let mut depth_from_root: HashMap<AccountSetId, i32> = HashMap::new();
+        for account_set_id in &topological_order {
+            let mut contribution = ancestors.get(account_set_id).cloned().unwrap_or_default();
+            contribution.insert(*account_set_id);
+            let parent_depth = *depth_from_root.get(account_set_id).unwrap_or(&0);
+
+            if let Some(children) = adjacency.get(account_set_id) {
+                for child in children {
+                    let child_ancestors = ancestors.entry(*child).or_default();
+                    if !child_ancestors.is_disjoint(&contribution) {
+                        return Err(AccountSetError::MemberAlreadyAdded);
+                    }
+                    child_ancestors.extend(contribution.iter().copied());
+                    depth_from_root
+                        .entry(*child)
+                        .and_modify(|depth| *depth = (*depth).max(parent_depth + 1))
+                        .or_insert(parent_depth + 1);
+                }
+            }
+        }
+
+        let mut account_paths = HashSet::new();
+        for (account_set_id, account_id) in account_members {
+            if !account_paths.insert((*account_set_id, *account_id)) {
+                return Err(AccountSetError::MemberAlreadyAdded);
+            }
+            if let Some(containers) = ancestors.get(account_set_id) {
+                for container in containers {
+                    if !account_paths.insert((*container, *account_id)) {
+                        return Err(AccountSetError::MemberAlreadyAdded);
+                    }
+                }
+            }
+        }
+
+        let max_depth = depth_from_root.values().copied().max().unwrap_or(0);
+        if max_depth > MAX_MEMBERSHIP_DEPTH {
+            let (index, depth) = Self::first_depth_overflow(existing_edges, proposed_edges);
+            let (account_set_id, member_account_set_id) = proposed_edges[index];
+            return Err(AccountSetError::MembershipDepthExceeded {
+                account_set_id,
+                member_account_set_id,
+                depth,
+                max: MAX_MEMBERSHIP_DEPTH,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn graph_has_path(
+        adjacency: &HashMap<AccountSetId, Vec<AccountSetId>>,
+        from: AccountSetId,
+        to: AccountSetId,
+    ) -> bool {
+        let mut pending = vec![from];
+        let mut visited = HashSet::new();
+        while let Some(current) = pending.pop() {
+            if current == to {
+                return true;
+            }
+            if visited.insert(current) {
+                pending.extend(adjacency.get(&current).into_iter().flatten().copied());
+            }
+        }
+        false
+    }
+
+    fn first_depth_overflow(
+        existing_edges: &[(AccountSetId, AccountSetId)],
+        proposed_edges: &[(AccountSetId, AccountSetId)],
+    ) -> (usize, i32) {
+        let mut low = 1;
+        let mut high = proposed_edges.len();
+        while low < high {
+            let middle = (low + high) / 2;
+            if Self::graph_max_depth(existing_edges, &proposed_edges[..middle])
+                > MAX_MEMBERSHIP_DEPTH
+            {
+                high = middle;
+            } else {
+                low = middle + 1;
+            }
+        }
+        (
+            low - 1,
+            Self::graph_max_depth(existing_edges, &proposed_edges[..low]),
+        )
+    }
+
+    fn graph_max_depth(
+        existing_edges: &[(AccountSetId, AccountSetId)],
+        proposed_edges: &[(AccountSetId, AccountSetId)],
+    ) -> i32 {
+        let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
+        for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
+            adjacency
+                .entry(*account_set_id)
+                .or_default()
+                .push(*member_account_set_id);
+            *indegree.entry(*member_account_set_id).or_default() += 1;
+            indegree.entry(*account_set_id).or_default();
+        }
+
+        let mut queue: VecDeque<AccountSetId> = indegree
+            .iter()
+            .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
+            .collect();
+        let mut depths = HashMap::new();
+        let mut max_depth = 0;
+        while let Some(account_set_id) = queue.pop_front() {
+            let parent_depth = *depths.get(&account_set_id).unwrap_or(&0);
+            if let Some(children) = adjacency.get(&account_set_id) {
+                for child in children {
+                    let child_depth = parent_depth + 1;
+                    depths
+                        .entry(*child)
+                        .and_modify(|depth| *depth = (*depth).max(child_depth))
+                        .or_insert(child_depth);
+                    max_depth = max_depth.max(child_depth);
+                    let degree = indegree
+                        .get_mut(child)
+                        .expect("every child must have an indegree");
+                    *degree -= 1;
+                    if *degree == 0 {
+                        queue.push_back(*child);
+                    }
+                }
+            }
+        }
+        max_depth
     }
 
     fn load(&self) -> Arc<GraphSnapshot> {
