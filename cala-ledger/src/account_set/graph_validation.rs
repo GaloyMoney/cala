@@ -10,6 +10,42 @@ use super::error::AccountSetError;
 /// headroom.
 pub(super) const MAX_MEMBERSHIP_DEPTH: i32 = 16;
 
+/// Count paths from each account's proposed and existing direct memberships
+/// through the supplied parent graph. Returns `None` when the graph view does
+/// not know a traversed set, allowing the cache adapter to fall back to SQL.
+pub(super) fn has_duplicate_account_membership_paths<'a>(
+    new_set_ids: &[AccountSetId],
+    new_account_ids: &[AccountId],
+    existing_seeds: &[(AccountId, AccountSetId)],
+    is_known: impl Fn(&AccountSetId) -> bool,
+    parents_of: impl Fn(&AccountSetId) -> &'a [AccountSetId],
+) -> Option<bool> {
+    let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+    for (set_id, account_id) in new_set_ids.iter().zip(new_account_ids) {
+        per_account.entry(*account_id).or_default().push(*set_id);
+    }
+    for (account_id, set_id) in existing_seeds {
+        per_account.entry(*account_id).or_default().push(*set_id);
+    }
+
+    for seeds in per_account.into_values() {
+        let mut path_counts: HashMap<AccountSetId, u32> = HashMap::new();
+        let mut queue: VecDeque<AccountSetId> = seeds.into();
+        while let Some(set_id) = queue.pop_front() {
+            if !is_known(&set_id) {
+                return None;
+            }
+            let count = path_counts.entry(set_id).or_default();
+            *count += 1;
+            if *count > 1 {
+                return Some(true);
+            }
+            queue.extend(parents_of(&set_id));
+        }
+    }
+    Some(false)
+}
+
 pub(super) fn validate_set_memberships(
     existing_edges: &[(AccountSetId, AccountSetId)],
     proposed_edges: &[(AccountSetId, AccountSetId)],
@@ -212,6 +248,60 @@ mod tests {
 
     fn set_ids<const N: usize>() -> [AccountSetId; N] {
         std::array::from_fn(|_| AccountSetId::new())
+    }
+
+    #[test]
+    fn account_paths_accept_distinct_ancestors() {
+        let [left, right] = set_ids();
+        let account_id = AccountId::new();
+        let known = HashSet::from([left, right]);
+        let parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+
+        assert_eq!(
+            has_duplicate_account_membership_paths(
+                &[left, right],
+                &[account_id, account_id],
+                &[],
+                |set_id| known.contains(set_id),
+                |set_id| parents.get(set_id).map(Vec::as_slice).unwrap_or(&[]),
+            ),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn account_paths_reject_a_shared_ancestor() {
+        let [root, left, right] = set_ids();
+        let account_id = AccountId::new();
+        let known = HashSet::from([root, left, right]);
+        let parents = HashMap::from([(left, vec![root]), (right, vec![root])]);
+
+        assert_eq!(
+            has_duplicate_account_membership_paths(
+                &[left, right],
+                &[account_id, account_id],
+                &[],
+                |set_id| known.contains(set_id),
+                |set_id| parents.get(set_id).map(Vec::as_slice).unwrap_or(&[]),
+            ),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn account_paths_defer_an_unknown_set() {
+        let [unknown] = set_ids();
+
+        assert_eq!(
+            has_duplicate_account_membership_paths(
+                &[unknown],
+                &[AccountId::new()],
+                &[],
+                |_| false,
+                |_| &[],
+            ),
+            None
+        );
     }
 
     #[test]

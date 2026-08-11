@@ -19,9 +19,9 @@
 //!
 //! Layering: `AccountSets` (service) calls this cache; this cache holds
 //! a handle on `AccountSetRepo` and orchestrates — ALL SQL lives in
-//! `repo.rs`, cache state and account-path graph logic live here, and pure
-//! set-membership invariants live in `graph_validation.rs`. The call graph is
-//! strictly service -> cache -> repo; the repo never calls back up into the cache.
+//! `repo.rs`, cache state and snapshot adaptation live here, and pure graph
+//! invariants live in `graph_validation.rs`. The call graph is strictly
+//! service -> cache -> repo; the repo never calls back up into the cache.
 //!
 //! Why the split read is safe — the two inputs have opposite write
 //! rates:
@@ -92,7 +92,7 @@ use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
     error::AccountSetError,
-    graph_validation::validate_set_memberships,
+    graph_validation::{has_duplicate_account_membership_paths, validate_set_memberships},
     repo::{AccountSetRepo, SetGraphNode},
 };
 
@@ -464,12 +464,31 @@ impl SetGraphCache {
             Some(Overlay { parents, meta })
         };
 
-        match Self::count_membership_paths(
-            &snapshot,
-            overlay.as_ref(),
+        let is_known = |set_id: &AccountSetId| -> bool {
+            snapshot.meta.contains_key(set_id)
+                || overlay
+                    .as_ref()
+                    .is_some_and(|overlay| overlay.meta.contains_key(set_id))
+        };
+        let parents_of = |set_id: &AccountSetId| -> &[AccountSetId] {
+            snapshot
+                .parents
+                .get(set_id)
+                .or_else(|| {
+                    overlay
+                        .as_ref()
+                        .and_then(|overlay| overlay.parents.get(set_id))
+                })
+                .map(Vec::as_slice)
+                .unwrap_or(&[])
+        };
+
+        match has_duplicate_account_membership_paths(
             account_set_ids,
             account_ids,
             &probe.seeds,
+            is_known,
+            parents_of,
         ) {
             Some(false) => {
                 span.record(
@@ -495,69 +514,6 @@ impl SetGraphCache {
                     .await
             }
         }
-    }
-
-    /// The in-memory mirror of the SQL walk's conflict predicate: seed
-    /// each account with its new target sets (pair multiplicity
-    /// preserved) plus its existing direct memberships, expand every
-    /// seed upward over snapshot + overlay counting *paths* (unlike
-    /// [`Self::expand`], which dedups via a visited set — reachability
-    /// is the wrong question here), and report a conflict as soon as any
-    /// `(account, set)` is reached twice.
-    ///
-    /// Returns `None` if a set id is unknown to snapshot + overlay —
-    /// caller falls back to the SQL walk.
-    ///
-    /// Terminates unconditionally: every pop increments some count and
-    /// the second increment of any count returns immediately, so pops
-    /// are bounded by (known sets + 1) per account. A corrupted cyclic
-    /// graph revisits a set and reports a conflict — a conservative
-    /// reject, where the SQL walk's unbounded UNION ALL recursion would
-    /// not terminate at all.
-    fn count_membership_paths(
-        snapshot: &GraphSnapshot,
-        overlay: Option<&Overlay>,
-        new_set_ids: &[AccountSetId],
-        new_account_ids: &[AccountId],
-        existing_seeds: &[(AccountId, AccountSetId)],
-    ) -> Option<bool> {
-        let known = |set_id: &AccountSetId| -> bool {
-            snapshot.meta.contains_key(set_id)
-                || overlay.is_some_and(|o| o.meta.contains_key(set_id))
-        };
-        let parents_of = |set_id: &AccountSetId| -> &[AccountSetId] {
-            snapshot
-                .parents
-                .get(set_id)
-                .or_else(|| overlay.and_then(|o| o.parents.get(set_id)))
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
-        };
-
-        let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for (set_id, account_id) in new_set_ids.iter().zip(new_account_ids) {
-            per_account.entry(*account_id).or_default().push(*set_id);
-        }
-        for (account_id, set_id) in existing_seeds {
-            per_account.entry(*account_id).or_default().push(*set_id);
-        }
-
-        for seeds in per_account.into_values() {
-            let mut path_counts: HashMap<AccountSetId, u32> = HashMap::new();
-            let mut queue: VecDeque<AccountSetId> = seeds.into();
-            while let Some(set_id) = queue.pop_front() {
-                if !known(&set_id) {
-                    return None;
-                }
-                let count = path_counts.entry(set_id).or_default();
-                *count += 1;
-                if *count > 1 {
-                    return Some(true);
-                }
-                queue.extend(parents_of(&set_id));
-            }
-        }
-        Some(false)
     }
 
     /// Validate a batch of set-to-set memberships against the graph read
