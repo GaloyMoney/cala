@@ -687,6 +687,85 @@ async fn add_member_sets_batch_rejects_duplicate_paths_atomically() -> anyhow::R
 }
 
 #[tokio::test]
+async fn add_member_sets_batch_rejects_account_conflict_from_interacting_edges(
+) -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let new_set = |name: &str| {
+        NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name)
+            .journal_id(journal.id())
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap()
+    };
+    let root = cala
+        .account_sets()
+        .create(new_set("batch-account-root"))
+        .await?;
+    let branch = cala
+        .account_sets()
+        .create(new_set("batch-account-branch"))
+        .await?;
+    let leaf = cala
+        .account_sets()
+        .create(new_set("batch-account-leaf"))
+        .await?;
+    let deep_leaf = cala
+        .account_sets()
+        .create(new_set("batch-account-deep-leaf"))
+        .await?;
+    cala.account_sets()
+        .add_member(leaf.id(), deep_leaf.id())
+        .await?;
+
+    let (account, _) = helpers::test_accounts();
+    let account = cala.accounts().create(account).await?;
+    cala.account_sets()
+        .add_member(root.id(), account.id())
+        .await?;
+    cala.account_sets()
+        .add_member(deep_leaf.id(), account.id())
+        .await?;
+
+    // The account below `deep_leaf` is selected by following both proposed
+    // edges and the committed leaf -> deep_leaf edge in the final descendant
+    // closure. Loading all memberships for that candidate then exposes its
+    // separate direct membership in `root`.
+    let result = cala
+        .account_sets()
+        .add_member_sets(&[(root.id(), branch.id()), (branch.id(), leaf.id())])
+        .await;
+    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+
+    let parent_ids = [root.id(), branch.id()];
+    let member_ids = [branch.id(), leaf.id()];
+    let edge_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = ANY($1)
+          AND member_account_set_id = ANY($2)
+        "#,
+    )
+    .bind(&parent_ids[..])
+    .bind(&member_ids[..])
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(edge_count, 0, "a rejected batch must not insert any edge");
+
+    Ok(())
+}
+
+#[tokio::test]
 async fn add_member_sets_batch_rejects_dense_duplicate_paths_without_path_explosion(
 ) -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;

@@ -917,30 +917,56 @@ impl AccountSetRepo {
         .fetch_all(db.as_executor())
         .await?;
 
-        let relevant_set_ids: Vec<AccountSetId> = account_set_ids
-            .iter()
-            .chain(&member_account_set_ids)
-            .copied()
-            .chain(
-                existing_edges
-                    .iter()
-                    .flat_map(|(account_set_id, member_account_set_id)| {
-                        [*account_set_id, *member_account_set_id]
-                    }),
-            )
-            .collect::<HashSet<_>>()
-            .into_iter()
-            .collect();
-        let account_members = sqlx::query_as(
+        // Only accounts below a proposed member endpoint can gain a new
+        // containment path. Compute that affected descendant closure over the
+        // final graph so interactions between proposed edges are included.
+        let mut children: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        for (account_set_id, member_account_set_id) in existing_edges.iter().chain(members) {
+            children
+                .entry(*account_set_id)
+                .or_default()
+                .push(*member_account_set_id);
+        }
+        let mut affected_set_ids = HashSet::new();
+        let mut pending: Vec<AccountSetId> = member_account_set_ids.clone();
+        while let Some(account_set_id) = pending.pop() {
+            if affected_set_ids.insert(account_set_id) {
+                pending.extend(children.get(&account_set_id).into_iter().flatten().copied());
+            }
+        }
+        let affected_set_ids: Vec<_> = affected_set_ids.into_iter().collect();
+
+        // The committed graph is already account-path valid. Therefore every
+        // conflict introduced by this batch includes an account attached in
+        // the affected descendant closure above. Find those candidate accounts
+        // through the set-leading index, then load all of their direct
+        // memberships through the member-leading unique index. This preserves
+        // complete account-path validation without reading every membership in
+        // the connected component.
+        let candidate_account_ids: Vec<AccountId> = sqlx::query_scalar(
             r#"
-          SELECT account_set_id, member_account_id
+          SELECT DISTINCT member_account_id
           FROM cala_account_set_member_accounts
           WHERE account_set_id = ANY($1)
           "#,
         )
-        .bind(&relevant_set_ids)
+        .bind(&affected_set_ids)
         .fetch_all(db.as_executor())
         .await?;
+        let account_members = if candidate_account_ids.is_empty() {
+            Vec::new()
+        } else {
+            sqlx::query_as(
+                r#"
+              SELECT account_set_id, member_account_id
+              FROM cala_account_set_member_accounts
+              WHERE member_account_id = ANY($1)
+              "#,
+            )
+            .bind(&candidate_account_ids)
+            .fetch_all(db.as_executor())
+            .await?
+        };
 
         Ok((existing_edges, account_members))
     }
