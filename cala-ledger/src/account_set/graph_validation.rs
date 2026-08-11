@@ -51,6 +51,10 @@ pub(super) fn validate_set_memberships(
     proposed_edges: &[(AccountSetId, AccountSetId)],
     account_members: &[(AccountSetId, AccountId)],
 ) -> Result<(), AccountSetError> {
+    debug_assert!(
+        !proposed_edges.is_empty(),
+        "batch validation requires at least one proposed edge"
+    );
     let mut nodes = HashSet::new();
     let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
     let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();

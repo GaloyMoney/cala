@@ -366,12 +366,17 @@ impl AccountSets {
             return Ok(());
         }
 
-        let account_set_ids: Vec<AccountSetId> = members
-            .iter()
-            .flat_map(|(account_set_id, member_account_set_id)| {
-                [*account_set_id, *member_account_set_id]
-            })
-            .collect();
+        let account_set_ids: Vec<AccountSetId> = {
+            let mut ids: Vec<AccountSetId> = members
+                .iter()
+                .flat_map(|(account_set_id, member_account_set_id)| {
+                    [*account_set_id, *member_account_set_id]
+                })
+                .collect();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        };
         let sets = self
             .repo
             .find_all_in_op::<AccountSet>(&mut *op, &account_set_ids)
