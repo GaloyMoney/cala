@@ -59,6 +59,19 @@ impl Journals {
         Ok(self.repo.find_by_id(journal_id).await?)
     }
 
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.journals.find_in_op",
+        skip(self, op)
+    )]
+    pub async fn find_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+    ) -> Result<Journal, JournalError> {
+        Ok(self.repo.find_by_id_in_op(op, journal_id).await?)
+    }
+
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
