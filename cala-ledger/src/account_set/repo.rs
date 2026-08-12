@@ -933,11 +933,18 @@ impl AccountSetRepo {
         // memberships through the member-leading unique index. This preserves
         // complete account-path validation without reading every membership in
         // the connected component.
+        //
+        // These queries decode into newtype tuples rather than using sqlx's
+        // compile-time checked `query!`, because the column types are stable
+        // and the tuple shape is local to this module. An `ORDER BY` keeps
+        // the candidate and membership rows deterministic so the same conflict
+        // is reported consistently across runs.
         let candidate_account_ids: Vec<AccountId> = sqlx::query_scalar(
             r#"
           SELECT DISTINCT member_account_id
           FROM cala_account_set_member_accounts
           WHERE account_set_id = ANY($1)
+          ORDER BY member_account_id
           "#,
         )
         .bind(&affected_set_ids)
@@ -952,6 +959,7 @@ impl AccountSetRepo {
           SELECT account_set_id, member_account_id
           FROM cala_account_set_member_accounts
           WHERE member_account_id = ANY($1)
+          ORDER BY member_account_id, account_set_id
           "#,
         )
         .bind(&candidate_account_ids)
