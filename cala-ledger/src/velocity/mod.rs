@@ -15,6 +15,7 @@ use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 pub use crate::param::Params;
 
+pub(crate) use account_control::AccountVelocityControl;
 use account_control::*;
 use balance::*;
 pub use control::*;
@@ -193,29 +194,31 @@ impl Velocities {
         Ok(control)
     }
 
-    #[instrument(level = "debug", name = "velocity.update_balances_with_limit_enforcement_in_op", skip(self, db, transaction, entries, account_ids, account_set_mappings), fields(account_ids_count = account_ids.len(), entries_count = entries.len()), err(level = tracing::Level::WARN))]
-    pub(crate) async fn update_balances_with_limit_enforcement_in_op(
+    /// Enforce every matching velocity limit for one posting and write the
+    /// resulting velocity balances.
+    ///
+    /// The controls are supplied by the caller: the posting flow reads the
+    /// controls for its entry accounts as part of its single read statement
+    /// (and those for any resolved ancestor sets in the ancestor phase), so the
+    /// dedicated `find_for_enforcement` probe — which the pre-consolidation path
+    /// issued on *every* posting, even in deployments with no velocity controls
+    /// at all — is gone.
+    ///
+    /// Enforcement itself stays per posting: the evaluation context is built
+    /// from one `TransactionValues`. Postings in a batch are enforced in input
+    /// order within the same database transaction, so each one's read observes
+    /// its predecessors' velocity writes — the same chaining a sequence of
+    /// separate calls would produce.
+    #[instrument(level = "debug", name = "velocity.enforce_with_controls_in_op", skip_all, fields(entries_count = entries.len()), err(level = tracing::Level::WARN))]
+    pub(crate) async fn enforce_with_controls_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
         transaction: &TransactionValues,
         entries: &[EntryValues],
-        account_ids: &[AccountId],
+        controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
-        let mut all_account_ids = account_ids.to_vec();
-        all_account_ids.extend(
-            account_ids
-                .iter()
-                .filter_map(|id| account_set_mappings.get(id))
-                .flat_map(|ids| ids.iter().map(AccountId::from)),
-        );
-
-        let controls = self
-            .account_controls
-            .find_for_enforcement(db, &all_account_ids)
-            .await?;
-
         self.balances
             .update_balances_with_limit_enforcement_in_op(
                 db,

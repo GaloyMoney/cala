@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH latest AS (\n            SELECT t.code, t.id, MAX(e.sequence)::int4 AS version\n            FROM cala_tx_templates t\n            JOIN cala_tx_template_events e ON t.id = e.id\n            WHERE t.code = ANY($1::text[])\n            GROUP BY t.code, t.id\n        )\n        SELECT\n            l.code AS \"code!\",\n            l.id AS \"id!: TxTemplateId\",\n            l.version AS \"version!\",\n            e.event AS \"event!\"\n        FROM latest l\n        JOIN cala_tx_template_events e\n          ON e.id = l.id AND e.sequence = l.version\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!: TxTemplateId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "version!",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "event!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null,
+      false
+    ]
+  },
+  "hash": "464e4f43352e31815f1c4a080a68c18327fbbfc1d00fe5e3a79b21d142dc9703"
+}

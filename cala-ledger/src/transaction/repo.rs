@@ -1,10 +1,7 @@
 use es_entity::*;
 use sqlx::PgPool;
 
-use crate::{
-    outbox::OutboxPublisher,
-    primitives::{JournalId, TransactionId, TxTemplateId},
-};
+use crate::primitives::{JournalId, TransactionId, TxTemplateId};
 
 use super::entity::*;
 
@@ -21,31 +18,19 @@ use super::entity::*;
         effective(ty = "chrono::NaiveDate", update(persist = false)),
     ),
     tbl_prefix = "cala",
-    post_persist_hook = "publish",
     persist_event_context = false
 )]
+/// Read side of the transaction entity.
+///
+/// Transactions are written exclusively by [`crate::posting`], which inserts
+/// the row and its event in the same statement as the entries and balances, and
+/// publishes `TransactionCreated` itself — so this repo carries no persist hook.
 pub(super) struct TransactionRepo {
     pool: PgPool,
-    publisher: OutboxPublisher,
 }
 
 impl TransactionRepo {
-    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
-        Self {
-            pool: pool.clone(),
-            publisher: publisher.clone(),
-        }
-    }
-
-    async fn publish(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        entity: &Transaction,
-        new_events: es_entity::LastPersisted<'_, TransactionEvent>,
-    ) -> Result<(), sqlx::Error> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
-        Ok(())
+    pub fn new(pool: &PgPool) -> Self {
+        Self { pool: pool.clone() }
     }
 }

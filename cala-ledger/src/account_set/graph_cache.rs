@@ -92,7 +92,7 @@ use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
     error::AccountSetError,
-    repo::{AccountSetRepo, SetGraphNode},
+    repo::{AccountSetRepo, DirectMembershipProbe, SetGraphNode},
 };
 
 /// Interval of the belt-and-braces timer refresh. Correctness never
@@ -241,25 +241,34 @@ impl SetGraphCache {
         fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty),
         err(level = "warn")
     )]
-    pub(super) async fn fetch_mappings_in_op(
+    /// The posting flow reads the direct memberships and the graph epoch as
+    /// part of its single read statement, so it arrives here with the probe
+    /// already in hand — the probe deliberately takes no locks, which is what
+    /// lets it share a statement with the flow's other reads.
+    ///
+    /// `probe_seeds` may cover accounts outside `journal_id` (a batch spanning
+    /// journals resolves one journal at a time); expansion filters by journal,
+    /// and the lock batch is built from `entry_pairs`, so extra seeds are inert.
+    #[instrument(
+        level = "debug",
+        name = "account_set.resolve_from_probe_in_op",
+        skip(self, op, probe_seeds, entry_pairs),
+        fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty),
+        err(level = "warn")
+    )]
+    pub(super) async fn resolve_from_probe_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
+        probe_epoch: i64,
+        probe_seeds: &[(AccountId, AccountSetId)],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let span = tracing::Span::current();
-
-        let account_ids: Vec<AccountId> = {
-            let mut ids = entry_pairs.0.clone();
-            ids.sort_unstable();
-            ids.dedup();
-            ids
+        let probe = DirectMembershipProbe {
+            epoch: probe_epoch,
+            seeds: probe_seeds.to_vec(),
         };
-        let probe = self
-            .inner
-            .repo
-            .probe_direct_memberships_in_op(op, &account_ids)
-            .await?;
         if probe.seeds.is_empty() {
             // No direct memberships => no ancestors, no locks to take.
             span.record("path", "no_memberships");

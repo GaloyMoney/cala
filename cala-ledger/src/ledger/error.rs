@@ -41,6 +41,12 @@ pub enum LedgerError {
          account-set backing account; an account set's balance is derived from its members"
     )]
     EntryTargetsAccountSet,
+    /// A posting rejected for a reason that carries its position in the
+    /// submitted batch. Failures that already had a dedicated variant keep it,
+    /// so existing matches are unaffected; this covers the kinds the batch API
+    /// introduced.
+    #[error("LedgerError - {0}")]
+    Posting(Box<crate::posting::PostingError>),
 }
 
 impl From<EntryError> for LedgerError {

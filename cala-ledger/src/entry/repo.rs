@@ -1,7 +1,4 @@
-use crate::{
-    outbox::OutboxPublisher,
-    primitives::{AccountId, AccountSetId, EntryId, JournalId, TransactionId},
-};
+use crate::primitives::{AccountId, AccountSetId, EntryId, JournalId, TransactionId};
 use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -21,21 +18,21 @@ use super::{entity::*, error::*};
         ),
     ),
     tbl_prefix = "cala",
-    post_persist_hook = "publish",
     persist_event_context = false
 )]
+/// Read side of the entry entity.
+///
+/// Entries are written exclusively by [`crate::posting`], which inserts the
+/// rows and their events in the same statement as the transactions and
+/// balances, and publishes `EntryCreated` itself — so this repo carries no
+/// persist hook.
 pub(crate) struct EntryRepo {
-    #[allow(dead_code)]
     pool: PgPool,
-    publisher: OutboxPublisher,
 }
 
 impl EntryRepo {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
-        Self {
-            pool: pool.clone(),
-            publisher: publisher.clone(),
-        }
+    pub(crate) fn new(pool: &PgPool) -> Self {
+        Self { pool: pool.clone() }
     }
 
     #[instrument(
@@ -222,17 +219,5 @@ impl EntryRepo {
             has_next_page,
             end_cursor,
         })
-    }
-
-    async fn publish(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        entity: &Entry,
-        new_events: es_entity::LastPersisted<'_, EntryEvent>,
-    ) -> Result<(), sqlx::Error> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
-        Ok(())
     }
 }

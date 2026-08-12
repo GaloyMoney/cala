@@ -22,24 +22,10 @@ pub struct Transactions {
 }
 
 impl Transactions {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
-            repo: TransactionRepo::new(pool, publisher),
+            repo: TransactionRepo::new(pool),
         }
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.transactions.create_in_op",
-        skip_all
-    )]
-    pub(crate) async fn create_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        new_transaction: NewTransaction,
-    ) -> Result<Transaction, TransactionError> {
-        let transaction = self.repo.create_in_op(db, new_transaction).await?;
-        Ok(transaction)
     }
 
     #[instrument(
