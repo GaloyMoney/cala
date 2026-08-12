@@ -216,7 +216,7 @@ impl Balances {
         created_at: DateTime<Utc>,
         account_set_mappings: HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), BalanceError> {
-        let journal = self.journals.find(journal_id).await?;
+        let journal = self.journals.find_in_op(&mut *op, journal_id).await?;
         if journal.is_locked() {
             return Err(BalanceError::JournalLocked(journal.id));
         }
@@ -459,7 +459,7 @@ impl Balances {
                 .await?;
         }
 
-        let journal = self.journals.find(journal_id).await?;
+        let journal = self.journals.find_in_op(&mut *op, journal_id).await?;
         if journal.insert_effective_balances() {
             for tx in group {
                 let mut tx_involved: HashSet<(AccountId, Currency)> = HashSet::new();
