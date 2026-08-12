@@ -91,6 +91,10 @@ pub(super) fn validate_set_memberships(
     }
 
     if topological_order.len() != nodes.len() {
+        // A cycle must involve at least one proposed edge (the committed
+        // graph is a DAG). If it is in the existing graph that is
+        // corrupted state; attribute to the first existing edge so the
+        // fallback never indexes an empty proposed-edges slice.
         let (account_set_id, member_account_set_id) = proposed_edges
             .iter()
             .find(|(account_set_id, member_account_set_id)| {
@@ -98,7 +102,8 @@ pub(super) fn validate_set_memberships(
                     || graph_has_path(&adjacency, *member_account_set_id, *account_set_id)
             })
             .copied()
-            .unwrap_or(proposed_edges[0]);
+            .or_else(|| existing_edges.first().copied())
+            .expect("cycle detected in a graph with no edges");
         return Err(AccountSetError::MembershipCycleDetected {
             account_set_id,
             member_account_set_id,
@@ -178,6 +183,13 @@ fn graph_has_path(
     false
 }
 
+/// Find the first proposed edge whose inclusion makes the *combined*
+/// existing-plus-proposed graph exceed `MAX_MEMBERSHIP_DEPTH`. The returned
+/// depth is the maximum depth of that combined graph (not only the depth of
+/// the chain through the offending edge). The batch enforces a global depth
+/// bound so the read-time ancestor walk stays cheap and terminating; the
+/// reported `depth` therefore reflects the bound that was exceeded, and the
+/// returned index identifies the first edge responsible.
 fn first_depth_overflow(
     existing_edges: &[(AccountSetId, AccountSetId)],
     proposed_edges: &[(AccountSetId, AccountSetId)],
