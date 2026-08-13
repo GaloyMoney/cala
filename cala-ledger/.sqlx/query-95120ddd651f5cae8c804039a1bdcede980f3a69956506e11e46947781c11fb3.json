@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH updated AS (UPDATE cala_accounts SET name = $2, code = $3, external_id = $4, normal_balance_type = $5, status = $6, velocity_context_values = $7 WHERE id = $1 RETURNING id) INSERT INTO cala_account_events (id, recorded_at, sequence, event_type, event) SELECT updated.id, COALESCE($8, NOW()), ROW_NUMBER() OVER () + $9, unnested.event_type, unnested.event FROM updated CROSS JOIN UNNEST($10::TEXT[], $11::JSONB[]) AS unnested(event_type, event) RETURNING recorded_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        {
+          "Custom": {
+            "name": "debitorcredit",
+            "kind": {
+              "Enum": [
+                "debit",
+                "credit"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "status",
+            "kind": {
+              "Enum": [
+                "active",
+                "locked"
+              ]
+            }
+          }
+        },
+        "Jsonb",
+        "Timestamptz",
+        "Int8",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "95120ddd651f5cae8c804039a1bdcede980f3a69956506e11e46947781c11fb3"
+}

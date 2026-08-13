@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH updated AS (UPDATE cala_account_sets SET name = $2, external_id = $3 WHERE id = $1 RETURNING id) INSERT INTO cala_account_set_events (id, recorded_at, sequence, event_type, event) SELECT updated.id, COALESCE($4, NOW()), ROW_NUMBER() OVER () + $5, unnested.event_type, unnested.event FROM updated CROSS JOIN UNNEST($6::TEXT[], $7::JSONB[]) AS unnested(event_type, event) RETURNING recorded_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Timestamptz",
+        "Int8",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "71b1b9dbe247e8ae9a872b3138d1c966366640d979c23dacb53630f382ff95c3"
+}
