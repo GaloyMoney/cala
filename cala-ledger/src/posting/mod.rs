@@ -169,7 +169,11 @@ impl Postings {
     ///
     /// Any failure aborts the whole batch; the error names the offending
     /// posting. See the module docs for the ordering guarantees within a batch.
+    // `debug`, not the default INFO: this sits under every
+    // `post_transaction` / `post_transactions` unit-of-work span, so at INFO
+    // each posting would pay for a second exported span on the hot path.
     #[instrument(
+        level = "debug",
         name = "cala_ledger.posting.post_all_in_op",
         skip_all,
         fields(
