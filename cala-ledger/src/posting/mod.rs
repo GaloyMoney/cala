@@ -208,8 +208,7 @@ impl Postings {
         // template update landing between two statements of a live posting, and
         // Postgres resolves it by aborting one side with a retryable deadlock
         // error rather than hanging.
-        let stale = TemplateCache::check(&used, &fence.templates);
-        if !stale.is_empty() {
+        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &fence.templates) {
             let refreshed = self.templates.refresh_in_op(db, &stale).await?;
             let mut merged = used;
             merged.extend(refreshed);

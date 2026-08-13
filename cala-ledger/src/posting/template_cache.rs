@@ -108,22 +108,32 @@ impl TemplateCache {
         self.fetch_and_install(op, codes).await
     }
 
-    /// Compare the versions this flow prepared against with the versions the
-    /// fence statement observed. Returns the codes that must be re-resolved.
+    /// Assert that the versions this flow prepared against are the versions
+    /// the fence statement observed.
+    ///
+    /// `Ok(())` means every body used is current and the flow may proceed.
+    /// `Err(codes)` carries the codes that moved and must be re-resolved via
+    /// [`Self::refresh_in_op`] before re-preparing.
     ///
     /// A code missing from `observed` means the template was deleted between
-    /// preparation and the fence; it is reported as stale so the re-resolution
+    /// preparation and the fence; it is reported stale so the re-resolution
     /// path surfaces the proper `NotFound`.
-    pub(super) fn check(
+    pub(super) fn assert_up_to_date(
         used: &HashMap<String, ResolvedTemplate>,
         observed: &HashMap<String, (TxTemplateId, i32)>,
-    ) -> Vec<String> {
-        used.iter()
+    ) -> Result<(), Vec<String>> {
+        let stale: Vec<String> = used
+            .iter()
             .filter(|(code, resolved)| {
                 observed.get(*code) != Some(&(resolved.id, resolved.version))
             })
             .map(|(code, _)| code.clone())
-            .collect()
+            .collect();
+        if stale.is_empty() {
+            Ok(())
+        } else {
+            Err(stale)
+        }
     }
 
     async fn fetch_and_install(
