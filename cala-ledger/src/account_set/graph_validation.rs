@@ -94,40 +94,91 @@ pub(super) fn has_duplicate_account_membership_paths<'a>(
     Some(false)
 }
 
-pub(super) fn validate_set_memberships(
-    existing_edges: &[SetMembership],
-    proposed_edges: &[SetMembership],
-    account_members: &[AccountMembership],
-) -> Result<(), AccountSetError> {
-    let mut nodes = HashSet::new();
-    let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-    let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
+/// The combined existing-plus-proposed set graph, indexed once.
+///
+/// Nodes are exactly the keys of `indegree`: every edge endpoint gets an entry
+/// (the member's is incremented, the container's defaulted), and isolated sets
+/// are added explicitly. That makes a separate node set redundant, so the cycle
+/// test is `order.len() != node_count()`.
+struct SetDag {
+    adjacency: HashMap<AccountSetId, Vec<AccountSetId>>,
+    indegree: HashMap<AccountSetId, usize>,
+}
 
-    for edge in existing_edges.iter().chain(proposed_edges) {
-        nodes.insert(edge.account_set_id);
-        nodes.insert(edge.member_account_set_id);
-        adjacency
-            .entry(edge.account_set_id)
-            .or_default()
-            .push(edge.member_account_set_id);
-        *indegree.entry(edge.member_account_set_id).or_default() += 1;
-        indegree.entry(edge.account_set_id).or_default();
+/// One Kahn pass over a [`SetDag`], yielding both products the validator needs:
+/// the topological order and each node's longest-path depth from a root.
+///
+/// These were previously two separate walks — one ordering, one measuring
+/// depth — computing the same recurrence with the same `max` merge. Producing
+/// them together is what keeps a single traversal implementation in the module.
+struct Traversal {
+    order: Vec<AccountSetId>,
+    depths: HashMap<AccountSetId, i32>,
+}
+
+impl Traversal {
+    fn max_depth(&self) -> i32 {
+        self.depths.values().copied().max().unwrap_or(0)
     }
-    for membership in account_members {
-        nodes.insert(membership.account_set_id);
-        indegree.entry(membership.account_set_id).or_default();
+}
+
+impl SetDag {
+    fn new<'a>(edges: impl IntoIterator<Item = &'a SetMembership>) -> Self {
+        let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
+        for edge in edges {
+            adjacency
+                .entry(edge.account_set_id)
+                .or_default()
+                .push(edge.member_account_set_id);
+            *indegree.entry(edge.member_account_set_id).or_default() += 1;
+            indegree.entry(edge.account_set_id).or_default();
+        }
+        Self {
+            adjacency,
+            indegree,
+        }
     }
 
-    let mut queue: VecDeque<AccountSetId> = indegree
-        .iter()
-        .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
-        .collect();
-    let mut topological_order = Vec::with_capacity(nodes.len());
-    while let Some(account_set_id) = queue.pop_front() {
-        topological_order.push(account_set_id);
-        if let Some(children) = adjacency.get(&account_set_id) {
-            for child in children {
-                let degree = indegree
+    /// Register a set that carries no edges of its own, so it still counts as
+    /// a node for the cycle test.
+    fn add_isolated(&mut self, account_set_id: AccountSetId) {
+        self.indegree.entry(account_set_id).or_default();
+    }
+
+    fn node_count(&self) -> usize {
+        self.indegree.len()
+    }
+
+    fn children(&self, account_set_id: &AccountSetId) -> &[AccountSetId] {
+        self.adjacency
+            .get(account_set_id)
+            .map(Vec::as_slice)
+            .unwrap_or(&[])
+    }
+
+    /// Kahn's algorithm. `order` is shorter than [`Self::node_count`] exactly
+    /// when the graph contains a cycle (the nodes on it never reach indegree 0).
+    fn traverse(&self) -> Traversal {
+        // Cloned because the walk consumes indegrees and `&self` may be
+        // traversed more than once; O(V), dominated by the O(V + E) walk.
+        let mut remaining = self.indegree.clone();
+        let mut queue: VecDeque<AccountSetId> = remaining
+            .iter()
+            .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
+            .collect();
+        let mut order = Vec::with_capacity(remaining.len());
+        let mut depths: HashMap<AccountSetId, i32> = HashMap::new();
+
+        while let Some(account_set_id) = queue.pop_front() {
+            order.push(account_set_id);
+            let parent_depth = *depths.get(&account_set_id).unwrap_or(&0);
+            for child in self.children(&account_set_id) {
+                depths
+                    .entry(*child)
+                    .and_modify(|depth| *depth = (*depth).max(parent_depth + 1))
+                    .or_insert(parent_depth + 1);
+                let degree = remaining
                     .get_mut(child)
                     .expect("every child must have an indegree");
                 *degree -= 1;
@@ -136,9 +187,36 @@ pub(super) fn validate_set_memberships(
                 }
             }
         }
+        Traversal { order, depths }
     }
 
-    if topological_order.len() != nodes.len() {
+    fn has_path(&self, from: AccountSetId, to: AccountSetId) -> bool {
+        let mut pending = vec![from];
+        let mut visited = HashSet::new();
+        while let Some(current) = pending.pop() {
+            if current == to {
+                return true;
+            }
+            if visited.insert(current) {
+                pending.extend(self.children(&current));
+            }
+        }
+        false
+    }
+}
+
+pub(super) fn validate_set_memberships(
+    existing_edges: &[SetMembership],
+    proposed_edges: &[SetMembership],
+    account_members: &[AccountMembership],
+) -> Result<(), AccountSetError> {
+    let mut dag = SetDag::new(existing_edges.iter().chain(proposed_edges));
+    for membership in account_members {
+        dag.add_isolated(membership.account_set_id);
+    }
+    let traversal = dag.traverse();
+
+    if traversal.order.len() != dag.node_count() {
         // A cycle must involve at least one proposed edge (the committed
         // graph is a DAG). If it is in the existing graph that is
         // corrupted state; attribute to the first existing edge so the
@@ -147,7 +225,7 @@ pub(super) fn validate_set_memberships(
             .iter()
             .find(|edge| {
                 edge.account_set_id == edge.member_account_set_id
-                    || graph_has_path(&adjacency, edge.member_account_set_id, edge.account_set_id)
+                    || dag.has_path(edge.member_account_set_id, edge.account_set_id)
             })
             .copied()
             .or_else(|| existing_edges.first().copied())
@@ -163,24 +241,16 @@ pub(super) fn validate_set_memberships(
     // paths to the same ancestor. Hash-set union caps work at O(V^2) in the
     // worst case instead of enumerating exponentially many paths.
     let mut ancestors: HashMap<AccountSetId, HashSet<AccountSetId>> = HashMap::new();
-    let mut depth_from_root: HashMap<AccountSetId, i32> = HashMap::new();
-    for account_set_id in &topological_order {
+    for account_set_id in &traversal.order {
         let mut contribution = ancestors.get(account_set_id).cloned().unwrap_or_default();
         contribution.insert(*account_set_id);
-        let parent_depth = *depth_from_root.get(account_set_id).unwrap_or(&0);
 
-        if let Some(children) = adjacency.get(account_set_id) {
-            for child in children {
-                let child_ancestors = ancestors.entry(*child).or_default();
-                if !child_ancestors.is_disjoint(&contribution) {
-                    return Err(AccountSetError::MemberAlreadyAdded);
-                }
-                child_ancestors.extend(contribution.iter().copied());
-                depth_from_root
-                    .entry(*child)
-                    .and_modify(|depth| *depth = (*depth).max(parent_depth + 1))
-                    .or_insert(parent_depth + 1);
+        for child in dag.children(account_set_id) {
+            let child_ancestors = ancestors.entry(*child).or_default();
+            if !child_ancestors.is_disjoint(&contribution) {
+                return Err(AccountSetError::MemberAlreadyAdded);
             }
+            child_ancestors.extend(contribution.iter().copied());
         }
     }
 
@@ -204,8 +274,7 @@ pub(super) fn validate_set_memberships(
         }
     }
 
-    let max_depth = depth_from_root.values().copied().max().unwrap_or(0);
-    if max_depth > MAX_MEMBERSHIP_DEPTH {
+    if traversal.max_depth() > MAX_MEMBERSHIP_DEPTH {
         let (index, depth) = first_depth_overflow(existing_edges, proposed_edges);
         let edge = proposed_edges[index];
         return Err(AccountSetError::MembershipDepthExceeded {
@@ -219,24 +288,6 @@ pub(super) fn validate_set_memberships(
     Ok(())
 }
 
-fn graph_has_path(
-    adjacency: &HashMap<AccountSetId, Vec<AccountSetId>>,
-    from: AccountSetId,
-    to: AccountSetId,
-) -> bool {
-    let mut pending = vec![from];
-    let mut visited = HashSet::new();
-    while let Some(current) = pending.pop() {
-        if current == to {
-            return true;
-        }
-        if visited.insert(current) {
-            pending.extend(adjacency.get(&current).into_iter().flatten().copied());
-        }
-    }
-    false
-}
-
 /// Find the first proposed edge whose inclusion makes the *combined*
 /// existing-plus-proposed graph exceed `MAX_MEMBERSHIP_DEPTH`. The returned
 /// depth is the maximum depth of that combined graph (not only the depth of
@@ -244,65 +295,32 @@ fn graph_has_path(
 /// bound so the read-time ancestor walk stays cheap and terminating; the
 /// reported `depth` therefore reflects the bound that was exceeded, and the
 /// returned index identifies the first edge responsible.
+///
+/// Each probe rebuilds the graph for its prefix, so this is O(E log P) — but it
+/// runs only once the batch is already being rejected, never on the accept
+/// path. Depth is monotone in the prefix length, which is what makes the binary
+/// search valid; maintaining depths incrementally instead would be O(P(V + E)),
+/// worse than this for exactly the large batches that would motivate it.
 fn first_depth_overflow(
     existing_edges: &[SetMembership],
     proposed_edges: &[SetMembership],
 ) -> (usize, i32) {
+    let prefix_depth = |take: usize| {
+        SetDag::new(existing_edges.iter().chain(&proposed_edges[..take]))
+            .traverse()
+            .max_depth()
+    };
     let mut low = 1;
     let mut high = proposed_edges.len();
     while low < high {
         let middle = (low + high) / 2;
-        if graph_max_depth(existing_edges, &proposed_edges[..middle]) > MAX_MEMBERSHIP_DEPTH {
+        if prefix_depth(middle) > MAX_MEMBERSHIP_DEPTH {
             high = middle;
         } else {
             low = middle + 1;
         }
     }
-    (
-        low - 1,
-        graph_max_depth(existing_edges, &proposed_edges[..low]),
-    )
-}
-
-fn graph_max_depth(existing_edges: &[SetMembership], proposed_edges: &[SetMembership]) -> i32 {
-    let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-    let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
-    for edge in existing_edges.iter().chain(proposed_edges) {
-        adjacency
-            .entry(edge.account_set_id)
-            .or_default()
-            .push(edge.member_account_set_id);
-        *indegree.entry(edge.member_account_set_id).or_default() += 1;
-        indegree.entry(edge.account_set_id).or_default();
-    }
-
-    let mut queue: VecDeque<AccountSetId> = indegree
-        .iter()
-        .filter_map(|(id, degree)| (*degree == 0).then_some(*id))
-        .collect();
-    let mut depths = HashMap::new();
-    let mut max_depth = 0;
-    while let Some(account_set_id) = queue.pop_front() {
-        let parent_depth = *depths.get(&account_set_id).unwrap_or(&0);
-        if let Some(children) = adjacency.get(&account_set_id) {
-            for child in children {
-                let child_depth = parent_depth + 1;
-                depths
-                    .entry(*child)
-                    .and_modify(|depth| *depth = (*depth).max(child_depth))
-                    .or_insert(child_depth);
-                max_depth = max_depth.max(child_depth);
-                let degree = indegree
-                    .get_mut(child)
-                    .expect("every child must have an indegree");
-                *degree -= 1;
-                if *degree == 0 {
-                    queue.push_back(*child);
-                }
-            }
-        }
-    }
-    max_depth
+    (low - 1, prefix_depth(low))
 }
 
 #[cfg(test)]
@@ -325,6 +343,73 @@ mod tests {
             account_set_id,
             account_id,
         }
+    }
+
+    #[test]
+    fn dag_orders_parents_before_members() {
+        let [root, branch, leaf] = set_ids();
+        let dag = SetDag::new(&[edge(root, branch), edge(branch, leaf)]);
+
+        let order = dag.traverse().order;
+
+        let position = |id| order.iter().position(|other| *other == id).unwrap();
+        assert_eq!(order.len(), dag.node_count());
+        assert!(position(root) < position(branch));
+        assert!(position(branch) < position(leaf));
+    }
+
+    #[test]
+    fn dag_counts_isolated_sets_as_nodes() {
+        let [root, branch, lone] = set_ids();
+        let mut dag = SetDag::new(&[edge(root, branch)]);
+        assert_eq!(dag.node_count(), 2);
+
+        dag.add_isolated(lone);
+
+        assert_eq!(dag.node_count(), 3);
+        assert_eq!(dag.traverse().order.len(), 3);
+    }
+
+    #[test]
+    fn dag_leaves_a_cycles_nodes_out_of_the_order() {
+        let [a, b, c] = set_ids();
+        let dag = SetDag::new(&[edge(a, b), edge(b, c), edge(c, a)]);
+
+        // Every node on the cycle keeps a nonzero indegree, so none is emitted.
+        assert!(dag.traverse().order.len() < dag.node_count());
+    }
+
+    #[test]
+    fn dag_measures_the_longest_path_not_the_shortest() {
+        // root -> branch -> leaf is longer than the direct root -> leaf edge.
+        let [root, branch, leaf] = set_ids();
+        let dag = SetDag::new(&[edge(root, branch), edge(branch, leaf), edge(root, leaf)]);
+
+        assert_eq!(dag.traverse().max_depth(), 2);
+    }
+
+    #[test]
+    fn dag_max_depth_of_an_empty_graph_is_zero() {
+        assert_eq!(SetDag::new(&[]).traverse().max_depth(), 0);
+    }
+
+    #[test]
+    fn dag_finds_paths_only_downward() {
+        let [root, branch, leaf] = set_ids();
+        let dag = SetDag::new(&[edge(root, branch), edge(branch, leaf)]);
+
+        assert!(dag.has_path(root, leaf));
+        assert!(!dag.has_path(leaf, root));
+    }
+
+    #[test]
+    fn dag_traversal_is_repeatable() {
+        // `traverse` takes &self and must not consume the indegrees it walks.
+        let [root, branch] = set_ids();
+        let dag = SetDag::new(&[edge(root, branch)]);
+
+        assert_eq!(dag.traverse().order, dag.traverse().order);
+        assert_eq!(dag.traverse().max_depth(), 1);
     }
 
     #[test]
