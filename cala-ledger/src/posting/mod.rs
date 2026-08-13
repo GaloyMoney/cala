@@ -97,6 +97,12 @@ use crate::{
 
 pub use error::{PostingError, RejectionReason};
 
+/// Ancestor account sets per journal: `journal -> (leaf -> its sets in that
+/// journal)`. Keyed by journal because a leaf account has no journal of its
+/// own and may belong to sets in several — see
+/// [`Postings::resolve_ancestors`].
+pub(crate) type AncestorMappings = HashMap<JournalId, HashMap<AccountId, Vec<AccountSetId>>>;
+
 use repo::{BalanceKeys, PostingRepo, PostingRows, PostingState};
 use template_cache::{ResolvedTemplate, TemplateCache};
 
@@ -422,13 +428,22 @@ impl Postings {
     /// a fixed order extends that canonical order across a batch that spans
     /// journals, so two concurrent multi-journal batches cannot acquire the
     /// same ancestor locks in opposite orders.
+    ///
+    /// **The result is keyed by journal, and must stay that way.** A leaf
+    /// account carries no journal of its own, so the same leaf may be a member
+    /// of sets in several journals. Flattening the per-journal results into one
+    /// `leaf -> sets` map lets a posting in journal A fan into a set belonging
+    /// to journal B: the fold takes the set id from the map but the `journal_id`
+    /// from the *entry*, writing a balance row for (journal A, set B) that no
+    /// lock covers and that no query should ever see. Velocity has the same
+    /// hazard via `VelocityBalanceKey`.
     async fn resolve_ancestors(
         &self,
         db: &mut impl AtomicOperation,
         prepared: &[PreparedTransaction],
         read: &mut PostingState,
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, PostingError> {
-        let mut mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+    ) -> Result<AncestorMappings, PostingError> {
+        let mut mappings: AncestorMappings = HashMap::new();
         if read.seeds.is_empty() {
             return Ok(mappings);
         }
@@ -473,8 +488,9 @@ impl Postings {
                     }
                 }
             }
+            let per_journal = mappings.entry(journal_id).or_default();
             for (account_id, sets) in resolved {
-                mappings.entry(account_id).or_default().extend(sets);
+                per_journal.entry(account_id).or_default().extend(sets);
             }
         }
 
@@ -523,15 +539,18 @@ impl Postings {
         transactions: &[Transaction],
         entry_values: &[Vec<EntryValues>],
         read: &PostingState,
-        mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        mappings: &AncestorMappings,
         now: DateTime<Utc>,
     ) -> Vec<BalanceSnapshot> {
         let mut journals: Vec<JournalId> =
             Self::dedup(transactions.iter().map(|tx| tx.values().journal_id));
         journals.sort_unstable();
 
+        let empty = HashMap::new();
         let mut all = Vec::new();
         for journal_id in journals {
+            // Only this journal's ancestor sets; see `resolve_ancestors`.
+            let mappings = mappings.get(&journal_id).unwrap_or(&empty);
             let entries: Vec<EntryValues> = transactions
                 .iter()
                 .zip(entry_values)
@@ -616,7 +635,7 @@ impl Postings {
         transactions: &[Transaction],
         entry_values: &[Vec<EntryValues>],
         read: &PostingState,
-        mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        mappings: &AncestorMappings,
         now: DateTime<Utc>,
     ) -> Result<(), PostingError> {
         let mut groups: Vec<((JournalId, chrono::NaiveDate), Vec<EntryValues>)> = Vec::new();
@@ -637,7 +656,10 @@ impl Postings {
         }
         groups.sort_by_key(|((journal_id, effective), _)| (*journal_id, *effective));
 
+        let empty = HashMap::new();
         for ((journal_id, effective), entries) in groups {
+            // Only this journal's ancestor sets; see `resolve_ancestors`.
+            let mappings = mappings.get(&journal_id).unwrap_or(&empty);
             let involved: (Vec<AccountId>, Vec<&str>) = entries
                 .iter()
                 .flat_map(|entry| {

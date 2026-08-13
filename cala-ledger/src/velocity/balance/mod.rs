@@ -53,7 +53,7 @@ impl VelocityBalances {
         created_at: DateTime<Utc>,
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
-        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        account_set_mappings: &crate::posting::AncestorMappings,
     ) -> Result<(), VelocityError> {
         if controls.is_empty() {
             return Ok(());
@@ -80,15 +80,23 @@ impl VelocityBalances {
             VelocityBalanceKey,
             Vec<(&AccountVelocityLimit, &EntryValues)>,
         > = HashMap::new();
+        let empty = HashMap::new();
         for (transaction, entries) in postings {
             let context = contexts
                 .get_mut(&transaction.id)
                 .expect("context built for every posting");
+            // A leaf may belong to sets in several journals; enforce only
+            // against the ones in this posting's own journal, or a limit on a
+            // foreign journal's set would be checked (and its balance written)
+            // under this journal.
+            let mappings = account_set_mappings
+                .get(&transaction.journal_id)
+                .unwrap_or(&empty);
             Self::collect_balances_to_check(
                 context,
                 entries,
                 controls,
-                account_set_mappings,
+                mappings,
                 &mut entries_to_enforce,
             )?;
         }

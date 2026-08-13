@@ -216,7 +216,7 @@ impl Velocities {
         created_at: DateTime<Utc>,
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
-        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        account_set_mappings: &crate::posting::AncestorMappings,
     ) -> Result<(), VelocityError> {
         self.balances
             .enforce_batch_in_op(db, created_at, postings, controls, account_set_mappings)

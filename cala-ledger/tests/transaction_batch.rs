@@ -8,6 +8,7 @@ use rust_decimal::Decimal;
 
 use cala_ledger::{
     account::NewAccount,
+    account_set::{AccountSetId, NewAccountSet},
     error::LedgerError,
     posting::{PostingError, PostingInput, RejectionReason},
     tx_template::*,
@@ -786,5 +787,93 @@ async fn outbox_events_are_grouped_per_posting_not_by_type() -> anyhow::Result<(
         "outbox must interleave per posting (tx, its entries, tx, its entries, ...), \
          not group all transactions before all entries"
     );
+    Ok(())
+}
+
+/// A leaf may belong to account sets in more than one journal. When a batch
+/// spans those journals, each posting must fan into **only** the sets belonging
+/// to its own journal — otherwise a journal-B set acquires a balance row under
+/// journal A, which is both wrong and unlocked (the ancestor lock batch only
+/// covers the correct pairs).
+#[tokio::test]
+async fn a_multi_journal_batch_does_not_cross_ancestor_sets_between_journals() -> anyhow::Result<()>
+{
+    let cala = init().await?;
+    let journal_a = cala.journals().create(helpers::test_journal()).await?;
+    let journal_b = cala.journals().create(helpers::test_journal()).await?;
+
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+
+    let (a, b) = helpers::test_accounts();
+    let sender = cala.accounts().create(a).await?;
+    let recipient = cala.accounts().create(b).await?;
+
+    let mut set_in = |journal_id, name: &str| {
+        let s = NewAccountSet::builder()
+            .id(AccountSetId::new())
+            .name(name.to_string())
+            .journal_id(journal_id)
+            .balance_rollup(BalanceRollup::Synchronous)
+            .build()
+            .unwrap();
+        s
+    };
+    let set_a = cala
+        .account_sets()
+        .create(set_in(journal_a.id(), "SET A"))
+        .await?;
+    let set_b = cala
+        .account_sets()
+        .create(set_in(journal_b.id(), "SET B"))
+        .await?;
+
+    // The same leaves are members of a set in each journal.
+    for set in [set_a.id(), set_b.id()] {
+        for member in [sender.id(), recipient.id()] {
+            cala.account_sets().add_member(set, member).await?;
+        }
+    }
+
+    // One posting per journal, in a single batch.
+    cala.post_transactions(vec![
+        transfer(&code, journal_a.id(), sender.id(), recipient.id()),
+        transfer(&code, journal_b.id(), sender.id(), recipient.id()),
+    ])
+    .await?;
+
+    let btc: Currency = "BTC".parse().unwrap();
+    // Each set carries its own journal's posting...
+    let a_in_a = cala
+        .balances()
+        .find(journal_a.id(), set_a.id(), btc)
+        .await?;
+    let b_in_b = cala
+        .balances()
+        .find(journal_b.id(), set_b.id(), btc)
+        .await?;
+    assert_eq!(
+        a_in_a.details.settled.dr_balance,
+        Decimal::from(BTC_PER_POSTING)
+    );
+    assert_eq!(
+        b_in_b.details.settled.dr_balance,
+        Decimal::from(BTC_PER_POSTING)
+    );
+
+    // ...and nothing at all in the other journal.
+    for (journal_id, set_id, label) in [
+        (journal_a.id(), set_b.id(), "set B under journal A"),
+        (journal_b.id(), set_a.id(), "set A under journal B"),
+    ] {
+        let stray = cala.balances().find(journal_id, set_id, btc).await;
+        assert!(
+            stray.is_err(),
+            "{label} must have no balance row, got {:?}",
+            stray.ok().map(|b| b.details.settled.dr_balance)
+        );
+    }
     Ok(())
 }
