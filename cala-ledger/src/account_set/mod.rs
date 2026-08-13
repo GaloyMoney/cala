@@ -358,7 +358,9 @@ impl AccountSets {
     /// itself. Against a mature chart the account read is scoped to the
     /// descendant closure of the proposed member endpoints, and existing
     /// edges are served from the epoch-validated in-process cache, so a
-    /// small batch does not re-read or re-validate the whole graph. The
+    /// small batch does not re-read or re-validate the whole graph. A
+    /// single proposed edge routes through the existing single-attach
+    /// path, preserving the old cost model for degenerate batches. The
     /// exclusive membership-graph lock is held for the whole op, so very
     /// large batches will block other structure and account-member writers
     /// for the duration of validation and insert.
@@ -428,6 +430,18 @@ impl AccountSets {
                 account_set_id: *account_set_id,
                 member_id,
             });
+        }
+
+        // A single edge is cheaper through the existing single-attach path:
+        // one targeted CTE validation and insert, no combined-graph cache
+        // work. This preserves the old cost model for callers that batch a
+        // single pair by accident or for convenience.
+        if members.len() == 1 {
+            let (account_set_id, member_account_set_id) = members[0];
+            return self
+                .repo
+                .add_member_set(op, account_set_id, member_account_set_id)
+                .await;
         }
 
         self.repo.lock_for_set_membership_op(op).await?;
