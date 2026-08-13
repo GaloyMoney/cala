@@ -272,13 +272,48 @@ impl CalaLedger {
     /// as a stream-lag SLO metric, or block on the fence with
     /// [`await_completion`](crate::EcRollupStatus::await_completion). Works
     /// from any node (both sides are read from the database).
-    #[instrument(level = "debug", name = "cala_ledger.ec_rollup_status", skip_all)]
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.ec_rollup_status",
+        skip_all,
+        fields(applied, frontier, lag)
+    )]
     pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
         let snapshot = self.ec_rollup.load().await?;
-        Ok(crate::EcRollupStatus::new(
-            snapshot.stream_status(),
-            self.ec_rollup.clone(),
-        ))
+        let status = crate::EcRollupStatus::new(snapshot.stream_status(), self.ec_rollup.clone());
+
+        let span = tracing::Span::current();
+        span.record("applied", u64::from(status.applied));
+        span.record("frontier", u64::from(status.frontier));
+        span.record("lag", status.lag());
+
+        Ok(status)
+    }
+
+    /// Await the rollup applying through `frontier` — an outbox sequence
+    /// obtained some other way than the snapshot this call is on, e.g. a
+    /// [`EcRollupStatus::frontier`](crate::EcRollupStatus) read earlier and
+    /// carried across a boundary the snapshot itself can't cross (stored,
+    /// passed to another task, awaited from a different call site than the
+    /// one that captured it).
+    ///
+    /// Unlike [`EcRollupStatus::await_completion`](crate::EcRollupStatus::await_completion),
+    /// which is bound to the fence its own snapshot pinned, this takes any
+    /// `frontier` value directly — the ledger itself is the only handle you
+    /// need to hold onto. Prefer `await_completion` when the snapshot that
+    /// pinned the fence is still in scope; reach for this when only the
+    /// sequence survived.
+    ///
+    /// `timeout` is mandatory: a wedged rollup surfaces as
+    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
+    #[instrument(level = "debug", name = "cala_ledger.await_frontier", skip(self), fields(timeout = ?timeout))]
+    pub async fn await_frontier(
+        &self,
+        frontier: obix::EventSequence,
+        timeout: std::time::Duration,
+    ) -> Result<(), LedgerError> {
+        self.ec_rollup.await_sequence(frontier, timeout).await?;
+        Ok(())
     }
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {

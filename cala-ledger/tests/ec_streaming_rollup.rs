@@ -815,3 +815,104 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
     }
     Ok(())
 }
+
+/// `await_frontier` targets a caller-supplied sequence directly, rather
+/// than sampling the frontier at call time like `EcRollupStatus` does. The
+/// value can be captured once and carried across a boundary the pinned
+/// snapshot itself can't cross — stored, passed to another task, awaited
+/// later — since only the plain `EventSequence` survives, not the
+/// `EcRollupStatus` (and its handle) that produced it.
+#[tokio::test]
+async fn await_frontier_waits_for_a_previously_captured_sequence() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal_with_effective_balances()).await?;
+
+    let ec_set = create_ec_set(
+        &fixture.cala,
+        fixture.journal_id,
+        "captured-frontier EC set",
+    )
+    .await?;
+    for m in &fixture.members {
+        fixture
+            .cala
+            .account_sets()
+            .add_member(ec_set.id(), m.id())
+            .await?;
+    }
+
+    let n_posts = 8;
+    post_round_robin(&fixture, n_posts).await?;
+    let expected = POST_AMOUNT * Decimal::from(n_posts);
+
+    // Capture just the plain sequence value — the `EcRollupStatus` that
+    // read it is dropped immediately, proving it isn't needed again.
+    let frontier = fixture.cala.ec_rollup_status().await?.frontier;
+
+    jobs.start_poll().await?;
+    fixture
+        .cala
+        .await_frontier(frontier, std::time::Duration::from_secs(60))
+        .await?;
+
+    let bal = fixture
+        .cala
+        .balances()
+        .find(fixture.journal_id, ec_set.id(), usd)
+        .await?;
+    assert_eq!(
+        bal.settled(),
+        expected,
+        "EC set balance must be complete once the captured frontier is reached",
+    );
+    assert_member_sum(&fixture, usd, expected).await?;
+    Ok(())
+}
+
+/// A target beyond anything the outbox has assigned can never be
+/// satisfied — unlike `await_completion`'s call-time frontier, which is
+/// always reachable once applied. The timeout error must report the exact
+/// sequence requested, not a resampled "current" frontier, which is the
+/// property that distinguishes `await_frontier` from the snapshot-bound
+/// wait.
+#[tokio::test]
+async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::Result<()> {
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal()).await?;
+
+    let ec_set = create_ec_set(
+        &fixture.cala,
+        fixture.journal_id,
+        "unreachable-frontier EC set",
+    )
+    .await?;
+    fixture
+        .cala
+        .account_sets()
+        .add_member(ec_set.id(), fixture.members[0].id())
+        .await?;
+    post_to(&fixture, fixture.members[0].id(), 3).await?;
+    jobs.start_poll().await?;
+
+    let current = fixture.cala.ec_rollup_status().await?.frontier;
+    let unreachable = obix::EventSequence::from(u64::from(current) + 1_000);
+
+    let timeout = std::time::Duration::from_millis(300);
+    match fixture.cala.await_frontier(unreachable, timeout).await {
+        Err(LedgerError::EcCaughtUpTimeout {
+            frontier, waited, ..
+        }) => {
+            assert_eq!(
+                frontier, unreachable,
+                "error must report the exact target requested, not a resampled frontier",
+            );
+            assert!(
+                waited >= timeout,
+                "error must report the full wait, got {waited:?}",
+            );
+        }
+        other => panic!("expected EcCaughtUpTimeout, got {other:?}"),
+    }
+    Ok(())
+}

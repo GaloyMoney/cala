@@ -329,8 +329,19 @@ impl EcRollupStatus {
     /// Re-read the committed checkpoint, keeping the pinned `frontier`, so
     /// repeated calls watch the lag drain toward the fence this snapshot
     /// captured.
+    #[tracing::instrument(
+        level = "debug",
+        name = "cala_ledger.ec_rollup_status.refresh",
+        skip_all,
+        fields(frontier = %self.frontier, applied, lag)
+    )]
     pub async fn refresh(&mut self) -> Result<(), LedgerError> {
         self.applied = self.handle.load().await?.checkpoint();
+
+        let span = tracing::Span::current();
+        span.record("applied", u64::from(self.applied));
+        span.record("lag", self.lag());
+
         Ok(())
     }
 
