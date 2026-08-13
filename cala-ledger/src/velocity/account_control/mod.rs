@@ -5,11 +5,7 @@ use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 
-use std::collections::HashMap;
-
-use cala_types::velocity::{
-    VelocityContextAccountValues, VelocityControlValues, VelocityLimitValues,
-};
+use cala_types::velocity::{VelocityControlValues, VelocityLimitValues};
 
 use crate::{
     param::Params,
@@ -19,7 +15,7 @@ use crate::{
 use super::error::VelocityError;
 
 use repo::*;
-pub(super) use value::*;
+pub(crate) use value::*;
 
 #[derive(Clone)]
 pub struct AccountControls {
@@ -94,16 +90,5 @@ impl AccountControls {
         self.repo.create_in_op(db, control).await?;
 
         Ok(())
-    }
-
-    pub async fn find_for_enforcement(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
-    ) -> Result<
-        HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
-        VelocityError,
-    > {
-        self.repo.find_for_enforcement(db, account_ids).await
     }
 }

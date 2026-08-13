@@ -16,6 +16,7 @@ use crate::{
     entry::Entries,
     journal::Journals,
     outbox::OutboxPublisher,
+    posting::{PostingInput, Postings},
     primitives::TransactionId,
     transaction::{Transaction, Transactions},
     tx_template::{Params, TxTemplates},
@@ -34,6 +35,7 @@ pub struct CalaLedger {
     entries: Entries,
     velocities: Velocities,
     balances: Balances,
+    postings: Postings,
     publisher: OutboxPublisher,
 }
 
@@ -73,11 +75,18 @@ impl CalaLedger {
         let accounts = Accounts::new(&pool, &publisher, &clock);
         let journals = Journals::new(&pool, &publisher, &clock);
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
-        let transactions = Transactions::new(&pool, &publisher);
-        let entries = Entries::new(&pool, &publisher);
+        let transactions = Transactions::new(&pool);
+        let entries = Entries::new(&pool);
         let balances = Balances::new(&pool, &publisher, &journals);
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+        let postings = Postings::new(
+            &publisher,
+            &tx_templates,
+            &account_sets,
+            &balances,
+            &velocities,
+        );
 
         crate::ec_rollup::register_ec_balance_rollup(jobs, publisher.inner(), &balances, &entries)
             .await?;
@@ -85,6 +94,7 @@ impl CalaLedger {
         Ok(Self {
             accounts,
             account_sets,
+            postings,
             journals,
             tx_templates,
             publisher,
@@ -163,6 +173,10 @@ impl CalaLedger {
         Ok(transaction)
     }
 
+    /// Post `tx_id` within a caller-supplied operation.
+    ///
+    /// The N=1 case of [`Self::post_transactions_in_op`] — same flow, same
+    /// statements, arrays of length one.
     #[instrument(
         name = "cala_ledger.post_transaction_in_op",
         skip(self, db)
@@ -175,69 +189,72 @@ impl CalaLedger {
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<Transaction, LedgerError> {
-        let mut db = es_entity::OpWithTime::cached_or_db_time(db).await?;
-        let time = db.now();
-        let prepared_tx = self
-            .tx_templates
-            .prepare_transaction_in_op(&mut db, time, tx_id, tx_template_code, params.into())
-            .await?;
-
         let transaction = self
-            .transactions
-            .create_in_op(&mut db, prepared_tx.transaction)
-            .await?;
+            .postings
+            .post_all_in_op(
+                db,
+                vec![PostingInput::new(tx_id, tx_template_code, params.into())],
+            )
+            .await?
+            .pop()
+            .expect("one posting in, one transaction out");
 
         let span = tracing::Span::current();
         span.record("transaction_id", transaction.id().to_string());
         span.record("external_id", &transaction.values().external_id);
-
-        let journal_id = transaction.values().journal_id;
-        self.balances
-            .lock_entry_balances_in_op(&mut db, journal_id, &prepared_tx.entries)
-            .await?;
-
-        // The membership resolution reads only the membership graph, so
-        // it can run before the entry insert; it also takes the
-        // per-balance locks for the non-EC ancestors it resolves
-        // (strictly before `find_for_update`'s balance data fetch —
-        // lock-before-read).
-        let mappings = self
-            .account_sets
-            .fetch_mappings_in_op(&mut db, journal_id, &prepared_tx.entries)
-            .await?;
-
-        let entries = self
-            .entries
-            .create_all_in_op(&mut db, prepared_tx.entries)
-            .await?;
-
-        let account_ids = entries
-            .iter()
-            .map(|entry| entry.account_id)
-            .collect::<Vec<_>>();
-
-        self.velocities
-            .update_balances_with_limit_enforcement_in_op(
-                &mut db,
-                transaction.created_at(),
-                transaction.values(),
-                &entries,
-                &account_ids,
-                &mappings,
-            )
-            .await?;
-
-        self.balances
-            .update_balances_in_op(
-                &mut db,
-                transaction.journal_id(),
-                entries,
-                transaction.effective(),
-                transaction.created_at(),
-                mappings,
-            )
-            .await?;
         Ok(transaction)
+    }
+
+    /// Post many transactions in a single database transaction.
+    ///
+    /// Every phase of the flow is vectorised, so a batch costs the same number
+    /// of round trips as a single posting — which is what makes batching worth
+    /// doing: the per-commit WAL cost is amortised across the whole batch.
+    ///
+    /// **All-or-nothing.** Any failure aborts the batch and no posting lands;
+    /// the error names the offending posting.
+    ///
+    /// **Ordering.** The result is exactly as if the postings had run one at a
+    /// time, in the given order, inside one transaction: later postings observe
+    /// earlier ones' balances, velocity limits enforce against the chained
+    /// snapshots, and snapshot versions increment in order. Postings may span
+    /// journals and templates freely.
+    ///
+    /// Concurrent batches are deadlock-free by construction: a batch takes one
+    /// canonically sorted union lock batch over every posting's entry pairs,
+    /// then one sorted ancestor batch — see [`crate::posting`].
+    #[instrument(
+        name = "cala_ledger.post_transactions",
+        skip_all,
+        fields(batch_size = batch.len())
+    )]
+    pub async fn post_transactions(
+        &self,
+        batch: Vec<PostingInput>,
+    ) -> Result<Vec<Transaction>, LedgerError> {
+        let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
+        let transactions = self.post_transactions_in_op(&mut db, batch).await?;
+        db.commit().await?;
+        Ok(transactions)
+    }
+
+    /// [`Self::post_transactions`] within a caller-supplied operation.
+    ///
+    /// Note that issuing several batches on one operation reintroduces lock
+    /// acquisition across batch boundaries with no global ordering, which is
+    /// exactly what a single batch avoids; prefer one call with all the
+    /// postings.
+    #[instrument(
+        name = "cala_ledger.post_transactions_in_op",
+        skip_all,
+        fields(batch_size = batch.len())
+    )]
+    pub async fn post_transactions_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        batch: Vec<PostingInput>,
+    ) -> Result<Vec<Transaction>, LedgerError> {
+        Ok(self.postings.post_all_in_op(db, batch).await?)
     }
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {

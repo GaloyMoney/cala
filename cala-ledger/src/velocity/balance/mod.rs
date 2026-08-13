@@ -11,7 +11,7 @@ use cala_types::{
     velocity::VelocityContextAccountValues,
 };
 
-use crate::primitives::{AccountId, AccountSetId};
+use crate::primitives::{AccountId, AccountSetId, TransactionId};
 
 use super::{account_control::*, error::*};
 
@@ -31,23 +31,75 @@ impl VelocityBalances {
         }
     }
 
-    pub(crate) async fn update_balances_with_limit_enforcement_in_op(
+    /// Enforce every matching velocity limit across a whole batch of postings,
+    /// and write the resulting velocity balances.
+    ///
+    /// One lock statement, one read and one write for the batch, rather than
+    /// three per posting. Sequential equivalence is preserved because the keys
+    /// are collected in posting order and the per-key entry lists are appended
+    /// to in that order — the fold below already chains multiple entries within
+    /// a key, so a key touched by three postings gets three chained snapshots
+    /// exactly as three separate calls would have produced.
+    ///
+    /// **The early return is the point.** `collect_balances_to_check` is pure
+    /// CEL evaluation over controls the caller already has in hand, so a batch
+    /// where no limit's window matches costs *zero* statements — no lock, no
+    /// read, no write. Before this, every posting paid a control probe
+    /// unconditionally, and any posting against a controlled account paid the
+    /// lock and read even when no limit's window applied.
+    pub(crate) async fn enforce_batch_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
-        transaction: &TransactionValues,
-        entries: &[EntryValues],
-        controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
-        account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
+        postings: &[(&TransactionValues, &[EntryValues])],
+        controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
+        account_set_mappings: &crate::posting::AncestorMappings,
     ) -> Result<(), VelocityError> {
-        let mut context = super::context::EvalContext::new(
-            self.clock.clone(),
-            transaction,
-            controls.values().map(|v| &v.0),
-        );
+        if controls.is_empty() {
+            return Ok(());
+        }
 
-        let entries_to_enforce =
-            Self::balances_to_check(&mut context, entries, &controls, account_set_mappings)?;
+        // One evaluation context per posting: the context carries that
+        // posting's `TransactionValues`, which limit conditions and window
+        // expressions can reference.
+        let mut contexts: HashMap<TransactionId, super::context::EvalContext> = postings
+            .iter()
+            .map(|(transaction, _)| {
+                (
+                    transaction.id,
+                    super::context::EvalContext::new(
+                        self.clock.clone(),
+                        transaction,
+                        controls.values().map(|v| &v.0),
+                    ),
+                )
+            })
+            .collect();
+
+        let mut entries_to_enforce: HashMap<
+            VelocityBalanceKey,
+            Vec<(&AccountVelocityLimit, &EntryValues)>,
+        > = HashMap::new();
+        let empty = HashMap::new();
+        for (transaction, entries) in postings {
+            let context = contexts
+                .get_mut(&transaction.id)
+                .expect("context built for every posting");
+            // A leaf may belong to sets in several journals; enforce only
+            // against the ones in this posting's own journal, or a limit on a
+            // foreign journal's set would be checked (and its balance written)
+            // under this journal.
+            let mappings = account_set_mappings
+                .get(&transaction.journal_id)
+                .unwrap_or(&empty);
+            Self::collect_balances_to_check(
+                context,
+                entries,
+                controls,
+                mappings,
+                &mut entries_to_enforce,
+            )?;
+        }
 
         if entries_to_enforce.is_empty() {
             return Ok(());
@@ -59,7 +111,7 @@ impl VelocityBalances {
             .await?;
 
         let new_balances = Self::new_snapshots_with_limit_enforcement(
-            context,
+            &mut contexts,
             created_at,
             current_balances,
             &entries_to_enforce,
@@ -70,8 +122,10 @@ impl VelocityBalances {
         Ok(())
     }
 
+    /// Accumulate one posting's `(balance key -> limits x entries)` into
+    /// `balances_to_check`, which the caller shares across the batch.
     #[allow(clippy::type_complexity)]
-    fn balances_to_check<'a>(
+    fn collect_balances_to_check<'a>(
         context: &mut super::context::EvalContext,
         entries: &'a [EntryValues],
         controls: &'a HashMap<
@@ -79,14 +133,11 @@ impl VelocityBalances {
             (VelocityContextAccountValues, Vec<AccountVelocityControl>),
         >,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
-    ) -> Result<
-        HashMap<VelocityBalanceKey, Vec<(&'a AccountVelocityLimit, &'a EntryValues)>>,
-        VelocityError,
-    > {
-        let mut balances_to_check: HashMap<
+        balances_to_check: &mut HashMap<
             VelocityBalanceKey,
-            Vec<(&AccountVelocityLimit, &EntryValues)>,
-        > = HashMap::new();
+            Vec<(&'a AccountVelocityLimit, &'a EntryValues)>,
+        >,
+    ) -> Result<(), VelocityError> {
         let empty = Vec::new();
         for entry in entries {
             for account_id in account_set_mappings
@@ -124,11 +175,17 @@ impl VelocityBalances {
             }
         }
 
-        Ok(balances_to_check)
+        Ok(())
     }
 
+    /// Chain each key's entries into versioned snapshots, enforcing every limit
+    /// as it goes.
+    ///
+    /// `contexts` is keyed by transaction: within a batch the entries under one
+    /// balance key can come from different postings, and a limit condition is
+    /// evaluated against the posting that produced the entry.
     fn new_snapshots_with_limit_enforcement<'a>(
-        mut context: super::context::EvalContext,
+        contexts: &mut HashMap<TransactionId, super::context::EvalContext>,
         time: DateTime<Utc>,
         mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
         entries_to_add: &'a HashMap<VelocityBalanceKey, Vec<(&AccountVelocityLimit, &EntryValues)>>,
@@ -153,7 +210,10 @@ impl VelocityBalances {
                     None => crate::balance::Snapshots::new_snapshot(time, key.account_id, entry),
                 };
 
-                let ctx = context.context_for_entry(key.account_id, entry);
+                let ctx = contexts
+                    .get_mut(&entry.transaction_id)
+                    .expect("context built for every posting")
+                    .context_for_entry(key.account_id, entry);
                 limit.enforce(&ctx, time, &new_balance)?;
 
                 new_balances.push(new_balance.clone());
@@ -292,6 +352,23 @@ mod tests {
             }
         }
 
+        /// The batch fold looks a context up by the entry's transaction, so a
+        /// test entry has to belong to the transaction its context was built
+        /// from — the invariant the posting flow guarantees by construction.
+        fn entry_tx(entry: &mut EntryValues, transaction: &TransactionValues) {
+            entry.transaction_id = transaction.id;
+        }
+
+        fn contexts_for(
+            transaction: &TransactionValues,
+            account: &VelocityContextAccountValues,
+        ) -> HashMap<TransactionId, EvalContext> {
+            HashMap::from([(
+                transaction.id,
+                EvalContext::new(Clock::handle().clone(), transaction, [account].into_iter()),
+            )])
+        }
+
         fn create_test_account_values(id: AccountId) -> VelocityContextAccountValues {
             VelocityContextAccountValues {
                 id,
@@ -309,11 +386,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let mut entry = create_test_entry(
                 Decimal::from(50),
@@ -322,6 +395,7 @@ mod tests {
                 "USD",
             );
             entry.account_id = key.account_id;
+            entry_tx(&mut entry, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
@@ -333,7 +407,7 @@ mod tests {
             current_balances.insert(key.clone(), Some(existing_balance));
 
             let result = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,
@@ -354,11 +428,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let mut entry = create_test_entry(
                 Decimal::from(100),
@@ -367,6 +437,7 @@ mod tests {
                 "USD",
             );
             entry.account_id = key.account_id;
+            entry_tx(&mut entry, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
@@ -375,7 +446,7 @@ mod tests {
             current_balances.insert(key.clone(), None);
 
             let result = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,
@@ -396,11 +467,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let initial_debit = Decimal::from(100);
             let initial_credit = Decimal::from(25);
@@ -418,18 +485,20 @@ mod tests {
             let mut entry1 =
                 create_test_entry(entry1_debit, DebitOrCredit::Debit, Layer::Settled, "USD");
             entry1.account_id = key.account_id;
+            entry_tx(&mut entry1, &transaction);
 
             // Second entry should use the latest balance, not the current
             let entry2_credit = Decimal::from(30);
             let mut entry2 =
                 create_test_entry(entry2_credit, DebitOrCredit::Credit, Layer::Settled, "USD");
             entry2.account_id = key.account_id;
+            entry_tx(&mut entry2, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry1), (&limit, &entry2)]);
 
             let result = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,
@@ -463,11 +532,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let member_account_id = AccountId::new();
             assert_ne!(member_account_id, key.account_id);
@@ -478,6 +543,7 @@ mod tests {
                 "USD",
             );
             entry.account_id = member_account_id;
+            entry_tx(&mut entry, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
@@ -486,7 +552,7 @@ mod tests {
             current_balances.insert(key.clone(), None);
 
             let result = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,
@@ -505,11 +571,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let mut entry = create_test_entry(
                 Decimal::from(100),
@@ -518,6 +580,7 @@ mod tests {
                 "USD",
             );
             entry.account_id = key.account_id;
+            entry_tx(&mut entry, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
@@ -525,7 +588,7 @@ mod tests {
             let current_balances = HashMap::new();
 
             let _ = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,
@@ -538,11 +601,7 @@ mod tests {
 
             let transaction = create_test_transaction();
             let account = create_test_account_values(key.account_id);
-            let context = EvalContext::new(
-                Clock::handle().clone(),
-                &transaction,
-                [&account].into_iter(),
-            );
+            let mut contexts = contexts_for(&transaction, &account);
 
             let limit = AccountVelocityLimit {
                 limit_id: key.limit_id,
@@ -568,6 +627,7 @@ mod tests {
                 "USD",
             );
             entry.account_id = key.account_id;
+            entry_tx(&mut entry, &transaction);
 
             let mut entries_to_add = HashMap::new();
             entries_to_add.insert(key.clone(), vec![(&limit, &entry)]);
@@ -576,7 +636,7 @@ mod tests {
             current_balances.insert(key.clone(), None);
 
             let result = VelocityBalances::new_snapshots_with_limit_enforcement(
-                context,
+                &mut contexts,
                 Utc::now(),
                 current_balances,
                 &entries_to_add,

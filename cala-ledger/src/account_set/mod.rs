@@ -633,23 +633,22 @@ impl AccountSets {
 
     /// Resolve each entry account's ancestor-set mappings AND take the
     /// poster's per-balance locks on the non-EC ancestors, via the
-    /// epoch-validated set-graph cache — see the `graph_cache` module
-    /// docs for the resolution paths and lock doctrine. Extracts the
-    /// distinct `(account, currency)` pairs from the prepared entries.
-    pub(crate) async fn fetch_mappings_in_op(
+    /// epoch-validated set-graph cache — see the `graph_cache` module docs for
+    /// the resolution paths and lock doctrine.
+    ///
+    /// The membership probe itself is issued by the caller (the posting flow
+    /// folds it into its single read statement), which is sound precisely
+    /// because the probe takes no locks of its own.
+    pub(crate) async fn resolve_mappings_from_probe_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        entries: &[crate::entry::NewEntry],
+        probe_epoch: i64,
+        probe_seeds: &[(AccountId, AccountSetId)],
+        entry_pairs: &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
-        let entry_balances: (Vec<AccountId>, Vec<&str>) = entries
-            .iter()
-            .map(|entry| (entry.account_id(), entry.currency().code()))
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .unzip();
         self.set_graph_cache
-            .fetch_mappings_in_op(op, journal_id, &entry_balances)
+            .resolve_from_probe_in_op(op, journal_id, probe_epoch, probe_seeds, entry_pairs)
             .await
     }
 }

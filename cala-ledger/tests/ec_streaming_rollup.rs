@@ -30,6 +30,7 @@ use cala_ledger::{
     error::LedgerError,
     job::Jobs,
     journal::NewJournal,
+    posting::{PostingError, RejectionReason},
     primitives::BalanceRollup,
     tx_template::Params,
     AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
@@ -542,7 +543,11 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
             .post_transaction(TransactionId::new(), &fixture.tx_code, params)
             .await;
         assert!(
-            matches!(&result, Err(LedgerError::EntryTargetsAccountSet)),
+            matches!(
+                &result,
+                Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+                    if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_))
+            ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
             result.err(),
         );
@@ -613,7 +618,9 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(LedgerError::EntryTargetsAccountSet) => {
+        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+            if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) =>
+        {
             panic!("a missing account was misreported as targeting an account set")
         }
         Err(_) => {} // a referential-integrity / not-found error — correct

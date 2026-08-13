@@ -4,8 +4,8 @@ use thiserror::Error;
 use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
-    transaction::error::TransactionError, tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    posting::PostingError, transaction::error::TransactionError,
+    tx_template::error::TxTemplateError, velocity::error::VelocityError,
 };
 
 #[derive(Error, Debug)]
@@ -34,6 +34,8 @@ pub enum LedgerError {
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
     VelocityError(#[from] VelocityError),
+    #[error("LedgerError - PostingError: {0}")]
+    PostingError(#[from] PostingError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
     #[error(

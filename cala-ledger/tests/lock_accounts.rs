@@ -3,7 +3,12 @@ mod helpers;
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
-use cala_ledger::{balance::error::BalanceError, error::LedgerError, tx_template::*, *};
+use cala_ledger::{
+    error::LedgerError,
+    posting::{PostingError, RejectionReason},
+    tx_template::*,
+    *,
+};
 
 #[tokio::test]
 async fn blocks_transactions() -> anyhow::Result<()> {
@@ -50,8 +55,9 @@ async fn blocks_transactions() -> anyhow::Result<()> {
         .post_transaction(TransactionId::new(), &tx_code, params.clone())
         .await;
     assert!(matches!(
-        res,
-        Err(LedgerError::BalanceError(BalanceError::AccountLocked(account_id))) if account_id==sender_account.id()
+        &res,
+        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+            if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender_account.id())
     ));
 
     Ok(())

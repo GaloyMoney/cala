@@ -22,9 +22,9 @@ pub struct Entries {
 }
 
 impl Entries {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
-            repo: EntryRepo::new(pool, publisher),
+            repo: EntryRepo::new(pool),
         }
     }
 
@@ -141,23 +141,6 @@ impl Entries {
             a_sequence.cmp(&b_sequence)
         });
         Ok(entries)
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "cala_ledger.entries.create_all_in_op",
-        skip_all
-    )]
-    pub(crate) async fn create_all_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        entries: Vec<NewEntry>,
-    ) -> Result<Vec<EntryValues>, EntryError> {
-        let entries = self.repo.create_all_in_op(db, entries).await?;
-        Ok(entries
-            .into_iter()
-            .map(|entry| entry.into_values())
-            .collect())
     }
 }
 
