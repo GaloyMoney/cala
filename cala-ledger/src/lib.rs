@@ -158,6 +158,7 @@ pub use job;
 mod ledger;
 pub mod outbox;
 
+pub use ec_rollup::EcRollupStatus;
 pub use ledger::*;
 
 pub mod primitives {

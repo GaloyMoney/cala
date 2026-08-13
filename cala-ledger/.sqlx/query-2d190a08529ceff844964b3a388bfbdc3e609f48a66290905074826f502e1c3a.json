@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          DELETE FROM job_executions\n          WHERE id = $1 AND poller_instance_id = $2\n          RETURNING queue_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queue_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "2d190a08529ceff844964b3a388bfbdc3e609f48a66290905074826f502e1c3a"
+}
