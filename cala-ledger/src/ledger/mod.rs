@@ -37,6 +37,10 @@ pub struct CalaLedger {
     balances: Balances,
     postings: Postings,
     publisher: OutboxPublisher,
+    ec_rollup: obix::out::RegisteredEventHandler<
+        crate::outbox::OutboxEventPayload,
+        crate::outbox::CalaMailboxTables,
+    >,
 }
 
 impl CalaLedger {
@@ -88,10 +92,16 @@ impl CalaLedger {
             &velocities,
         );
 
-        crate::ec_rollup::register_ec_balance_rollup(jobs, publisher.inner(), &balances, &entries)
-            .await?;
+        let ec_rollup = crate::ec_rollup::register_ec_balance_rollup(
+            jobs,
+            publisher.inner(),
+            &balances,
+            &entries,
+        )
+        .await?;
 
         Ok(Self {
+            ec_rollup,
             accounts,
             account_sets,
             postings,
@@ -255,6 +265,20 @@ impl CalaLedger {
         batch: Vec<PostingInput>,
     ) -> Result<Vec<Transaction>, LedgerError> {
         Ok(self.postings.post_all_in_op(db, batch).await?)
+    }
+
+    /// Snapshot the rollup's position, pinning the outbox frontier as a
+    /// fence. Cheap and read-only — poll [`lag`](crate::EcRollupStatus::lag)
+    /// as a stream-lag SLO metric, or block on the fence with
+    /// [`await_completion`](crate::EcRollupStatus::await_completion). Works
+    /// from any node (both sides are read from the database).
+    #[instrument(level = "debug", name = "cala_ledger.ec_rollup_status", skip_all)]
+    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
+        let snapshot = self.ec_rollup.load().await?;
+        Ok(crate::EcRollupStatus::new(
+            snapshot.stream_status(),
+            self.ec_rollup.clone(),
+        ))
     }
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {

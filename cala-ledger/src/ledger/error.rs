@@ -37,7 +37,18 @@ pub enum LedgerError {
     #[error("LedgerError - PostingError: {0}")]
     PostingError(#[from] PostingError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
-    EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
+    EcRollupRegistration(#[from] Box<dyn std::error::Error + Send + Sync>),
+    #[error("LedgerError - EcRollupCheckpoint: {0}")]
+    EcRollupCheckpoint(obix::out::HandlerCheckpointError),
+    #[error(
+        "LedgerError - EcCaughtUpTimeout: EC rollup checkpoint {applied} had not reached the \
+         outbox frontier {frontier} after waiting {waited:?}"
+    )]
+    EcCaughtUpTimeout {
+        applied: obix::EventSequence,
+        frontier: obix::EventSequence,
+        waited: std::time::Duration,
+    },
     #[error(
         "LedgerError - EntryTargetsAccountSet: an entry may not be posted directly to an \
          account-set backing account; an account set's balance is derived from its members"
@@ -52,6 +63,26 @@ impl From<EntryError> for LedgerError {
             // callers don't have to dig through the entry-error nesting.
             EntryError::EntryTargetsAccountSet => Self::EntryTargetsAccountSet,
             other => Self::EntryError(other),
+        }
+    }
+}
+
+/// Manual, not `#[from]`: the timeout case is remapped so callers
+/// destructure ledger vocabulary (`applied`) rather than obix's
+/// (`checkpoint`). Everything else passes through.
+impl From<obix::out::HandlerCheckpointError> for LedgerError {
+    fn from(e: obix::out::HandlerCheckpointError) -> Self {
+        match e {
+            obix::out::HandlerCheckpointError::CaughtUpTimeout {
+                checkpoint,
+                target,
+                waited,
+            } => Self::EcCaughtUpTimeout {
+                applied: checkpoint,
+                frontier: target,
+                waited,
+            },
+            other => Self::EcRollupCheckpoint(other),
         }
     }
 }

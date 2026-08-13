@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT state AS \"state: JobExecutionState\", execute_at, attempt_index, alive_at, execution_state_json\n            FROM job_executions WHERE id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state: JobExecutionState",
+        "type_info": {
+          "Custom": {
+            "name": "jobexecutionstate",
+            "kind": {
+              "Enum": [
+                "pending",
+                "running"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "execute_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "alive_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "execution_state_json",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "232c7eb7d5e1782f64962a4ef4b40fba51d328fbf1ad14b2c566741b90aa00f9"
+}

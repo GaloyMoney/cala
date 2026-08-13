@@ -48,9 +48,12 @@ use chrono::{DateTime, NaiveDate, Utc};
 use std::collections::{HashMap, HashSet};
 
 use job::{JobType, Jobs};
-use obix::out::{
-    EventCtx, EventSubscription, FlushOp, Handled, OutboxEventHandler, OutboxEventJobConfig,
-    PersistentOutboxEvent,
+use obix::{
+    out::{
+        EventCtx, EventSubscription, FlushOp, Handled, HandlerStreamStatus, OutboxEventHandler,
+        OutboxEventJobConfig, PersistentOutboxEvent, RegisteredEventHandler,
+    },
+    EventSequence,
 };
 
 use cala_types::entry::EntryValues;
@@ -58,7 +61,8 @@ use cala_types::entry::EntryValues;
 use crate::{
     balance::{Balances, EcRollupTxn},
     entry::{Entries, Entry},
-    outbox::{ObixOutbox, OutboxEventPayload},
+    ledger::error::LedgerError,
+    outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
     primitives::{EntryId, JournalId, TransactionId},
 };
 
@@ -73,14 +77,15 @@ const MAX_EVENTS_PER_BATCH: usize = 1_000;
 /// Register the streaming EC-balance rollup and spawn its single instance.
 ///
 /// Must be called **before** [`Jobs::start_poll`] (`add_initializer`
-/// panics once polling has started). Idempotent via `spawn_unique`.
+/// panics once polling has started). Idempotent via `spawn_unique`. The
+/// returned handle is the ledger's observation point on the rollup.
 pub(crate) async fn register_ec_balance_rollup(
     jobs: &mut Jobs,
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<(), crate::ledger::error::LedgerError> {
-    outbox
+) -> Result<RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>, LedgerError> {
+    Ok(outbox
         .register_event_handler(
             jobs,
             OutboxEventJobConfig::new(EC_BALANCE_ROLLUP_JOB)
@@ -90,8 +95,7 @@ pub(crate) async fn register_ec_balance_rollup(
                 entries: entries.clone(),
             },
         )
-        .await
-        .map_err(crate::ledger::error::LedgerError::EcRollupRegistration)
+        .await?)
 }
 
 /// A transaction pulled from a `TransactionCreated` event, carrying just
@@ -293,3 +297,78 @@ mod __fuzz {
 
 #[cfg(feature = "fuzz")]
 pub use __fuzz::fuzz_batch;
+
+/// A snapshot of the rollup's position. Every outbox event with sequence ≤
+/// `applied` is folded into EC balances (settled and effective) and
+/// committed.
+///
+/// `frontier` is pinned at construction. [`refresh`](Self::refresh) advances
+/// `applied` against that same fence, so [`lag`](Self::lag) drains toward it
+/// instead of chasing a frontier that new postings keep moving.
+#[derive(Debug, Clone)]
+pub struct EcRollupStatus {
+    /// The rollup job's committed checkpoint.
+    pub applied: EventSequence,
+    /// The outbox frontier pinned when this snapshot was taken.
+    pub frontier: EventSequence,
+    handle: RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>,
+}
+
+impl EcRollupStatus {
+    pub(crate) fn new(
+        status: HandlerStreamStatus,
+        handle: RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>,
+    ) -> Self {
+        Self {
+            applied: status.checkpoint,
+            frontier: status.frontier,
+            handle,
+        }
+    }
+
+    /// Re-read the committed checkpoint, keeping the pinned `frontier`, so
+    /// repeated calls watch the lag drain toward the fence this snapshot
+    /// captured.
+    pub async fn refresh(&mut self) -> Result<(), LedgerError> {
+        self.applied = self.handle.load().await?.checkpoint();
+        Ok(())
+    }
+
+    /// Await the rollup applying everything up to this snapshot's pinned
+    /// `frontier`.
+    ///
+    /// On `Ok(())` every posting that had been assigned an outbox sequence
+    /// when the snapshot was taken — committed or still in flight — is folded
+    /// into EC balances (settled and effective) and visible to subsequent
+    /// reads.
+    ///
+    /// This is what makes `close_books(); ec_rollup_status().await?
+    /// .await_completion(..)` free of straggler holes: sequences are assigned
+    /// at entry insert, *before* velocity enforcement, so anything that saw
+    /// the period as open sits at or below the pinned frontier, and gapless
+    /// delivery means the wait covers each one. The checkpoint only *trails*
+    /// the applied state, so the fence never returns early.
+    ///
+    /// The fence does not move: unlike re-reading status, the frontier stays
+    /// where the snapshot pinned it, so a rollup publishing `BalanceUpdated`
+    /// events as it drains cannot extend its own barrier.
+    ///
+    /// `timeout` is mandatory: a wedged rollup surfaces as
+    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
+    pub async fn await_completion(&self, timeout: std::time::Duration) -> Result<(), LedgerError> {
+        self.handle.await_sequence(self.frontier, timeout).await?;
+        Ok(())
+    }
+
+    /// Outbox positions the rollup has yet to consume — the stream-lag SLO
+    /// metric. Counts the `BalanceUpdated` events the rollup publishes
+    /// itself and later crosses as skips, so a healthy stream can report a
+    /// small nonzero lag; alert on lag that is large or not shrinking.
+    pub fn lag(&self) -> u64 {
+        u64::from(self.frontier).saturating_sub(u64::from(self.applied))
+    }
+
+    pub fn is_caught_up(&self) -> bool {
+        self.applied >= self.frontier
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE job_executions AS je\n            SET state = 'pending', execute_at = u.execute_at, attempt_index = 1,\n                poller_instance_id = NULL\n            FROM UNNEST($1::uuid[], $2::timestamptz[]) AS u(id, execute_at)\n            WHERE je.id = u.id AND je.poller_instance_id = $3\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TimestamptzArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a71ac3f9107bd2bbd5cd5cd54b06b2b35d28d97bb7ac3c3cf022a697f6111a2"
+}
