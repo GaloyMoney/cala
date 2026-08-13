@@ -1,11 +1,14 @@
+use chrono::{DateTime, NaiveDate, Utc};
 use derive_builder::Builder;
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 pub use crate::param::definition::*;
+use cala_types::primitives::{DebitOrCredit, Layer};
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
-use cel_interpreter::CelExpression;
-use es_entity::*;
+use cel_interpreter::{CelError, CelExpression, CelMap, CelResult, CelValue, ResultCoercionError};
+use es_entity::{clock::Clock, *};
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
@@ -74,6 +77,7 @@ impl TryFromEvents<TxTemplateEvent> for TxTemplate {
 }
 
 #[derive(Builder, Debug)]
+#[builder(build_fn(validate = "Self::validate"))]
 pub struct NewTxTemplate {
     #[builder(setter(into))]
     pub(super) id: TxTemplateId,
@@ -125,6 +129,126 @@ impl NewTxTemplateBuilder {
         self.metadata = Some(Some(serde_json::to_value(metadata)?));
         Ok(self)
     }
+
+    #[instrument(name = "tx_template.validate", skip(self), err(level = tracing::Level::WARN))]
+    fn validate(&self) -> Result<(), String> {
+        let mut ctx = crate::cel_context::initialize(Clock::handle().clone());
+        let mut params_map = CelMap::new();
+        if let Some(Some(defs)) = self.params.as_ref() {
+            for def in defs {
+                params_map.insert(def.name.clone(), dummy_value_for(&def.r#type));
+            }
+        }
+        ctx.add_variable("params", params_map);
+
+        if let Some(txn) = self.transaction.as_ref() {
+            eval_expr(&ctx, &txn.effective, "transaction.effective")?;
+            eval_expr(&ctx, &txn.journal_id, "transaction.journal_id")?;
+            if let Some(s) = &txn.correlation_id {
+                eval_expr(&ctx, s, "transaction.correlation_id")?;
+            }
+            if let Some(s) = &txn.external_id {
+                eval_expr(&ctx, s, "transaction.external_id")?;
+            }
+            if let Some(s) = &txn.description {
+                eval_expr(&ctx, s, "transaction.description")?;
+            }
+            if let Some(s) = &txn.metadata {
+                eval_expr(&ctx, s, "transaction.metadata")?;
+            }
+        }
+
+        if let Some(entries) = self.entries.as_ref() {
+            for (i, e) in entries.iter().enumerate() {
+                eval_expr(&ctx, &e.entry_type, &format!("entries[{i}].entry_type"))?;
+                eval_expr(&ctx, &e.account_id, &format!("entries[{i}].account_id"))?;
+                eval_expr(&ctx, &e.layer, &format!("entries[{i}].layer"))?;
+                eval_expr(&ctx, &e.direction, &format!("entries[{i}].direction"))?;
+                eval_expr(&ctx, &e.units, &format!("entries[{i}].units"))?;
+                eval_expr(&ctx, &e.currency, &format!("entries[{i}].currency"))?;
+                if let Some(s) = &e.description {
+                    eval_expr(&ctx, s, &format!("entries[{i}].description"))?;
+                }
+                if let Some(s) = &e.metadata {
+                    eval_expr(&ctx, s, &format!("entries[{i}].metadata"))?;
+                }
+
+                // Enum-literal check: only applies when the expression is a
+                // bare quoted string. Dynamic refs like `params.dir` are
+                // opaque here and get validated at post time.
+                check_enum_literal::<Layer>(&e.layer, &format!("entries[{i}].layer"))?;
+                check_enum_literal::<DebitOrCredit>(
+                    &e.direction,
+                    &format!("entries[{i}].direction"),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+}
+
+fn dummy_value_for(t: &ParamDataType) -> CelValue {
+    match t {
+        ParamDataType::String => CelValue::from("stub"),
+        ParamDataType::Integer => CelValue::from(1i64),
+        ParamDataType::Decimal => CelValue::from(Decimal::ONE),
+        ParamDataType::Boolean => CelValue::from(false),
+        ParamDataType::Uuid => CelValue::from(uuid::Uuid::nil()),
+        ParamDataType::Date => CelValue::from(NaiveDate::from_ymd_opt(2000, 1, 1).unwrap()),
+        ParamDataType::Timestamp => CelValue::from(DateTime::<Utc>::from_timestamp(0, 0).unwrap()),
+        ParamDataType::Json => CelValue::Map(std::sync::Arc::new(CelMap::new())),
+    }
+}
+
+fn unknown_ident(err: &CelError) -> Option<&str> {
+    match err {
+        CelError::UnknownIdent(name) => Some(name.as_str()),
+        CelError::EvaluationError(_, inner) => unknown_ident(inner),
+        _ => None,
+    }
+}
+
+fn eval_expr(ctx: &cel_interpreter::CelContext, expr: &str, field: &str) -> Result<(), String> {
+    let compiled = CelExpression::try_from(expr).map_err(|e| format!("{field}: {e}"))?;
+    match compiled.evaluate(ctx) {
+        Ok(_) => Ok(()),
+        Err(e) => match unknown_ident(&e) {
+            Some(name) => Err(format!(
+                "{field}: undeclared identifier '{name}' — declare it as a param or fix the reference"
+            )),
+            None => Ok(()),
+        },
+    }
+}
+
+/// Returns the inner value if `expr` is a bare single-quoted string literal.
+///
+/// Only handles the simple `'...'` shape used throughout the codebase for
+/// enum literals (e.g. `'SETTLED'`, `'DEBIT'`). Anything else — expressions,
+/// concatenations, escaped quotes — falls through and gets deferred to
+/// runtime validation.
+fn as_string_literal(expr: &str) -> Option<&str> {
+    let trimmed = expr.trim();
+    let inner = trimmed.strip_prefix('\'')?.strip_suffix('\'')?;
+    if inner.contains(['\'', '\\']) {
+        return None;
+    }
+    Some(inner)
+}
+
+fn check_enum_literal<T>(expr: &str, field: &str) -> Result<(), String>
+where
+    for<'a> T: TryFrom<CelResult<'a>, Error = ResultCoercionError>,
+{
+    let Some(literal) = as_string_literal(expr) else {
+        return Ok(());
+    };
+    let val = CelValue::from(literal);
+    let result = CelResult { expr, val };
+    T::try_from(result)
+        .map(|_| ())
+        .map_err(|e| format!("{field}: {e}"))
 }
 
 #[derive(Clone, Debug, Builder)]
@@ -301,22 +425,40 @@ mod tests {
     use super::*;
     use uuid::Uuid;
 
-    #[test]
-    fn it_builds() {
-        let journal_id = Uuid::now_v7();
-        let entries = vec![NewTxTemplateEntry::builder()
+    fn valid_entry() -> NewTxTemplateEntry {
+        NewTxTemplateEntry::builder()
             .entry_type("'TEST_DR'")
-            .account_id("param.recipient")
-            .layer("'Settled'")
-            .direction("'Settled'")
+            .account_id("params.recipient")
+            .layer("'SETTLED'")
+            .direction("'DEBIT'")
             .units("1290")
             .currency("'BTC'")
-            .metadata(r#"{"sender": param.sender}"#)
+            .metadata(r#"{"sender": params.sender}"#)
             .build()
-            .unwrap()];
-        let new_tx_template = NewTxTemplate::builder()
+            .unwrap()
+    }
+
+    fn valid_params() -> Vec<NewParamDefinition> {
+        vec![
+            NewParamDefinition::builder()
+                .name("recipient")
+                .r#type(ParamDataType::Uuid)
+                .build()
+                .unwrap(),
+            NewParamDefinition::builder()
+                .name("sender")
+                .r#type(ParamDataType::Uuid)
+                .build()
+                .unwrap(),
+        ]
+    }
+
+    fn template_with(entries: Vec<NewTxTemplateEntry>) -> Result<NewTxTemplate, String> {
+        let journal_id = Uuid::now_v7();
+        NewTxTemplate::builder()
             .id(TxTemplateId::new())
             .code("CODE")
+            .params(valid_params())
             .transaction(
                 NewTxTemplateTransaction::builder()
                     .effective("date('2022-11-01')")
@@ -326,7 +468,12 @@ mod tests {
             )
             .entries(entries)
             .build()
-            .unwrap();
+            .map_err(|e| e.to_string())
+    }
+
+    #[test]
+    fn it_builds() {
+        let new_tx_template = template_with(vec![valid_entry()]).unwrap();
         assert_eq!(new_tx_template.description, None);
     }
 
@@ -334,5 +481,151 @@ mod tests {
     fn fails_when_mandatory_fields_are_missing() {
         let new_tx_template = NewTxTemplate::builder().build();
         assert!(new_tx_template.is_err());
+    }
+
+    #[test]
+    fn rejects_singular_param_reference() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("param.recipient") // singular: never populated in the CEL context
+            .layer("'SETTLED'")
+            .direction("'DEBIT'")
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let err = template_with(vec![entry]).unwrap_err();
+        assert!(err.contains("account_id"), "err was: {err}");
+        assert!(err.contains("param"), "err was: {err}");
+    }
+
+    #[test]
+    fn rejects_undeclared_param_key() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("params.not_declared") // plural but never declared
+            .layer("'SETTLED'")
+            .direction("'DEBIT'")
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let err = template_with(vec![entry]).unwrap_err();
+        assert!(err.contains("not_declared"), "err was: {err}");
+    }
+
+    #[test]
+    fn rejects_params_reference_when_no_params_declared() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("params.whatever")
+            .layer("'SETTLED'")
+            .direction("'DEBIT'")
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let journal_id = Uuid::now_v7();
+        let err = NewTxTemplate::builder()
+            .id(TxTemplateId::new())
+            .code("CODE")
+            // no `.params(...)` call — nothing declared
+            .transaction(
+                NewTxTemplateTransaction::builder()
+                    .effective("date('2022-11-01')")
+                    .journal_id(format!("uuid('{journal_id}')"))
+                    .build()
+                    .unwrap(),
+            )
+            .entries(vec![entry])
+            .build()
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("whatever"), "err was: {err}");
+    }
+
+    #[test]
+    fn rejects_invalid_layer_literal() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("params.recipient")
+            .layer("'Settled'") // wrong case: Layer::try_from expects uppercase
+            .direction("'DEBIT'")
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let err = template_with(vec![entry]).unwrap_err();
+        assert!(err.contains("layer"), "err was: {err}");
+    }
+
+    #[test]
+    fn rejects_invalid_direction_literal() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("params.recipient")
+            .layer("'SETTLED'")
+            .direction("'Settled'") // not a valid DebitOrCredit
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let err = template_with(vec![entry]).unwrap_err();
+        assert!(err.contains("direction"), "err was: {err}");
+    }
+
+    #[test]
+    fn accepts_dynamic_direction_and_layer_from_declared_param() {
+        // When direction/layer are param references (not literals), we can't
+        // check the runtime value at build time — validation must not reject.
+        let params = vec![
+            NewParamDefinition::builder()
+                .name("recipient")
+                .r#type(ParamDataType::Uuid)
+                .build()
+                .unwrap(),
+            NewParamDefinition::builder()
+                .name("sender")
+                .r#type(ParamDataType::Uuid)
+                .build()
+                .unwrap(),
+            NewParamDefinition::builder()
+                .name("dir")
+                .r#type(ParamDataType::String)
+                .build()
+                .unwrap(),
+            NewParamDefinition::builder()
+                .name("lyr")
+                .r#type(ParamDataType::String)
+                .build()
+                .unwrap(),
+        ];
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'X'")
+            .account_id("params.recipient")
+            .layer("params.lyr")
+            .direction("params.dir")
+            .units("1")
+            .currency("'BTC'")
+            .build()
+            .unwrap();
+        let journal_id = Uuid::now_v7();
+        let result = NewTxTemplate::builder()
+            .id(TxTemplateId::new())
+            .code("CODE")
+            .params(params)
+            .transaction(
+                NewTxTemplateTransaction::builder()
+                    .effective("date('2022-11-01')")
+                    .journal_id(format!("uuid('{journal_id}')"))
+                    .build()
+                    .unwrap(),
+            )
+            .entries(vec![entry])
+            .build();
+        assert!(
+            result.is_ok(),
+            "template with dynamic enum refs was rejected"
+        );
     }
 }
