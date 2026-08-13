@@ -397,3 +397,177 @@ async fn concurrent_adds_resolve_all_ancestors() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// Batch set-structure mutations serialize with single-edge structure
+/// mutations on the same exclusive coarse lock, even when the sets are
+/// disjoint. This exercises the combined-graph validation path rather than
+/// the single-edge fast path.
+#[tokio::test]
+async fn batch_structure_ops_serialize() -> anyhow::Result<()> {
+    let cala = init_cala().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+
+    let parent_a = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-a-parent"))
+        .await?;
+    let child_a = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-a-child"))
+        .await?;
+    let parent_b = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-b-parent"))
+        .await?;
+    let child_b = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-b-child"))
+        .await?;
+    let parent_c = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-c-parent"))
+        .await?;
+    let child_c = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-struct-c-child"))
+        .await?;
+
+    // Hold an uncommitted batch structure mutation open (exclusive coarse
+    // lock, len > 1 to stay on the combined-graph path).
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_sets_in_op(
+            &mut op,
+            &[(parent_a.id(), child_a.id()), (parent_b.id(), child_b.id())],
+        )
+        .await?;
+
+    // A disjoint single-edge structure mutation must still wait.
+    let cala2 = cala.clone();
+    let (p_c, c_c) = (parent_c.id(), child_c.id());
+    let mut blocked = tokio::spawn(async move { cala2.account_sets().add_member(p_c, c_c).await });
+
+    assert!(
+        tokio::time::timeout(MUST_STILL_BE_PENDING, &mut blocked)
+            .await
+            .is_err(),
+        "a single-edge structure mutation must block while a batch is open"
+    );
+
+    op.commit().await?;
+    blocked.await??;
+    Ok(())
+}
+
+/// An open batch set-structure mutation fences unrelated account-member
+/// mutations, just like a single-edge structure mutation does.
+#[tokio::test]
+async fn batch_structure_ops_fence_account_member_ops() -> anyhow::Result<()> {
+    let cala = init_cala().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+
+    let (one, _) = helpers::test_accounts();
+    let one = cala.accounts().create(one).await?;
+    let parent = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-fence-parent"))
+        .await?;
+    let child = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-fence-child"))
+        .await?;
+    let unrelated = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-fence-unrelated"))
+        .await?;
+
+    let child2 = cala
+        .account_sets()
+        .create(new_set(journal.id(), "batch-fence-child2"))
+        .await?;
+
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_sets_in_op(
+            &mut op,
+            &[(parent.id(), child.id()), (parent.id(), child2.id())],
+        )
+        .await?;
+
+    let cala2 = cala.clone();
+    let unrelated_id = unrelated.id();
+    let member_id = one.id();
+    let mut blocked = tokio::spawn(async move {
+        cala2
+            .account_sets()
+            .add_member(unrelated_id, member_id)
+            .await
+    });
+
+    assert!(
+        tokio::time::timeout(MUST_STILL_BE_PENDING, &mut blocked)
+            .await
+            .is_err(),
+        "account-member add must block while a batch structure mutation is open"
+    );
+
+    op.commit().await?;
+    blocked.await??;
+    Ok(())
+}
+
+/// A single-edge batch routes through the same single-attach path as a
+/// direct set-structure call, so it produces identical persisted state
+/// and outbox events without running combined-graph validation.
+#[tokio::test]
+async fn single_edge_batch_matches_single_attach_path() -> anyhow::Result<()> {
+    let pool = init_isolated_pool(5).await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+
+    let parent = cala
+        .account_sets()
+        .create(new_set(journal.id(), "single-edge-parent"))
+        .await?;
+    let child = cala
+        .account_sets()
+        .create(new_set(journal.id(), "single-edge-child"))
+        .await?;
+
+    cala.account_sets()
+        .add_member_sets(&[(parent.id(), child.id())])
+        .await?;
+
+    let edge_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_account_set_member_account_sets
+        WHERE account_set_id = $1 AND member_account_set_id = $2
+        "#,
+    )
+    .bind(parent.id())
+    .bind(child.id())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(edge_count, 1);
+
+    let event_count: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)
+        FROM cala_persistent_outbox_events
+        WHERE payload->>'type' = 'account_set_member_created'
+          AND payload->>'account_set_id' = $1::text
+        "#,
+    )
+    .bind(parent.id())
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(event_count, 1);
+
+    Ok(())
+}

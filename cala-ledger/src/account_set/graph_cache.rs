@@ -19,9 +19,9 @@
 //!
 //! Layering: `AccountSets` (service) calls this cache; this cache holds
 //! a handle on `AccountSetRepo` and orchestrates — ALL SQL lives in
-//! `repo.rs`, all cache state and in-memory graph logic lives here. The
-//! call graph is strictly service -> cache -> repo; the repo never
-//! calls back up into the cache.
+//! `repo.rs`, cache state and snapshot adaptation live here, and pure graph
+//! invariants live in `graph_validation.rs`. The call graph is strictly
+//! service -> cache -> repo; the repo never calls back up into the cache.
 //!
 //! Why the split read is safe — the two inputs have opposite write
 //! rates:
@@ -31,8 +31,8 @@
 //!   depends on reading these fresh — an account-attach mutates exactly
 //!   the rows we still read from the DB, never the cache.
 //! - **Set->set edges + per-set metadata** (cold, small; edges mutated
-//!   only by `add_member_set` / `remove_member_set`, both already
-//!   serialized under the exclusive coarse membership lock): cached
+//!   only by `add_member_set` / `add_member_sets` / `remove_member_set`,
+//!   all already serialized under the exclusive coarse membership lock): cached
 //!   in-process, validated by the `cala_account_set_graph_epoch`
 //!   counter read in the SAME statement/snapshot as the probe. Per-set
 //!   metadata (`journal_id`, `eventually_consistent`) is immutable
@@ -51,7 +51,8 @@
 //! resolution costs one round trip, exactly like the pre-cache path:
 //!
 //! - **Epoch mismatch** (structure op committed since the last refresh,
-//!   or a same-op `add_member_set` bumped it locally): walk op-locally
+//!   or a same-op `add_member_set` / `add_member_sets` bumped it
+//!   locally): walk op-locally
 //!   and separately trigger a background refresh from the **pool**.
 //!   Op-local results are NEVER installed into the shared snapshot — an
 //!   in-op read can see the op's own uncommitted writes, and installing
@@ -92,6 +93,10 @@ use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
     error::AccountSetError,
+    graph_validation::{
+        has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
+        SetMembership,
+    },
     repo::{AccountSetRepo, DirectMembershipProbe, SetGraphNode},
 };
 
@@ -118,6 +123,10 @@ struct GraphSnapshot {
     /// member set -> direct parent sets (upward edges). Sets with no
     /// parents have no entry.
     parents: HashMap<AccountSetId, Vec<AccountSetId>>,
+    /// parent set -> direct member sets (downward edges). Kept alongside
+    /// `parents` so batch validation can find affected components without
+    /// repeatedly inverting the snapshot.
+    children: HashMap<AccountSetId, Vec<AccountSetId>>,
     /// Every set known at snapshot time. Also the known-set universe for
     /// expansion: an id absent here forces the supplement/fallback path.
     meta: HashMap<AccountSetId, SetMeta>,
@@ -128,8 +137,38 @@ impl GraphSnapshot {
         Self {
             epoch: COLD_EPOCH,
             parents: HashMap::new(),
+            children: HashMap::new(),
             meta: HashMap::new(),
         }
+    }
+
+    fn edges_connected_to(&self, members: &[SetMembership]) -> Vec<SetMembership> {
+        let mut pending: Vec<_> = members
+            .iter()
+            .flat_map(|edge| [edge.account_set_id, edge.member_account_set_id])
+            .collect();
+        let mut visited = HashSet::new();
+        let mut edges = HashSet::new();
+        while let Some(account_set_id) = pending.pop() {
+            if !visited.insert(account_set_id) {
+                continue;
+            }
+            for parent_id in self.parents.get(&account_set_id).into_iter().flatten() {
+                edges.insert(SetMembership {
+                    account_set_id: *parent_id,
+                    member_account_set_id: account_set_id,
+                });
+                pending.push(*parent_id);
+            }
+            for member_id in self.children.get(&account_set_id).into_iter().flatten() {
+                edges.insert(SetMembership {
+                    account_set_id,
+                    member_account_set_id: *member_id,
+                });
+                pending.push(*member_id);
+            }
+        }
+        edges.into_iter().collect()
     }
 }
 
@@ -137,6 +176,12 @@ impl GraphSnapshot {
 /// (sets created after the last refresh). Never installed.
 struct Overlay {
     parents: HashMap<AccountSetId, Vec<AccountSetId>>,
+    meta: HashMap<AccountSetId, SetMeta>,
+}
+
+struct IndexedNodes {
+    parents: HashMap<AccountSetId, Vec<AccountSetId>>,
+    children: HashMap<AccountSetId, Vec<AccountSetId>>,
     meta: HashMap<AccountSetId, SetMeta>,
 }
 
@@ -230,7 +275,7 @@ impl SetGraphCache {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         probe_epoch: i64,
-        probe_seeds: &[(AccountId, AccountSetId)],
+        probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let span = tracing::Span::current();
@@ -274,7 +319,7 @@ impl SetGraphCache {
             let mut missing: Vec<_> = probe
                 .seeds
                 .iter()
-                .map(|(_, set_id)| *set_id)
+                .map(|seed| seed.account_set_id)
                 .filter(|set_id| !snapshot.meta.contains_key(set_id))
                 .collect();
             missing.sort_unstable();
@@ -289,7 +334,7 @@ impl SetGraphCache {
                 .repo
                 .fetch_set_graph_nodes_in_op(op, &missing)
                 .await?;
-            let (parents, meta) = Self::index_nodes(nodes);
+            let IndexedNodes { parents, meta, .. } = Self::index_nodes(nodes);
             Some(Overlay { parents, meta })
         };
 
@@ -359,9 +404,9 @@ impl SetGraphCache {
     ///   op's own earlier attaches, and the per-member EXCLUSIVE lock
     ///   serializes concurrent mutations of the same member — the only
     ///   interleavings that could invalidate the count.
-    /// - A same-op `add_member_set` bumps the epoch in-op, so the probe
-    ///   reads the bumped value, mismatches every shared snapshot, and
-    ///   this method falls back to the SQL walk, which sees the op's
+    /// - A same-op `add_member_set` / `add_member_sets` bumps the epoch
+    ///   in-op, so the probe reads the bumped value, mismatches every
+    ///   shared snapshot, and this method falls back to the SQL walk, which sees the op's
     ///   uncommitted edge.
     ///
     /// Fallbacks (epoch mismatch, unknown set id mid-walk) run the SQL
@@ -372,20 +417,19 @@ impl SetGraphCache {
     #[instrument(
         level = "debug",
         name = "account_set.assert_no_double_membership",
-        skip(self, op, account_set_ids, account_ids),
-        fields(pairs = account_ids.len(), path = tracing::field::Empty),
+        skip(self, op, members),
+        fields(pairs = members.len(), path = tracing::field::Empty),
         err(level = "warn")
     )]
     pub(super) async fn assert_no_double_membership_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        account_set_ids: &[AccountSetId],
-        account_ids: &[AccountId],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
         let span = tracing::Span::current();
 
         let distinct_account_ids: Vec<AccountId> = {
-            let mut ids = account_ids.to_vec();
+            let mut ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
             ids.sort_unstable();
             ids.dedup();
             ids
@@ -410,7 +454,7 @@ impl SetGraphCache {
             return self
                 .inner
                 .repo
-                .assert_no_double_membership(op, account_set_ids, account_ids)
+                .assert_no_double_membership(op, members)
                 .await;
         }
 
@@ -419,10 +463,10 @@ impl SetGraphCache {
         // last refresh — including in this op. Fetch them op-locally as an
         // overlay; never installed.
         let missing: Vec<AccountSetId> = {
-            let mut missing: Vec<_> = account_set_ids
+            let mut missing: Vec<_> = members
                 .iter()
-                .chain(probe.seeds.iter().map(|(_, set_id)| set_id))
-                .copied()
+                .chain(probe.seeds.iter())
+                .map(|membership| membership.account_set_id)
                 .filter(|set_id| !snapshot.meta.contains_key(set_id))
                 .collect();
             missing.sort_unstable();
@@ -437,17 +481,33 @@ impl SetGraphCache {
                 .repo
                 .fetch_set_graph_nodes_in_op(op, &missing)
                 .await?;
-            let (parents, meta) = Self::index_nodes(nodes);
+            let IndexedNodes { parents, meta, .. } = Self::index_nodes(nodes);
             Some(Overlay { parents, meta })
         };
 
-        match Self::count_membership_paths(
-            &snapshot,
-            overlay.as_ref(),
-            account_set_ids,
-            account_ids,
-            &probe.seeds,
-        ) {
+        // One lookup carries all three states the walk distinguishes: `None`
+        // for a set neither the snapshot nor the overlay knows (defer to SQL),
+        // `Some(&[])` for a known root, `Some(parents)` otherwise.
+        let parents_of = |set_id: &AccountSetId| -> Option<&[AccountSetId]> {
+            let known = snapshot.meta.contains_key(set_id)
+                || overlay
+                    .as_ref()
+                    .is_some_and(|overlay| overlay.meta.contains_key(set_id));
+            known.then(|| {
+                snapshot
+                    .parents
+                    .get(set_id)
+                    .or_else(|| {
+                        overlay
+                            .as_ref()
+                            .and_then(|overlay| overlay.parents.get(set_id))
+                    })
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+            })
+        };
+
+        match has_duplicate_account_membership_paths(members, &probe.seeds, parents_of) {
             Some(false) => {
                 span.record(
                     "path",
@@ -468,73 +528,56 @@ impl SetGraphCache {
                 span.record("path", "fallback_unknown");
                 self.inner
                     .repo
-                    .assert_no_double_membership(op, account_set_ids, account_ids)
+                    .assert_no_double_membership(op, members)
                     .await
             }
         }
     }
 
-    /// The in-memory mirror of the SQL walk's conflict predicate: seed
-    /// each account with its new target sets (pair multiplicity
-    /// preserved) plus its existing direct memberships, expand every
-    /// seed upward over snapshot + overlay counting *paths* (unlike
-    /// [`Self::expand`], which dedups via a visited set — reachability
-    /// is the wrong question here), and report a conflict as soon as any
-    /// `(account, set)` is reached twice.
+    /// Validate a batch of set-to-set memberships against the graph read
+    /// inside `op`. The caller must hold the exclusive structure lock so the
+    /// graph cannot change between this check and persistence.
     ///
-    /// Returns `None` if a set id is unknown to snapshot + overlay —
-    /// caller falls back to the SQL walk.
-    ///
-    /// Terminates unconditionally: every pop increments some count and
-    /// the second increment of any count returns immediately, so pops
-    /// are bounded by (known sets + 1) per account. A corrupted cyclic
-    /// graph revisits a set and reports a conflict — a conservative
-    /// reject, where the SQL walk's unbounded UNION ALL recursion would
-    /// not terminate at all.
-    fn count_membership_paths(
-        snapshot: &GraphSnapshot,
-        overlay: Option<&Overlay>,
-        new_set_ids: &[AccountSetId],
-        new_account_ids: &[AccountId],
-        existing_seeds: &[(AccountId, AccountSetId)],
-    ) -> Option<bool> {
-        let known = |set_id: &AccountSetId| -> bool {
-            snapshot.meta.contains_key(set_id)
-                || overlay.is_some_and(|o| o.meta.contains_key(set_id))
+    /// An epoch match proves the cached edges equal the committed graph, so the
+    /// affected components are selected in memory. A cold or stale snapshot
+    /// falls back to one flat op-local edge read, which also sees same-op
+    /// mutations that have already bumped the epoch.
+    #[instrument(
+        level = "debug",
+        name = "account_set.assert_valid_set_memberships",
+        skip_all,
+        fields(count = members.len(), path = tracing::field::Empty),
+        err(level = "warn")
+    )]
+    pub(super) async fn assert_valid_set_memberships_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<(), AccountSetError> {
+        let span = tracing::Span::current();
+        let snapshot = self.load();
+        let epoch = self.inner.repo.fetch_set_graph_epoch_in_op(op).await?;
+        let existing_edges = if snapshot.epoch == epoch {
+            span.record("path", "memory");
+            snapshot.edges_connected_to(members)
+        } else {
+            span.record(
+                "path",
+                if snapshot.epoch == COLD_EPOCH {
+                    "fallback_cold"
+                } else {
+                    "fallback_epoch"
+                },
+            );
+            self.spawn_refresh();
+            self.inner.repo.fetch_set_membership_edges_in_op(op).await?
         };
-        let parents_of = |set_id: &AccountSetId| -> &[AccountSetId] {
-            snapshot
-                .parents
-                .get(set_id)
-                .or_else(|| overlay.and_then(|o| o.parents.get(set_id)))
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
-        };
-
-        let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for (set_id, account_id) in new_set_ids.iter().zip(new_account_ids) {
-            per_account.entry(*account_id).or_default().push(*set_id);
-        }
-        for (account_id, set_id) in existing_seeds {
-            per_account.entry(*account_id).or_default().push(*set_id);
-        }
-
-        for seeds in per_account.into_values() {
-            let mut path_counts: HashMap<AccountSetId, u32> = HashMap::new();
-            let mut queue: VecDeque<AccountSetId> = seeds.into();
-            while let Some(set_id) = queue.pop_front() {
-                if !known(&set_id) {
-                    return None;
-                }
-                let count = path_counts.entry(set_id).or_default();
-                *count += 1;
-                if *count > 1 {
-                    return Some(true);
-                }
-                queue.extend(parents_of(&set_id));
-            }
-        }
-        Some(false)
+        let account_members = self
+            .inner
+            .repo
+            .fetch_affected_account_memberships_in_op(op, &existing_edges, members)
+            .await?;
+        validate_set_memberships(&existing_edges, members, &account_members)
     }
 
     fn load(&self) -> Arc<GraphSnapshot> {
@@ -545,13 +588,9 @@ impl SetGraphCache {
             .clone()
     }
 
-    fn index_nodes(
-        nodes: Vec<SetGraphNode>,
-    ) -> (
-        HashMap<AccountSetId, Vec<AccountSetId>>,
-        HashMap<AccountSetId, SetMeta>,
-    ) {
+    fn index_nodes(nodes: Vec<SetGraphNode>) -> IndexedNodes {
         let mut parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        let mut children: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
         let mut meta = HashMap::new();
         for node in nodes {
             meta.insert(
@@ -563,9 +602,14 @@ impl SetGraphCache {
             );
             if let Some(parent_id) = node.parent_id {
                 parents.entry(node.id).or_default().push(parent_id);
+                children.entry(parent_id).or_default().push(node.id);
             }
         }
-        (parents, meta)
+        IndexedNodes {
+            parents,
+            children,
+            meta,
+        }
     }
 
     /// In-memory BFS expansion of the probed seeds over snapshot +
@@ -583,7 +627,7 @@ impl SetGraphCache {
         snapshot: &GraphSnapshot,
         overlay: Option<&Overlay>,
         journal_id: JournalId,
-        seeds: &[(AccountId, AccountSetId)],
+        seeds: &[AccountMembership],
         (entry_account_ids, entry_currencies): &(Vec<AccountId>, Vec<&'c str>),
     ) -> Option<(
         HashMap<AccountId, Vec<AccountSetId>>,
@@ -606,8 +650,11 @@ impl SetGraphCache {
         };
 
         let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for (account_id, set_id) in seeds {
-            per_account.entry(*account_id).or_default().push(*set_id);
+        for seed in seeds {
+            per_account
+                .entry(seed.account_id)
+                .or_default()
+                .push(seed.account_set_id);
         }
 
         let mut mappings = HashMap::new();
@@ -680,10 +727,15 @@ impl SetGraphCache {
             return Ok(());
         };
         let data = inner.repo.fetch_set_graph().await?;
-        let (parents, meta) = Self::index_nodes(data.nodes);
+        let IndexedNodes {
+            parents,
+            children,
+            meta,
+        } = Self::index_nodes(data.nodes);
         let new = GraphSnapshot {
             epoch: data.epoch,
             parents,
+            children,
             meta,
         };
         tracing::Span::current().record("epoch", new.epoch);
@@ -700,5 +752,85 @@ impl SetGraphCache {
             *current = Arc::new(new);
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn edge(account_set_id: AccountSetId, member_account_set_id: AccountSetId) -> SetMembership {
+        SetMembership {
+            account_set_id,
+            member_account_set_id,
+        }
+    }
+
+    #[test]
+    fn batch_validation_selects_only_connected_snapshot_edges() {
+        let root = AccountSetId::new();
+        let branch = AccountSetId::new();
+        let leaf = AccountSetId::new();
+        let proposed_leaf = AccountSetId::new();
+        let unrelated_root = AccountSetId::new();
+        let unrelated_leaf = AccountSetId::new();
+        let snapshot = GraphSnapshot {
+            epoch: 1,
+            parents: HashMap::from([
+                (branch, vec![root]),
+                (leaf, vec![branch]),
+                (unrelated_leaf, vec![unrelated_root]),
+            ]),
+            children: HashMap::from([
+                (root, vec![branch]),
+                (branch, vec![leaf]),
+                (unrelated_root, vec![unrelated_leaf]),
+            ]),
+            meta: HashMap::new(),
+        };
+
+        let edges: HashSet<_> = snapshot
+            .edges_connected_to(&[edge(branch, proposed_leaf)])
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            edges,
+            HashSet::from([edge(root, branch), edge(branch, leaf)])
+        );
+    }
+
+    #[test]
+    fn batch_validation_selects_each_component_joined_by_proposed_edges() {
+        let left_root = AccountSetId::new();
+        let left_leaf = AccountSetId::new();
+        let right_root = AccountSetId::new();
+        let right_leaf = AccountSetId::new();
+        let unrelated_root = AccountSetId::new();
+        let unrelated_leaf = AccountSetId::new();
+        let snapshot = GraphSnapshot {
+            epoch: 1,
+            parents: HashMap::from([
+                (left_leaf, vec![left_root]),
+                (right_leaf, vec![right_root]),
+                (unrelated_leaf, vec![unrelated_root]),
+            ]),
+            children: HashMap::from([
+                (left_root, vec![left_leaf]),
+                (right_root, vec![right_leaf]),
+                (unrelated_root, vec![unrelated_leaf]),
+            ]),
+            meta: HashMap::new(),
+        };
+
+        let edges: HashSet<_> = snapshot
+            .edges_connected_to(&[edge(left_leaf, right_root)])
+            .into_iter()
+            .collect();
+
+        assert_eq!(
+            edges,
+            HashSet::from([edge(left_root, left_leaf), edge(right_root, right_leaf)])
+        );
     }
 }

@@ -2,14 +2,18 @@ use es_entity::*;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, JournalId},
 };
 
-use super::{entity::*, error::*};
+use super::{
+    entity::*,
+    error::*,
+    graph_validation::{AccountMembership, SetMembership, MAX_MEMBERSHIP_DEPTH},
+};
 
 /// Coarse advisory lock guarding the account-set membership graph
 /// (`cala_account_set_member_accounts` and
@@ -34,8 +38,8 @@ use super::{entity::*, error::*};
 /// so it must be fenced against concurrent writers — which is why the
 /// closure-era lock protocol survives walk-only unchanged:
 ///
-/// - Set-structure mutations (`add_member_set` / `remove_member_set`)
-///   take this lock EXCLUSIVE. They mutate the edges that every walk
+/// - Set-structure mutations (`add_member_set`, batched set attachment, and
+///   `remove_member_set`) take this lock EXCLUSIVE. They mutate the edges that every walk
 ///   reads, and read the member rows that account-member mutations
 ///   write, so they must exclude everything.
 /// - Account-member mutations (`add_member_account(s)` /
@@ -58,12 +62,6 @@ const ADDVISORY_LOCK_ID: i64 = 123456;
 /// keyed on `hashtext(<member account id>)`. Must stay disjoint from
 /// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
 const MEMBER_LOCK_CLASS: i32 = 2;
-
-/// Maximum depth (in set->set edges) of any root-to-leaf membership
-/// chain. Enforced in `add_member_set`: rejecting edges past this bound
-/// keeps the read-time ancestor walk cheap and terminating. Real
-/// hierarchies are <=10 deep; 16 leaves headroom.
-const MAX_MEMBERSHIP_DEPTH: i32 = 16;
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -197,9 +195,12 @@ impl AccountSetRepo {
     pub(super) async fn assert_no_double_membership(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        account_set_ids: &[AccountSetId],
-        account_ids: &[AccountId],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
+        // The parallel arrays the UNNEST needs are built here, at the SQL
+        // boundary, so the ordered-pair shape never escapes into the caller.
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
         let row = sqlx::query!(
             r#"
             WITH RECURSIVE all_seeds AS (
@@ -226,8 +227,8 @@ impl AccountSetRepo {
                 HAVING COUNT(*) > 1
             ) AS "conflict!"
             "#,
-            account_set_ids as &[AccountSetId],
-            account_ids as &[AccountId],
+            &account_set_ids as &[AccountSetId],
+            &account_ids as &[AccountId],
         )
         .fetch_one(db.as_executor())
         .await?;
@@ -591,13 +592,13 @@ impl AccountSetRepo {
     pub(super) async fn insert_member_accounts(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountId)],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
         if members.is_empty() {
             return Ok(());
         }
-        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
-        let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
 
         // Direct edges only: one insert covers every pair; ancestor sets
         // are resolved by the read-time walk.
@@ -616,10 +617,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                members.iter().map(|(account_set_id, account_id)| {
+                members.iter().map(|membership| {
                     crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                        account_set_id: *account_set_id,
-                        member_id: crate::account_set::AccountSetMemberId::Account(*account_id),
+                        account_set_id: membership.account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::Account(
+                            membership.account_id,
+                        ),
                     }
                 }),
             )
@@ -859,6 +862,191 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    /// Take the exclusive membership-graph lock for a structure mutation.
+    /// Held until `db` commits or rolls back.
+    pub(super) async fn lock_for_set_membership_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+    ) -> Result<(), AccountSetError> {
+        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
+            .execute(db.as_executor())
+            .await?;
+        Ok(())
+    }
+
+    /// Read the membership-graph epoch in this operation's snapshot.
+    pub(super) async fn fetch_set_graph_epoch_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+    ) -> Result<i64, AccountSetError> {
+        Ok(
+            sqlx::query_scalar("SELECT epoch FROM cala_account_set_graph_epoch")
+                .fetch_one(db.as_executor())
+                .await?,
+        )
+    }
+
+    /// Load all committed set-to-set edges as an op-local cache fallback.
+    ///
+    /// The graph is intentionally read with one flat query. It is small, and
+    /// this path runs only when the epoch-validated snapshot is cold or stale;
+    /// avoiding a recursive component walk keeps fallback work bounded by the
+    /// edge table rather than graph depth.
+    pub(super) async fn fetch_set_membership_edges_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+    ) -> Result<Vec<SetMembership>, AccountSetError> {
+        let rows: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+            r#"
+          SELECT account_set_id, member_account_set_id
+          FROM cala_account_set_member_account_sets
+          "#,
+        )
+        .fetch_all(db.as_executor())
+        .await?;
+        Ok(rows.into_iter().map(SetMembership::from).collect())
+    }
+
+    /// Load only direct account memberships that can participate in a conflict
+    /// introduced by `members` against the supplied existing edge graph.
+    pub(super) async fn fetch_affected_account_memberships_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        existing_edges: &[SetMembership],
+        members: &[SetMembership],
+    ) -> Result<Vec<AccountMembership>, AccountSetError> {
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+
+        // Only accounts below a proposed member endpoint can gain a new
+        // containment path. Compute that affected descendant closure over the
+        // final graph so interactions between proposed edges are included.
+        let mut children: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        for edge in existing_edges.iter().chain(members) {
+            children
+                .entry(edge.account_set_id)
+                .or_default()
+                .push(edge.member_account_set_id);
+        }
+        let mut affected_set_ids = HashSet::new();
+        let mut pending = member_account_set_ids;
+        while let Some(account_set_id) = pending.pop() {
+            if affected_set_ids.insert(account_set_id) {
+                pending.extend(children.get(&account_set_id).into_iter().flatten().copied());
+            }
+        }
+        let affected_set_ids: Vec<_> = affected_set_ids.into_iter().collect();
+
+        // The committed graph is already account-path valid. Therefore every
+        // conflict introduced by this batch includes an account attached in
+        // the affected descendant closure above. Find those candidate accounts
+        // through the set-leading index, then load all of their direct
+        // memberships through the member-leading unique index. This preserves
+        // complete account-path validation without reading every membership in
+        // the connected component.
+        //
+        // These queries decode into newtype tuples rather than using sqlx's
+        // compile-time checked `query!`, because the column types are stable
+        // and the tuple shape is local to this module. An `ORDER BY` keeps
+        // the candidate and membership rows deterministic so the same conflict
+        // is reported consistently across runs.
+        let candidate_account_ids: Vec<AccountId> = sqlx::query_scalar(
+            r#"
+          SELECT DISTINCT member_account_id
+          FROM cala_account_set_member_accounts
+          WHERE account_set_id = ANY($1)
+          ORDER BY member_account_id
+          "#,
+        )
+        .bind(&affected_set_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        if candidate_account_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let rows: Vec<(AccountSetId, AccountId)> = sqlx::query_as(
+            r#"
+          SELECT account_set_id, member_account_id
+          FROM cala_account_set_member_accounts
+          WHERE member_account_id = ANY($1)
+          ORDER BY member_account_id, account_set_id
+          "#,
+        )
+        .bind(&candidate_account_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        Ok(rows.into_iter().map(AccountMembership::from).collect())
+    }
+
+    /// Insert a validated batch of direct account-set membership edges.
+    ///
+    /// Precondition: the caller holds [`Self::lock_for_set_membership_op`]
+    /// and has passed the graph cache's combined-graph validation in this
+    /// same op. This function only persists: it inserts the edges, bumps the
+    /// graph epoch once for the whole batch, and publishes one outbox event
+    /// per edge. All cycle, path, account, and depth checks happen in the
+    /// caller's validation step before this runs.
+    #[instrument(
+        level = "debug",
+        name = "account_set.insert_member_sets",
+        skip_all,
+        fields(count = members.len()),
+        err(level = "warn")
+    )]
+    pub(super) async fn insert_member_sets(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<(), AccountSetError> {
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+
+        sqlx::query(
+            r#"
+          INSERT INTO cala_account_set_member_account_sets
+            (account_set_id, member_account_set_id)
+          SELECT account_set_id, member_account_set_id
+          FROM UNNEST($1::uuid[], $2::uuid[])
+            AS proposed(account_set_id, member_account_set_id)
+          "#,
+        )
+        .bind(&account_set_ids)
+        .bind(&member_account_set_ids)
+        .execute(db.as_executor())
+        .await?;
+
+        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
+            .execute(db.as_executor())
+            .await?;
+
+        self.publisher
+            .publish_all(
+                db,
+                members.iter().map(|edge| {
+                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id: edge.account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                            edge.member_account_set_id,
+                        ),
+                    }
+                }),
+            )
+            .await?;
+
+        Ok(())
+    }
+
     #[instrument(
         level = "debug",
         name = "account_set.remove_member_set",
@@ -1059,7 +1247,12 @@ impl AccountSetRepo {
             epoch,
             seeds: rows
                 .into_iter()
-                .filter_map(|row| Some((row.account_id?, row.set_id?)))
+                .filter_map(|row| {
+                    Some(AccountMembership {
+                        account_set_id: row.set_id?,
+                        account_id: row.account_id?,
+                    })
+                })
                 .collect(),
         })
     }
@@ -1311,7 +1504,7 @@ impl AccountSetRepo {
 /// in one snapshot.
 pub(super) struct DirectMembershipProbe {
     pub epoch: i64,
-    pub seeds: Vec<(AccountId, AccountSetId)>,
+    pub seeds: Vec<AccountMembership>,
 }
 
 /// One set's graph node as stored: its immutable meta plus one upward
