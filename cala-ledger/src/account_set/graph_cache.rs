@@ -93,7 +93,10 @@ use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
     error::AccountSetError,
-    graph_validation::{has_duplicate_account_membership_paths, validate_set_memberships},
+    graph_validation::{
+        has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
+        SetMembership,
+    },
     repo::{AccountSetRepo, DirectMembershipProbe, SetGraphNode},
 };
 
@@ -139,15 +142,10 @@ impl GraphSnapshot {
         }
     }
 
-    fn edges_connected_to(
-        &self,
-        members: &[(AccountSetId, AccountSetId)],
-    ) -> Vec<(AccountSetId, AccountSetId)> {
+    fn edges_connected_to(&self, members: &[SetMembership]) -> Vec<SetMembership> {
         let mut pending: Vec<_> = members
             .iter()
-            .flat_map(|(account_set_id, member_account_set_id)| {
-                [*account_set_id, *member_account_set_id]
-            })
+            .flat_map(|edge| [edge.account_set_id, edge.member_account_set_id])
             .collect();
         let mut visited = HashSet::new();
         let mut edges = HashSet::new();
@@ -156,11 +154,17 @@ impl GraphSnapshot {
                 continue;
             }
             for parent_id in self.parents.get(&account_set_id).into_iter().flatten() {
-                edges.insert((*parent_id, account_set_id));
+                edges.insert(SetMembership {
+                    account_set_id: *parent_id,
+                    member_account_set_id: account_set_id,
+                });
                 pending.push(*parent_id);
             }
             for member_id in self.children.get(&account_set_id).into_iter().flatten() {
-                edges.insert((account_set_id, *member_id));
+                edges.insert(SetMembership {
+                    account_set_id,
+                    member_account_set_id: *member_id,
+                });
                 pending.push(*member_id);
             }
         }
@@ -271,7 +275,7 @@ impl SetGraphCache {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         probe_epoch: i64,
-        probe_seeds: &[(AccountId, AccountSetId)],
+        probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         let span = tracing::Span::current();
@@ -315,7 +319,7 @@ impl SetGraphCache {
             let mut missing: Vec<_> = probe
                 .seeds
                 .iter()
-                .map(|(_, set_id)| *set_id)
+                .map(|seed| seed.account_set_id)
                 .filter(|set_id| !snapshot.meta.contains_key(set_id))
                 .collect();
             missing.sort_unstable();
@@ -413,20 +417,19 @@ impl SetGraphCache {
     #[instrument(
         level = "debug",
         name = "account_set.assert_no_double_membership",
-        skip(self, op, account_set_ids, account_ids),
-        fields(pairs = account_ids.len(), path = tracing::field::Empty),
+        skip(self, op, members),
+        fields(pairs = members.len(), path = tracing::field::Empty),
         err(level = "warn")
     )]
     pub(super) async fn assert_no_double_membership_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        account_set_ids: &[AccountSetId],
-        account_ids: &[AccountId],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
         let span = tracing::Span::current();
 
         let distinct_account_ids: Vec<AccountId> = {
-            let mut ids = account_ids.to_vec();
+            let mut ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
             ids.sort_unstable();
             ids.dedup();
             ids
@@ -451,7 +454,7 @@ impl SetGraphCache {
             return self
                 .inner
                 .repo
-                .assert_no_double_membership(op, account_set_ids, account_ids)
+                .assert_no_double_membership(op, members)
                 .await;
         }
 
@@ -460,10 +463,10 @@ impl SetGraphCache {
         // last refresh — including in this op. Fetch them op-locally as an
         // overlay; never installed.
         let missing: Vec<AccountSetId> = {
-            let mut missing: Vec<_> = account_set_ids
+            let mut missing: Vec<_> = members
                 .iter()
-                .chain(probe.seeds.iter().map(|(_, set_id)| set_id))
-                .copied()
+                .chain(probe.seeds.iter())
+                .map(|membership| membership.account_set_id)
                 .filter(|set_id| !snapshot.meta.contains_key(set_id))
                 .collect();
             missing.sort_unstable();
@@ -482,32 +485,29 @@ impl SetGraphCache {
             Some(Overlay { parents, meta })
         };
 
-        let is_known = |set_id: &AccountSetId| -> bool {
-            snapshot.meta.contains_key(set_id)
+        // One lookup carries all three states the walk distinguishes: `None`
+        // for a set neither the snapshot nor the overlay knows (defer to SQL),
+        // `Some(&[])` for a known root, `Some(parents)` otherwise.
+        let parents_of = |set_id: &AccountSetId| -> Option<&[AccountSetId]> {
+            let known = snapshot.meta.contains_key(set_id)
                 || overlay
                     .as_ref()
-                    .is_some_and(|overlay| overlay.meta.contains_key(set_id))
-        };
-        let parents_of = |set_id: &AccountSetId| -> &[AccountSetId] {
-            snapshot
-                .parents
-                .get(set_id)
-                .or_else(|| {
-                    overlay
-                        .as_ref()
-                        .and_then(|overlay| overlay.parents.get(set_id))
-                })
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
+                    .is_some_and(|overlay| overlay.meta.contains_key(set_id));
+            known.then(|| {
+                snapshot
+                    .parents
+                    .get(set_id)
+                    .or_else(|| {
+                        overlay
+                            .as_ref()
+                            .and_then(|overlay| overlay.parents.get(set_id))
+                    })
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])
+            })
         };
 
-        match has_duplicate_account_membership_paths(
-            account_set_ids,
-            account_ids,
-            &probe.seeds,
-            is_known,
-            parents_of,
-        ) {
+        match has_duplicate_account_membership_paths(members, &probe.seeds, parents_of) {
             Some(false) => {
                 span.record(
                     "path",
@@ -528,7 +528,7 @@ impl SetGraphCache {
                 span.record("path", "fallback_unknown");
                 self.inner
                     .repo
-                    .assert_no_double_membership(op, account_set_ids, account_ids)
+                    .assert_no_double_membership(op, members)
                     .await
             }
         }
@@ -552,7 +552,7 @@ impl SetGraphCache {
     pub(super) async fn assert_valid_set_memberships_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountSetId)],
+        members: &[SetMembership],
     ) -> Result<(), AccountSetError> {
         let span = tracing::Span::current();
         let snapshot = self.load();
@@ -627,7 +627,7 @@ impl SetGraphCache {
         snapshot: &GraphSnapshot,
         overlay: Option<&Overlay>,
         journal_id: JournalId,
-        seeds: &[(AccountId, AccountSetId)],
+        seeds: &[AccountMembership],
         (entry_account_ids, entry_currencies): &(Vec<AccountId>, Vec<&'c str>),
     ) -> Option<(
         HashMap<AccountId, Vec<AccountSetId>>,
@@ -650,8 +650,11 @@ impl SetGraphCache {
         };
 
         let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for (account_id, set_id) in seeds {
-            per_account.entry(*account_id).or_default().push(*set_id);
+        for seed in seeds {
+            per_account
+                .entry(seed.account_id)
+                .or_default()
+                .push(seed.account_set_id);
         }
 
         let mut mappings = HashMap::new();
@@ -756,6 +759,13 @@ impl SetGraphCache {
 mod tests {
     use super::*;
 
+    fn edge(account_set_id: AccountSetId, member_account_set_id: AccountSetId) -> SetMembership {
+        SetMembership {
+            account_set_id,
+            member_account_set_id,
+        }
+    }
+
     #[test]
     fn batch_validation_selects_only_connected_snapshot_edges() {
         let root = AccountSetId::new();
@@ -780,11 +790,14 @@ mod tests {
         };
 
         let edges: HashSet<_> = snapshot
-            .edges_connected_to(&[(branch, proposed_leaf)])
+            .edges_connected_to(&[edge(branch, proposed_leaf)])
             .into_iter()
             .collect();
 
-        assert_eq!(edges, HashSet::from([(root, branch), (branch, leaf)]));
+        assert_eq!(
+            edges,
+            HashSet::from([edge(root, branch), edge(branch, leaf)])
+        );
     }
 
     #[test]
@@ -811,13 +824,13 @@ mod tests {
         };
 
         let edges: HashSet<_> = snapshot
-            .edges_connected_to(&[(left_leaf, right_root)])
+            .edges_connected_to(&[edge(left_leaf, right_root)])
             .into_iter()
             .collect();
 
         assert_eq!(
             edges,
-            HashSet::from([(left_root, left_leaf), (right_root, right_leaf)])
+            HashSet::from([edge(left_root, left_leaf), edge(right_root, right_leaf)])
         );
     }
 }

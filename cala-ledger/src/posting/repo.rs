@@ -72,6 +72,7 @@ use cala_types::{
 };
 
 use crate::{
+    account_set::AccountMembership,
     entry::{Entry, NewEntry},
     primitives::*,
     transaction::{NewTransaction, Transaction},
@@ -159,7 +160,7 @@ pub(super) struct AccountMeta {
 /// Everything the flow reads, in one statement.
 pub(super) struct PostingState {
     pub epoch: i64,
-    pub seeds: Vec<(AccountId, AccountSetId)>,
+    pub seeds: Vec<AccountMembership>,
     pub journals: HashMap<JournalId, JournalValues>,
     pub accounts: HashMap<AccountId, AccountMeta>,
     pub balances: HashMap<(JournalId, AccountId, Currency), BalanceSnapshot>,
@@ -484,7 +485,10 @@ impl PostingRepo {
             epoch: row.epoch,
             seeds: Self::decode::<SeedRow>(row.seeds)
                 .into_iter()
-                .map(|SeedRow(a, s)| (a, s))
+                .map(|SeedRow(account_id, account_set_id)| AccountMembership {
+                    account_set_id,
+                    account_id,
+                })
                 .collect(),
             journals: Self::decode::<JournalRow>(row.journals)
                 .into_iter()

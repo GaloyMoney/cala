@@ -9,7 +9,11 @@ use crate::{
     primitives::{AccountId, JournalId},
 };
 
-use super::{entity::*, error::*, graph_validation::MAX_MEMBERSHIP_DEPTH};
+use super::{
+    entity::*,
+    error::*,
+    graph_validation::{AccountMembership, SetMembership, MAX_MEMBERSHIP_DEPTH},
+};
 
 /// Coarse advisory lock guarding the account-set membership graph
 /// (`cala_account_set_member_accounts` and
@@ -191,9 +195,12 @@ impl AccountSetRepo {
     pub(super) async fn assert_no_double_membership(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        account_set_ids: &[AccountSetId],
-        account_ids: &[AccountId],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
+        // The parallel arrays the UNNEST needs are built here, at the SQL
+        // boundary, so the ordered-pair shape never escapes into the caller.
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
         let row = sqlx::query!(
             r#"
             WITH RECURSIVE all_seeds AS (
@@ -220,8 +227,8 @@ impl AccountSetRepo {
                 HAVING COUNT(*) > 1
             ) AS "conflict!"
             "#,
-            account_set_ids as &[AccountSetId],
-            account_ids as &[AccountId],
+            &account_set_ids as &[AccountSetId],
+            &account_ids as &[AccountId],
         )
         .fetch_one(db.as_executor())
         .await?;
@@ -585,13 +592,13 @@ impl AccountSetRepo {
     pub(super) async fn insert_member_accounts(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountId)],
+        members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
         if members.is_empty() {
             return Ok(());
         }
-        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(s, _)| *s).collect();
-        let account_ids: Vec<AccountId> = members.iter().map(|(_, a)| *a).collect();
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
 
         // Direct edges only: one insert covers every pair; ancestor sets
         // are resolved by the read-time walk.
@@ -610,10 +617,12 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                members.iter().map(|(account_set_id, account_id)| {
+                members.iter().map(|membership| {
                     crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                        account_set_id: *account_set_id,
-                        member_id: crate::account_set::AccountSetMemberId::Account(*account_id),
+                        account_set_id: membership.account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::Account(
+                            membership.account_id,
+                        ),
                     }
                 }),
             )
@@ -886,15 +895,16 @@ impl AccountSetRepo {
     pub(super) async fn fetch_set_membership_edges_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-    ) -> Result<Vec<(AccountSetId, AccountSetId)>, AccountSetError> {
-        Ok(sqlx::query_as(
+    ) -> Result<Vec<SetMembership>, AccountSetError> {
+        let rows: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
             r#"
           SELECT account_set_id, member_account_set_id
           FROM cala_account_set_member_account_sets
           "#,
         )
         .fetch_all(db.as_executor())
-        .await?)
+        .await?;
+        Ok(rows.into_iter().map(SetMembership::from).collect())
     }
 
     /// Load only direct account memberships that can participate in a conflict
@@ -902,20 +912,23 @@ impl AccountSetRepo {
     pub(super) async fn fetch_affected_account_memberships_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        existing_edges: &[(AccountSetId, AccountSetId)],
-        members: &[(AccountSetId, AccountSetId)],
-    ) -> Result<Vec<(AccountSetId, AccountId)>, AccountSetError> {
-        let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
+        existing_edges: &[SetMembership],
+        members: &[SetMembership],
+    ) -> Result<Vec<AccountMembership>, AccountSetError> {
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
 
         // Only accounts below a proposed member endpoint can gain a new
         // containment path. Compute that affected descendant closure over the
         // final graph so interactions between proposed edges are included.
         let mut children: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-        for (account_set_id, member_account_set_id) in existing_edges.iter().chain(members) {
+        for edge in existing_edges.iter().chain(members) {
             children
-                .entry(*account_set_id)
+                .entry(edge.account_set_id)
                 .or_default()
-                .push(*member_account_set_id);
+                .push(edge.member_account_set_id);
         }
         let mut affected_set_ids = HashSet::new();
         let mut pending = member_account_set_ids;
@@ -954,7 +967,7 @@ impl AccountSetRepo {
             return Ok(Vec::new());
         }
 
-        Ok(sqlx::query_as(
+        let rows: Vec<(AccountSetId, AccountId)> = sqlx::query_as(
             r#"
           SELECT account_set_id, member_account_id
           FROM cala_account_set_member_accounts
@@ -964,7 +977,8 @@ impl AccountSetRepo {
         )
         .bind(&candidate_account_ids)
         .fetch_all(db.as_executor())
-        .await?)
+        .await?;
+        Ok(rows.into_iter().map(AccountMembership::from).collect())
     }
 
     /// Insert a validated batch of direct account-set membership edges.
@@ -985,14 +999,18 @@ impl AccountSetRepo {
     pub(super) async fn insert_member_sets(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        members: &[(AccountSetId, AccountSetId)],
+        members: &[SetMembership],
     ) -> Result<(), AccountSetError> {
         if members.is_empty() {
             return Ok(());
         }
 
-        let account_set_ids: Vec<AccountSetId> = members.iter().map(|(id, _)| *id).collect();
-        let member_account_set_ids: Vec<AccountSetId> = members.iter().map(|(_, id)| *id).collect();
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
 
         sqlx::query(
             r#"
@@ -1015,16 +1033,14 @@ impl AccountSetRepo {
         self.publisher
             .publish_all(
                 db,
-                members
-                    .iter()
-                    .map(|(account_set_id, member_account_set_id)| {
-                        crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                            account_set_id: *account_set_id,
-                            member_id: crate::account_set::AccountSetMemberId::AccountSet(
-                                *member_account_set_id,
-                            ),
-                        }
-                    }),
+                members.iter().map(|edge| {
+                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id: edge.account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::AccountSet(
+                            edge.member_account_set_id,
+                        ),
+                    }
+                }),
             )
             .await?;
 
@@ -1231,7 +1247,12 @@ impl AccountSetRepo {
             epoch,
             seeds: rows
                 .into_iter()
-                .filter_map(|row| Some((row.account_id?, row.set_id?)))
+                .filter_map(|row| {
+                    Some(AccountMembership {
+                        account_set_id: row.set_id?,
+                        account_id: row.account_id?,
+                    })
+                })
                 .collect(),
         })
     }
@@ -1483,7 +1504,7 @@ impl AccountSetRepo {
 /// in one snapshot.
 pub(super) struct DirectMembershipProbe {
     pub epoch: i64,
-    pub seeds: Vec<(AccountId, AccountSetId)>,
+    pub seeds: Vec<AccountMembership>,
 }
 
 /// One set's graph node as stored: its immutable meta plus one upward

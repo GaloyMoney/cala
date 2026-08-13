@@ -14,6 +14,11 @@ use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
 pub use entity::*;
 use error::*;
 use graph_cache::SetGraphCache;
+/// Re-exported for the posting flow, which reads the direct-membership probe
+/// seeds as part of its single read statement and hands them back to the
+/// set-graph cache.
+pub(crate) use graph_validation::AccountMembership;
+use graph_validation::SetMembership;
 use repo::*;
 pub use repo::{account_set_cursor::*, members_cursor::*};
 
@@ -239,7 +244,13 @@ impl AccountSets {
                 // direct-edge insert the check's verdict fences.
                 self.repo.lock_for_account_member_op(&mut *op, id).await?;
                 self.set_graph_cache
-                    .assert_no_double_membership_in_op(op, &[account_set_id], &[id])
+                    .assert_no_double_membership_in_op(
+                        op,
+                        &[AccountMembership {
+                            account_set_id,
+                            account_id: id,
+                        }],
+                    )
                     .await?;
                 self.repo
                     .insert_member_account(&mut *op, account_set_id, id)
@@ -286,31 +297,38 @@ impl AccountSets {
             return Ok(());
         }
 
-        let account_set_ids: Vec<AccountSetId> =
-            members.iter().map(|(set_id, _)| *set_id).collect();
+        // The public API takes plain pairs; convert once here so every layer
+        // below the service names the two ends.
+        let members: Vec<AccountMembership> = members
+            .iter()
+            .copied()
+            .map(AccountMembership::from)
+            .collect();
+
+        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
         let sets = self
             .repo
             .find_all_in_op::<AccountSet>(&mut *op, &account_set_ids)
             .await?;
 
         let mut check_pairs = Vec::with_capacity(members.len());
-        for (account_set_id, member_id) in members {
+        for membership in &members {
             let set = sets
-                .get(account_set_id)
-                .ok_or(AccountSetError::CouldNotFindById(*account_set_id))?;
-            check_pairs.push((set.values().journal_id, *member_id));
+                .get(&membership.account_set_id)
+                .ok_or(AccountSetError::CouldNotFindById(membership.account_set_id))?;
+            check_pairs.push((set.values().journal_id, membership.account_id));
         }
         let with_history = self
             .balances
             .members_with_balance_history_in_op(op, &check_pairs)
             .await?;
         if let Some(member_id) = with_history.into_iter().next() {
-            let (account_set_id, _) = members
+            let membership = members
                 .iter()
-                .find(|(_, m)| *m == member_id)
+                .find(|m| m.account_id == member_id)
                 .expect("member with history must be in input");
             return Err(AccountSetError::MemberHasBalanceHistory {
-                account_set_id: *account_set_id,
+                account_set_id: membership.account_set_id,
                 member_id,
             });
         }
@@ -318,15 +336,14 @@ impl AccountSets {
         // Batch attach sequence, mirroring the single-pair path: batch
         // lock protocol, one path-uniqueness check covering all pairs
         // (and their interactions with each other), one insert.
-        let account_ids: Vec<AccountId> =
-            members.iter().map(|(_, account_id)| *account_id).collect();
+        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
         self.repo
             .lock_for_account_members_op(op, &account_ids)
             .await?;
         self.set_graph_cache
-            .assert_no_double_membership_in_op(op, &account_set_ids, &account_ids)
+            .assert_no_double_membership_in_op(op, &members)
             .await?;
-        self.repo.insert_member_accounts(op, members).await?;
+        self.repo.insert_member_accounts(op, &members).await?;
 
         Ok(())
     }
@@ -380,12 +397,15 @@ impl AccountSets {
             return Ok(());
         }
 
+        // The public API takes plain pairs; convert once here so every layer
+        // below the service names container and member explicitly.
+        let members: Vec<SetMembership> =
+            members.iter().copied().map(SetMembership::from).collect();
+
         let account_set_ids: Vec<AccountSetId> = {
             let mut ids: Vec<AccountSetId> = members
                 .iter()
-                .flat_map(|(account_set_id, member_account_set_id)| {
-                    [*account_set_id, *member_account_set_id]
-                })
+                .flat_map(|edge| [edge.account_set_id, edge.member_account_set_id])
                 .collect();
             ids.sort_unstable();
             ids.dedup();
@@ -397,13 +417,15 @@ impl AccountSets {
             .await?;
 
         let mut check_pairs = Vec::with_capacity(members.len());
-        for (account_set_id, member_account_set_id) in members {
+        for edge in &members {
             let account_set = sets
-                .get(account_set_id)
-                .ok_or(AccountSetError::CouldNotFindById(*account_set_id))?;
-            let member_account_set = sets
-                .get(member_account_set_id)
-                .ok_or(AccountSetError::CouldNotFindById(*member_account_set_id))?;
+                .get(&edge.account_set_id)
+                .ok_or(AccountSetError::CouldNotFindById(edge.account_set_id))?;
+            let member_account_set =
+                sets.get(&edge.member_account_set_id)
+                    .ok_or(AccountSetError::CouldNotFindById(
+                        edge.member_account_set_id,
+                    ))?;
 
             if account_set.values().journal_id != member_account_set.values().journal_id {
                 return Err(AccountSetError::JournalIdMismatch);
@@ -411,7 +433,7 @@ impl AccountSets {
 
             check_pairs.push((
                 account_set.values().journal_id,
-                AccountId::from(*member_account_set_id),
+                AccountId::from(edge.member_account_set_id),
             ));
         }
 
@@ -420,14 +442,12 @@ impl AccountSets {
             .members_with_balance_history_in_op(op, &check_pairs)
             .await?;
         if let Some(member_id) = with_history.into_iter().next() {
-            let (account_set_id, _) = members
+            let edge = members
                 .iter()
-                .find(|(_, member_account_set_id)| {
-                    AccountId::from(*member_account_set_id) == member_id
-                })
+                .find(|edge| AccountId::from(edge.member_account_set_id) == member_id)
                 .expect("member with history must be in input");
             return Err(AccountSetError::MemberHasBalanceHistory {
-                account_set_id: *account_set_id,
+                account_set_id: edge.account_set_id,
                 member_id,
             });
         }
@@ -436,19 +456,18 @@ impl AccountSets {
         // one targeted CTE validation and insert, no combined-graph cache
         // work. This preserves the old cost model for callers that batch a
         // single pair by accident or for convenience.
-        if members.len() == 1 {
-            let (account_set_id, member_account_set_id) = members[0];
+        if let [edge] = members[..] {
             return self
                 .repo
-                .add_member_set(op, account_set_id, member_account_set_id)
+                .add_member_set(op, edge.account_set_id, edge.member_account_set_id)
                 .await;
         }
 
         self.repo.lock_for_set_membership_op(op).await?;
         self.set_graph_cache
-            .assert_valid_set_memberships_in_op(op, members)
+            .assert_valid_set_memberships_in_op(op, &members)
             .await?;
-        self.repo.insert_member_sets(op, members).await?;
+        self.repo.insert_member_sets(op, &members).await?;
 
         Ok(())
     }
@@ -767,7 +786,7 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         probe_epoch: i64,
-        probe_seeds: &[(AccountId, AccountSetId)],
+        probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
         self.set_graph_cache

@@ -10,64 +10,112 @@ use super::error::AccountSetError;
 /// headroom.
 pub(super) const MAX_MEMBERSHIP_DEPTH: i32 = 16;
 
-/// Count paths from each account's proposed and existing direct memberships
-/// through the supplied parent graph. Returns `None` when the graph view does
-/// not know a traversed set, allowing the cache adapter to fall back to SQL.
+/// A directed hierarchy edge: `member_account_set_id` is a direct member of
+/// `account_set_id`.
+///
+/// Both ends are `AccountSetId`, so a bare pair offers no protection against
+/// transposing container and member — a swap type-checks and silently inverts
+/// the graph. Naming the ends makes the direction explicit at every call site.
+/// The field names mirror the `cala_account_set_member_account_sets` columns
+/// and the outbox payload, so one vocabulary carries from SQL through the cache
+/// into this validator.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct SetMembership {
+    pub account_set_id: AccountSetId,
+    pub member_account_set_id: AccountSetId,
+}
+
+impl From<(AccountSetId, AccountSetId)> for SetMembership {
+    fn from((account_set_id, member_account_set_id): (AccountSetId, AccountSetId)) -> Self {
+        Self {
+            account_set_id,
+            member_account_set_id,
+        }
+    }
+}
+
+/// An account's direct membership in a set.
+///
+/// This replaces the two transposed pair shapes the module previously carried
+/// for one concept — `(set, account)` for proposed members and account-member
+/// rows, `(account, set)` for probed seeds. A single orientation means code
+/// that consumes both sources (the path walk below) can no longer read one of
+/// them backwards. Only the canonical `(set, account)` `From` is provided, so
+/// the transposed order cannot be converted in by accident.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub(crate) struct AccountMembership {
+    pub account_set_id: AccountSetId,
+    pub account_id: AccountId,
+}
+
+impl From<(AccountSetId, AccountId)> for AccountMembership {
+    fn from((account_set_id, account_id): (AccountSetId, AccountId)) -> Self {
+        Self {
+            account_set_id,
+            account_id,
+        }
+    }
+}
+
+/// Count containment paths from each account's proposed and existing direct
+/// memberships upward through `parents_of`.
+///
+/// `parents_of` answers every state the walk distinguishes: `None` for a set
+/// the graph view does not know (the caller falls back to SQL), `Some(&[])`
+/// for a known root, and `Some(parents)` otherwise. Returns `None` when any
+/// traversed set is unknown, `Some(true)` when some account reaches the same
+/// set twice, `Some(false)` when every path is unique.
 pub(super) fn has_duplicate_account_membership_paths<'a>(
-    new_set_ids: &[AccountSetId],
-    new_account_ids: &[AccountId],
-    existing_seeds: &[(AccountId, AccountSetId)],
-    is_known: impl Fn(&AccountSetId) -> bool,
-    parents_of: impl Fn(&AccountSetId) -> &'a [AccountSetId],
+    proposed: &[AccountMembership],
+    existing: &[AccountMembership],
+    parents_of: impl Fn(&AccountSetId) -> Option<&'a [AccountSetId]>,
 ) -> Option<bool> {
     let mut per_account: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-    for (set_id, account_id) in new_set_ids.iter().zip(new_account_ids) {
-        per_account.entry(*account_id).or_default().push(*set_id);
-    }
-    for (account_id, set_id) in existing_seeds {
-        per_account.entry(*account_id).or_default().push(*set_id);
+    for membership in proposed.iter().chain(existing) {
+        per_account
+            .entry(membership.account_id)
+            .or_default()
+            .push(membership.account_set_id);
     }
 
     for seeds in per_account.into_values() {
         let mut path_counts: HashMap<AccountSetId, u32> = HashMap::new();
         let mut queue: VecDeque<AccountSetId> = seeds.into();
-        while let Some(set_id) = queue.pop_front() {
-            if !is_known(&set_id) {
-                return None;
-            }
-            let count = path_counts.entry(set_id).or_default();
+        while let Some(account_set_id) = queue.pop_front() {
+            let parents = parents_of(&account_set_id)?;
+            let count = path_counts.entry(account_set_id).or_default();
             *count += 1;
             if *count > 1 {
                 return Some(true);
             }
-            queue.extend(parents_of(&set_id));
+            queue.extend(parents);
         }
     }
     Some(false)
 }
 
 pub(super) fn validate_set_memberships(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
-    account_members: &[(AccountSetId, AccountId)],
+    existing_edges: &[SetMembership],
+    proposed_edges: &[SetMembership],
+    account_members: &[AccountMembership],
 ) -> Result<(), AccountSetError> {
     let mut nodes = HashSet::new();
     let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
     let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
 
-    for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
-        nodes.insert(*account_set_id);
-        nodes.insert(*member_account_set_id);
+    for edge in existing_edges.iter().chain(proposed_edges) {
+        nodes.insert(edge.account_set_id);
+        nodes.insert(edge.member_account_set_id);
         adjacency
-            .entry(*account_set_id)
+            .entry(edge.account_set_id)
             .or_default()
-            .push(*member_account_set_id);
-        *indegree.entry(*member_account_set_id).or_default() += 1;
-        indegree.entry(*account_set_id).or_default();
+            .push(edge.member_account_set_id);
+        *indegree.entry(edge.member_account_set_id).or_default() += 1;
+        indegree.entry(edge.account_set_id).or_default();
     }
-    for (account_set_id, _) in account_members {
-        nodes.insert(*account_set_id);
-        indegree.entry(*account_set_id).or_default();
+    for membership in account_members {
+        nodes.insert(membership.account_set_id);
+        indegree.entry(membership.account_set_id).or_default();
     }
 
     let mut queue: VecDeque<AccountSetId> = indegree
@@ -95,18 +143,18 @@ pub(super) fn validate_set_memberships(
         // graph is a DAG). If it is in the existing graph that is
         // corrupted state; attribute to the first existing edge so the
         // fallback never indexes an empty proposed-edges slice.
-        let (account_set_id, member_account_set_id) = proposed_edges
+        let edge = proposed_edges
             .iter()
-            .find(|(account_set_id, member_account_set_id)| {
-                account_set_id == member_account_set_id
-                    || graph_has_path(&adjacency, *member_account_set_id, *account_set_id)
+            .find(|edge| {
+                edge.account_set_id == edge.member_account_set_id
+                    || graph_has_path(&adjacency, edge.member_account_set_id, edge.account_set_id)
             })
             .copied()
             .or_else(|| existing_edges.first().copied())
             .expect("cycle detected in a graph with no edges");
         return Err(AccountSetError::MembershipCycleDetected {
-            account_set_id,
-            member_account_set_id,
+            account_set_id: edge.account_set_id,
+            member_account_set_id: edge.member_account_set_id,
         });
     }
 
@@ -136,14 +184,20 @@ pub(super) fn validate_set_memberships(
         }
     }
 
+    // Every containment an account gains, direct or inherited, must be
+    // reached exactly once. `AccountMembership` is the natural set element:
+    // a repeated insert *is* a duplicate containment path.
     let mut account_paths = HashSet::new();
-    for (account_set_id, account_id) in account_members {
-        if !account_paths.insert((*account_set_id, *account_id)) {
+    for membership in account_members {
+        if !account_paths.insert(*membership) {
             return Err(AccountSetError::MemberAlreadyAdded);
         }
-        if let Some(containers) = ancestors.get(account_set_id) {
+        if let Some(containers) = ancestors.get(&membership.account_set_id) {
             for container in containers {
-                if !account_paths.insert((*container, *account_id)) {
+                if !account_paths.insert(AccountMembership {
+                    account_set_id: *container,
+                    account_id: membership.account_id,
+                }) {
                     return Err(AccountSetError::MemberAlreadyAdded);
                 }
             }
@@ -153,10 +207,10 @@ pub(super) fn validate_set_memberships(
     let max_depth = depth_from_root.values().copied().max().unwrap_or(0);
     if max_depth > MAX_MEMBERSHIP_DEPTH {
         let (index, depth) = first_depth_overflow(existing_edges, proposed_edges);
-        let (account_set_id, member_account_set_id) = proposed_edges[index];
+        let edge = proposed_edges[index];
         return Err(AccountSetError::MembershipDepthExceeded {
-            account_set_id,
-            member_account_set_id,
+            account_set_id: edge.account_set_id,
+            member_account_set_id: edge.member_account_set_id,
             depth,
             max: MAX_MEMBERSHIP_DEPTH,
         });
@@ -191,8 +245,8 @@ fn graph_has_path(
 /// reported `depth` therefore reflects the bound that was exceeded, and the
 /// returned index identifies the first edge responsible.
 fn first_depth_overflow(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
+    existing_edges: &[SetMembership],
+    proposed_edges: &[SetMembership],
 ) -> (usize, i32) {
     let mut low = 1;
     let mut high = proposed_edges.len();
@@ -210,19 +264,16 @@ fn first_depth_overflow(
     )
 }
 
-fn graph_max_depth(
-    existing_edges: &[(AccountSetId, AccountSetId)],
-    proposed_edges: &[(AccountSetId, AccountSetId)],
-) -> i32 {
+fn graph_max_depth(existing_edges: &[SetMembership], proposed_edges: &[SetMembership]) -> i32 {
     let mut adjacency: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
     let mut indegree: HashMap<AccountSetId, usize> = HashMap::new();
-    for (account_set_id, member_account_set_id) in existing_edges.iter().chain(proposed_edges) {
+    for edge in existing_edges.iter().chain(proposed_edges) {
         adjacency
-            .entry(*account_set_id)
+            .entry(edge.account_set_id)
             .or_default()
-            .push(*member_account_set_id);
-        *indegree.entry(*member_account_set_id).or_default() += 1;
-        indegree.entry(*account_set_id).or_default();
+            .push(edge.member_account_set_id);
+        *indegree.entry(edge.member_account_set_id).or_default() += 1;
+        indegree.entry(edge.account_set_id).or_default();
     }
 
     let mut queue: VecDeque<AccountSetId> = indegree
@@ -262,6 +313,20 @@ mod tests {
         std::array::from_fn(|_| AccountSetId::new())
     }
 
+    fn edge(account_set_id: AccountSetId, member_account_set_id: AccountSetId) -> SetMembership {
+        SetMembership {
+            account_set_id,
+            member_account_set_id,
+        }
+    }
+
+    fn member(account_set_id: AccountSetId, account_id: AccountId) -> AccountMembership {
+        AccountMembership {
+            account_set_id,
+            account_id,
+        }
+    }
+
     #[test]
     fn account_paths_accept_distinct_ancestors() {
         let [left, right] = set_ids();
@@ -271,11 +336,12 @@ mod tests {
 
         assert_eq!(
             has_duplicate_account_membership_paths(
-                &[left, right],
-                &[account_id, account_id],
+                &[member(left, account_id), member(right, account_id)],
                 &[],
-                |set_id| known.contains(set_id),
-                |set_id| parents.get(set_id).map(Vec::as_slice).unwrap_or(&[]),
+                |account_set_id| known.contains(account_set_id).then(|| parents
+                    .get(account_set_id)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])),
             ),
             Some(false)
         );
@@ -290,11 +356,12 @@ mod tests {
 
         assert_eq!(
             has_duplicate_account_membership_paths(
-                &[left, right],
-                &[account_id, account_id],
+                &[member(left, account_id), member(right, account_id)],
                 &[],
-                |set_id| known.contains(set_id),
-                |set_id| parents.get(set_id).map(Vec::as_slice).unwrap_or(&[]),
+                |account_set_id| known.contains(account_set_id).then(|| parents
+                    .get(account_set_id)
+                    .map(Vec::as_slice)
+                    .unwrap_or(&[])),
             ),
             Some(true)
         );
@@ -306,11 +373,9 @@ mod tests {
 
         assert_eq!(
             has_duplicate_account_membership_paths(
-                &[unknown],
-                &[AccountId::new()],
+                &[member(unknown, AccountId::new())],
                 &[],
-                |_| false,
-                |_| &[],
+                |_| None,
             ),
             None
         );
@@ -319,8 +384,8 @@ mod tests {
     #[test]
     fn set_paths_accept_a_valid_combined_tree() {
         let [root, branch, existing_leaf, proposed_leaf] = set_ids();
-        let existing = [(root, branch), (branch, existing_leaf)];
-        let proposed = [(branch, proposed_leaf)];
+        let existing = [edge(root, branch), edge(branch, existing_leaf)];
+        let proposed = [edge(branch, proposed_leaf)];
 
         assert!(validate_set_memberships(&existing, &proposed, &[]).is_ok());
     }
@@ -328,7 +393,7 @@ mod tests {
     #[test]
     fn set_paths_reject_a_cycle_created_within_the_batch() {
         let [a, b, c] = set_ids();
-        let proposed = [(a, b), (b, c), (c, a)];
+        let proposed = [edge(a, b), edge(b, c), edge(c, a)];
 
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
@@ -339,8 +404,8 @@ mod tests {
     #[test]
     fn set_paths_reject_a_duplicate_existing_and_proposed_path() {
         let [root, branch, leaf] = set_ids();
-        let existing = [(root, branch), (branch, leaf)];
-        let proposed = [(root, leaf)];
+        let existing = [edge(root, branch), edge(branch, leaf)];
+        let proposed = [edge(root, leaf)];
 
         assert!(matches!(
             validate_set_memberships(&existing, &proposed, &[]),
@@ -352,8 +417,8 @@ mod tests {
     fn set_paths_reject_an_account_reachable_twice() {
         let [root, left, right] = set_ids();
         let account_id = AccountId::new();
-        let existing = [(root, left), (root, right)];
-        let account_members = [(left, account_id), (right, account_id)];
+        let existing = [edge(root, left), edge(root, right)];
+        let account_members = [member(left, account_id), member(right, account_id)];
 
         assert!(matches!(
             validate_set_memberships(&existing, &[], &account_members),
@@ -364,7 +429,7 @@ mod tests {
     #[test]
     fn set_paths_attribute_the_first_depth_overflow() {
         let sets: [AccountSetId; 18] = set_ids();
-        let proposed: Vec<_> = sets.windows(2).map(|pair| (pair[0], pair[1])).collect();
+        let proposed: Vec<_> = sets.windows(2).map(|pair| edge(pair[0], pair[1])).collect();
 
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
