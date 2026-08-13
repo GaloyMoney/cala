@@ -21,11 +21,29 @@
 //! Nothing is written until all of it has succeeded, which is what lets a
 //! rejection name the posting that caused it with no rows to undo.
 //!
-//! Features that a deployment actually uses cost extra statements, and only
-//! then: non-EC ancestor sets add a lock statement and a supplemental read (one
-//! pair per journal involved); velocity controls that match add their existing
-//! read/write per posting; a journal with effective balances adds its existing
-//! read/write per posting.
+//! Features a deployment actually uses cost extra statements, and only then —
+//! but they too are **per batch, not per posting**:
+//!
+//! - non-EC ancestor sets: a lock statement and a supplemental read, one pair
+//!   per journal involved;
+//! - velocity: three statements (lock, read, write) for the whole batch, and
+//!   *zero* when no limit's window matches — the check that decides is pure CEL
+//!   over controls the read statement already returned;
+//! - effective balances: two statements per distinct `(journal, effective
+//!   date)`, which for the usual same-day batch is two for the batch.
+//!
+//! So a batch of 10 with velocity and effective balances both live costs ~1.15
+//! statements per posting, against 11 when posted one at a time.
+//!
+//! # What bounds a batch
+//!
+//! Not its size — 500k postings over a small account pool is fine. The fence
+//! holds two advisory locks per distinct entry account until commit, and those
+//! live in Postgres' *shared* lock table, so the limit is the number of
+//! distinct `(journal, account, currency)` balances a batch touches. Past
+//! [`error::MAX_DISTINCT_BALANCES_PER_BATCH`] the flow refuses up front rather
+//! than letting Postgres raise a bare `out of shared memory` — which names
+//! neither cause nor fix, and can strike unrelated concurrent transactions.
 //!
 //! # Ordering within a batch
 //!
@@ -55,9 +73,7 @@ use es_entity::AtomicOperation;
 use sqlx::PgPool;
 use tracing::instrument;
 
-use cala_types::{
-    balance::BalanceSnapshot, entry::EntryValues, velocity::VelocityContextAccountValues,
-};
+use cala_types::{balance::BalanceSnapshot, entry::EntryValues};
 
 use crate::{
     account_set::AccountSets,
@@ -68,7 +84,7 @@ use crate::{
     primitives::*,
     transaction::{NewTransaction, Transaction},
     tx_template::Params,
-    velocity::{AccountVelocityControl, Velocities},
+    velocity::Velocities,
 };
 
 pub use error::{PostingError, PostingErrorKind};
@@ -174,6 +190,12 @@ impl Postings {
 
         // ---- phase 1: fence -------------------------------------------
         let mut keys = entry_balance_keys(&prepared);
+        if keys.account_ids.len() > error::MAX_DISTINCT_BALANCES_PER_BATCH {
+            return Err(Flow::Ledger(LedgerError::BatchTooManyAccounts {
+                distinct: keys.account_ids.len(),
+                max: error::MAX_DISTINCT_BALANCES_PER_BATCH,
+            }));
+        }
         let fence = fence_in_op(db, &keys, &codes, db.maybe_now()).await?;
 
         // A template version moved between preparation and the fence. Nothing
@@ -243,15 +265,19 @@ impl Postings {
 
         let snapshots = self.fold_balances(&hydrated, &entry_values, &read, &mappings, now);
 
-        // Velocity and effective balances keep their existing per-posting
-        // shape: both are driven by a single `TransactionValues` (velocity's
-        // evaluation context, effective balances' back-dating replay). Within
-        // one database transaction each posting's read still observes its
-        // predecessors' writes, so batch ordering is preserved.
-        for (transaction, values) in hydrated.iter().zip(entry_values.iter()) {
-            self.enforce_velocity(db, transaction, values, &read, &mappings, now)
-                .await?;
-        }
+        // Velocity for the whole batch: one lock, one read, one write — or
+        // nothing at all, when no limit's window matches (the common case for
+        // a deployment with controls attached to only some accounts).
+        let for_enforcement: Vec<(&cala_types::transaction::TransactionValues, &[EntryValues])> =
+            hydrated
+                .iter()
+                .zip(entry_values.iter())
+                .map(|(tx, values)| (tx.values(), values.as_slice()))
+                .collect();
+        self.velocities
+            .enforce_batch_in_op(db, now, &for_enforcement, &read.controls, &mappings)
+            .await
+            .map_err(|e| Flow::Ledger(e.into()))?;
 
         // ---- phase 3: apply --------------------------------------------
         apply_in_op(
@@ -611,42 +637,33 @@ impl Postings {
     // velocity + effective balances
     // ------------------------------------------------------------------
 
-    async fn enforce_velocity(
-        &self,
-        db: &mut impl AtomicOperation,
-        transaction: &Transaction,
-        entries: &[EntryValues],
-        read: &ReadOutcome,
-        mappings: &HashMap<AccountId, Vec<AccountSetId>>,
-        now: DateTime<Utc>,
-    ) -> Result<(), Flow> {
-        if read.controls.is_empty() {
-            return Ok(());
-        }
-        let controls: HashMap<
-            AccountId,
-            (VelocityContextAccountValues, Vec<AccountVelocityControl>),
-        > = entries
-            .iter()
-            .flat_map(|entry| {
-                mappings
-                    .get(&entry.account_id)
-                    .into_iter()
-                    .flatten()
-                    .map(AccountId::from)
-                    .chain(std::iter::once(entry.account_id))
-            })
-            .filter_map(|id| read.controls.get(&id).map(|v| (id, v.clone())))
-            .collect();
-        if controls.is_empty() {
-            return Ok(());
-        }
-        self.velocities
-            .enforce_with_controls_in_op(db, now, transaction.values(), entries, controls, mappings)
-            .await
-            .map_err(|e| Flow::Ledger(e.into()))
-    }
-
+    /// Maintain cumulative-effective balances for the batch, one pass per
+    /// `(journal, effective date)` group.
+    ///
+    /// **Why grouped by date rather than one pass over the batch.** The
+    /// effective read is destructive: it deletes every row *after* the posting's
+    /// effective date and returns them so the replay can shift them forward. The
+    /// replay's ordering (`SnapshotOrEntry: Ord`) sorts by effective date and
+    /// treats an `Entry` and a `Snapshot` sharing a date as `unreachable!()` —
+    /// an invariant that holds precisely because the deleted rows are strictly
+    /// *after* the date and the new entries are exactly *at* it. Reading once at
+    /// `min(effective)` across a mixed-date batch would delete a row at some
+    /// later posting's date and then push an entry at that same date, tripping
+    /// that assertion.
+    ///
+    /// Grouping restores the invariant exactly, and makes equivalence with the
+    /// per-posting path easy to see: a group's pass anchors at the row at-or-
+    /// before its date, chains its entries (all at that date, so versions
+    /// increment without the per-date reset), then shifts the deleted future
+    /// rows — which is precisely what running those postings one at a time
+    /// produces, since each would re-anchor on the row its predecessor just
+    /// wrote. `all_time_version` is a dense positional counter over the sorted
+    /// union, and both paths sort the same union, so the numbering is identical.
+    ///
+    /// Groups run in ascending date order so a batch spanning dates behaves like
+    /// the same postings submitted oldest-first. In the overwhelmingly common
+    /// case — every posting on today's date, one journal — this is a single
+    /// pass for the whole batch.
     async fn update_effective_balances(
         &self,
         db: &mut impl AtomicOperation,
@@ -656,6 +673,7 @@ impl Postings {
         mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         now: DateTime<Utc>,
     ) -> Result<(), Flow> {
+        let mut groups: Vec<((JournalId, chrono::NaiveDate), Vec<EntryValues>)> = Vec::new();
         for (transaction, entries) in transactions.iter().zip(entry_values) {
             let journal_id = transaction.values().journal_id;
             let enabled = read
@@ -665,6 +683,15 @@ impl Postings {
             if !enabled {
                 continue;
             }
+            let key = (journal_id, transaction.values().effective);
+            match groups.iter_mut().find(|(k, _)| *k == key) {
+                Some((_, group)) => group.extend(entries.iter().cloned()),
+                None => groups.push((key, entries.clone())),
+            }
+        }
+        groups.sort_by_key(|((journal_id, effective), _)| (*journal_id, *effective));
+
+        for ((journal_id, effective), entries) in groups {
             let involved: (Vec<AccountId>, Vec<&str>) = entries
                 .iter()
                 .flat_map(|entry| {
@@ -693,8 +720,8 @@ impl Postings {
                 .update_cumulative_balances_in_op(
                     db,
                     journal_id,
-                    entries.clone(),
-                    transaction.values().effective,
+                    entries,
+                    effective,
                     now,
                     mappings.clone(),
                     involved,

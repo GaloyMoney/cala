@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 
 use cala_ledger::{
     account::NewAccount, balance::error::BalanceError, error::LedgerError, posting::PostingInput,
-    tx_template::*, *,
+    tx_template::*, velocity::*, *,
 };
 
 async fn init() -> anyhow::Result<CalaLedger> {
@@ -37,6 +37,43 @@ fn transfer(
 /// Each posting in the template debits the sender 1290 BTC and credits the
 /// recipient the same, so a batch of `n` must move exactly `n * 1290`.
 const BTC_PER_POSTING: i64 = 1290;
+
+/// Every cumulative-effective row for one account, in `all_time_version` order.
+/// Compared wholesale so a batched run has to reproduce the sequential run's
+/// versions and dates, not merely its final balance.
+async fn effective_rows(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    account_id: AccountId,
+) -> anyhow::Result<Vec<(chrono::NaiveDate, i32, i32, String)>> {
+    Ok(sqlx::query_as::<_, (chrono::NaiveDate, i32, i32, String)>(
+        "SELECT effective, version, all_time_version, \
+                (values->'settled'->>'dr_balance') \
+         FROM cala_cumulative_effective_balances \
+         WHERE journal_id = $1 AND account_id = $2 AND currency = 'BTC' \
+         ORDER BY all_time_version",
+    )
+    .bind(uuid::Uuid::from(journal_id))
+    .bind(uuid::Uuid::from(account_id))
+    .fetch_all(cala.pool())
+    .await?)
+}
+
+async fn velocity_rows(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    account_id: AccountId,
+) -> anyhow::Result<Vec<(i32, String)>> {
+    Ok(sqlx::query_as::<_, (i32, String)>(
+        "SELECT version, (values->'settled'->>'dr_balance') \
+         FROM cala_velocity_balance_history \
+         WHERE journal_id = $1 AND account_id = $2 ORDER BY version",
+    )
+    .bind(uuid::Uuid::from(journal_id))
+    .bind(uuid::Uuid::from(account_id))
+    .fetch_all(cala.pool())
+    .await?)
+}
 
 #[tokio::test]
 async fn batch_of_postings_on_overlapping_accounts_chains_balances() -> anyhow::Result<()> {
@@ -386,5 +423,232 @@ async fn concurrent_overlapping_batches_do_not_deadlock() -> anyhow::Result<()> 
     }
     assert_eq!(total_dr, total_cr);
     assert_eq!(total_dr, Decimal::from(6 * 4 * 3 * BTC_PER_POSTING));
+    Ok(())
+}
+
+/// The effective-balance pass is grouped by `(journal, effective date)` rather
+/// than run per posting. This is the equivalence that licenses the grouping:
+/// the rows a batch produces — **including `all_time_version`**, which is a
+/// dense positional counter over the sorted union and is load-bearing for
+/// `find_in_range`'s version diffs — must match the rows the same postings
+/// produce one at a time, with effective dates deliberately out of order so
+/// back-dating replay is exercised.
+#[tokio::test]
+async fn effective_balances_match_sequential_across_mixed_dates() -> anyhow::Result<()> {
+    let cala = init().await?;
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+
+    // Dates deliberately unsorted: d2 back-dates behind d3, so a later posting
+    // in the batch lands before an earlier one and forces the replay to shift
+    // already-written future rows.
+    let d1 = chrono::NaiveDate::from_ymd_opt(2026, 3, 10).unwrap();
+    let d2 = chrono::NaiveDate::from_ymd_opt(2026, 3, 1).unwrap();
+    let d3 = chrono::NaiveDate::from_ymd_opt(2026, 3, 20).unwrap();
+    let dates = [d1, d2, d3, d2, d1];
+
+    let dated = |sender: AccountId, recipient: AccountId, effective: chrono::NaiveDate| {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender);
+        params.insert("recipient", recipient);
+        params.insert("effective", effective);
+        PostingInput::new(TransactionId::new(), &code, params)
+    };
+
+    let (a, b) = helpers::test_accounts();
+    let (batched_s, batched_r) = (
+        cala.accounts().create(a).await?,
+        cala.accounts().create(b).await?,
+    );
+    let (c, d) = helpers::test_accounts();
+    let (looped_s, looped_r) = (
+        cala.accounts().create(c).await?,
+        cala.accounts().create(d).await?,
+    );
+
+    cala.post_transactions(
+        dates
+            .iter()
+            .map(|e| dated(batched_s.id(), batched_r.id(), *e))
+            .collect(),
+    )
+    .await?;
+    for e in dates.iter() {
+        cala.post_transactions(vec![dated(looped_s.id(), looped_r.id(), *e)])
+            .await?;
+    }
+
+    // Compare the full cumulative-effective row sets, not just the final
+    // balance: effective, version and all_time_version all have to line up.
+    let batched = effective_rows(&cala, journal.id(), batched_s.id()).await?;
+    let looped = effective_rows(&cala, journal.id(), looped_s.id()).await?;
+    assert!(!batched.is_empty(), "the batch must have written rows");
+    assert_eq!(
+        batched, looped,
+        "batched effective rows must match sequential exactly, all_time_version included"
+    );
+    Ok(())
+}
+
+/// Velocity balances are collected across the whole batch into one lock/read/
+/// write. A key touched by several postings must end up with the same chained
+/// snapshots the same postings produce one at a time.
+#[tokio::test]
+async fn velocity_balances_match_sequential_across_a_batch() -> anyhow::Result<()> {
+    let cala = init().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::velocity_template(&code))
+        .await?;
+
+    let velocity_params = |sender: AccountId, recipient: AccountId| {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender);
+        params.insert("recipient", recipient);
+        params.insert("amount", Decimal::from(100));
+        params.insert("currency", "BTC".to_string());
+        params.insert("layer", "SETTLED".to_string());
+        PostingInput::new(TransactionId::new(), &code, params)
+    };
+
+    // A limit high enough that four postings never trip it — the point here is
+    // the chained balance, not the rejection.
+    let limit = cala
+        .velocities()
+        .create_limit(
+            NewVelocityLimit::builder()
+                .id(VelocityLimitId::new())
+                .name("batch probe")
+                .description("never trips")
+                .window(vec![])
+                .limit(
+                    NewLimit::builder()
+                        .balance(vec![NewBalanceLimit::builder()
+                            .layer("SETTLED")
+                            .amount("decimal('1000000000')")
+                            .enforcement_direction("DEBIT")
+                            .always_active()
+                            .build()
+                            .unwrap()])
+                        .build()
+                        .unwrap(),
+                )
+                .build()
+                .unwrap(),
+        )
+        .await?;
+    let control = cala
+        .velocities()
+        .create_control(
+            NewVelocityControl::builder()
+                .id(VelocityControlId::new())
+                .name("batch probe")
+                .description("batch probe")
+                .build()
+                .unwrap(),
+        )
+        .await?;
+    cala.velocities()
+        .add_limit_to_control(control.id(), limit.id())
+        .await?;
+
+    let mut made = Vec::new();
+    for _ in 0..2 {
+        let (s, r) = helpers::test_accounts();
+        let s = cala.accounts().create(s).await?;
+        let r = cala.accounts().create(r).await?;
+        cala.velocities()
+            .attach_control_to_account(control.id(), s.id(), Params::new())
+            .await?;
+        made.push((s.id(), r.id()));
+    }
+    let (batched_s, batched_r) = made[0];
+    let (looped_s, looped_r) = made[1];
+
+    cala.post_transactions(
+        (0..4)
+            .map(|_| velocity_params(batched_s, batched_r))
+            .collect(),
+    )
+    .await?;
+    for _ in 0..4 {
+        cala.post_transactions(vec![velocity_params(looped_s, looped_r)])
+            .await?;
+    }
+
+    let batched = velocity_rows(&cala, journal.id(), batched_s).await?;
+    let looped = velocity_rows(&cala, journal.id(), looped_s).await?;
+    assert!(
+        !batched.is_empty(),
+        "velocity history must have been written"
+    );
+    assert_eq!(
+        batched, looped,
+        "batched velocity snapshots must match sequential exactly"
+    );
+    Ok(())
+}
+
+/// A batch's cost in advisory locks scales with *distinct accounts*, not batch
+/// size, and those locks live in Postgres' shared lock table until commit.
+/// Exceeding it yields a bare `out of shared memory` that names neither cause
+/// nor fix, so the flow refuses up front instead.
+#[tokio::test]
+async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> anyhow::Result<()> {
+    let cala = init().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+
+    // Two accounts per posting, each posting on a fresh pair; the template
+    // books two currencies per account, so 400 postings is 1600 distinct
+    // (account, currency) balances — past the bound without being a large batch.
+    let mut ids = Vec::new();
+    let mut pending = Vec::new();
+    for i in 0..800 {
+        let id = AccountId::new();
+        ids.push(id);
+        pending.push(
+            NewAccount::builder()
+                .id(id)
+                .name(format!("lock ceiling {i}"))
+                .code(format!("LOCKCEIL-{}-{i}", uuid::Uuid::now_v7().simple()))
+                .build()
+                .unwrap(),
+        );
+    }
+    cala.accounts().create_all(pending).await?;
+
+    let batch: Vec<_> = (0..400)
+        .map(|i| transfer(&code, journal.id(), ids[i * 2], ids[i * 2 + 1]))
+        .collect();
+
+    match cala.post_transactions(batch).await {
+        Err(LedgerError::BatchTooManyAccounts { distinct, max }) => {
+            assert!(distinct > max, "{distinct} should exceed {max}");
+        }
+        Err(other) => panic!("expected BatchTooManyAccounts, got {other:?}"),
+        Ok(_) => panic!("expected the batch to be refused"),
+    }
+
+    // The same postings split into batches that respect the bound all land.
+    for chunk in (0..400).collect::<Vec<_>>().chunks(100) {
+        let batch: Vec<_> = chunk
+            .iter()
+            .map(|i| transfer(&code, journal.id(), ids[i * 2], ids[i * 2 + 1]))
+            .collect();
+        cala.post_transactions(batch).await?;
+    }
     Ok(())
 }

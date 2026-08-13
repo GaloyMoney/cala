@@ -209,25 +209,17 @@ impl Velocities {
     /// order within the same database transaction, so each one's read observes
     /// its predecessors' velocity writes — the same chaining a sequence of
     /// separate calls would produce.
-    #[instrument(level = "debug", name = "velocity.enforce_with_controls_in_op", skip_all, fields(entries_count = entries.len()), err(level = tracing::Level::WARN))]
-    pub(crate) async fn enforce_with_controls_in_op(
+    #[instrument(level = "debug", name = "velocity.enforce_batch_in_op", skip_all, fields(postings = postings.len()), err(level = tracing::Level::WARN))]
+    pub(crate) async fn enforce_batch_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         created_at: DateTime<Utc>,
-        transaction: &TransactionValues,
-        entries: &[EntryValues],
-        controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
+        postings: &[(&TransactionValues, &[EntryValues])],
+        controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
     ) -> Result<(), VelocityError> {
         self.balances
-            .update_balances_with_limit_enforcement_in_op(
-                db,
-                created_at,
-                transaction,
-                entries,
-                controls,
-                account_set_mappings,
-            )
+            .enforce_batch_in_op(db, created_at, postings, controls, account_set_mappings)
             .await
     }
 

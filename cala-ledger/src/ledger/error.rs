@@ -47,6 +47,16 @@ pub enum LedgerError {
     /// introduced.
     #[error("LedgerError - {0}")]
     Posting(Box<crate::posting::PostingError>),
+    /// The batch would hold more advisory locks than the shared lock table can
+    /// be relied on to provide. Refused up front, because the alternative is a
+    /// bare `out of shared memory` from Postgres that names neither the cause
+    /// nor the fix — and that can strike unrelated concurrent transactions too.
+    #[error(
+        "LedgerError - BatchTooManyAccounts: this batch touches {distinct} distinct \
+         (journal, account, currency) balances; at most {max} may be locked in one batch. \
+         Split it — batch *size* is not the limit, the number of distinct accounts is."
+    )]
+    BatchTooManyAccounts { distinct: usize, max: usize },
 }
 
 impl From<EntryError> for LedgerError {

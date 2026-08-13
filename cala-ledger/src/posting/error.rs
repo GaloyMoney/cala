@@ -62,3 +62,21 @@ pub enum PostingErrorKind {
     #[error("duplicate external id `{0}` within the submitted batch")]
     DuplicateExternalIdInBatch(String),
 }
+
+/// The number of distinct `(journal, account, currency)` triples one batch may
+/// lock.
+///
+/// The fence takes two advisory locks per distinct entry account — a shared
+/// class-1 lock and, for non-EC accounts, a per-balance exclusive — and holds
+/// them all until commit. Advisory locks live in the *shared* lock table, sized
+/// `max_locks_per_transaction x (max_connections + max_prepared_transactions)`,
+/// so a batch spanning enough distinct accounts exhausts it and Postgres aborts
+/// with a bare `out of shared memory`, which says nothing about the cause and
+/// can equally be triggered by unrelated concurrent work.
+///
+/// Batch *size* is not the constraint — 500k postings over a small account pool
+/// lock only that pool. Distinct accounts are. This bound is deliberately well
+/// under the stock ceiling (64 x 100 = 6400 slots) because the table is shared
+/// with every other backend; a batch that fits alone can still fail beside
+/// concurrent traffic.
+pub(super) const MAX_DISTINCT_BALANCES_PER_BATCH: usize = 1_000;
