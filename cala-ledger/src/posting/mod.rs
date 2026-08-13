@@ -7,14 +7,19 @@
 //! controls, no effective balances — costs **six round trips regardless of
 //! batch size**:
 //!
-//! | # | statement | phase |
-//! |---|-----------|-------|
-//! | 1 | `BEGIN` | |
-//! | 2 | fence: union advisory locks + `now()` + template versions | [`PostingRepo::fence_in_op`] |
-//! | 3 | read: memberships + epoch + journals + account meta + velocity controls + balances | [`PostingRepo::read_in_op`] |
-//! | 4 | apply: transactions + entries + both event streams + balance snapshots | [`PostingRepo::apply_in_op`] |
-//! | 5 | outbox insert (obix commit hook) | |
-//! | 6 | `COMMIT` | |
+//! | # | phase | statement |
+//! |---|-------|-----------|
+//! | 1 | | `BEGIN` |
+//! | 2 | lock (the fence) | [`PostingRepo::lock_balances_and_probe_templates_in_op`] |
+//! | 3 | read | [`PostingRepo::read_posting_state_in_op`] |
+//! | 4 | write | [`PostingRepo::insert_postings_and_balances_in_op`] |
+//! | 5 | | outbox insert (obix commit hook) |
+//! | 6 | | `COMMIT` |
+//!
+//! Phase 2 takes the union advisory locks, pins `now()`, and probes the
+//! template versions preparation used. Phase 3 reads memberships, the set-graph
+//! epoch, journals, account metadata, velocity controls and balances. Phase 4
+//! writes transactions, entries, both event streams and the balance snapshots.
 //!
 //! Between 3 and 4 the flow runs entirely in memory: ancestor expansion against
 //! the set-graph cache, the chained balance fold, and velocity enforcement.
@@ -92,7 +97,7 @@ use crate::{
 
 pub use error::{PostingError, RejectionReason};
 
-use repo::{ApplyRows, BalanceKeys, PostingRepo, ReadOutcome};
+use repo::{BalanceKeys, PostingRepo, PostingRows, PostingState};
 use template_cache::{ResolvedTemplate, TemplateCache};
 
 /// One transaction to post.
@@ -182,7 +187,7 @@ impl Postings {
         let used = self.templates.resolve_in_op(db, &codes).await?;
         let mut prepared = self.prepare_all(&batch, &used)?;
 
-        // ---- phase 1: fence -------------------------------------------
+        // ---- phase 1: lock (the fence) --------------------------------
         let mut keys = Self::entry_balance_keys(&prepared);
         if keys.account_ids.len() > error::MAX_DISTINCT_BALANCES_PER_BATCH {
             return Err(PostingError::BatchTooManyAccounts {
@@ -190,17 +195,17 @@ impl Postings {
                 max: error::MAX_DISTINCT_BALANCES_PER_BATCH,
             });
         }
-        let fence = self
+        let locked = self
             .repo
-            .fence_in_op(db, &keys, &codes, db.maybe_now())
+            .lock_balances_and_probe_templates_in_op(db, &keys, &codes, db.maybe_now())
             .await?;
 
-        // A template version moved between preparation and the fence. Nothing
-        // has been written, so refreshing the cache and re-preparing is safe;
-        // any entry pair the new bodies introduced needs its lock, which is
-        // taken in a supplemental sorted batch. (This must be a *refresh* —
-        // what the cache holds for these codes is exactly what the fence
-        // reported stale.)
+        // A template version moved between preparation and the lock statement.
+        // Nothing has been written, so refreshing the cache and re-preparing is
+        // safe; any entry pair the new bodies introduced needs its lock, which
+        // is taken in a supplemental sorted batch. (This must be a *refresh* —
+        // what the cache holds for these codes is exactly what was reported
+        // stale.)
         //
         // Deadlock note: those supplemental locks are in the same key class as
         // the ones already held, so acquiring them out of the flow's canonical
@@ -208,19 +213,19 @@ impl Postings {
         // template update landing between two statements of a live posting, and
         // Postgres resolves it by aborting one side with a retryable deadlock
         // error rather than hanging.
-        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &fence.templates) {
+        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
             let refreshed = self.templates.refresh_in_op(db, &stale).await?;
             let mut merged = used;
             merged.extend(refreshed);
             prepared = self.prepare_all(&batch, &merged)?;
             let new_keys = Self::entry_balance_keys(&prepared);
             self.repo
-                .fence_in_op(db, &new_keys, &[], db.maybe_now())
+                .lock_balances_and_probe_templates_in_op(db, &new_keys, &[], db.maybe_now())
                 .await?;
             keys = new_keys;
         }
 
-        let now = fence.now;
+        let now = locked.now;
 
         // ---- phase 2: read --------------------------------------------
         let account_ids = Self::dedup(
@@ -231,7 +236,7 @@ impl Postings {
         let journal_ids = Self::dedup(prepared.iter().map(|p| p.journal_id));
         let mut read = self
             .repo
-            .read_in_op(db, &account_ids, &journal_ids, &keys)
+            .read_posting_state_in_op(db, &account_ids, &journal_ids, &keys)
             .await?;
 
         self.validate(&batch, &prepared, &read)?;
@@ -247,7 +252,7 @@ impl Postings {
 
         let mut hydrated = Vec::with_capacity(transactions.len());
         let mut entry_values: Vec<Vec<EntryValues>> = Vec::with_capacity(transactions.len());
-        let mut rows = ApplyRows::default();
+        let mut rows = PostingRows::default();
 
         for (new_tx, new_entries) in transactions.into_iter().zip(entries_per_posting) {
             let transaction = rows.push_transaction(new_tx, now);
@@ -276,7 +281,9 @@ impl Postings {
             .await?;
 
         // ---- phase 3: apply --------------------------------------------
-        self.repo.apply_in_op(db, now, &rows, &snapshots).await?;
+        self.repo
+            .insert_postings_and_balances_in_op(db, now, &rows, &snapshots)
+            .await?;
 
         self.update_effective_balances(db, &hydrated, &entry_values, &read, &mappings, now)
             .await?;
@@ -350,7 +357,7 @@ impl Postings {
         &self,
         batch: &[PostingInput],
         prepared: &[PreparedTransaction],
-        read: &ReadOutcome,
+        read: &PostingState,
     ) -> Result<(), PostingError> {
         for (index, posting) in prepared.iter().enumerate() {
             let tx_id = batch[index].tx_id;
@@ -419,7 +426,7 @@ impl Postings {
         &self,
         db: &mut impl AtomicOperation,
         prepared: &[PreparedTransaction],
-        read: &mut ReadOutcome,
+        read: &mut PostingState,
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, PostingError> {
         let mut mappings: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
         if read.seeds.is_empty() {
@@ -479,7 +486,7 @@ impl Postings {
         ancestor_ids.dedup();
         let supplemental = self
             .repo
-            .read_ancestors_in_op(db, &ancestor_ids, &ancestor_keys.sorted_deduped())
+            .read_ancestor_state_in_op(db, &ancestor_ids, &ancestor_keys.sorted_deduped())
             .await?;
         read.accounts.extend(supplemental.accounts);
         read.balances.extend(supplemental.balances);
@@ -515,7 +522,7 @@ impl Postings {
         &self,
         transactions: &[Transaction],
         entry_values: &[Vec<EntryValues>],
-        read: &ReadOutcome,
+        read: &PostingState,
         mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         now: DateTime<Utc>,
     ) -> Vec<BalanceSnapshot> {
@@ -608,7 +615,7 @@ impl Postings {
         db: &mut impl AtomicOperation,
         transactions: &[Transaction],
         entry_values: &[Vec<EntryValues>],
-        read: &ReadOutcome,
+        read: &PostingState,
         mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         now: DateTime<Utc>,
     ) -> Result<(), PostingError> {

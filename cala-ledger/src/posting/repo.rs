@@ -2,18 +2,18 @@
 //!
 //! # Why the phases are separate statements
 //!
-//! The fence/read/apply split is **not** stylistic; each boundary is a
+//! The lock/read/write split is **not** stylistic; each boundary is a
 //! correctness requirement inherited from the pre-consolidation path, and
 //! collapsing any of them reintroduces a race:
 //!
-//! - **fence -> read.** An advisory-lock wait *inside* a statement does not
+//! - **lock -> read.** An advisory-lock wait *inside* a statement does not
 //!   refresh that statement's snapshot (the snapshot is taken at statement
-//!   start). Any read that the fence protects — the balance rows, and above
+//!   start). Any read the locks protect — the balance rows, and above
 //!   all the account-set memberships — must therefore run in a *later*
-//!   statement, or a concurrent attach committing while we block on the fence
+//!   statement, or a concurrent attach committing while we block on the locks
 //!   would be invisible to us. This is precisely the stale-read class the
 //!   attach fence exists to close.
-//! - **read -> apply.** Balance snapshot versioning and velocity limit
+//! - **read -> write.** Balance snapshot versioning and velocity limit
 //!   enforcement run in Rust between them. Nothing is written until every
 //!   posting has been folded and enforced, which is what makes a rejection
 //!   attributable to a single posting with no rows to undo.
@@ -23,10 +23,10 @@
 //! Class-1 advisory locks (`EC_SET_LOCK_CLASS`): SHARED = the poster, on its
 //! distinct **entry accounts** (leaves only, EC and non-EC alike — never
 //! ancestors), held from *before its first entry insert* to commit — which
-//! [`PostingRepo::fence_in_op`] satisfies by construction, since it is the
-//! flow's first statement and the entry rows are written by
-//! [`PostingRepo::apply_in_op`], the last. EXCLUSIVE = the membership guard on
-//! the member being added/removed
+//! [`PostingRepo::lock_balances_and_probe_templates_in_op`] satisfies by
+//! construction, since it is the flow's first statement and the entry rows are
+//! written by [`PostingRepo::insert_postings_and_balances_in_op`], the last.
+//! EXCLUSIVE = the membership guard on the member being added/removed
 //! (`BalanceRepo::member_has_balance_history_in_op`); the streaming rollup
 //! applier takes SHARED on the EC accounts it writes.
 //!
@@ -40,8 +40,9 @@
 //! holds across statements.
 //!
 //! **Lock-ordering invariant.** The `ORDER BY` in
-//! [`PostingRepo::fence_in_op`] is what makes acquisition order canonical — do
-//! not remove it. It is *required* because the JOIN lets the planner produce
+//! [`PostingRepo::lock_balances_and_probe_templates_in_op`] is what makes
+//! acquisition order canonical — do not remove it. It is *required* because
+//! the JOIN lets the planner produce
 //! rows in arbitrary order (a hash join probing from a `cala_accounts` scan
 //! emits heap order, not UNNEST array order — observed as real deadlocks and
 //! fixed by adding the `ORDER BY`). It is also *sufficient*: advisory-lock
@@ -82,8 +83,9 @@ use crate::{
 const EC_SET_LOCK_CLASS: i32 = 1;
 
 /// Maximum balance snapshots written per `INSERT` in
-/// [`PostingRepo::apply_in_op`]. A large batch fanning into deep ancestor
-/// chains would otherwise become one multi-million-row statement big enough to
+/// [`PostingRepo::insert_postings_and_balances_in_op`]. A large batch fanning
+/// into deep ancestor chains would otherwise become one multi-million-row
+/// statement big enough to
 /// OOM a Postgres backend. Each sub-batch is self-contained (history insert +
 /// current upsert), so the balance-history FK is satisfied per sub-batch; the
 /// whole set still commits atomically as one transaction.
@@ -136,14 +138,15 @@ impl BalanceKeys {
     }
 }
 
-/// What the fence statement returns besides the locks it took.
-pub(super) struct FenceOutcome {
+/// What the locking statement returns besides the locks it took.
+pub(super) struct LockOutcome {
     /// The transaction timestamp — `transaction_timestamp()`, pinned at
     /// `BEGIN`, so it is byte-identical to the dedicated `SELECT NOW()` the
     /// pre-consolidation path issued, and shared by every row the flow writes.
     pub now: DateTime<Utc>,
-    /// `code -> (id, latest version)` for the codes the flow prepared against.
-    pub templates: HashMap<String, (TxTemplateId, i32)>,
+    /// `code -> (id, latest version)` as committed right now, for the codes
+    /// the flow prepared against.
+    pub template_versions: HashMap<String, (TxTemplateId, i32)>,
 }
 
 /// Immutable per-account facts the flow needs before it may write.
@@ -154,7 +157,7 @@ pub(super) struct AccountMeta {
 }
 
 /// Everything the flow reads, in one statement.
-pub(super) struct ReadOutcome {
+pub(super) struct PostingState {
     pub epoch: i64,
     pub seeds: Vec<(AccountId, AccountSetId)>,
     pub journals: HashMap<JournalId, JournalValues>,
@@ -165,7 +168,7 @@ pub(super) struct ReadOutcome {
 
 /// The ancestor phase's supplemental read (only when the flow resolved
 /// non-EC ancestor sets).
-pub(super) struct AncestorReadOutcome {
+pub(super) struct AncestorState {
     pub accounts: HashMap<AccountId, AccountMeta>,
     pub balances: HashMap<(JournalId, AccountId, Currency), BalanceSnapshot>,
     pub controls: HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
@@ -227,20 +230,20 @@ struct EntryRows {
     transaction_ids: Vec<TransactionId>,
 }
 
-/// Every row [`PostingRepo::apply_in_op`] writes, accumulated per posting.
+/// Every row [`PostingRepo::insert_postings_and_balances_in_op`] writes, accumulated per posting.
 ///
 /// The push methods hydrate exactly as the entity repos would — serialize the
 /// initial event, mark it persisted at `now`, rebuild the entity from its
 /// events — and stage the table + event rows for the fused insert.
 #[derive(Default)]
-pub(super) struct ApplyRows {
+pub(super) struct PostingRows {
     transactions: TransactionRows,
     tx_events: EventRows,
     entries: EntryRows,
     entry_events: EventRows,
 }
 
-impl ApplyRows {
+impl PostingRows {
     pub(super) fn push_transaction(
         &mut self,
         new_tx: NewTransaction,
@@ -334,18 +337,18 @@ impl PostingRepo {
     /// locked.
     #[tracing::instrument(
         level = "debug",
-        name = "cala_ledger.posting.fence",
+        name = "cala_ledger.posting.lock_balances_and_probe_templates",
         skip_all,
         fields(pairs = keys.account_ids.len(), codes = codes.len()),
         err(level = "warn")
     )]
-    pub(super) async fn fence_in_op(
+    pub(super) async fn lock_balances_and_probe_templates_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         keys: &BalanceKeys,
         codes: &[String],
         manual_now: Option<DateTime<Utc>>,
-    ) -> Result<FenceOutcome, sqlx::Error> {
+    ) -> Result<LockOutcome, sqlx::Error> {
         let rows = sqlx::query!(
             r#"
             WITH locks AS MATERIALIZED (
@@ -388,21 +391,24 @@ impl PostingRepo {
         .await?;
 
         let now = rows.first().expect("anchor row always present").now;
-        let mut templates = HashMap::new();
+        let mut template_versions = HashMap::new();
         for row in rows {
             if let (Some(code), Some(id), Some(version)) = (row.code, row.template_id, row.version)
             {
-                templates.insert(code, (id, version));
+                template_versions.insert(code, (id, version));
             }
         }
-        Ok(FenceOutcome { now, templates })
+        Ok(LockOutcome {
+            now,
+            template_versions,
+        })
     }
 
     /// Phase 2: every read the flow needs, in one statement.
     ///
-    /// Runs strictly after [`Self::fence_in_op`], so the membership probe and
-    /// the balance rows are read under a snapshot taken *after* the fence was
-    /// granted. The probe deliberately takes no locks of its own: the
+    /// Runs strictly after [`Self::lock_balances_and_probe_templates_in_op`],
+    /// so the membership probe and the balance rows are read under a snapshot
+    /// taken *after* the locks were granted. The probe takes no locks of its own: the
     /// ancestors are unknowable until the seeds come back and are expanded,
     /// and locking guessed ancestors here would be unsound (an in-statement
     /// lock wait does not refresh the snapshot) as well as wasteful (a wrong
@@ -410,18 +416,18 @@ impl PostingRepo {
     /// acquisition).
     #[tracing::instrument(
         level = "debug",
-        name = "cala_ledger.posting.read",
+        name = "cala_ledger.posting.read_posting_state",
         skip_all,
         fields(accounts = account_ids.len(), journals = journal_ids.len()),
         err(level = "warn")
     )]
-    pub(super) async fn read_in_op(
+    pub(super) async fn read_posting_state_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
         journal_ids: &[JournalId],
         keys: &BalanceKeys,
-    ) -> Result<ReadOutcome, sqlx::Error> {
+    ) -> Result<PostingState, sqlx::Error> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -474,7 +480,7 @@ impl PostingRepo {
         .fetch_one(op.as_executor())
         .await?;
 
-        Ok(ReadOutcome {
+        Ok(PostingState {
             epoch: row.epoch,
             seeds: Self::decode::<SeedRow>(row.seeds)
                 .into_iter()
@@ -495,20 +501,20 @@ impl PostingRepo {
     ///
     /// Runs strictly after `lock_resolved_ancestors_in_op`, preserving
     /// lock-before-read for the ancestor rows exactly as the entry pairs get
-    /// it from [`Self::fence_in_op`].
+    /// it from [`Self::lock_balances_and_probe_templates_in_op`].
     #[tracing::instrument(
         level = "debug",
-        name = "cala_ledger.posting.read_ancestors",
+        name = "cala_ledger.posting.read_ancestor_state",
         skip_all,
         fields(pairs = keys.account_ids.len()),
         err(level = "warn")
     )]
-    pub(super) async fn read_ancestors_in_op(
+    pub(super) async fn read_ancestor_state_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         set_account_ids: &[AccountId],
         keys: &BalanceKeys,
-    ) -> Result<AncestorReadOutcome, sqlx::Error> {
+    ) -> Result<AncestorState, sqlx::Error> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -545,7 +551,7 @@ impl PostingRepo {
         .fetch_one(op.as_executor())
         .await?;
 
-        Ok(AncestorReadOutcome {
+        Ok(AncestorState {
             accounts: Self::index_accounts(Self::decode(row.accounts)),
             balances: Self::index_balances(Self::decode(row.balances)),
             controls: Self::index_controls(Self::decode(row.controls)),
@@ -568,7 +574,7 @@ impl PostingRepo {
     /// chains costs a few extra statements rather than one unbounded one.
     #[tracing::instrument(
         level = "debug",
-        name = "cala_ledger.posting.apply",
+        name = "cala_ledger.posting.insert_postings_and_balances",
         skip_all,
         fields(
             transactions = rows.transactions.ids.len(),
@@ -577,11 +583,11 @@ impl PostingRepo {
         ),
         err(level = "warn")
     )]
-    pub(super) async fn apply_in_op(
+    pub(super) async fn insert_postings_and_balances_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         now: DateTime<Utc>,
-        rows: &ApplyRows,
+        rows: &PostingRows,
         snapshots: &[BalanceSnapshot],
     ) -> Result<(), sqlx::Error> {
         let (head, rest) = snapshots.split_at(snapshots.len().min(INSERT_SNAPSHOT_BATCH_SIZE));
@@ -715,7 +721,7 @@ impl PostingRepo {
             .collect())
     }
 
-    /// Overflow flush for [`Self::apply_in_op`]'s snapshot sub-batching.
+    /// Overflow flush for [`Self::insert_postings_and_balances_in_op`]'s snapshot sub-batching.
     async fn insert_snapshots_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
