@@ -400,6 +400,7 @@ dependencies = [
  "anyhow",
  "cala-ledger",
  "rand 0.10.2",
+ "rust_decimal",
  "sqlx",
  "tokio",
 ]
