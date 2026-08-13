@@ -140,29 +140,6 @@ struct Overlay {
     meta: HashMap<AccountSetId, SetMeta>,
 }
 
-fn index_nodes(
-    nodes: Vec<SetGraphNode>,
-) -> (
-    HashMap<AccountSetId, Vec<AccountSetId>>,
-    HashMap<AccountSetId, SetMeta>,
-) {
-    let mut parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
-    let mut meta = HashMap::new();
-    for node in nodes {
-        meta.insert(
-            node.id,
-            SetMeta {
-                journal_id: node.journal_id,
-                eventually_consistent: node.eventually_consistent,
-            },
-        );
-        if let Some(parent_id) = node.parent_id {
-            parents.entry(node.id).or_default().push(parent_id);
-        }
-    }
-    (parents, meta)
-}
-
 /// The per-process set-graph cache — an internal detail of the
 /// `account_set` module, constructed by `AccountSets::new` and shared
 /// across its clones. (The streaming EC rollup applier's per-batch
@@ -226,25 +203,17 @@ impl SetGraphCache {
     /// Input is the posting's distinct `(account_id, currency)` entry
     /// pairs (parallel arrays), exactly like the pre-cache walk.
     ///
-    /// Hot path: one probe statement (live direct memberships + epoch in
-    /// the same snapshot), in-memory expansion against the cached edge
-    /// graph, then one lock statement for the resolved non-EC ancestor
-    /// pairs. Rare paths fall back to the fused walk+locks statement —
-    /// see the module doc. Every path reads only the membership graph,
-    /// never balance values, and completes its single ancestor lock
-    /// batch strictly before `find_for_update`'s balance data fetch, so
-    /// the lock-before-read doctrine holds unchanged.
-    #[instrument(
-        level = "debug",
-        name = "account_set.fetch_mappings_in_op",
-        skip(self, op, entry_pairs),
-        fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty),
-        err(level = "warn")
-    )]
-    /// The posting flow reads the direct memberships and the graph epoch as
-    /// part of its single read statement, so it arrives here with the probe
-    /// already in hand — the probe deliberately takes no locks, which is what
-    /// lets it share a statement with the flow's other reads.
+    /// The posting flow reads the direct memberships and the graph epoch
+    /// as part of its single read statement, so it arrives here with the
+    /// probe already in hand — the probe deliberately takes no locks,
+    /// which is what lets it share a statement with the flow's other
+    /// reads. Hot path from there: in-memory expansion against the cached
+    /// edge graph, then one lock statement for the resolved non-EC
+    /// ancestor pairs. Rare paths fall back to the fused walk+locks
+    /// statement — see the module doc. Every path reads only the
+    /// membership graph, never balance values, and completes its single
+    /// ancestor lock batch strictly before any balance data fetch, so the
+    /// lock-before-read doctrine holds unchanged.
     ///
     /// `probe_seeds` may cover accounts outside `journal_id` (a batch spanning
     /// journals resolves one journal at a time); expansion filters by journal,
@@ -320,7 +289,7 @@ impl SetGraphCache {
                 .repo
                 .fetch_set_graph_nodes_in_op(op, &missing)
                 .await?;
-            let (parents, meta) = index_nodes(nodes);
+            let (parents, meta) = Self::index_nodes(nodes);
             Some(Overlay { parents, meta })
         };
 
@@ -468,7 +437,7 @@ impl SetGraphCache {
                 .repo
                 .fetch_set_graph_nodes_in_op(op, &missing)
                 .await?;
-            let (parents, meta) = index_nodes(nodes);
+            let (parents, meta) = Self::index_nodes(nodes);
             Some(Overlay { parents, meta })
         };
 
@@ -574,6 +543,29 @@ impl SetGraphCache {
             .read()
             .expect("set_graph_cache snapshot lock poisoned")
             .clone()
+    }
+
+    fn index_nodes(
+        nodes: Vec<SetGraphNode>,
+    ) -> (
+        HashMap<AccountSetId, Vec<AccountSetId>>,
+        HashMap<AccountSetId, SetMeta>,
+    ) {
+        let mut parents: HashMap<AccountSetId, Vec<AccountSetId>> = HashMap::new();
+        let mut meta = HashMap::new();
+        for node in nodes {
+            meta.insert(
+                node.id,
+                SetMeta {
+                    journal_id: node.journal_id,
+                    eventually_consistent: node.eventually_consistent,
+                },
+            );
+            if let Some(parent_id) = node.parent_id {
+                parents.entry(node.id).or_default().push(parent_id);
+            }
+        }
+        (parents, meta)
     }
 
     /// In-memory BFS expansion of the probed seeds over snapshot +
@@ -688,7 +680,7 @@ impl SetGraphCache {
             return Ok(());
         };
         let data = inner.repo.fetch_set_graph().await?;
-        let (parents, meta) = index_nodes(data.nodes);
+        let (parents, meta) = Self::index_nodes(data.nodes);
         let new = GraphSnapshot {
             epoch: data.epoch,
             parents,

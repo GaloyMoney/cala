@@ -7,6 +7,7 @@ use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetUpdate, NewAccountSet},
     error::LedgerError,
+    posting::PostingError,
     velocity::{error::VelocityError, *},
     *,
 };
@@ -285,7 +286,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         Ok(())
@@ -387,7 +390,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -396,7 +401,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         Ok(())
@@ -489,7 +496,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         Ok(())
@@ -603,7 +612,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -612,7 +623,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         // Add first closing date and re-check
@@ -643,7 +656,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -652,7 +667,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         // Update closing date and re-check
@@ -670,7 +687,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -679,7 +698,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::VelocityError(VelocityError::Enforcement(_)))
+            Err(LedgerError::PostingError(PostingError::VelocityError(
+                VelocityError::Enforcement(_)
+            )))
         ));
 
         Ok(())

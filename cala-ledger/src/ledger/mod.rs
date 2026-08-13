@@ -81,9 +81,8 @@ impl CalaLedger {
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
         let postings = Postings::new(
-            &pool,
             &publisher,
-            &clock,
+            &tx_templates,
             &account_sets,
             &balances,
             &velocities,
@@ -255,7 +254,7 @@ impl CalaLedger {
         db: &mut impl es_entity::AtomicOperation,
         batch: Vec<PostingInput>,
     ) -> Result<Vec<Transaction>, LedgerError> {
-        self.postings.post_all_in_op(db, batch).await
+        Ok(self.postings.post_all_in_op(db, batch).await?)
     }
 
     pub fn outbox(&self) -> &crate::outbox::ObixOutbox {

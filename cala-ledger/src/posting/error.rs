@@ -1,49 +1,100 @@
+use sqlx::error::DatabaseError;
 use thiserror::Error;
 
-use crate::primitives::{AccountId, TransactionId};
+use crate::{
+    account_set::error::AccountSetError,
+    balance::error::BalanceError,
+    primitives::{AccountId, JournalId, TransactionId},
+    tx_template::error::TxTemplateError,
+    velocity::error::VelocityError,
+};
 
-/// A failure attributed to a specific posting within a batch.
+/// The posting module's error — nested under
+/// [`crate::ledger::error::LedgerError`], never the other way around, exactly
+/// like every other domain error.
 ///
-/// The batch API is all-or-nothing: the whole operation aborts on the first
-/// failure. `index` and `tx_id` identify which posting of the submitted batch
-/// caused it, so a caller can eject the offender and retry the remainder
-/// without having to correlate an opaque error against its input.
+/// Domain errors the flow passes through keep their own granularity via
+/// `#[from]`; failures specific to the posting path get their own variants
+/// here. [`Self::Rejected`] additionally attributes a failure to one posting
+/// of the submitted batch.
 #[derive(Error, Debug)]
-#[error("posting {index} ({tx_id}) failed: {source}")]
-pub struct PostingError {
-    pub index: usize,
-    pub tx_id: TransactionId,
-    #[source]
-    pub source: Box<PostingErrorKind>,
+pub enum PostingError {
+    #[error("PostingError - Sqlx: {0}")]
+    Sqlx(sqlx::Error),
+    #[error("PostingError - DuplicateKey: {0}")]
+    DuplicateKey(Box<dyn DatabaseError>),
+    #[error("PostingError - TxTemplateError: {0}")]
+    TxTemplateError(#[from] TxTemplateError),
+    #[error("PostingError - VelocityError: {0}")]
+    VelocityError(#[from] VelocityError),
+    #[error("PostingError - AccountSetError: {0}")]
+    AccountSetError(#[from] AccountSetError),
+    #[error("PostingError - BalanceError: {0}")]
+    BalanceError(#[from] BalanceError),
+    /// A failure attributed to a specific posting within a batch.
+    ///
+    /// The batch API is all-or-nothing: the whole operation aborts on the
+    /// first failure. `index` and `tx_id` identify which posting of the
+    /// submitted batch caused it, so a caller can eject the offender and
+    /// retry the remainder without correlating an opaque error against its
+    /// input. Every reason is detected **client-side, before the apply
+    /// statement runs**, which is what keeps the failure attributable:
+    /// nothing has been written when it surfaces. Infrastructure failures
+    /// (constraint races, deadlocks, connection loss) are not attributable
+    /// and surface through the other variants.
+    #[error("PostingError - Rejected: posting {index} ({tx_id}): {reason}")]
+    Rejected {
+        index: usize,
+        tx_id: TransactionId,
+        reason: Box<RejectionReason>,
+    },
+    /// The batch would hold more advisory locks than the shared lock table can
+    /// be relied on to provide. Refused up front, because the alternative is a
+    /// bare `out of shared memory` from Postgres that names neither the cause
+    /// nor the fix — and that can strike unrelated concurrent transactions too.
+    #[error(
+        "PostingError - BatchTooManyAccounts: this batch touches {distinct} distinct \
+         (journal, account, currency) balances; at most {max} may be locked in one batch. \
+         Split it — batch *size* is not the limit, the number of distinct accounts is."
+    )]
+    BatchTooManyAccounts { distinct: usize, max: usize },
 }
 
 impl PostingError {
-    pub(super) fn at(
+    pub(super) fn rejected(
         index: usize,
         tx_id: TransactionId,
-        source: impl Into<PostingErrorKind>,
+        reason: impl Into<RejectionReason>,
     ) -> Self {
-        Self {
+        // Keep the attribution observable on the flow's span even when the
+        // caller only logs the error.
+        let span = tracing::Span::current();
+        span.record("failed_posting_index", index);
+        span.record("failed_posting_id", tracing::field::display(tx_id));
+        Self::Rejected {
             index,
             tx_id,
-            source: Box::new(source.into()),
+            reason: Box::new(reason.into()),
+        }
+    }
+}
+
+impl From<sqlx::Error> for PostingError {
+    fn from(e: sqlx::Error) -> Self {
+        match e {
+            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
+                Self::DuplicateKey(err)
+            }
+            e => Self::Sqlx(e),
         }
     }
 }
 
 /// The business-level reason a posting was rejected.
-///
-/// Every variant is detected **client-side, before the apply statement runs**,
-/// which is what keeps the failure attributable to one posting: nothing has
-/// been written when it surfaces. Infrastructure failures (constraint races,
-/// deadlocks, connection loss) are not attributable and surface as
-/// [`crate::ledger::error::LedgerError`] directly.
 #[derive(Error, Debug)]
-pub enum PostingErrorKind {
+pub enum RejectionReason {
     #[error("{0}")]
-    TxTemplate(#[from] crate::tx_template::error::TxTemplateError),
-    #[error("{0}")]
-    Velocity(#[from] crate::velocity::error::VelocityError),
+    TxTemplate(#[from] TxTemplateError),
     #[error("account {0} does not exist")]
     AccountNotFound(AccountId),
     #[error(
@@ -54,9 +105,9 @@ pub enum PostingErrorKind {
     #[error("account {0} is locked")]
     AccountLocked(AccountId),
     #[error("journal {0} is locked")]
-    JournalLocked(crate::primitives::JournalId),
+    JournalLocked(JournalId),
     #[error("journal {0} does not exist")]
-    JournalNotFound(crate::primitives::JournalId),
+    JournalNotFound(JournalId),
     #[error("duplicate transaction id {0} within the submitted batch")]
     DuplicateTransactionIdInBatch(TransactionId),
     #[error("duplicate external id `{0}` within the submitted batch")]

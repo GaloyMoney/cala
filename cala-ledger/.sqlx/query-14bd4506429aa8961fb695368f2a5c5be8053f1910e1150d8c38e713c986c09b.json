@@ -1,0 +1,56 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                (SELECT g.epoch FROM cala_account_set_graph_epoch g) AS \"epoch!\",\n                (\n                    SELECT jsonb_agg(jsonb_build_array(m.member_account_id, m.account_set_id))\n                    FROM cala_account_set_member_accounts m\n                    WHERE m.member_account_id = ANY($1::uuid[])\n                ) AS \"seeds\",\n                (\n                    SELECT jsonb_agg(jsonb_build_array(\n                        a.id, a.status::text, a.eventually_consistent, a.is_account_set\n                    ))\n                    FROM cala_accounts a\n                    WHERE a.id = ANY($1::uuid[])\n                ) AS \"accounts\",\n                (\n                    SELECT jsonb_agg(jsonb_build_array(\n                        vc.account_id, vc.values, a.velocity_context_values\n                    ))\n                    FROM cala_velocity_account_controls vc\n                    JOIN cala_accounts a ON a.id = vc.account_id\n                    WHERE vc.account_id = ANY($1::uuid[])\n                ) AS \"controls\",\n                (\n                    SELECT jsonb_agg(jsonb_build_array(j.id, j.values))\n                    FROM (\n                        SELECT DISTINCT ON (e.id) e.id, e.event -> 'values' AS values\n                        FROM cala_journal_events e\n                        WHERE e.id = ANY($2::uuid[])\n                        ORDER BY e.id, e.sequence DESC\n                    ) j\n                ) AS \"journals\",\n                (\n                    SELECT jsonb_agg(b.latest_values)\n                    FROM UNNEST($3::uuid[], $4::uuid[], $5::text[])\n                        AS v(journal_id, account_id, currency)\n                    JOIN cala_current_balances b\n                      ON b.journal_id = v.journal_id\n                     AND b.account_id = v.account_id\n                     AND b.currency = v.currency\n                ) AS \"balances\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "epoch!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "seeds",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "accounts",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "controls",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "journals",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "balances",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "14bd4506429aa8961fb695368f2a5c5be8053f1910e1150d8c38e713c986c09b"
+}

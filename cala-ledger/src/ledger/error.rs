@@ -4,8 +4,8 @@ use thiserror::Error;
 use crate::{
     account::error::AccountError, account_set::error::AccountSetError,
     balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
-    transaction::error::TransactionError, tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    posting::PostingError, transaction::error::TransactionError,
+    tx_template::error::TxTemplateError, velocity::error::VelocityError,
 };
 
 #[derive(Error, Debug)]
@@ -34,6 +34,8 @@ pub enum LedgerError {
     BalanceError(#[from] BalanceError),
     #[error("LedgerError - VelocityError: {0}")]
     VelocityError(#[from] VelocityError),
+    #[error("LedgerError - PostingError: {0}")]
+    PostingError(#[from] PostingError),
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(Box<dyn std::error::Error + Send + Sync>),
     #[error(
@@ -41,22 +43,6 @@ pub enum LedgerError {
          account-set backing account; an account set's balance is derived from its members"
     )]
     EntryTargetsAccountSet,
-    /// A posting rejected for a reason that carries its position in the
-    /// submitted batch. Failures that already had a dedicated variant keep it,
-    /// so existing matches are unaffected; this covers the kinds the batch API
-    /// introduced.
-    #[error("LedgerError - {0}")]
-    Posting(Box<crate::posting::PostingError>),
-    /// The batch would hold more advisory locks than the shared lock table can
-    /// be relied on to provide. Refused up front, because the alternative is a
-    /// bare `out of shared memory` from Postgres that names neither the cause
-    /// nor the fix — and that can strike unrelated concurrent transactions too.
-    #[error(
-        "LedgerError - BatchTooManyAccounts: this batch touches {distinct} distinct \
-         (journal, account, currency) balances; at most {max} may be locked in one batch. \
-         Split it — batch *size* is not the limit, the number of distinct accounts is."
-    )]
-    BatchTooManyAccounts { distinct: usize, max: usize },
 }
 
 impl From<EntryError> for LedgerError {

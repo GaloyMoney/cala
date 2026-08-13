@@ -7,8 +7,12 @@ use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{
-    account::NewAccount, balance::error::BalanceError, error::LedgerError, posting::PostingInput,
-    tx_template::*, velocity::*, *,
+    account::NewAccount,
+    error::LedgerError,
+    posting::{PostingError, PostingInput, RejectionReason},
+    tx_template::*,
+    velocity::*,
+    *,
 };
 
 async fn init() -> anyhow::Result<CalaLedger> {
@@ -258,8 +262,8 @@ async fn a_rejected_posting_rolls_back_the_whole_batch() -> anyhow::Result<()> {
         .await;
 
     match result {
-        Err(LedgerError::Posting(err)) => {
-            assert_eq!(err.index, 1, "the second posting is the offender");
+        Err(LedgerError::PostingError(PostingError::Rejected { index, .. })) => {
+            assert_eq!(index, 1, "the second posting is the offender");
         }
         Err(other) => panic!("expected an attributed posting rejection, got {other:?}"),
         Ok(_) => panic!("expected the batch to be rejected"),
@@ -303,10 +307,9 @@ async fn a_locked_account_rejects_its_batch() -> anyhow::Result<()> {
         .await;
     assert!(
         matches!(
-            result,
-            Err(LedgerError::BalanceError(
-                    BalanceError::AccountLocked(id)
-            )) if id == sender.id()
+            &result,
+            Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+                if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender.id())
         ),
         "expected AccountLocked, got {:?}",
         result.err()
@@ -338,7 +341,9 @@ async fn duplicate_transaction_ids_within_a_batch_are_rejected() -> anyhow::Resu
 
     let result = cala.post_transactions(vec![first, second]).await;
     match result {
-        Err(LedgerError::Posting(err)) => assert_eq!(err.index, 1),
+        Err(LedgerError::PostingError(PostingError::Rejected { index, .. })) => {
+            assert_eq!(index, 1)
+        }
         Err(other) => panic!("expected a duplicate-id rejection, got {other:?}"),
         Ok(_) => panic!("expected the batch to be rejected"),
     }
@@ -635,7 +640,7 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
         .collect();
 
     match cala.post_transactions(batch).await {
-        Err(LedgerError::BatchTooManyAccounts { distinct, max }) => {
+        Err(LedgerError::PostingError(PostingError::BatchTooManyAccounts { distinct, max })) => {
             assert!(distinct > max, "{distinct} should exceed {max}");
         }
         Err(other) => panic!("expected BatchTooManyAccounts, got {other:?}"),
@@ -650,5 +655,68 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
             .collect();
         cala.post_transactions(batch).await?;
     }
+    Ok(())
+}
+
+/// The template cache is optimistic: preparation uses the cached body and the
+/// fence statement re-checks the version. When the version moved, the flow
+/// must re-resolve from the DATABASE — not the cache, which is exactly what
+/// was reported stale — and re-prepare against the fresh body.
+#[tokio::test]
+async fn a_stale_template_cache_is_refreshed_via_the_fence_version_check() -> anyhow::Result<()> {
+    let cala = init().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let (sender, receiver) = helpers::test_accounts();
+    let sender = cala.accounts().create(sender).await?;
+    let recipient = cala.accounts().create(receiver).await?;
+
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+
+    // Warm this process's template cache with version 1.
+    let first = cala
+        .post_transactions(vec![transfer(
+            &code,
+            journal.id(),
+            sender.id(),
+            recipient.id(),
+        )])
+        .await?
+        .pop()
+        .expect("one transaction");
+    assert_eq!(first.values().description, None);
+
+    // Simulate a template update landing after preparation: a version-2 event
+    // whose body pins the transaction description to a literal.
+    let template_id = cala.tx_templates().find_by_code(&code).await?.id();
+    sqlx::query(
+        "INSERT INTO cala_tx_template_events (id, sequence, event_type, event) \
+         SELECT id, 2, event_type, \
+                jsonb_set(event, '{values,transaction,description}', to_jsonb($2::text)) \
+         FROM cala_tx_template_events WHERE id = $1 AND sequence = 1",
+    )
+    .bind(uuid::Uuid::from(template_id))
+    .bind("'refreshed-body'") // a CEL string literal
+    .execute(cala.pool())
+    .await?;
+
+    // The cache still holds version 1; the fence must report it stale and the
+    // flow must re-prepare with the refreshed body.
+    let second = cala
+        .post_transactions(vec![transfer(
+            &code,
+            journal.id(),
+            sender.id(),
+            recipient.id(),
+        )])
+        .await?
+        .pop()
+        .expect("one transaction");
+    assert_eq!(
+        second.values().description.as_deref(),
+        Some("refreshed-body")
+    );
     Ok(())
 }
