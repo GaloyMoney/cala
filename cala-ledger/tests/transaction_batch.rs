@@ -720,3 +720,71 @@ async fn a_stale_template_cache_is_refreshed_via_the_fence_version_check() -> an
     );
     Ok(())
 }
+
+/// Outbox events must be grouped **per posting** — each `TransactionCreated`
+/// immediately followed by that transaction's own `EntryCreated` events — which
+/// is the interleaving a sequence of single-posting calls produces. A consumer
+/// that accumulates a transaction's entries until the next `TransactionCreated`
+/// would silently break if a batch ever emitted all transactions first and then
+/// all entries.
+#[tokio::test]
+async fn outbox_events_are_grouped_per_posting_not_by_type() -> anyhow::Result<()> {
+    let pool = helpers::init_isolated_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&code))
+        .await?;
+    let (a, b) = helpers::test_accounts();
+    let sender = cala.accounts().create(a).await?;
+    let recipient = cala.accounts().create(b).await?;
+
+    let high_water: i64 =
+        sqlx::query_scalar("SELECT COALESCE(MAX(sequence), 0) FROM cala_persistent_outbox_events")
+            .fetch_one(&pool)
+            .await?;
+
+    let posted = cala
+        .post_transactions(
+            (0..3)
+                .map(|_| transfer(&code, journal.id(), sender.id(), recipient.id()))
+                .collect(),
+        )
+        .await?;
+
+    // (payload type, owning transaction id) in outbox sequence order.
+    let rows = sqlx::query_as::<_, (String, String)>(
+        "SELECT payload->>'type', \
+                COALESCE(payload->'transaction'->>'id', payload->'entry'->>'transaction_id') \
+         FROM cala_persistent_outbox_events WHERE sequence > $1 ORDER BY sequence",
+    )
+    .bind(high_water)
+    .fetch_all(&pool)
+    .await?;
+
+    // Build the expected sequence directly from what was posted: each
+    // transaction, then exactly its own entries, in posting order.
+    let mut expected: Vec<(String, String)> = Vec::new();
+    for tx in posted.iter() {
+        let tx_id = tx.id().to_string();
+        expected.push(("transaction_created".to_string(), tx_id.clone()));
+        let entries = cala.entries().list_for_transaction_id(tx.id()).await?;
+        for _ in 0..entries.len() {
+            expected.push(("entry_created".to_string(), tx_id.clone()));
+        }
+    }
+
+    assert_eq!(
+        rows, expected,
+        "outbox must interleave per posting (tx, its entries, tx, its entries, ...), \
+         not group all transactions before all entries"
+    );
+    Ok(())
+}
