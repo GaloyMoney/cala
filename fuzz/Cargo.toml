@@ -1,6 +1,6 @@
 [package]
 name = "cala-fuzz"
-version = "0.23.2"
+version = "0.23.3-dev"
 publish = false
 edition = "2021"
 
