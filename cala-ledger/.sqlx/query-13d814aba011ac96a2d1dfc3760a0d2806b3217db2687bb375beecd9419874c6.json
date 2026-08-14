@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON (account_id, currency, effective)\n                values\n            FROM cala_cumulative_effective_balances\n            WHERE journal_id = $1\n              AND updated_at >= $2\n              AND (\n                $3::uuid IS NULL\n                OR (account_id, currency, effective) > ($3::uuid, $4::text, $5::date)\n              )\n            ORDER BY account_id, currency, effective, all_time_version DESC\n            LIMIT $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "values",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz",
+        "Uuid",
+        "Text",
+        "Date",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "13d814aba011ac96a2d1dfc3760a0d2806b3217db2687bb375beecd9419874c6"
+}
