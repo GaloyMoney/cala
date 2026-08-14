@@ -1,6 +1,10 @@
+use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
-use cala_types::primitives::{AccountId, Currency};
+use cala_types::{
+    balance::EffectiveBalanceSnapshot,
+    primitives::{AccountId, Currency},
+};
 
 use super::{AccountBalance, BalanceRange};
 
@@ -45,6 +49,28 @@ impl From<&BalanceRange> for AccountBalanceCursor {
         Self {
             account_id: range.close.details.account_id,
             currency: range.close.details.currency,
+        }
+    }
+}
+
+/// Keyset cursor for [`super::EffectiveBalances::list_modified_since`].
+/// Orders on the tuple identity itself — `(account_id, currency, effective)`
+/// — which doubles as the `DISTINCT ON` grouping key in the backing query,
+/// so pagination stays stable regardless of how many times a tuple was
+/// rewritten (backdating fan-out) between pages.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EffectiveBalancesModifiedCursor {
+    pub account_id: AccountId,
+    pub currency: Currency,
+    pub effective: NaiveDate,
+}
+
+impl From<&EffectiveBalanceSnapshot> for EffectiveBalancesModifiedCursor {
+    fn from(snapshot: &EffectiveBalanceSnapshot) -> Self {
+        Self {
+            account_id: snapshot.account_id,
+            currency: snapshot.currency,
+            effective: snapshot.effective,
         }
     }
 }

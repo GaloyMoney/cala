@@ -41,7 +41,7 @@ use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
 pub use cala_types::{
-    balance::{BalanceAmount, BalanceSnapshot},
+    balance::{BalanceAmount, BalanceSnapshot, EffectiveBalanceSnapshot},
     journal::JournalValues,
 };
 use cala_types::{entry::EntryValues, primitives::*};

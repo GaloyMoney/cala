@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
@@ -6,7 +6,9 @@ use tracing::instrument;
 use crate::{
     balance::{
         account_balance::{AccountBalance, BalanceRange},
-        cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+        cursor::{
+            AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
+        },
         error::BalanceError,
     },
     outbox::OutboxPublisher,
@@ -396,6 +398,93 @@ impl EffectiveBalanceRepo {
             })
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
+
+        Ok(es_entity::PaginatedQueryRet {
+            entities,
+            has_next_page,
+            end_cursor,
+        })
+    }
+
+    /// Backs [`super::EffectiveBalances::list_modified_since`]. `DISTINCT ON
+    /// (account_id, currency, effective)` groups on the tuple identity —
+    /// also the keyset cursor's shape — and `ORDER BY ... all_time_version
+    /// DESC` picks each group's overall-latest row (see the invariant
+    /// documented on the public method). Filtering on `updated_at >= since`
+    /// before the DISTINCT ON is what makes this a "changed since" query
+    /// rather than a full snapshot listing: a tuple only survives the WHERE
+    /// clause if it has been written since the watermark, and per that same
+    /// invariant its latest row is then guaranteed to be among the
+    /// surviving rows.
+    ///
+    /// Deliberately `updated_at`, not `created_at`: `created_at` is set once
+    /// at row-genesis for an (account_id, currency) chain
+    /// (`EffectiveBalanceData::first_snapshot`) and carried forward
+    /// unchanged on every later row for that chain
+    /// (`EffectiveBalanceData::into_snapshots` copies it from the
+    /// carried-forward baseline) — it does not mark per-row insert time.
+    /// `updated_at` (bound from `EffectiveBalanceSnapshot.modified_at`) is
+    /// what `EffectiveBalanceData::update_snapshot` refreshes on every
+    /// write, including backdating-rewritten rows.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.list_modified_since",
+        skip(self)
+    )]
+    pub(super) async fn list_modified_since(
+        &self,
+        journal_id: JournalId,
+        since: DateTime<Utc>,
+        args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
+        BalanceError,
+    > {
+        let es_entity::PaginatedQueryArgs { first, after } = args;
+        let (after_account_id, after_currency, after_effective) = if let Some(after) = after {
+            (
+                Some(uuid::Uuid::from(after.account_id)),
+                Some(after.currency.code().to_string()),
+                Some(after.effective),
+            )
+        } else {
+            (None, None, None)
+        };
+
+        let rows = sqlx::query!(
+            r#"
+            SELECT DISTINCT ON (account_id, currency, effective)
+                values
+            FROM cala_cumulative_effective_balances
+            WHERE journal_id = $1
+              AND updated_at >= $2
+              AND (
+                $3::uuid IS NULL
+                OR (account_id, currency, effective) > ($3::uuid, $4::text, $5::date)
+              )
+            ORDER BY account_id, currency, effective, all_time_version DESC
+            LIMIT $6
+            "#,
+            journal_id as JournalId,
+            since,
+            after_account_id,
+            after_currency.as_deref(),
+            after_effective,
+            (first + 1) as i64,
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let has_next_page = rows.len() > first;
+        let entities = rows
+            .into_iter()
+            .take(first)
+            .map(|row| {
+                serde_json::from_value::<EffectiveBalanceSnapshot>(row.values)
+                    .expect("Failed to deserialize effective balance snapshot")
+            })
+            .collect::<Vec<_>>();
+        let end_cursor = entities.last().map(EffectiveBalancesModifiedCursor::from);
 
         Ok(es_entity::PaginatedQueryRet {
             entities,

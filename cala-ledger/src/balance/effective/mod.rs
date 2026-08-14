@@ -6,13 +6,15 @@ use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 
-use cala_types::{entry::EntryValues, primitives::*};
+use cala_types::{balance::EffectiveBalanceSnapshot, entry::EntryValues, primitives::*};
 
 use crate::{outbox::OutboxPublisher, primitives::JournalId};
 
 use super::{
     account_balance::*,
-    cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
+    cursor::{
+        AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
+    },
     error::BalanceError,
 };
 
@@ -175,6 +177,65 @@ impl EffectiveBalances {
         self.repo
             .list_range_for_accounts(journal_id, account_ids, from, until, args)
             .await
+    }
+
+    /// Enumerate every `(account_id, currency, effective)` tuple under
+    /// `journal_id` that has had a cumulative-effective-balance snapshot
+    /// written since `since`, returning each tuple's overall-latest
+    /// [`EffectiveBalanceSnapshot`] (not merely the latest one written since
+    /// `since` — the tuple's newest row overall, so callers never need a
+    /// second read). A CDC-style pull API: designed to replace entry-derived
+    /// dirty-tracking side tables built against the
+    /// `EffectiveBalanceCreated`/`EffectiveBalanceUpdated` outbox events.
+    ///
+    /// # Contract (load-bearing — read before wiring up a consumer)
+    ///
+    /// 1. **Watermark race.** The watermark column (`modified_at`) is
+    ///    assigned at INSERT time inside a transaction that may not commit
+    ///    until later; a reader using `since = now()` can miss rows from
+    ///    transactions that were still in flight at read time. Callers MUST
+    ///    re-query with an overlap window (`since = previous_watermark -
+    ///    overlap`, with `overlap` much greater than the expected max
+    ///    transaction duration) and MUST be idempotent under re-delivery of
+    ///    tuples that did not actually change. A global sequence with gap
+    ///    tracking was considered and rejected as unwarranted machinery for
+    ///    an EOD-cadence consumer.
+    ///
+    ///    Note this filters on `modified_at`, not `created_at`: `created_at`
+    ///    is set once at row-genesis for an (account_id, currency) chain and
+    ///    carried forward unchanged on every later row for that chain, so it
+    ///    does not mark per-row write time — `modified_at` does, including
+    ///    for backdating-rewritten rows.
+    /// 2. **EC completeness.** Snapshots for eventually-consistent
+    ///    accounts/sets are written only when the streaming EC rollup
+    ///    flushes. This method reports what has been *written* — it does
+    ///    not wait for anything. A caller wanting a complete picture as of a
+    ///    moment must fence first via
+    ///    [`CalaLedger::ec_rollup_status`](crate::CalaLedger::ec_rollup_status)
+    ///    `.await_completion(..)`.
+    /// 3. **Clock domain.** `modified_at` comes from the ledger's configured
+    ///    clock. Prefer deriving `since` from previously *returned* data or
+    ///    the caller's own job-state watermark rather than wall-clock
+    ///    `now()` on the caller's side, which can diverge (e.g. under
+    ///    simulated time).
+    /// 4. Requires `enable_effective_balance = true` on the journal —
+    ///    otherwise no snapshot rows exist and this returns empty pages,
+    ///    not an error.
+    #[instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.list_modified_since",
+        skip(self)
+    )]
+    pub async fn list_modified_since(
+        &self,
+        journal_id: JournalId,
+        since: DateTime<Utc>,
+        args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
+    ) -> Result<
+        es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
+        BalanceError,
+    > {
+        self.repo.list_modified_since(journal_id, since, args).await
     }
 
     #[allow(clippy::too_many_arguments)]

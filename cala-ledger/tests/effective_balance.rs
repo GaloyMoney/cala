@@ -1,13 +1,13 @@
 mod helpers;
 
-use chrono::NaiveDate;
+use chrono::{NaiveDate, Utc};
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
 use std::collections::{HashMap, HashSet};
 
 use cala_ledger::{
     account_set::NewAccountSet,
-    balance::{AccountBalance, BalanceRange},
+    balance::{AccountBalance, BalanceRange, EffectiveBalanceSnapshot},
     tx_template::*,
     *,
 };
@@ -1133,6 +1133,482 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         ec_usd.pending(),
         inline_usd.pending(),
         "USD pending at date2"
+    );
+
+    Ok(())
+}
+
+/// Basic day-boundary case: a watermark captured between two postings on
+/// different days must return only the later day's tuples.
+#[tokio::test]
+async fn list_modified_since_basic() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let day_before = NaiveDate::from_ymd_opt(2025, 7, 1).unwrap();
+    let day_after = NaiveDate::from_ymd_opt(2025, 7, 2).unwrap();
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", day_before);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let since = Utc::now();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", day_after);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let page = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), since, all_balances_query())
+        .await?;
+    assert!(!page.has_next_page);
+
+    let tuples: HashSet<(AccountId, Currency, NaiveDate)> = page
+        .entities
+        .iter()
+        .map(|s| (s.account_id, s.currency, s.effective))
+        .collect();
+    let expected: HashSet<(AccountId, Currency, NaiveDate)> = [
+        (recipient_account.id(), Currency::BTC, day_after),
+        (recipient_account.id(), Currency::USD, day_after),
+        (sender_account.id(), Currency::BTC, day_after),
+        (sender_account.id(), Currency::USD, day_after),
+    ]
+    .into_iter()
+    .collect();
+    assert_eq!(tuples, expected, "only the later day's tuples must appear");
+
+    for snapshot in &page.entities {
+        let fresh = cala
+            .balances()
+            .effective()
+            .find_cumulative(
+                journal.id(),
+                snapshot.account_id,
+                snapshot.currency,
+                day_after,
+            )
+            .await?;
+        assert_eq!(fresh.details.settled, snapshot.settled);
+        assert_eq!(fresh.details.pending, snapshot.pending);
+        assert_eq!(fresh.details.encumbrance, snapshot.encumbrance);
+    }
+
+    Ok(())
+}
+
+/// Backdating fan-out: seeding four consecutive days then posting a
+/// backdated entry on the earliest of them rewrites every later snapshot
+/// (fresh `modified_at`, corrected values) — all four days must come back.
+#[tokio::test]
+async fn list_modified_since_backdating_fanout() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let dates: Vec<NaiveDate> = (1..=4)
+        .map(|d| NaiveDate::from_ymd_opt(2025, 8, d).unwrap())
+        .collect();
+
+    for &date in &dates {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        params.insert("effective", date);
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await?;
+    }
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let since = Utc::now();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Backdated posting at the earliest date rewrites every later snapshot
+    // (find_for_update deletes+replays every row with effective > this date).
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", recipient_account.id());
+    params.insert("effective", dates[0]);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let page = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), since, all_balances_query())
+        .await?;
+
+    let recipient_btc: HashMap<NaiveDate, EffectiveBalanceSnapshot> = page
+        .entities
+        .into_iter()
+        .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
+        .map(|s| (s.effective, s))
+        .collect();
+
+    assert_eq!(
+        recipient_btc.keys().copied().collect::<HashSet<_>>(),
+        dates.iter().copied().collect::<HashSet<_>>(),
+        "backdating must rewrite every later snapshot, not just the backdated date"
+    );
+
+    for &date in &dates {
+        let fresh = cala
+            .balances()
+            .effective()
+            .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date)
+            .await?;
+        let snapshot = &recipient_btc[&date];
+        assert_eq!(fresh.details.settled, snapshot.settled, "settled at {date}");
+        assert_eq!(fresh.details.pending, snapshot.pending, "pending at {date}");
+    }
+
+    Ok(())
+}
+
+/// Several updates to the same tuple since the watermark must collapse to
+/// exactly one row: the tuple's overall-latest snapshot.
+#[tokio::test]
+async fn list_modified_since_latest_wins() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 9, 1).unwrap();
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let since = Utc::now();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    for _ in 0..3 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        params.insert("effective", date);
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await?;
+    }
+
+    let page = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), since, all_balances_query())
+        .await?;
+
+    let recipient_btc_rows: Vec<&EffectiveBalanceSnapshot> = page
+        .entities
+        .iter()
+        .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
+        .collect();
+    assert_eq!(
+        recipient_btc_rows.len(),
+        1,
+        "three updates to one tuple must collapse to a single latest row"
+    );
+    assert_eq!(
+        recipient_btc_rows[0].version, 3,
+        "should carry the third (latest) version at this date"
+    );
+
+    let fresh = cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date)
+        .await?;
+    assert_eq!(fresh.details.settled, recipient_btc_rows[0].settled);
+
+    Ok(())
+}
+
+/// Keyset pagination: stable, complete, non-overlapping pages across a
+/// changed-set larger than one page, plus edge cases — a single-row page,
+/// resuming exactly at a cursor boundary, and an empty result once the
+/// watermark moves past all activity.
+#[tokio::test]
+async fn list_modified_since_pagination() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, _) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let since = Utc::now();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    // Five distinct recipients posted-to once, on the same date — a sparse
+    // set of tuples (recipient UUIDs interleave with the sender across two
+    // currencies), not a contiguous block.
+    let date = NaiveDate::from_ymd_opt(2025, 10, 1).unwrap();
+    let mut recipients = Vec::new();
+    for _ in 0..5 {
+        let (_, receiver) = helpers::test_accounts();
+        let recipient_account = cala.accounts().create(receiver).await?;
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        params.insert("effective", date);
+        cala.post_transaction(TransactionId::new(), &tx_code, params)
+            .await?;
+        recipients.push(recipient_account.id());
+    }
+    let expected_count = recipients.len() * 2 + 2; // each recipient x{BTC,USD} + sender x{BTC,USD}
+
+    let full = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), since, all_balances_query())
+        .await?;
+    assert!(!full.has_next_page);
+    assert_eq!(full.entities.len(), expected_count);
+    let expected_tuples: HashSet<(AccountId, Currency, NaiveDate)> = full
+        .entities
+        .iter()
+        .map(|s| (s.account_id, s.currency, s.effective))
+        .collect();
+    assert_eq!(expected_tuples.len(), expected_count, "no duplicate tuples");
+
+    // Page through with a small page size; the union must match exactly,
+    // with no duplicates or gaps across cursor boundaries.
+    let mut collected = Vec::new();
+    let mut after = None;
+    let mut pages = 0;
+    loop {
+        let page = cala
+            .balances()
+            .effective()
+            .list_modified_since(
+                journal.id(),
+                since,
+                es_entity::PaginatedQueryArgs { first: 3, after },
+            )
+            .await?;
+        pages += 1;
+        assert!(page.entities.len() <= 3);
+        let has_next = page.has_next_page;
+        after = page.end_cursor;
+        collected.extend(page.entities);
+        if !has_next {
+            break;
+        }
+    }
+    assert!(pages > 1, "test setup should require multiple pages");
+    let paginated_tuples: HashSet<(AccountId, Currency, NaiveDate)> = collected
+        .iter()
+        .map(|s| (s.account_id, s.currency, s.effective))
+        .collect();
+    assert_eq!(paginated_tuples, expected_tuples);
+    assert_eq!(
+        collected.len(),
+        expected_count,
+        "no duplicates across pages"
+    );
+
+    // Single-row page (first == 1), then resume exactly at that boundary.
+    let first_page = cala
+        .balances()
+        .effective()
+        .list_modified_since(
+            journal.id(),
+            since,
+            es_entity::PaginatedQueryArgs {
+                first: 1,
+                after: None,
+            },
+        )
+        .await?;
+    assert_eq!(first_page.entities.len(), 1);
+    assert!(first_page.has_next_page);
+    let boundary_tuple = (
+        first_page.entities[0].account_id,
+        first_page.entities[0].currency,
+        first_page.entities[0].effective,
+    );
+
+    let rest = cala
+        .balances()
+        .effective()
+        .list_modified_since(
+            journal.id(),
+            since,
+            es_entity::PaginatedQueryArgs {
+                first: expected_count,
+                after: first_page.end_cursor,
+            },
+        )
+        .await?;
+    assert!(!rest.has_next_page);
+    assert_eq!(rest.entities.len(), expected_count - 1);
+    assert!(
+        rest.entities
+            .iter()
+            .all(|s| (s.account_id, s.currency, s.effective) != boundary_tuple),
+        "the boundary tuple must not repeat on the next page"
+    );
+
+    // No rows once the watermark moves past all activity.
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let quiet_since = Utc::now();
+    let empty = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), quiet_since, all_balances_query())
+        .await?;
+    assert!(empty.entities.is_empty());
+    assert!(!empty.has_next_page);
+    assert!(empty.end_cursor.is_none());
+
+    Ok(())
+}
+
+/// A tuple whose only activity is before the watermark must be absent, even
+/// while a sibling tuple touched after the watermark is present.
+#[tokio::test]
+async fn list_modified_since_excludes_untouched_tuples() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+
+    let (sender, _) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let (_, untouched_receiver) = helpers::test_accounts();
+    let untouched_account = cala.accounts().create(untouched_receiver).await?;
+    let (_, touched_receiver) = helpers::test_accounts();
+    let touched_account = cala.accounts().create(touched_receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 11, 1).unwrap();
+
+    // The untouched account's only activity is before the watermark.
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", untouched_account.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    let since = Utc::now();
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let mut params = Params::new();
+    params.insert("journal_id", journal.id());
+    params.insert("sender", sender_account.id());
+    params.insert("recipient", touched_account.id());
+    params.insert("effective", date);
+    cala.post_transaction(TransactionId::new(), &tx_code, params)
+        .await?;
+
+    let page = cala
+        .balances()
+        .effective()
+        .list_modified_since(journal.id(), since, all_balances_query())
+        .await?;
+
+    let touched_ids: HashSet<AccountId> = page.entities.iter().map(|s| s.account_id).collect();
+    assert!(touched_ids.contains(&touched_account.id()));
+    assert!(
+        !touched_ids.contains(&untouched_account.id()),
+        "a tuple whose last change is before the watermark must be absent"
     );
 
     Ok(())
