@@ -44,10 +44,8 @@ fn compile_program(source: String) -> Result<Arc<Program>, String> {
         .expect("failed to spawn cel-compile thread")
         .join()
         .unwrap_or_else(|panic| {
-            // The upstream `cel` parser can panic on adversarial input
-            // (e.g. its RecursionListener depth counter underflows when a
-            // syntax error is followed by deep nesting). A library must not
-            // crash its caller, so surface the panic as a parse error.
+            // A library must not crash its caller: surface panics from
+            // the compile thread as parse errors.
             let msg = panic
                 .downcast_ref::<&str>()
                 .map(|s| s.to_string())
@@ -150,12 +148,8 @@ mod tests {
 
     #[test]
     fn parser_panic_surfaces_as_error() {
-        // Regression test (found by fuzzing): a leading syntax error followed
-        // by deep nesting makes the upstream `cel` parser's RecursionListener
-        // underflow its depth counter (`exit_expr`: `self.depth -= 1`),
-        // panicking with "attempt to subtract with overflow" in builds with
-        // overflow checks. Compilation must surface this as a parse error,
-        // not propagate the panic to the caller.
+        // A panic during compilation must surface as a parse error, not
+        // propagate to the caller.
         let mut source = String::from(">");
         source.push_str(&"{".repeat(63));
         source.push_str("?[");

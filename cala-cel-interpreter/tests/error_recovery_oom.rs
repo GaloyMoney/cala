@@ -1,33 +1,21 @@
-//! Regression tests: adversarial input must not trigger runaway parser
-//! error-recovery (OOM).
+//! Regression tests: adversarial CEL input must fail fast during parsing,
+//! not trigger runaway parser error-recovery (OOM).
 //!
-//! The upstream `cel` parser (before v0.14.3, cel-rust PR #310) had no cap
-//! on ANTLR error-recovery attempts, so syntactically ambiguous input drove
-//! the ALL(*) adaptive-prediction machinery into exponential DFA/config-set
-//! growth. Measured on this machine with `cel` 0.14.1 (release build):
-//! repeating the `!!(` motif to 126 bytes peaked at **46GB RSS** and was
-//! still burning CPU after 300s; 63 bytes already needed 82MB and 0.5s.
-//!
-//! v0.14.3 ports cel-go's `recoveryLimitErrorStrategy`: once recovery is
-//! attempted 30 times the parse fails fast. The same 126-byte input now
-//! errors in ~1ms with ~8MB RSS, and memory stays flat as the motif grows.
-//!
-//! Before the fix these tests would OOM-kill (or time out) the CI runner;
-//! now they must simply report parse errors.
+//! The `cel` parser caps error-recovery attempts; once the cap is hit the
+//! parse fails fast. These tests pin that: pathological inputs must produce
+//! a plain parse error within a bounded time, with cost scaling linearly
+//! (not exponentially) in input size.
 
 use cala_cel_interpreter::CelExpression;
 
-/// The reproduction from cel-rust issue #306: repeating the ambiguous
-/// `!!(` sequence. 126 bytes was the "~1.1GB" row in the issue's table
-/// (this machine fared worse: >46GB).
+/// Repeating the ambiguous `!!(` motif — errors quickly at any size.
 #[test]
 fn repeated_negation_parens_motif_errors_quickly() {
     let source = "!!(".repeat(42); // 126 bytes
     let started = std::time::Instant::now();
     let err = CelExpression::try_from(source).expect_err("must be a parse error");
     assert!(err.to_string().contains("CelParseError"));
-    // Generous bound (debug builds, loaded CI): release peaks at ~1ms.
-    // Pre-fix this never completed at all within 300s.
+    // Generous bound (debug builds, loaded CI); release is ~1ms.
     assert!(
         started.elapsed() < std::time::Duration::from_secs(60),
         "parse took {:?} — error recovery no longer short-circuits?",
@@ -35,8 +23,7 @@ fn repeated_negation_parens_motif_errors_quickly() {
     );
 }
 
-/// Scaling must be flat, not exponential: 40x more of the same motif costs
-/// a few more recovery attempts, not 40x the memory/time.
+/// Cost must scale linearly, not exponentially, with input size.
 #[test]
 fn recovery_cost_scales_linearly_with_input() {
     for n in [84usize, 210, 840] {
@@ -56,8 +43,8 @@ fn recovery_cost_scales_linearly_with_input() {
     }
 }
 
-/// Malformed deep nesting (from cel-rust PR #310's own tests): recovery
-/// combined with the recursion listener must terminate in an error.
+/// Malformed deep nesting: recovery combined with the recursion listener
+/// must terminate in an error, not hang.
 #[test]
 fn malformed_nested_expression_errors_without_hanging() {
     let expression = format!(
