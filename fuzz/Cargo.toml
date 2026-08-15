@@ -37,17 +37,8 @@ features = ["fuzz"]
 [workspace]
 members = ["."]
 
-# Fuzz builds run in release mode; make sure panics we care about still fire.
-#
-# NOTE: overflow-checks are intentionally off (matching production release
-# builds). The upstream `cel` parser's RecursionListener depth counter
-# underflows on adversarial input (`exit_expr`: `self.depth -= 1`), which
-# panics with overflow checks on and then dies with SIGSEGV while unwinding
-# in the sanitizer-instrumented build. With overflow checks off (production
-# behavior) the counter wraps and the parse simply fails with a recursion
-# error. `cala-cel-interpreter` additionally catches compile-thread panics
-# and converts them to parse errors; the debug-build regression test
-# `parser_panic_surfaces_as_error` covers that path.
+# Fuzz builds run in release mode; make sure panics we care about still
+# fire while matching production release behavior (no overflow checks).
 [profile.release]
 debug-assertions = true
 overflow-checks = false
