@@ -91,19 +91,13 @@ cargo fuzz run -s none cel_compile -- \
 
 ## Bugs found
 
-1. **`cel` parser panic: depth-counter underflow** (upstream
-   [cel-rust#305](https://github.com/cel-rust/cel-rust/issues/305)). A leading syntax error followed by deep nesting makes
-   `RecursionListener::exit_expr` underflow (`self.depth -= 1` on a `u16`),
-   panicking in builds with overflow checks. Fixed defensively in cala:
-   `compile_program` converts compile-thread panics into parse errors
-   (regression test: `parser_panic_surfaces_as_error`).
-2. **`cel` parser exponential memory blowup** (upstream
-   [cel-rust#306](https://github.com/cel-rust/cel-rust/issues/306), not fixed). A
-   ~125-byte input — a 32-byte `!!(!!...` motif repeated 4 times — consumes
-   >1 GiB during `Program::compile` (53 MiB at 3 repeats, 6 GiB at 5), OOMing
-   the process. This is a DoS against any deployment that compiles
-   user-supplied CEL (velocity controls, tx templates). No in-process
-   mitigation is possible; needs an upstream parser fix.
+1. **`cel` parser panic: depth-counter underflow** (fixed upstream in
+   `cel` 0.14.2; also defended in cala — `compile_program` converts
+   compile-thread panics into parse errors; regression test:
+   `parser_panic_surfaces_as_error`).
+2. **`cel` parser exponential memory blowup during `Program::compile`**
+   (fixed upstream in `cel` 0.14.3 — error-recovery limit; regression
+   tests: `error_recovery_oom.rs`).
 3. **Panic in `timestamp.format(...)` builtin** (fixed). Invalid chrono
    format specifiers (e.g. `now.format('%Q')`) made `DelayedFormat`'s
    `Display` impl return `fmt::Error` and `.to_string()` panic. Now an
