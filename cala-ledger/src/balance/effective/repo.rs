@@ -3,19 +3,15 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{
-    balance::{
-        account_balance::{AccountBalance, BalanceRange},
-        cursor::{
-            AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
-        },
-        error::BalanceError,
+use crate::balance::{
+    account_balance::{AccountBalance, BalanceRange},
+    cursor::{
+        AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    outbox::OutboxPublisher,
+    error::BalanceError,
 };
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
-    outbox::OutboxEventPayload,
     primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
@@ -27,15 +23,11 @@ type BalanceRangeResult =
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
-    publisher: OutboxPublisher,
 }
 
 impl EffectiveBalanceRepo {
-    pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
-        Self {
-            pool: pool.clone(),
-            publisher: publisher.clone(),
-        }
+    pub fn new(pool: &PgPool) -> Self {
+        Self { pool: pool.clone() }
     }
 
     pub async fn find(
@@ -1226,19 +1218,6 @@ impl EffectiveBalanceRepo {
         )
         .execute(op.as_executor())
         .await?;
-
-        self.publisher
-            .publish_all(
-                op,
-                new_balances.into_iter().map(|balance| {
-                    if balance.all_time_version == 1 {
-                        OutboxEventPayload::EffectiveBalanceCreated { balance }
-                    } else {
-                        OutboxEventPayload::EffectiveBalanceUpdated { balance }
-                    }
-                }),
-            )
-            .await?;
 
         Ok(())
     }

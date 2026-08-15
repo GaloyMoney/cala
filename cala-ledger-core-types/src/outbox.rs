@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    account::*, account_set::*, balance::*, entry::*, journal::*, primitives::*, transaction::*,
+    account::*, account_set::*, entry::*, journal::*, primitives::*, transaction::*,
     tx_template::*,
 };
 
@@ -51,11 +51,5 @@ pub enum OutboxEventPayload {
     },
     EntryCreated {
         entry: EntryValues,
-    },
-    EffectiveBalanceCreated {
-        balance: EffectiveBalanceSnapshot,
-    },
-    EffectiveBalanceUpdated {
-        balance: EffectiveBalanceSnapshot,
     },
 }

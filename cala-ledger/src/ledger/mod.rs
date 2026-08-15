@@ -81,7 +81,7 @@ impl CalaLedger {
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
         let transactions = Transactions::new(&pool);
         let entries = Entries::new(&pool);
-        let balances = Balances::new(&pool, &publisher, &journals);
+        let balances = Balances::new(&pool, &journals);
         let velocities = Velocities::new(&pool, &clock);
         let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
         let postings = Postings::new(
