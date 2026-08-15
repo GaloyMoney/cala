@@ -550,6 +550,7 @@ plan:
     - { name: corpus }
     outputs:
     - { name: corpus-out }
+    - { name: artifacts-out }
     caches:
     - { path: cargo-home }
     - { path: cargo-target-dir }
@@ -567,35 +568,61 @@ plan:
           export CARGO_TARGET_DIR=$PWD/../cargo-target-dir
           export CORPUS_TARBALL_IN="../corpus/*.tgz"
           export CORPUS_TARBALL_OUT="../corpus-out/corpus-v$(date -u +%Y%m%d-%H%M%S).tgz"
+          export ARTIFACTS_TARBALL_OUT="../artifacts-out/artifacts-v$(date -u +%Y%m%d-%H%M%S).tgz"
           bash ci/vendor/tasks/fuzz.sh
         '
     params:
       CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
       CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
       FUZZ_SECONDS: #@ fuzz_seconds
-- task: store-corpus
-  config:
-    platform: linux
-    image_resource:
-      type: registry-image
-      source: { repository: google/cloud-sdk }
-    inputs:
-    - { name: corpus-out }
-    params:
-      GCS_BUCKET: ((staging-gcp-creds.bucket_name))
-      GCS_CREDS: ((staging-gcp-creds.creds_json))
-      GCS_PREFIX: #@ data.values.gh_repository + "-artifacts/fuzz-corpus"
-    run:
-      path: sh
-      args:
-      - -exc
-      - |
-        set -euo pipefail
-        if ! ls corpus-out/*.tgz >/dev/null 2>&1; then echo "no corpus to store; nothing was packaged"; exit 0; fi
-        printf '%s' "$GCS_CREDS" > /tmp/key.json
-        gcloud auth activate-service-account --key-file=/tmp/key.json >/dev/null
-        gsutil cp corpus-out/corpus-v*.tgz "gs://$GCS_BUCKET/$GCS_PREFIX/"
-        echo "stored corpus"
+  ensure:
+    do:
+    - task: store-corpus
+      config:
+        platform: linux
+        image_resource:
+          type: registry-image
+          source: { repository: google/cloud-sdk }
+        inputs:
+        - { name: corpus-out }
+        params:
+          GCS_BUCKET: ((staging-gcp-creds.bucket_name))
+          GCS_CREDS: ((staging-gcp-creds.creds_json))
+          GCS_PREFIX: #@ data.values.gh_repository + "-artifacts/fuzz-corpus"
+        run:
+          path: sh
+          args:
+          - -exc
+          - |
+            set -euo pipefail
+            if ! ls corpus-out/*.tgz >/dev/null 2>&1; then echo "no corpus to store; nothing was packaged"; exit 0; fi
+            printf '%s' "$GCS_CREDS" > /tmp/key.json
+            gcloud auth activate-service-account --key-file=/tmp/key.json >/dev/null
+            gsutil cp corpus-out/corpus-v*.tgz "gs://$GCS_BUCKET/$GCS_PREFIX/"
+            echo "stored corpus"
+    - task: store-artifacts
+      config:
+        platform: linux
+        image_resource:
+          type: registry-image
+          source: { repository: google/cloud-sdk }
+        inputs:
+        - { name: artifacts-out }
+        params:
+          GCS_BUCKET: ((staging-gcp-creds.bucket_name))
+          GCS_CREDS: ((staging-gcp-creds.creds_json))
+          GCS_PREFIX: #@ data.values.gh_repository + "-artifacts/fuzz-artifacts"
+        run:
+          path: sh
+          args:
+          - -exc
+          - |
+            set -euo pipefail
+            if ! ls artifacts-out/*.tgz >/dev/null 2>&1; then echo "no artifacts to store"; exit 0; fi
+            printf '%s' "$GCS_CREDS" > /tmp/key.json
+            gcloud auth activate-service-account --key-file=/tmp/key.json >/dev/null
+            gsutil cp artifacts-out/artifacts-v*.tgz "gs://$GCS_BUCKET/$GCS_PREFIX/"
+            echo "stored artifacts"
 on_failure: #@ zenduty_notification_hook()
 on_error: #@ zenduty_notification_hook()
 #@ end

@@ -8,9 +8,8 @@ directories:
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'feat(fuzz): merge fuzz/seeds/<target>/ into the corpus before
-        each run...'
-      sha: 0564af2488d0d64fae1f2345b1d23b3b09f65ee6
+      commitTitle: 'fix(fuzz): preserve corpus + artifacts when a target crashes...'
+      sha: 1285fea1165e38202ca627ad27d993dcaff4eef5
     path: .
   path: vendor
 kind: LockConfig
