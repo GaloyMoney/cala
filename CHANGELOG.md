@@ -1,3 +1,11 @@
+# [cala release v0.24.0](https://github.com/GaloyMoney/cala/releases/tag/0.24.0)
+
+
+
+### Features
+
+- [**breaking**] Remove EffectiveBalanceCreated/EffectiveBalanceUpdated outbox events (#850)
+
 # [cala release v0.23.2](https://github.com/GaloyMoney/cala/releases/tag/0.23.2)
 
 
