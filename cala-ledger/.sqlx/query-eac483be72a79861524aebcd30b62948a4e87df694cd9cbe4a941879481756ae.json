@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH win AS (\n                SELECT sequence, ROW_NUMBER() OVER (ORDER BY sequence) AS rn\n                FROM cala_persistent_outbox_events\n                WHERE sequence > $1\n                  AND sequence <= $1 + $2\n            )\n            SELECT e.sequence AS \"sequence!: i64\", e.id AS \"id!\", e.payload,\n                   e.tracing_context, e.recorded_at AS \"recorded_at!\"\n            FROM cala_persistent_outbox_events e\n            WHERE e.sequence > $1\n              AND e.sequence <= $1 + $2\n              AND e.sequence < (\n                  SELECT COALESCE(MIN(sequence), $1 + $2 + 1)\n                  FROM win\n                  WHERE sequence <> $1 + rn\n              )\n            ORDER BY e.sequence ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "tracing_context",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "recorded_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "eac483be72a79861524aebcd30b62948a4e87df694cd9cbe4a941879481756ae"
+}

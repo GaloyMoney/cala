@@ -8,7 +8,7 @@ use tracing::instrument;
 
 use cala_types::{balance::EffectiveBalanceSnapshot, entry::EntryValues, primitives::*};
 
-use crate::{outbox::OutboxPublisher, primitives::JournalId};
+use crate::primitives::JournalId;
 
 use super::{
     account_balance::*,
@@ -26,9 +26,9 @@ pub struct EffectiveBalances {
     _pool: PgPool,
 }
 impl EffectiveBalances {
-    pub(crate) fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
+    pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
-            repo: EffectiveBalanceRepo::new(pool, publisher),
+            repo: EffectiveBalanceRepo::new(pool),
             _pool: pool.clone(),
         }
     }
@@ -185,8 +185,7 @@ impl EffectiveBalances {
     /// [`EffectiveBalanceSnapshot`] (not merely the latest one written since
     /// `since` — the tuple's newest row overall, so callers never need a
     /// second read). A CDC-style pull API: designed to replace entry-derived
-    /// dirty-tracking side tables built against the
-    /// `EffectiveBalanceCreated`/`EffectiveBalanceUpdated` outbox events.
+    /// dirty-tracking side tables built against per-snapshot outbox events.
     ///
     /// # Contract (load-bearing — read before wiring up a consumer)
     ///
