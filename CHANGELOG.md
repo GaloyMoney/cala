@@ -1,3 +1,12 @@
+# [cala release v0.24.1](https://github.com/GaloyMoney/cala/releases/tag/0.24.1)
+
+
+
+### Miscellaneous Tasks
+
+- Bump job, obix
+- Upgrade cel to 0.14.3 to fix parser OOM (cel-rust #310) (#851)
+
 # [cala release v0.24.0](https://github.com/GaloyMoney/cala/releases/tag/0.24.0)
 
 
