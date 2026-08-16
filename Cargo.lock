@@ -898,9 +898,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.9"
+version = "0.12.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2227e547593b0c89be2c5711af8af0ec132397a4bdd2eb13033171e06ce4fba7"
+checksum = "1b46ec6f5ea842d48519daa7a59060667e5df7a8018390d9aefb9928f4241883"
 dependencies = [
  "async-stream",
  "chrono",
@@ -926,9 +926,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.9"
+version = "0.12.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdde286ff62b9d58b6e43ce414920c57b799641fcbadb8c633452f8e7687122c"
+checksum = "c80cfaeb802cdfc853aaba00a123b2f8b4593f970ad5e1de7c9c77a503e7c260"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1441,9 +1441,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.9.1"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "787e0bada3ca33fb727b9d3a631c351c48d6eec9da8139f90ae8946145199ada"
+checksum = "3083523d28127213aad09e26cf4d9ab78f60bd4647bf3472c25f9f193910e4e8"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1647,9 +1647,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a445299b365dd8058ebff758213ebe3d3e1c910f7cb159cfe1641e8e7fe8ccb3"
+checksum = "02eaf245fc5fe057366257289946c95a707568cce188e0c2705a076b0e0acb42"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1670,9 +1670,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.8.2"
+version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ff2cd179133d36761881970ca73497fac9d130688c5d9cee934f2a3122278fe"
+checksum = "5235bd1111c6d8a08934a744add1a7c74eaf59c334a4ce1d1ebbe6320dbb4b60"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",

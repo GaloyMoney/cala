@@ -1,11 +1,13 @@
 CREATE TABLE jobs (
   id UUID PRIMARY KEY,
-  unique_per_type BOOLEAN NOT NULL,
+  unique_key VARCHAR,
   job_type VARCHAR NOT NULL,
   queue_id VARCHAR,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX idx_unique_job_type ON jobs (job_type) WHERE unique_per_type = TRUE;
+CREATE UNIQUE INDEX idx_jobs_job_type_unique_key
+  ON jobs (job_type, unique_key)
+  WHERE unique_key IS NOT NULL;
 
 CREATE TABLE job_events (
   id UUID NOT NULL REFERENCES jobs(id),
