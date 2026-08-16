@@ -228,12 +228,22 @@ impl TxTemplates {
             builder.account_id(account_id);
 
             let entry_type: String = entry.entry_type.try_evaluate(ctx)?;
-            builder.entry_type(entry_type);
+            builder.entry_type(entry_type.clone());
 
             let layer: Layer = entry.layer.try_evaluate(ctx)?;
             builder.layer(layer);
 
             let units: Decimal = entry.units.try_evaluate(ctx)?;
+            // Negative or zero units invert the entry's accounting
+            // meaning (a DEBIT of -X is a CREDIT of X) while still
+            // passing the zero-sum check below, and let postings drive
+            // balance legs negative and slip past velocity enforcement.
+            if units <= Decimal::ZERO {
+                return Err(TxTemplateError::NonPositiveUnits(
+                    entry_type.clone(),
+                    units,
+                ));
+            }
             let currency: Currency = entry.currency.try_evaluate(ctx)?;
             let direction: DebitOrCredit = entry.direction.try_evaluate(ctx)?;
 
