@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #9 from GaloyMoney/chore/migrate-kaniko-to-oci-build-task...'
-      sha: 8653c10a6ed135eea3d26cce9772afa96e0139d6
+      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
+      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'fix(fuzz): preserve corpus + artifacts when a target crashes...'
-      sha: 1285fea1165e38202ca627ad27d993dcaff4eef5
+      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
+      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
     path: .
   path: vendor
 kind: LockConfig
