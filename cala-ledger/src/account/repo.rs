@@ -87,6 +87,9 @@ impl AccountRepo {
         entity: &Account,
         new_events: es_entity::LastPersisted<'_, AccountEvent>,
     ) -> Result<(), sqlx::Error> {
+        if entity.is_account_set() {
+            return Ok(());
+        }
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;
