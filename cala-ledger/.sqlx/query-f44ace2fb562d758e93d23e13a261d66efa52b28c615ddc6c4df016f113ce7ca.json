@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH entities AS (SELECT id FROM jobs WHERE job_type = $1 AND unique_per_type = TRUE) SELECT i.id AS \"entity_id!: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at, NULL::jsonb as \"forgettable_payload?\" FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id, e.sequence",
+  "query": "WITH entities AS (SELECT id FROM jobs WHERE job_type = $1 AND unique_key = $2) SELECT i.id AS \"entity_id!: Repo__Id\", e.sequence, e.event, CASE WHEN $3 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at, NULL::jsonb as \"forgettable_payload?\" FROM entities i JOIN job_events e ON i.id = e.id ORDER BY i.id, e.sequence",
   "describe": {
     "columns": [
       {
@@ -37,6 +37,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Text",
         "Bool"
       ]
     },
@@ -49,5 +50,5 @@
       null
     ]
   },
-  "hash": "9fe15942e7a33e1d163bcbb15911ef59fa764db26e161d1a16f3a56b82c62c83"
+  "hash": "f44ace2fb562d758e93d23e13a261d66efa52b28c615ddc6c4df016f113ce7ca"
 }

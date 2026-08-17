@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT execution_state_json FROM job_executions WHERE id = $1",
+  "query": "SELECT execution_state_json FROM job_execution_states WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,8 @@
       ]
     },
     "nullable": [
-      true
+      false
     ]
   },
-  "hash": "452f79837dff78243fdd7fd2ea45371d1e3ff04da632c907c5779f186e0faf90"
+  "hash": "9cd061f44802c10127d9e0d2d3df24e9a939798758c7df017998c7917ca073de"
 }

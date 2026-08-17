@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          INSERT INTO job_execution_states (id, execution_state_json)\n          VALUES ($1, $2)\n          ON CONFLICT (id) DO UPDATE SET execution_state_json = EXCLUDED.execution_state_json\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "79bd9627946cdc28326570e62bd1faaf4cce4d2a474d6df71a284506acfb80f9"
+}

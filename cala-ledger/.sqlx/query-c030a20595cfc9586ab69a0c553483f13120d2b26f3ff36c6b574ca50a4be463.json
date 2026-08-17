@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        -- Narrowest set first: only due jobs, in execute_at order,\n        -- bounded by a small overscan of the poll limit.\n        -- idx_job_executions_pending_job_type_execute_at serves this as\n        -- an ordered index scan; future-scheduled jobs never reach the\n        -- anti-join / window-function work below.\n        WITH global_running AS (\n            -- Running-execution count of the globally-capped subset of $4\n            -- ($7, almost always empty or tiny — batched types never appear\n            -- here, see `JobInitializer::max_concurrent_global`). Feeds\n            -- `limits` below. `job_executions` is small (bounded by the\n            -- fleet's slot budgets — hundreds of rows), and the partial index\n            -- idx_job_executions_poller_instance already covers\n            -- `state = 'running'`, so with $7 empty this is a no-op scan of\n            -- zero rows; with $7 populated it's still a cheap index scan, not\n            -- a sequential one.\n            SELECT job_type, COUNT(*) AS n\n            FROM job_executions\n            WHERE state = 'running' AND job_type = ANY($7)\n            GROUP BY job_type\n        ),\n        limits AS (\n            -- One row per pollable type carrying how many rows this poll may\n            -- claim for it. For a batched type that is\n            -- `max_batch_size * free batch slots`, so no more rows are taken\n            -- than a batch is free to execute immediately; the rest of the\n            -- backlog stays unclaimed for other pollers and accumulates into\n            -- fuller later batches. A plain type's per-process concurrency\n            -- cap (`JobInitializer::max_concurrent_per_process`) is folded\n            -- into `row_limit` client-side, before this query runs, via $6 —\n            -- `units_in_flight` is in-process state no query can see. A\n            -- global cap (`max_concurrent_global`) is folded in right here,\n            -- against `global_running`, in the SAME round trip as everything\n            -- else: types not in $7 are unaffected (`g.cap IS NULL`).\n            SELECT l.job_type,\n                   CASE WHEN g.cap IS NOT NULL\n                        THEN LEAST(l.row_limit, GREATEST(g.cap - COALESCE(gr.n, 0), 0))\n                        ELSE l.row_limit\n                   END AS row_limit\n            FROM UNNEST($4::text[], $6::int4[]) AS l(job_type, row_limit)\n            LEFT JOIN UNNEST($7::text[], $8::int4[]) AS g(job_type, cap)\n                   ON g.job_type = l.job_type\n            LEFT JOIN global_running gr ON gr.job_type = l.job_type\n        ),\n        pollable AS (\n            -- Types with zero effective row_limit — per-process/batch-slot\n            -- saturated (never reach here, already absent from $4) or\n            -- global-budget saturated (computed above) — are dropped here,\n            -- before `due`: exactly like today, a saturated type's backlog\n            -- never floods the overscan window below. A plain row set, not\n            -- an aggregated array: `= ANY(subquery)` compares against each\n            -- ROW of a subquery, so an array-typed aggregate here would\n            -- compare `job_type` against whole arrays instead of elements.\n            SELECT job_type FROM limits WHERE row_limit > 0\n        ),\n        due AS (\n            SELECT id, queue_id, execute_at, job_type\n            FROM job_executions\n            WHERE state = 'pending'\n            AND job_type IN (SELECT job_type FROM pollable)\n            AND execute_at <= $2::timestamptz\n            ORDER BY execute_at\n            LIMIT $1 * 4\n        ),\n        candidates AS (\n            -- The 1-at-a-time-per-queue anti-join and the queue-dedup\n            -- window run only over the bounded due set instead of every\n            -- pending row.\n            SELECT id, execute_at, job_type,\n                   ROW_NUMBER() OVER (\n                       PARTITION BY COALESCE(queue_id, id::text)\n                       ORDER BY execute_at\n                   ) AS rn\n            FROM due\n            WHERE NOT EXISTS (\n                SELECT 1 FROM job_executions AS running\n                WHERE running.state = 'running'\n                AND running.queue_id IS NOT NULL\n                AND running.queue_id = due.queue_id\n            )\n        ),\n        locked AS (\n            -- execution_state_json comes from job_execution_states via this\n            -- LEFT JOIN, fetched only for the ~$1 winners.\n            --\n            -- Every queue-head is eligible here, deliberately: the per-type\n            -- cap is applied *after* this lock, never before it. Filtering to\n            -- each type's cap first would make every instance rank the same\n            -- global candidate set and target an identical head slice, so a\n            -- poller that lost the race would skip that whole slice and fall\n            -- through to nothing while due work sat unclaimed. SKIP LOCKED can\n            -- only route around a concurrent poller if there is something\n            -- past its rows left to see.\n            --\n            -- FOR UPDATE OF je: bare FOR UPDATE errors on a nullable join side.\n            SELECT je.id, cp.execution_state_json AS data_json, je.attempt_index,\n                   c.job_type, je.execute_at\n            FROM candidates c\n            JOIN job_executions je ON je.id = c.id\n            LEFT JOIN job_execution_states cp ON cp.id = c.id\n            WHERE c.rn = 1\n            ORDER BY je.execute_at ASC\n            LIMIT $1\n            FOR UPDATE OF je SKIP LOCKED\n        ),\n        selected_jobs AS (\n            -- Enforce each type's cap on the rows this poller actually holds.\n            -- Rows over the cap are simply not claimed: they stay `pending`\n            -- and their lock is released when this short poll transaction\n            -- commits, so they remain visible to other instances and\n            -- accumulate into fuller later batches.\n            --\n            -- Every type `locked` can contain came through `due`, which only\n            -- admits types `pollable` kept — i.e. row_limit >= 1 in `limits`\n            -- (`limits` itself may still hold saturated, row_limit = 0 rows;\n            -- `pollable` is what filters those out before `due`). So the\n            -- first row of any type present here always survives —\n            -- `selected_jobs` is never empty while `locked` isn't.\n            SELECT t.id, t.data_json, t.attempt_index\n            FROM (\n                SELECT l.*,\n                       ROW_NUMBER() OVER (\n                           PARTITION BY l.job_type ORDER BY l.execute_at\n                       ) AS type_rn\n                FROM locked l\n            ) t\n            JOIN limits lim ON lim.job_type = t.job_type\n            WHERE t.type_rn <= lim.row_limit\n        ),\n        updated AS (\n            -- queue_id rides along in the projection (it is already read by\n            -- `due`): batch formation needs it as the canonical ordering key,\n            -- and batched runners surface it per item.\n            UPDATE job_executions AS je\n            SET state = 'running', alive_at = $5, execute_at = NULL, poller_instance_id = $3\n            FROM selected_jobs\n            WHERE je.id = selected_jobs.id\n              AND je.state = 'pending'\n            RETURNING je.id, selected_jobs.data_json, je.attempt_index, je.queue_id\n        ),\n        min_wait AS (\n            -- Index-only scan over the pending partial index, no\n            -- anti-join. May wake slightly early when the nearest\n            -- future job is queue-blocked — one wasted wake-up at\n            -- worst, only while its queue stays busy.\n            --\n            -- Absolute timestamp; excludes already-due rows (see overscan_status).\n            SELECT MIN(execute_at) AS next_due_at\n            FROM job_executions\n            WHERE state = 'pending'\n            AND job_type = ANY($4)\n            AND execute_at > $2::timestamptz\n        ),\n        overscan_status AS (\n            -- Whether `due` or `locked` hit its LIMIT — if so, re-poll rather than trust next_due_at.\n            SELECT\n                (SELECT COUNT(*) FROM due) >= $1 * 4\n                OR (SELECT COUNT(*) FROM locked) >= $1\n                AS may_have_more\n        )\n        SELECT * FROM (\n            SELECT\n                u.id AS \"id?: JobId\",\n                u.data_json AS \"data_json?: JsonValue\",\n                u.attempt_index AS \"attempt_index?\",\n                u.queue_id AS \"queue_id?\",\n                NULL::TIMESTAMPTZ AS \"next_due_at?\",\n                os.may_have_more AS \"may_have_more!\"\n            FROM updated u, overscan_status os\n            UNION ALL\n            SELECT\n                NULL::UUID AS \"id?: JobId\",\n                NULL::JSONB AS \"data_json?: JsonValue\",\n                NULL::INT AS \"attempt_index?\",\n                NULL::VARCHAR AS \"queue_id?\",\n                mw.next_due_at AS \"next_due_at?\",\n                os.may_have_more AS \"may_have_more!\"\n            FROM min_wait mw, overscan_status os\n        ) AS result\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "data_json?: JsonValue",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_index?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "queue_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "next_due_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "may_have_more!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Timestamptz",
+        "Uuid",
+        "TextArray",
+        "Timestamptz",
+        "Int4Array",
+        "TextArray",
+        "Int4Array"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c030a20595cfc9586ab69a0c553483f13120d2b26f3ff36c6b574ca50a4be463"
+}

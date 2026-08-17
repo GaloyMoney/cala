@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT unique_key AS \"unique_key!\", id AS \"id: JobId\"\n            FROM jobs\n            WHERE job_type = $1 AND unique_key IS NOT NULL\n            ORDER BY unique_key\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unique_key!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "id: JobId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "cae58de3a503958cc982ebbecc73d79c500276c84bee8218c92919eeff83155a"
+}
