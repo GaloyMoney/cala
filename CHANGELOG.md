@@ -1,3 +1,11 @@
+# [cala release v0.24.3](https://github.com/GaloyMoney/cala/releases/tag/0.24.3)
+
+
+
+### Bug Fixes
+
+- Don't publish Account outbox events for AccountSet-backing accounts (#853)
+
 # [cala release v0.24.2](https://github.com/GaloyMoney/cala/releases/tag/0.24.2)
 
 
