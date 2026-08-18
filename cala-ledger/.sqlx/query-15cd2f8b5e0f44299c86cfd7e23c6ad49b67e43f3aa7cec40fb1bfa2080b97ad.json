@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT unique_key AS \"unique_key!\", id AS \"id: JobId\"\n            FROM jobs\n            WHERE job_type = $1 AND unique_key IS NOT NULL\n            ORDER BY unique_key\n            ",
+  "query": "\n            SELECT DISTINCT ON (unique_key)\n                unique_key AS \"unique_key!\", id AS \"id: JobId\"\n            FROM jobs\n            WHERE job_type = $1 AND unique_key IS NOT NULL\n            ORDER BY unique_key, created_at DESC, id DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -24,5 +24,5 @@
       false
     ]
   },
-  "hash": "cae58de3a503958cc982ebbecc73d79c500276c84bee8218c92919eeff83155a"
+  "hash": "15cd2f8b5e0f44299c86cfd7e23c6ad49b67e43f3aa7cec40fb1bfa2080b97ad"
 }

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id AS \"id: JobId\" FROM jobs WHERE job_type = $1 AND resident",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id: JobId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c52fc20f1f73ff3e3865595231d72fce3790be8438c42f8144599ae87a35e8a2"
+}

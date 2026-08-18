@@ -6,7 +6,7 @@
 //! (`find_for_update` filters `eventually_consistent = FALSE`) and are
 //! instead maintained **asynchronously** by the streaming rollup job
 //! ([`crate::ec_rollup`]), which folds each committed transaction's leaf
-//! deltas into its ancestor EC sets. That single, ordered, `spawn_unique`
+//! deltas into its ancestor EC sets. That single, ordered, resident-job
 //! writer is the only maintainer of EC-set balances.
 //!
 //! Class-1 advisory-lock doctrine (`EC_SET_LOCK_CLASS`), in full:
