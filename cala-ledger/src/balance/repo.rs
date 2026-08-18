@@ -651,7 +651,7 @@ impl BalanceRepo {
     /// Take the **shared** EC-set advisory lock on `account_ids` (the same
     /// class + ordering as the poster path) and read the current balances
     /// for the requested EC set-accounts. The streaming rollup is the sole
-    /// EC-set writer (`spawn_unique`), so this lock is a cheap, defensive
+    /// EC-set writer (a resident job), so this lock is a cheap, defensive
     /// serialization point rather than a hard requirement. Unlike
     /// `find_for_update` this keeps `eventually_consistent = TRUE` rows —
     /// those are exactly the sets the streaming rollup owns.

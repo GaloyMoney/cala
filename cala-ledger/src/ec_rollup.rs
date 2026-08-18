@@ -29,8 +29,8 @@
 //!   The runner guarantees this: flushed items and the checkpoint commit
 //!   in one transaction, so a mid-batch crash rolls back both and replay
 //!   re-collects only unapplied events.
-//! - **Single writer.** Registered via `register_event_handler`
-//!   (`spawn_unique` underneath), so exactly one instance runs
+//! - **Single writer.** Registered via `register_event_handler` (a
+//!   *resident* job underneath), so exactly one instance runs
 //!   cluster-wide — no streaming-vs-streaming contention.
 //! - **Sole EC-set writer.** There is no separate pull/batch recalc to
 //!   compose with — this job is the only maintainer of EC-set balances.
@@ -76,9 +76,10 @@ const MAX_EVENTS_PER_BATCH: usize = 1_000;
 
 /// Register the streaming EC-balance rollup and spawn its single instance.
 ///
-/// Must be called **before** [`Jobs::start_poll`] (`add_initializer`
-/// panics once polling has started). Idempotent via `spawn_unique`. The
-/// returned handle is the ledger's observation point on the rollup.
+/// Must be called **before** [`Jobs::start_poll`]
+/// (`add_resident_initializer` panics once polling has started).
+/// Idempotent via the resident-job spawn. The returned handle is the
+/// ledger's observation point on the rollup.
 pub(crate) async fn register_ec_balance_rollup(
     jobs: &mut Jobs,
     outbox: &ObixOutbox,
