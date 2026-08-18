@@ -10,9 +10,9 @@ members = [
 ]
 
 [workspace.dependencies]
-cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.24.4-dev" }
-cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.24.4-dev" }
-cala-ledger = { path = "cala-ledger", version = "0.24.4-dev" }
+cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpreter", version = "0.25.0" }
+cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.25.0" }
+cala-ledger = { path = "cala-ledger", version = "0.25.0" }
 
 cel = "0.14.3"
 es-entity = "0.12.7"
