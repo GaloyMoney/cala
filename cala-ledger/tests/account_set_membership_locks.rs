@@ -516,9 +516,9 @@ async fn batch_structure_ops_fence_account_member_ops() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A single-edge batch routes through the same single-attach path as a
-/// direct set-structure call, so it produces identical persisted state
-/// and outbox events without running combined-graph validation.
+/// A single-edge batch and a direct set-structure call route through
+/// the same combined-graph validation machinery, producing identical
+/// persisted state and outbox events.
 #[tokio::test]
 async fn single_edge_batch_matches_single_attach_path() -> anyhow::Result<()> {
     let pool = init_isolated_pool(5).await?;

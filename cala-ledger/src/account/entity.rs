@@ -247,9 +247,10 @@ pub struct NewAccount {
     /// 3. **Account-level path uniqueness for k=1 memberships is implied
     ///    by set-level path uniqueness.** With exactly one direct
     ///    membership in set S, two account→ancestor paths would require
-    ///    two S→ancestor paths — which is precisely the `set_conflict`
-    ///    invariant that `add_member_set` / `add_member_sets` enforce
-    ///    under the coarse EXCLUSIVE lock. That validation reads only
+    ///    two S→ancestor paths — which is precisely the set-level
+    ///    path-uniqueness invariant that every set-structure mutation
+    ///    (`AccountSets::add_member` with a set member /
+    ///    `add_member_sets`) enforces under the coarse EXCLUSIVE lock. That validation reads only
     ///    set→set edges; a concurrent fast-path member row (committed or
     ///    not) is irrelevant to it. Therefore no interleaving with a
     ///    concurrent structure op can create a double-path for a

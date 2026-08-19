@@ -12,7 +12,7 @@ use crate::{
 use super::{
     entity::*,
     error::*,
-    graph_validation::{AccountMembership, SetMembership, MAX_MEMBERSHIP_DEPTH},
+    graph_validation::{AccountMembership, SetMembership},
 };
 
 /// Coarse advisory lock guarding the account-set membership graph
@@ -33,13 +33,17 @@ use super::{
 /// given set via at most one membership path (double membership is
 /// prohibited). The old closure enforced this incidentally through its
 /// unique constraint; walk-only enforces it explicitly
-/// (`assert_no_double_membership` and the set-level checks in
-/// `add_member_set`). Each check is a read-then-write over the graph,
+/// (`assert_no_double_membership` and the combined-graph set-structure
+/// validation, `SetGraphCache::assert_valid_set_memberships_in_op`).
+/// Each check is a read-then-write over the graph,
 /// so it must be fenced against concurrent writers — which is why the
 /// closure-era lock protocol survives walk-only unchanged:
 ///
-/// - Set-structure mutations (`add_member_set`, batched set attachment, and
-///   `remove_member_set`) take this lock EXCLUSIVE. They mutate the edges that every walk
+/// - Set-structure mutations (single and batched set attachment —
+///   `AccountSets::add_member_in_op`'s set arm and
+///   `add_member_sets_in_op`, both via [`Self::lock_for_set_membership_op`]
+///   — and `remove_member_set`) take this lock EXCLUSIVE. They mutate
+///   the edges that every walk
 ///   reads, and read the member rows that account-member mutations
 ///   write, so they must exclude everything.
 /// - Account-member mutations (`add_member_account(s)` /
@@ -608,197 +612,6 @@ impl AccountSetRepo {
                 std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
                     account_set_id,
                     member_id: crate::account_set::AccountSetMemberId::Account(account_id),
-                }),
-            )
-            .await?;
-
-        Ok(())
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "account_set.add_member_set",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub async fn add_member_set(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
-        // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
-        // Held across the validation query and the insert below, so the
-        // graph it validated cannot change before the new edge commits.
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
-
-        // A set can never be its own member; the recursive cycle check
-        // below catches the transitive case.
-        if account_set_id == member_account_set_id {
-            return Err(AccountSetError::MembershipCycleDetected {
-                account_set_id,
-                member_account_set_id,
-            });
-        }
-
-        // Validate the edge in a single round trip. The checks share
-        // their walks, so they run as one statement over four CTEs:
-        //
-        // - `target_ancestors`: the target's ancestors with their
-        //   distance from it, capped at MAX_MEMBERSHIP_DEPTH (complete,
-        //   since the cap is enforced on every edge; the bound also
-        //   keeps the walk terminating even on a corrupted graph).
-        // - `member_subtree`: the member and its descendants with their
-        //   distance below it, same cap.
-        // - `subtree_reach`: every set any subtree member already
-        //   reaches upward.
-        // - `target_reach`: every set whose accounts already live under
-        //   the target chain (down-walk from target + ancestors).
-        //
-        // Verdicts, in error-precedence order:
-        //
-        // 1. `cycle`: the member is already an ancestor of the
-        //    target — the edge would close a cycle and make membership
-        //    resolution non-terminating.
-        // 2. `set_conflict` (path uniqueness, set level): the member —
-        //    or any set below it — already reaches the target or one of
-        //    the target's ancestors, so the edge would give that set
-        //    (and every account below it) a second path there. The walk
-        //    covers the member's whole subtree, not just the member: a
-        //    descendant can reach the target chain through an edge that
-        //    bypasses the member entirely (`A⊃B`, `B⊃D`, `X⊃D` — then
-        //    attaching X under A would double-contain D). Seeding the
-        //    reach walk with the subtree itself also catches a duplicate
-        //    direct edge before the unique constraint does; the subtree
-        //    cannot legitimately intersect the target chain (that is the
-        //    cycle case, rejected first).
-        // 3. `account_conflict` (path uniqueness, account level): an
-        //    account somewhere under the member set is already contained
-        //    somewhere under the target chain — the edge would
-        //    double-contain it.
-        // 4. `depth`: the deepest root->leaf chain through the new edge
-        //    ((edges above the target) + 1 + (edges below the member))
-        //    must stay within MAX_MEMBERSHIP_DEPTH so the read-time
-        //    ancestor walk stays cheap and bounded.
-        let checks = sqlx::query!(
-            r#"
-          WITH RECURSIVE target_ancestors AS (
-            SELECT e.account_set_id AS set_id, 1 AS depth
-            FROM cala_account_set_member_account_sets e
-            WHERE e.member_account_set_id = $1
-
-            UNION
-            SELECT e.account_set_id, a.depth + 1
-            FROM target_ancestors a
-            JOIN cala_account_set_member_account_sets e
-                ON e.member_account_set_id = a.set_id
-            WHERE a.depth < $3
-          ),
-          target_chain AS (
-            SELECT $1::uuid AS set_id
-            UNION
-            SELECT set_id FROM target_ancestors
-          ),
-          member_subtree AS (
-            SELECT $2::uuid AS set_id, 0 AS depth
-            UNION
-            SELECT e.member_account_set_id, s.depth + 1
-            FROM member_subtree s
-            JOIN cala_account_set_member_account_sets e
-                ON e.account_set_id = s.set_id
-            WHERE s.depth < $3
-          ),
-          subtree_reach AS (
-            SELECT set_id FROM member_subtree
-            UNION
-            SELECT e.account_set_id
-            FROM subtree_reach r
-            JOIN cala_account_set_member_account_sets e
-                ON e.member_account_set_id = r.set_id
-          ),
-          target_reach AS (
-            SELECT set_id FROM target_chain
-            UNION
-            SELECT e.member_account_set_id
-            FROM target_reach r
-            JOIN cala_account_set_member_account_sets e
-                ON e.account_set_id = r.set_id
-          )
-          SELECT
-            EXISTS (
-                SELECT 1 FROM target_ancestors WHERE set_id = $2
-            ) AS "cycle!",
-            EXISTS (
-                SELECT 1 FROM subtree_reach r
-                JOIN target_chain t ON r.set_id = t.set_id
-            ) AS "set_conflict!",
-            EXISTS (
-                SELECT 1
-                FROM cala_account_set_member_accounts ma
-                JOIN member_subtree ms ON ma.account_set_id = ms.set_id
-                JOIN cala_account_set_member_accounts ta
-                    ON ta.member_account_id = ma.member_account_id
-                JOIN target_reach tr ON ta.account_set_id = tr.set_id
-            ) AS "account_conflict!",
-            COALESCE((SELECT MAX(depth) FROM target_ancestors), 0)
-            + 1
-            + COALESCE((SELECT MAX(depth) FROM member_subtree), 0) AS "depth!"
-          "#,
-            account_set_id as AccountSetId,
-            member_account_set_id as AccountSetId,
-            MAX_MEMBERSHIP_DEPTH,
-        )
-        .fetch_one(db.as_executor())
-        .await?;
-        if checks.cycle {
-            return Err(AccountSetError::MembershipCycleDetected {
-                account_set_id,
-                member_account_set_id,
-            });
-        }
-        if checks.set_conflict || checks.account_conflict {
-            return Err(AccountSetError::MemberAlreadyAdded);
-        }
-        if checks.depth > MAX_MEMBERSHIP_DEPTH {
-            return Err(AccountSetError::MembershipDepthExceeded {
-                account_set_id,
-                member_account_set_id,
-                depth: checks.depth,
-                max: MAX_MEMBERSHIP_DEPTH,
-            });
-        }
-
-        // Insert the single direct set->set edge. Ancestor membership is
-        // resolved by the read-time walk; there is no closure to propagate.
-        sqlx::query!(
-            r#"
-          INSERT INTO cala_account_set_member_account_sets (account_set_id, member_account_set_id)
-          VALUES ($1, $2)
-          "#,
-            account_set_id as AccountSetId,
-            member_account_set_id as AccountSetId,
-        )
-        .execute(db.as_executor())
-        .await?;
-
-        // Invalidate every in-process set-graph cache snapshot (see
-        // account_set/graph_cache.rs). Serialized with the edge write
-        // under the exclusive coarse lock held above, so a resolution
-        // can never observe the new edge under the old epoch.
-        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
-            .execute(db.as_executor())
-            .await?;
-
-        self.publisher
-            .publish_all(
-                db,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::AccountSet(
-                        member_account_set_id,
-                    ),
                 }),
             )
             .await?;

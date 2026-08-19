@@ -257,7 +257,19 @@ impl AccountSets {
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
-                self.repo.add_member_set(op, account_set_id, id).await?;
+                // Structure mutation: the same protocol as the batch
+                // path — exclusive coarse lock, combined-graph validation
+                // via the epoch-validated cache (with its op-local SQL
+                // fallback), then one insert + one epoch bump.
+                let edge = SetMembership {
+                    account_set_id,
+                    member_account_set_id: id,
+                };
+                self.repo.lock_for_set_membership_op(op).await?;
+                self.set_graph_cache
+                    .assert_valid_set_memberships_in_op(op, &[edge])
+                    .await?;
+                self.repo.insert_member_sets(op, &[edge]).await?;
             }
         }
 
@@ -376,11 +388,15 @@ impl AccountSets {
     /// descendant closure of the proposed member endpoints, and existing
     /// edges are served from the epoch-validated in-process cache, so a
     /// small batch does not re-read or re-validate the whole graph. A
-    /// single proposed edge routes through the existing single-attach
-    /// path, preserving the old cost model for degenerate batches. The
-    /// exclusive membership-graph lock is held for the whole op, so very
-    /// large batches will block other structure and account-member writers
-    /// for the duration of validation and insert.
+    /// single proposed edge (from here or from `add_member_in_op`) runs
+    /// through the same combined-graph machinery: with a warm cache it
+    /// validates in memory, and its SQL fallback is one flat edge read —
+    /// bounded by the edge table, unlike the retired single-attach CTE
+    /// whose `target_reach` was an uncapped downward closure scanned
+    /// inside the exclusive section. The exclusive membership-graph lock
+    /// is held for the whole op, so very large batches will block other
+    /// structure and account-member writers for the duration of
+    /// validation and insert.
     #[instrument(
         level = "debug",
         name = "cala_ledger.account_sets.add_member_sets_in_op",
@@ -450,17 +466,6 @@ impl AccountSets {
                 account_set_id: edge.account_set_id,
                 member_id,
             });
-        }
-
-        // A single edge is cheaper through the existing single-attach path:
-        // one targeted CTE validation and insert, no combined-graph cache
-        // work. This preserves the old cost model for callers that batch a
-        // single pair by accident or for convenience.
-        if let [edge] = members[..] {
-            return self
-                .repo
-                .add_member_set(op, edge.account_set_id, edge.member_account_set_id)
-                .await;
         }
 
         self.repo.lock_for_set_membership_op(op).await?;
