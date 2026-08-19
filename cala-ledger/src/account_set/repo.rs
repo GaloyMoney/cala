@@ -71,7 +71,25 @@ use super::{
 /// form a wait cycle with a queued exclusive (structure) waiter. (The
 /// fast path never touches the coarse lock at all, so it cannot
 /// violate this.)
-const ADDVISORY_LOCK_ID: i64 = 123456;
+///
+/// Key-space hygiene: the lock lives in the 2-arg advisory key space
+/// under its own `classid` ([`GRAPH_LOCK_CLASS`]). It used to be the
+/// 1-arg key `123456` — but the 1-arg space is shared with the
+/// `hashtext(journal‖account‖currency)` per-balance poster locks and
+/// the velocity balance locks, so any tuple hashing to exactly 123456
+/// would have taken the graph lock EXCLUSIVE from the poster path
+/// (silent global serialization, ~2⁻³² per key). The 1-arg and 2-arg
+/// forms are DIFFERENT lock spaces that do not mutually exclude, so
+/// every acquisition site must always agree on the form — they all go
+/// through this module and use ([`GRAPH_LOCK_CLASS`],
+/// [`ADDVISORY_LOCK_ID`]).
+const ADDVISORY_LOCK_ID: i32 = 123456;
+
+/// `classid` namespace for the coarse membership-graph lock (2-arg
+/// form), keyed on [`ADDVISORY_LOCK_ID`]. Must stay disjoint from
+/// `EC_SET_LOCK_CLASS` (= 1) and `MEMBER_LOCK_CLASS` (= 2, in
+/// `crate::membership_write`).
+const GRAPH_LOCK_CLASS: i32 = 3;
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -156,9 +174,13 @@ impl AccountSetRepo {
         db: &mut impl es_entity::AtomicOperation,
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock_shared($1, $2)",
+            GRAPH_LOCK_CLASS,
+            ADDVISORY_LOCK_ID
+        )
+        .execute(db.as_executor())
+        .await?;
         crate::membership_write::lock_member_accounts(db, &[account_id]).await?;
         Ok(())
     }
@@ -518,9 +540,13 @@ impl AccountSetRepo {
         db: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
     ) -> Result<(), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock_shared($1, $2)",
+            GRAPH_LOCK_CLASS,
+            ADDVISORY_LOCK_ID
+        )
+        .execute(db.as_executor())
+        .await?;
         crate::membership_write::lock_member_accounts(db, account_ids).await?;
         Ok(())
     }
@@ -625,9 +651,13 @@ impl AccountSetRepo {
         &self,
         db: &mut impl es_entity::AtomicOperation,
     ) -> Result<(), AccountSetError> {
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            GRAPH_LOCK_CLASS,
+            ADDVISORY_LOCK_ID
+        )
+        .execute(db.as_executor())
+        .await?;
         Ok(())
     }
 
@@ -817,9 +847,13 @@ impl AccountSetRepo {
         member_account_set_id: AccountSetId,
     ) -> Result<(), AccountSetError> {
         // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
-        sqlx::query!("SELECT pg_advisory_xact_lock($1)", ADDVISORY_LOCK_ID)
-            .execute(db.as_executor())
-            .await?;
+        sqlx::query!(
+            "SELECT pg_advisory_xact_lock($1, $2)",
+            GRAPH_LOCK_CLASS,
+            ADDVISORY_LOCK_ID
+        )
+        .execute(db.as_executor())
+        .await?;
         // Delete the single direct set->set edge. There are no
         // materialized ancestor/member rows to scrub.
         sqlx::query!(
