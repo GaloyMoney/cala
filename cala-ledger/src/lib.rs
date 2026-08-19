@@ -137,6 +137,7 @@
 
 mod cel_context;
 mod ec_rollup;
+mod membership_write;
 mod param;
 
 pub mod account;

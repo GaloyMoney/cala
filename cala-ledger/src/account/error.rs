@@ -3,7 +3,7 @@ use thiserror::Error;
 use super::repo::{
     AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError,
 };
-use crate::primitives::AccountId;
+use crate::primitives::{AccountId, AccountSetId};
 
 #[derive(Error, Debug)]
 pub enum AccountError {
@@ -29,6 +29,14 @@ pub enum AccountError {
     CodeAlreadyExists(String),
     #[error("AccountError - cannot update accounts backing an AccountSet")]
     CannotUpdateAccountSetAccounts,
+    #[error(
+        "AccountError - account '{account_id}' requested more than one initial account set; \
+        the lock-free create path supports exactly one membership per new account — attach \
+        additional sets after creation via AccountSets::add_member_in_op"
+    )]
+    MultipleInitialAccountSets { account_id: AccountId },
+    #[error("AccountError - initial account set '{0}' not found")]
+    InitialAccountSetNotFound(AccountSetId),
 }
 
 impl From<AccountFindError> for AccountError {

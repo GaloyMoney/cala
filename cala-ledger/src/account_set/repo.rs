@@ -44,24 +44,30 @@ use super::{
 ///   write, so they must exclude everything.
 /// - Account-member mutations (`add_member_account(s)` /
 ///   `remove_member_account`) take this lock SHARED plus an EXCLUSIVE
-///   per-member lock (`MEMBER_LOCK_CLASS`, keyed on the member account
-///   id). Shared-vs-exclusive fences them against structure mutations,
+///   per-member lock (`MEMBER_LOCK_CLASS` — the constant now lives in
+///   `crate::membership_write`, the shared home of the member-edge
+///   write primitive — keyed on the member account id).
+///   Shared-vs-exclusive fences them against structure mutations,
 ///   while account-member mutations for *different* members run
 ///   concurrently — each validation involves only its own member's
 ///   paths. The per-member lock serializes mutations touching the
 ///   *same* member, whose interleaved check-then-write sequences could
 ///   otherwise commit a double membership.
+/// - The create-inside-set fast path (`Accounts::create_*` with
+///   `NewAccount::initial_account_sets`) takes NEITHER this lock nor
+///   any class-1 lock — only the class-2 per-member EXCLUSIVE, via
+///   `crate::membership_write`. Sound only because the account is
+///   created in the same op with exactly one membership; the invariant
+///   argument lives on the `NewAccount::initial_account_sets` field
+///   docs.
 ///
 /// Ordering: the coarse lock is always acquired before the per-member
 /// lock. An operation must never wait on the coarse lock while holding
 /// a per-member lock — under PostgreSQL's FIFO lock queueing that can
-/// form a wait cycle with a queued exclusive (structure) waiter.
+/// form a wait cycle with a queued exclusive (structure) waiter. (The
+/// fast path never touches the coarse lock at all, so it cannot
+/// violate this.)
 const ADDVISORY_LOCK_ID: i64 = 123456;
-
-/// `classid` namespace for the per-member advisory locks (2-arg form),
-/// keyed on `hashtext(<member account id>)`. Must stay disjoint from
-/// `EC_SET_LOCK_CLASS` (= 1) used by balance locking.
-const MEMBER_LOCK_CLASS: i32 = 2;
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -149,13 +155,7 @@ impl AccountSetRepo {
         sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
-        sqlx::query!(
-            "SELECT pg_advisory_xact_lock($1, hashtext($2))",
-            MEMBER_LOCK_CLASS,
-            account_id.to_string(),
-        )
-        .execute(db.as_executor())
-        .await?;
+        crate::membership_write::lock_member_accounts(db, &[account_id]).await?;
         Ok(())
     }
 
@@ -514,28 +514,10 @@ impl AccountSetRepo {
         db: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
     ) -> Result<(), AccountSetError> {
-        // Sort and dedup the lock ids in Rust so the per-member locks
-        // are always acquired in canonical id order, matching the
-        // single-pair path. A SQL ORDER BY is not a reliable
-        // substitute: the planner is free to evaluate the lock
-        // projection before any sort node.
-        let mut lock_ids = account_ids.to_vec();
-        lock_ids.sort();
-        lock_ids.dedup();
-
         sqlx::query!("SELECT pg_advisory_xact_lock_shared($1)", ADDVISORY_LOCK_ID)
             .execute(db.as_executor())
             .await?;
-        sqlx::query!(
-            r#"
-            SELECT pg_advisory_xact_lock($1, hashtext(v.account_id::text))
-            FROM UNNEST($2::uuid[]) AS v(account_id)
-            "#,
-            MEMBER_LOCK_CLASS,
-            &lock_ids as &[AccountId],
-        )
-        .execute(db.as_executor())
-        .await?;
+        crate::membership_write::lock_member_accounts(db, account_ids).await?;
         Ok(())
     }
 
@@ -554,27 +536,15 @@ impl AccountSetRepo {
         account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         // A single direct edge: ancestor sets are resolved by the
-        // read-time walk, so there is no closure to materialize.
-        sqlx::query!(
-            r#"
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-          VALUES ($1, $2)
-          "#,
-            account_set_id as AccountSetId,
-            account_id as AccountId,
+        // read-time walk, so there is no closure to materialize. The
+        // write itself is homed in `crate::membership_write`, shared
+        // with the create-inside-set fast path.
+        crate::membership_write::insert_member_accounts(
+            db,
+            &self.publisher,
+            &[(account_set_id, account_id)],
         )
-        .execute(db.as_executor())
         .await?;
-
-        self.publisher
-            .publish_all(
-                db,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
-                }),
-            )
-            .await?;
 
         Ok(())
     }
@@ -594,39 +564,13 @@ impl AccountSetRepo {
         db: &mut impl es_entity::AtomicOperation,
         members: &[AccountMembership],
     ) -> Result<(), AccountSetError> {
-        if members.is_empty() {
-            return Ok(());
-        }
-        let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
-        let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
-
-        // Direct edges only: one insert covers every pair; ancestor sets
-        // are resolved by the read-time walk.
-        sqlx::query!(
-            r#"
-          INSERT INTO cala_account_set_member_accounts (account_set_id, member_account_id)
-          SELECT account_set_id, account_id
-          FROM UNNEST($1::uuid[], $2::uuid[]) AS v(account_set_id, account_id)
-          "#,
-            &account_set_ids as &[AccountSetId],
-            &account_ids as &[AccountId],
-        )
-        .execute(db.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                db,
-                members.iter().map(|membership| {
-                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
-                        account_set_id: membership.account_set_id,
-                        member_id: crate::account_set::AccountSetMemberId::Account(
-                            membership.account_id,
-                        ),
-                    }
-                }),
-            )
-            .await?;
+        // The write itself is homed in `crate::membership_write`, shared
+        // with the create-inside-set fast path.
+        let pairs: Vec<(AccountSetId, AccountId)> = members
+            .iter()
+            .map(|membership| (membership.account_set_id, membership.account_id))
+            .collect();
+        crate::membership_write::insert_member_accounts(db, &self.publisher, &pairs).await?;
 
         Ok(())
     }

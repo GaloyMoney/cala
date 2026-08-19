@@ -217,6 +217,83 @@ pub struct NewAccount {
     description: Option<String>,
     #[builder(setter(custom), default)]
     metadata: Option<serde_json::Value>,
+    /// Account sets this account joins **in the same atomic operation
+    /// that creates it** — the lock-free create-inside-set fast path
+    /// honored natively by `Accounts::create_in_op` /
+    /// `Accounts::create_all_in_op`.
+    ///
+    /// The Vec is plural for API future-proofing; **at most one set is
+    /// accepted at runtime**
+    /// (`AccountError::MultipleInitialAccountSets`). A future k≥2 would
+    /// have to route through the classic locked attach protocol
+    /// (`AccountSets::add_member_in_op`), never this path.
+    ///
+    /// # Why the fast path needs (almost) none of the classic attach
+    /// protocol
+    ///
+    /// For an account created and attached to exactly one set in the same
+    /// atomic operation:
+    ///
+    /// 1. **MemberHasBalanceHistory is vacuously satisfied.** The account
+    ///    row is uncommitted; `cala_entries` / `cala_balance_history`
+    ///    rows FK `cala_accounts`, so no poster can have produced
+    ///    activity for it. No `EXISTS` check and no class-1
+    ///    (`EC_SET_LOCK_CLASS`) lock needed.
+    /// 2. **The attach fence is moot.** The fence closes
+    ///    attach-vs-in-flight-first-posting races. No posting to a
+    ///    not-yet-committed account can be in flight; from the instant
+    ///    the account becomes visible its membership already exists, so a
+    ///    first posting resolves ancestors correctly.
+    /// 3. **Account-level path uniqueness for k=1 memberships is implied
+    ///    by set-level path uniqueness.** With exactly one direct
+    ///    membership in set S, two account→ancestor paths would require
+    ///    two S→ancestor paths — which is precisely the `set_conflict`
+    ///    invariant that `add_member_set` / `add_member_sets` enforce
+    ///    under the coarse EXCLUSIVE lock. That validation reads only
+    ///    set→set edges; a concurrent fast-path member row (committed or
+    ///    not) is irrelevant to it. Therefore no interleaving with a
+    ///    concurrent structure op can create a double-path for a
+    ///    single-membership account, and the fast path needs **no coarse
+    ///    SHARED lock, no graph read, and no
+    ///    `assert_no_double_membership` check**. The fast path must
+    ///    REFUSE more than one target set per account (k≥2 needs
+    ///    ancestor-closure disjointness of the targets — a graph read
+    ///    that write-skews against concurrent edge inserts; that is what
+    ///    the classic locked path is for).
+    /// 4. **Same-account race guard.** A concurrent *classic*
+    ///    `add_member(s)` of the same fresh account (possible only if the
+    ///    caller leaks the client-generated id before commit) is fenced
+    ///    by retaining the **class-2 per-member EXCLUSIVE**
+    ///    (`MEMBER_LOCK_CLASS = 2`) in the fast path: the classic
+    ///    attacher blocks on it and, after our commit, its probe sees
+    ///    membership {S}. This is the ONLY advisory lock the fast path
+    ///    takes; it is uncontended in sane usage. Lock-ordering safety:
+    ///    the fast path never waits on the coarse lock while holding
+    ///    class-2 (it never touches the coarse lock at all), so the
+    ///    doctrine in the `ADDVISORY_LOCK_ID` doc comment
+    ///    (`account_set/repo.rs`) is not violated.
+    /// 5. **EC semantics.** Membership exists from account birth; the
+    ///    streaming rollup folds from birth. Strictly safer than
+    ///    create-then-attach.
+    ///
+    /// Design-reviewed caveat (accepted): the fast path *relies on* the
+    /// set-level uniqueness invariant instead of re-verifying
+    /// account-level uniqueness per call. A pre-existing corrupted set
+    /// graph (a diamond above S) would double-count the new account
+    /// without being detected at attach time; the classic path's
+    /// path-count would have caught it. The invariant is re-verified on
+    /// every structure mutation and the soak drift-check remains the
+    /// backstop.
+    ///
+    /// # Transient — MUST stay out of persisted state
+    ///
+    /// This field is intentionally absent from `AccountValues`,
+    /// `into_values()`, and `IntoEvents`: membership's single source of
+    /// truth is the member table + `AccountSetMemberCreated` outbox
+    /// events, and duplicating set ids into the account's event stream
+    /// would go stale on any later `remove_member`.
+    #[builder(setter(into), default)]
+    pub(super) initial_account_sets: Vec<AccountSetId>,
 }
 
 impl NewAccount {
@@ -275,6 +352,16 @@ impl NewAccountBuilder {
 
     pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {
         self.is_account_set = Some(is_account_set);
+        self
+    }
+
+    /// Singular convenience form of
+    /// [`initial_account_sets`](Self::initial_account_sets) — the
+    /// dominant caller shape: create the account already attached to
+    /// exactly one account set, without any of the classic attach
+    /// protocol's locks (see the field docs on `NewAccount`).
+    pub fn initial_account_set(&mut self, id: impl Into<AccountSetId>) -> &mut Self {
+        self.initial_account_sets = Some(vec![id.into()]);
         self
     }
 

@@ -9,7 +9,11 @@ use tracing::instrument;
 
 use std::collections::HashMap;
 
-use crate::{outbox::*, primitives::Status};
+use crate::{
+    membership_write::{self, MembershipWriteError},
+    outbox::*,
+    primitives::{AccountSetId, Status},
+};
 
 pub use entity::*;
 use error::*;
@@ -42,14 +46,17 @@ impl Accounts {
     #[instrument(
         level = "debug",
         name = "cala_ledger.accounts.create_in_op",
-        skip(self, db)
+        skip(self, db),
+        fields(initial_set_count = new_account.initial_account_sets.len())
     )]
     pub async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
+        let pairs = initial_membership_pairs(std::slice::from_ref(&new_account))?;
         let account = self.repo.create_in_op(db, new_account).await?;
+        self.attach_initial_account_sets_in_op(db, pairs).await?;
         Ok(account)
     }
 
@@ -64,13 +71,16 @@ impl Accounts {
         Ok(accounts)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len()))]
+    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len(), initial_set_count = tracing::field::Empty))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_accounts: Vec<NewAccount>,
     ) -> Result<Vec<Account>, AccountError> {
+        let pairs = initial_membership_pairs(&new_accounts)?;
+        tracing::Span::current().record("initial_set_count", pairs.len());
         let accounts = self.repo.create_all_in_op(db, new_accounts).await?;
+        self.attach_initial_account_sets_in_op(db, pairs).await?;
         Ok(accounts)
     }
 
@@ -173,6 +183,51 @@ impl Accounts {
         Ok(())
     }
 
+    /// The create-inside-set fast path: write the direct memberships for
+    /// accounts created *in this same op* via
+    /// [`NewAccount::initial_account_sets`], through the shared leaf
+    /// write primitive (`crate::membership_write`).
+    ///
+    /// This takes NEITHER the coarse membership-graph lock nor the
+    /// class-1 balance-history guard lock — only the class-2 per-member
+    /// EXCLUSIVE — and runs no balance-history or path-uniqueness check.
+    /// The invariant argument for why that is sound (and its accepted
+    /// caveat) lives on the `NewAccount::initial_account_sets` field
+    /// docs; the restriction that makes it hold is enforced by
+    /// [`initial_membership_pairs`]: exactly one target set per account.
+    ///
+    /// Statement footprint when every field is empty: ZERO — the create
+    /// path is byte-identical to a plain create. When set: exactly three
+    /// added statements (set existence, class-2 locks, member insert).
+    async fn attach_initial_account_sets_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        pairs: Vec<(AccountSetId, AccountId)>,
+    ) -> Result<(), AccountError> {
+        if pairs.is_empty() {
+            return Ok(());
+        }
+
+        let mut set_ids: Vec<AccountSetId> = pairs.iter().map(|(set_id, _)| *set_id).collect();
+        set_ids.sort_unstable();
+        set_ids.dedup();
+        membership_write::assert_account_sets_exist(db, &set_ids)
+            .await
+            .map_err(|e| match e {
+                MembershipWriteError::AccountSetsNotFound(missing) => {
+                    AccountError::InitialAccountSetNotFound(
+                        *missing.first().expect("missing ids are never empty"),
+                    )
+                }
+                MembershipWriteError::Sqlx(e) => AccountError::Sqlx(e),
+            })?;
+
+        let account_ids: Vec<AccountId> = pairs.iter().map(|(_, account_id)| *account_id).collect();
+        membership_write::lock_member_accounts(db, &account_ids).await?;
+        membership_write::insert_member_accounts(db, self.repo.publisher(), &pairs).await?;
+        Ok(())
+    }
+
     #[instrument(
         level = "debug",
         name = "cala_ledger.accounts.update_velocity_context_values_in_op",
@@ -187,6 +242,31 @@ impl Accounts {
             .update_velocity_context_values_in_op(db, values.into())
             .await
     }
+}
+
+/// Partition the fast-path membership pairs out of a batch of
+/// `NewAccount`s, enforcing the fast path's cardinality restriction:
+/// **exactly one** target set per account
+/// ([`AccountError::MultipleInitialAccountSets`] otherwise — see the
+/// `NewAccount::initial_account_sets` field docs for why k≥2 must route
+/// through the classic locked protocol). Accounts with no sets are
+/// simply created without membership.
+fn initial_membership_pairs(
+    new_accounts: &[NewAccount],
+) -> Result<Vec<(AccountSetId, AccountId)>, AccountError> {
+    let mut pairs = Vec::new();
+    for new_account in new_accounts {
+        match new_account.initial_account_sets[..] {
+            [] => {}
+            [set_id] => pairs.push((set_id, new_account.id)),
+            _ => {
+                return Err(AccountError::MultipleInitialAccountSets {
+                    account_id: new_account.id,
+                })
+            }
+        }
+    }
+    Ok(pairs)
 }
 
 impl From<&AccountEvent> for OutboxEventPayload {
