@@ -1,3 +1,15 @@
+# [cala release v0.26.0](https://github.com/GaloyMoney/cala/releases/tag/0.26.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Bump job to 0.13.0, obix to 0.9.0 (#857)
+
+### Refactor
+
+- [**breaking**] Lock-free create-inside-set via AccountSetMembers + initial_account_set (#855)
+
 # [cala release v0.25.0](https://github.com/GaloyMoney/cala/releases/tag/0.25.0)
 
 
