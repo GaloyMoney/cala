@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidates AS (\n                SELECT je.id, je.queue_id, je.execute_at\n                FROM job_executions je\n                WHERE je.id = ANY($1) AND je.state = 'pending' AND je.queue_id IS NOT NULL\n            ), swaps AS (\n                SELECT c.id AS pending_id, sib.id AS parked_id\n                FROM candidates c\n                CROSS JOIN LATERAL (\n                    SELECT id, execute_at FROM job_executions\n                    WHERE state = 'parked' AND queue_id = c.queue_id\n                    ORDER BY execute_at, id\n                    LIMIT 1\n                ) sib\n                WHERE (sib.execute_at, sib.id) < (c.execute_at, c.id)\n            ), demote AS (\n                UPDATE job_executions SET state = 'parked'\n                WHERE id IN (SELECT pending_id FROM swaps)\n                RETURNING id\n            )\n            -- The promote UPDATE reads FROM `demote` (not `swaps`) so Postgres\n            -- has a real data dependency forcing `demote` to run to completion\n            -- first. Without it, this is two independent writes to the same\n            -- table within one statement with no ordering guarantee between\n            -- them, which can transiently make two rows active for one queue\n            -- within the statement's own execution and violate\n            -- `idx_job_executions_queue_active`.\n            UPDATE job_executions je SET state = 'pending'\n            FROM swaps s\n            JOIN demote d ON d.id = s.pending_id\n            WHERE je.id = s.parked_id\n            RETURNING je.job_type, je.execute_at AS \"execute_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "execute_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "380bd610fa86229e457058b1d74f97014443a04b9c2f6428f5596c9c1db8f4e4"
+}

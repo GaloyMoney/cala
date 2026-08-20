@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            -- `parked` is a claim-time implementation detail: a parked row\n            -- is a queued job blocked behind its queue's active row, which\n            -- to every external caller just means \"pending, not yet\n            -- claimable\". Masking it here keeps `JobExecutionState`/\n            -- `JobStatus` a two-value public contract (`Pending`/`Running`).\n            SELECT (CASE WHEN je.state = 'parked' THEN 'pending' ELSE je.state END)\n                       AS \"state!: JobExecutionState\",\n                   je.execute_at, je.attempt_index,\n                   je.alive_at, cp.execution_state_json AS \"execution_state_json?\"\n            FROM job_executions je\n            LEFT JOIN job_execution_states cp ON cp.id = je.id\n            WHERE je.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: JobExecutionState",
+        "type_info": {
+          "Custom": {
+            "name": "jobexecutionstate",
+            "kind": {
+              "Enum": [
+                "pending",
+                "parked",
+                "running"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "execute_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "attempt_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "alive_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "execution_state_json?",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4911c201cf68952a0cb9ac1d106de61e86195dec554c3f923d1ed43b168f8a89"
+}
