@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH ordered AS MATERIALIZED (\n                SELECT DISTINCT account_id\n                FROM UNNEST($2::uuid[]) AS v(account_id)\n                ORDER BY account_id\n            )\n            SELECT pg_advisory_xact_lock($1, hashtext(account_id::text))\n            FROM ordered\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "023e9c2df6f76c4e15a653084c30de3200b362ad04a0f7bbb09e72c76b587fdd"
+}

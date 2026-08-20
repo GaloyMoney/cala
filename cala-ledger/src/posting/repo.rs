@@ -28,7 +28,10 @@
 //! written by [`PostingRepo::insert_postings_and_balances_in_op`], the last.
 //! EXCLUSIVE = the membership guard on the member being added/removed
 //! (`BalanceRepo::member_has_balance_history_in_op`); the streaming rollup
-//! applier takes SHARED on the EC accounts it writes.
+//! applier takes SHARED on the EC accounts it writes. The create-inside-set
+//! fast path (`NewAccount::initial_account_set`) is exempt from the fence:
+//! its account is uncommitted, so no history exists and no first posting can
+//! be in flight (see the field docs).
 //!
 //! Per-balance FOR_UPDATE locks (1-arg `pg_advisory_xact_lock`, keyed on
 //! `(journal_id, account_id, currency)`) are the poster-vs-poster serializer

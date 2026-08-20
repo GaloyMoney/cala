@@ -9,8 +9,11 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
+use crate::{
+    account::*, account_set_member::AccountSetMembers, balance::*, outbox::*, primitives::JournalId,
+};
 
+pub use crate::account_set_member::members_cursor::*;
 pub use entity::*;
 use error::*;
 use graph_cache::SetGraphCache;
@@ -19,14 +22,15 @@ use graph_cache::SetGraphCache;
 /// set-graph cache.
 pub(crate) use graph_validation::AccountMembership;
 use graph_validation::SetMembership;
+pub use repo::account_set_cursor::*;
 use repo::*;
-pub use repo::{account_set_cursor::*, members_cursor::*};
 
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
     balances: Balances,
+    account_set_members: AccountSetMembers,
     /// Internal detail of this module: the epoch-validated in-process
     /// cache backing the posting hot path's ancestor resolution
     /// (`fetch_mappings_in_op`). Holds its own handle on the repo — all
@@ -42,6 +46,7 @@ impl AccountSets {
         publisher: &OutboxPublisher,
         accounts: &Accounts,
         balances: &Balances,
+        account_set_members: &AccountSetMembers,
         clock: &ClockHandle,
     ) -> Self {
         let repo = AccountSetRepo::new(pool, publisher);
@@ -50,6 +55,7 @@ impl AccountSets {
             repo,
             accounts: accounts.clone(),
             balances: balances.clone(),
+            account_set_members: account_set_members.clone(),
             clock: clock.clone(),
         }
     }
@@ -238,11 +244,10 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                // Account-member attach sequence: lock protocol first,
-                // then the path-uniqueness check (in-memory on the
-                // set-graph cache, SQL walk fallback), then the
-                // direct-edge insert the check's verdict fences.
-                self.repo.lock_for_account_member_op(&mut *op, id).await?;
+                self.repo.lock_graph_shared_in_op(&mut *op).await?;
+                self.account_set_members
+                    .lock_members_in_op(&mut *op, &[id])
+                    .await?;
                 self.set_graph_cache
                     .assert_no_double_membership_in_op(
                         op,
@@ -252,12 +257,20 @@ impl AccountSets {
                         }],
                     )
                     .await?;
-                self.repo
-                    .insert_member_account(&mut *op, account_set_id, id)
+                self.account_set_members
+                    .add_in_op(&mut *op, &[(account_set_id, id)])
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
-                self.repo.add_member_set(op, account_set_id, id).await?;
+                let edge = SetMembership {
+                    account_set_id,
+                    member_account_set_id: id,
+                };
+                self.repo.lock_for_set_membership_op(op).await?;
+                self.set_graph_cache
+                    .assert_valid_set_memberships_in_op(op, &[edge])
+                    .await?;
+                self.repo.insert_member_sets(op, &[edge]).await?;
             }
         }
 
@@ -333,17 +346,19 @@ impl AccountSets {
             });
         }
 
-        // Batch attach sequence, mirroring the single-pair path: batch
-        // lock protocol, one path-uniqueness check covering all pairs
-        // (and their interactions with each other), one insert.
         let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
-        self.repo
-            .lock_for_account_members_op(op, &account_ids)
+        self.repo.lock_graph_shared_in_op(op).await?;
+        self.account_set_members
+            .lock_members_in_op(op, &account_ids)
             .await?;
         self.set_graph_cache
             .assert_no_double_membership_in_op(op, &members)
             .await?;
-        self.repo.insert_member_accounts(op, &members).await?;
+        let pairs: Vec<(AccountSetId, AccountId)> = members
+            .iter()
+            .map(|m| (m.account_set_id, m.account_id))
+            .collect();
+        self.account_set_members.add_in_op(op, &pairs).await?;
 
         Ok(())
     }
@@ -376,11 +391,13 @@ impl AccountSets {
     /// descendant closure of the proposed member endpoints, and existing
     /// edges are served from the epoch-validated in-process cache, so a
     /// small batch does not re-read or re-validate the whole graph. A
-    /// single proposed edge routes through the existing single-attach
-    /// path, preserving the old cost model for degenerate batches. The
-    /// exclusive membership-graph lock is held for the whole op, so very
-    /// large batches will block other structure and account-member writers
-    /// for the duration of validation and insert.
+    /// single proposed edge (from here or from `add_member_in_op`) runs
+    /// through the same combined-graph machinery: with a warm cache it
+    /// validates in memory, and its SQL fallback is one flat edge read —
+    /// bounded by the edge table. The exclusive membership-graph lock is
+    /// held for the whole op, so very large batches will block other
+    /// structure and account-member writers for the duration of
+    /// validation and insert.
     #[instrument(
         level = "debug",
         name = "cala_ledger.account_sets.add_member_sets_in_op",
@@ -450,17 +467,6 @@ impl AccountSets {
                 account_set_id: edge.account_set_id,
                 member_id,
             });
-        }
-
-        // A single edge is cheaper through the existing single-attach path:
-        // one targeted CTE validation and insert, no combined-graph cache
-        // work. This preserves the old cost model for callers that batch a
-        // single pair by accident or for convenience.
-        if let [edge] = members[..] {
-            return self
-                .repo
-                .add_member_set(op, edge.account_set_id, edge.member_account_set_id)
-                .await;
         }
 
         self.repo.lock_for_set_membership_op(op).await?;
@@ -568,8 +574,12 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                self.repo
-                    .remove_member_account(op, account_set_id, id)
+                self.repo.lock_graph_shared_in_op(op).await?;
+                self.account_set_members
+                    .lock_members_in_op(op, &[id])
+                    .await?;
+                self.account_set_members
+                    .remove_in_op(op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -725,7 +735,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children_by_created_at(id, args).await
+        Ok(self
+            .account_set_members
+            .list_by_created_at(id, args)
+            .await?)
     }
 
     pub async fn list_members_by_created_at_in_op(
@@ -737,9 +750,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo
-            .list_children_by_created_at_in_op(op, id, args)
-            .await
+        Ok(self
+            .account_set_members
+            .list_by_created_at_in_op(op, id, args)
+            .await?)
     }
 
     pub async fn list_members_by_external_id(
@@ -753,7 +767,10 @@ impl AccountSets {
         >,
         AccountSetError,
     > {
-        self.repo.list_children_by_external_id(id, args).await
+        Ok(self
+            .account_set_members
+            .list_by_external_id(id, args)
+            .await?)
     }
 
     pub async fn list_members_by_external_id_in_op(
@@ -768,9 +785,10 @@ impl AccountSets {
         >,
         AccountSetError,
     > {
-        self.repo
-            .list_children_by_external_id_in_op(op, id, args)
-            .await
+        Ok(self
+            .account_set_members
+            .list_by_external_id_in_op(op, id, args)
+            .await?)
     }
 
     /// Resolve each entry account's ancestor-set mappings AND take the

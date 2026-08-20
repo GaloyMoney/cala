@@ -516,9 +516,205 @@ async fn batch_structure_ops_fence_account_member_ops() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// A single-edge batch routes through the same single-attach path as a
-/// direct set-structure call, so it produces identical persisted state
-/// and outbox events without running combined-graph validation.
+/// Key-space hygiene (`GRAPH_LOCK_CLASS`): every coarse membership-graph
+/// lock acquisition uses the 2-arg advisory form (classid 3, key
+/// 123456). The 1-arg and 2-arg advisory forms are DIFFERENT lock
+/// spaces that do not mutually exclude, so a single leftover 1-arg site
+/// would silently stop excluding the others — this test trips on any
+/// half-migrated state by pinning the exact form on both the EXCLUSIVE
+/// (structure) and SHARED (account-member) sides. A 1-arg
+/// `pg_advisory_xact_lock(123456)` surfaces in `pg_locks` as
+/// `(classid 0, objid 123456)`, so filtering on the objid catches both
+/// forms.
+#[tokio::test]
+async fn coarse_lock_uses_two_arg_form_only() -> anyhow::Result<()> {
+    let pool = init_isolated_pool(10).await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool.clone())
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+
+    let parent = cala
+        .account_sets()
+        .create(new_set(journal.id(), "two-arg-parent"))
+        .await?;
+    let child = cala
+        .account_sets()
+        .create(new_set(journal.id(), "two-arg-child"))
+        .await?;
+    let member_set = cala
+        .account_sets()
+        .create(new_set(journal.id(), "two-arg-member-target"))
+        .await?;
+    let (account, _) = helpers::test_accounts();
+    let account = cala.accounts().create(account).await?;
+
+    async fn coarse_lock_rows(pool: &sqlx::PgPool) -> anyhow::Result<Vec<(i64, String)>> {
+        Ok(sqlx::query_as::<_, (i64, String)>(
+            r#"
+            SELECT classid::bigint, mode FROM pg_locks
+            WHERE locktype = 'advisory'
+              AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+              AND objid = 123456
+            "#,
+        )
+        .fetch_all(pool)
+        .await?)
+    }
+
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, parent.id(), child.id())
+        .await?;
+    let rows = coarse_lock_rows(&pool).await?;
+    assert!(
+        !rows.is_empty(),
+        "structure op must hold the coarse lock (key 123456)"
+    );
+    assert!(
+        rows.iter().all(|(classid, _)| *classid == 3),
+        "coarse lock must be 2-arg classid-3 only (1-arg shows classid 0) — got {rows:?}"
+    );
+    assert!(rows.iter().any(|(_, mode)| mode == "ExclusiveLock"));
+    op.commit().await?;
+
+    let mut op = cala.begin_operation().await?;
+    cala.account_sets()
+        .add_member_in_op(&mut op, member_set.id(), account.id())
+        .await?;
+    let rows = coarse_lock_rows(&pool).await?;
+    assert!(
+        !rows.is_empty(),
+        "account-member op must hold the coarse lock SHARED (key 123456)"
+    );
+    assert!(
+        rows.iter().all(|(classid, _)| *classid == 3),
+        "coarse lock must be 2-arg classid-3 only (1-arg shows classid 0) — got {rows:?}"
+    );
+    assert!(rows.iter().any(|(_, mode)| mode == "ShareLock"));
+    op.commit().await?;
+
+    Ok(())
+}
+
+/// The classic-path counterpart to `fast_path_members_locked_in_canonical_order`
+/// (`create_member_account.rs`), exercised against
+/// `AccountSetMembers::lock_members_in_op`'s batch statement
+/// (`AccountSets::add_members`) instead of the fast path's consolidated
+/// CTE. Canonical class-2 order is established on the PG side (`ORDER
+/// BY` inside `AS MATERIALIZED`, one level below the volatile lock
+/// call), never by the caller's array order: pre-take the HIGHER of two
+/// account ids' class-2 lock from an independent session, then submit
+/// `add_members` with the pair in DESCENDING (wrong) input order. The
+/// only state consistent with PG-side ascending order is `add_members`
+/// holding the LOWER lock (uncontended) while queued on the HIGHER one.
+#[tokio::test]
+async fn classic_batch_members_locked_in_canonical_order() -> anyhow::Result<()> {
+    let cala = init_cala().await?;
+    let pool = cala.pool().clone();
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let set = cala
+        .account_sets()
+        .create(new_set(journal.id(), "order-classic"))
+        .await?;
+
+    let (one, two) = helpers::test_accounts();
+    let mut lo = cala.accounts().create(one).await?;
+    let mut hi = cala.accounts().create(two).await?;
+    if lo.id() > hi.id() {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    let (lo_id, hi_id) = (lo.id(), hi.id());
+
+    async fn class2_objid(pool: &sqlx::PgPool, account_id: AccountId) -> anyhow::Result<i64> {
+        Ok(
+            sqlx::query_scalar::<_, i64>("SELECT hashtext($1)::bigint & 4294967295")
+                .bind(account_id.to_string())
+                .fetch_one(pool)
+                .await?,
+        )
+    }
+    /// `(any row granted, any row waiting)`. A contended lock surfaces
+    /// as TWO `pg_locks` rows for the same (classid, objid) — one
+    /// `granted = true` (holder), one `granted = false` (queued
+    /// waiter) — so this checks for the waiter's EXISTENCE rather than
+    /// fetching a single (order-unspecified) row.
+    async fn class2_lock_state(pool: &sqlx::PgPool, objid: i64) -> anyhow::Result<(bool, bool)> {
+        let rows: Vec<bool> = sqlx::query_scalar(
+            r#"
+            SELECT granted FROM pg_locks
+            WHERE locktype = 'advisory' AND classid = 2 AND objid = $1
+              AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+            "#,
+        )
+        .bind(objid)
+        .fetch_all(pool)
+        .await?;
+        Ok((rows.iter().any(|g| *g), rows.iter().any(|g| !*g)))
+    }
+
+    let lo_objid = class2_objid(&pool, lo_id).await?;
+    let hi_objid = class2_objid(&pool, hi_id).await?;
+
+    let mut blocker_tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(2, hashtext($1::text))")
+        .bind(hi_id.to_string())
+        .execute(&mut *blocker_tx)
+        .await?;
+
+    let attach = tokio::spawn({
+        let cala = cala.clone();
+        let set_id = set.id();
+        async move {
+            cala.account_sets()
+                .add_members(&[(set_id, hi_id), (set_id, lo_id)])
+                .await
+        }
+    });
+
+    tokio::time::sleep(MUST_STILL_BE_PENDING).await;
+    let (lo_granted, lo_waiting) = class2_lock_state(&pool, lo_objid).await?;
+    assert!(
+        lo_granted && !lo_waiting,
+        "canonical (ascending) order must acquire the lower id's lock \
+         first (uncontended), regardless of input array order — \
+         got granted={lo_granted}, waiting={lo_waiting}"
+    );
+    let (hi_granted, hi_waiting) = class2_lock_state(&pool, hi_objid).await?;
+    assert!(
+        hi_granted && hi_waiting,
+        "the higher id's lock must show both the independent session's \
+         hold (granted) AND add_members queued behind it (waiting) — \
+         got granted={hi_granted}, waiting={hi_waiting}"
+    );
+
+    blocker_tx.rollback().await?;
+    tokio::time::timeout(MUST_COMPLETE, attach)
+        .await
+        .expect("add_members must complete once the higher lock is released")??;
+
+    for account_id in [lo_id, hi_id] {
+        let count: i64 = sqlx::query_scalar(
+            r#"
+            SELECT COUNT(*) FROM cala_account_set_member_accounts
+            WHERE account_set_id = $1 AND member_account_id = $2
+            "#,
+        )
+        .bind(set.id())
+        .bind(account_id)
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(count, 1);
+    }
+    Ok(())
+}
+
+/// A single-edge batch and a direct set-structure call route through
+/// the same combined-graph validation machinery, producing identical
+/// persisted state and outbox events.
 #[tokio::test]
 async fn single_edge_batch_matches_single_attach_path() -> anyhow::Result<()> {
     let pool = init_isolated_pool(5).await?;
