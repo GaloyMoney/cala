@@ -74,11 +74,6 @@ CREATE TABLE cala_account_set_member_accounts (
   -- resolved at read time by an upward recursive walk over
   -- cala_account_set_member_account_sets (see fetch_mappings_in_op /
   -- fetch_ec_set_mappings); there is no materialized transitive closure.
-  -- Rows are written solely by src/account_set_member/repo.rs
-  -- (AccountSetMemberRepo), which has two callers: the classic attach
-  -- path (account_set module, full membership lock protocol) and the
-  -- create-inside-set fast path (account module, class-2 per-member
-  -- lock only; see NewAccount::initial_account_set).
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- Lead the uniqueness constraint on the random member_account_id: all
   -- concurrent attaches insert into the same few hot account_set_id key
