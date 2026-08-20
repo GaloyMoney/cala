@@ -56,12 +56,6 @@ impl AccountRepo {
         }
     }
 
-    /// The shared `OutboxPublisher` handle, for the create-inside-set
-    /// fast path's membership-event publish (`crate::membership_write`).
-    pub(super) fn publisher(&self) -> &OutboxPublisher {
-        &self.publisher
-    }
-
     #[instrument(
         level = "debug",
         name = "account.update_velocity_context_values_in_op",

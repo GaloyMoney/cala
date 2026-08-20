@@ -9,8 +9,11 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{account::*, balance::*, outbox::*, primitives::JournalId};
+use crate::{
+    account::*, account_set_member::AccountSetMembers, balance::*, outbox::*, primitives::JournalId,
+};
 
+pub use crate::account_set_member::members_cursor::*;
 pub use entity::*;
 use error::*;
 use graph_cache::SetGraphCache;
@@ -19,14 +22,15 @@ use graph_cache::SetGraphCache;
 /// set-graph cache.
 pub(crate) use graph_validation::AccountMembership;
 use graph_validation::SetMembership;
+pub use repo::account_set_cursor::*;
 use repo::*;
-pub use repo::{account_set_cursor::*, members_cursor::*};
 
 #[derive(Clone)]
 pub struct AccountSets {
     repo: AccountSetRepo,
     accounts: Accounts,
     balances: Balances,
+    account_set_members: AccountSetMembers,
     /// Internal detail of this module: the epoch-validated in-process
     /// cache backing the posting hot path's ancestor resolution
     /// (`fetch_mappings_in_op`). Holds its own handle on the repo — all
@@ -42,6 +46,7 @@ impl AccountSets {
         publisher: &OutboxPublisher,
         accounts: &Accounts,
         balances: &Balances,
+        account_set_members: &AccountSetMembers,
         clock: &ClockHandle,
     ) -> Self {
         let repo = AccountSetRepo::new(pool, publisher);
@@ -50,6 +55,7 @@ impl AccountSets {
             repo,
             accounts: accounts.clone(),
             balances: balances.clone(),
+            account_set_members: account_set_members.clone(),
             clock: clock.clone(),
         }
     }
@@ -238,11 +244,16 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                // Account-member attach sequence: lock protocol first,
+                // Account-member attach sequence: coarse SHARED, then
+                // per-member EXCLUSIVE (two statements — the service
+                // sequences them so acquisition order is guaranteed),
                 // then the path-uniqueness check (in-memory on the
                 // set-graph cache, SQL walk fallback), then the
                 // direct-edge insert the check's verdict fences.
-                self.repo.lock_for_account_member_op(&mut *op, id).await?;
+                self.repo.lock_graph_shared_in_op(&mut *op).await?;
+                self.account_set_members
+                    .lock_members_in_op(&mut *op, &[id])
+                    .await?;
                 self.set_graph_cache
                     .assert_no_double_membership_in_op(
                         op,
@@ -252,8 +263,8 @@ impl AccountSets {
                         }],
                     )
                     .await?;
-                self.repo
-                    .insert_member_account(&mut *op, account_set_id, id)
+                self.account_set_members
+                    .add_in_op(&mut *op, &[(account_set_id, id)])
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -345,17 +356,24 @@ impl AccountSets {
             });
         }
 
-        // Batch attach sequence, mirroring the single-pair path: batch
-        // lock protocol, one path-uniqueness check covering all pairs
-        // (and their interactions with each other), one insert.
+        // Batch attach sequence, mirroring the single-pair path: coarse
+        // SHARED, then per-member EXCLUSIVE for every account (all member
+        // locks in one PG-side-ordered statement), one path-uniqueness
+        // check covering all pairs (and their interactions with each
+        // other), one insert.
         let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
-        self.repo
-            .lock_for_account_members_op(op, &account_ids)
+        self.repo.lock_graph_shared_in_op(op).await?;
+        self.account_set_members
+            .lock_members_in_op(op, &account_ids)
             .await?;
         self.set_graph_cache
             .assert_no_double_membership_in_op(op, &members)
             .await?;
-        self.repo.insert_member_accounts(op, &members).await?;
+        let pairs: Vec<(AccountSetId, AccountId)> = members
+            .iter()
+            .map(|m| (m.account_set_id, m.account_id))
+            .collect();
+        self.account_set_members.add_in_op(op, &pairs).await?;
 
         Ok(())
     }
@@ -573,8 +591,15 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                self.repo
-                    .remove_member_account(op, account_set_id, id)
+                // Same coarse-then-per-member sequencing as attach (see
+                // `add_member_in_op`'s account arm) — the lock also keeps
+                // same-member add/remove interleavings serialized.
+                self.repo.lock_graph_shared_in_op(op).await?;
+                self.account_set_members
+                    .lock_members_in_op(op, &[id])
+                    .await?;
+                self.account_set_members
+                    .remove_in_op(op, account_set_id, id)
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -730,7 +755,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo.list_children_by_created_at(id, args).await
+        Ok(self
+            .account_set_members
+            .list_by_created_at(id, args)
+            .await?)
     }
 
     pub async fn list_members_by_created_at_in_op(
@@ -742,9 +770,10 @@ impl AccountSets {
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
         AccountSetError,
     > {
-        self.repo
-            .list_children_by_created_at_in_op(op, id, args)
-            .await
+        Ok(self
+            .account_set_members
+            .list_by_created_at_in_op(op, id, args)
+            .await?)
     }
 
     pub async fn list_members_by_external_id(
@@ -758,7 +787,10 @@ impl AccountSets {
         >,
         AccountSetError,
     > {
-        self.repo.list_children_by_external_id(id, args).await
+        Ok(self
+            .account_set_members
+            .list_by_external_id(id, args)
+            .await?)
     }
 
     pub async fn list_members_by_external_id_in_op(
@@ -773,9 +805,10 @@ impl AccountSets {
         >,
         AccountSetError,
     > {
-        self.repo
-            .list_children_by_external_id_in_op(op, id, args)
-            .await
+        Ok(self
+            .account_set_members
+            .list_by_external_id_in_op(op, id, args)
+            .await?)
     }
 
     /// Resolve each entry account's ancestor-set mappings AND take the

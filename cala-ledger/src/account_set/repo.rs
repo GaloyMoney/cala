@@ -46,11 +46,15 @@ use super::{
 ///   the edges that every walk
 ///   reads, and read the member rows that account-member mutations
 ///   write, so they must exclude everything.
-/// - Account-member mutations (`add_member_account(s)` /
-///   `remove_member_account`) take this lock SHARED plus an EXCLUSIVE
-///   per-member lock (`MEMBER_LOCK_CLASS` — the constant now lives in
-///   `crate::membership_write`, the shared home of the member-edge
-///   write primitive — keyed on the member account id).
+/// - Account-member mutations (`AccountSets::add_member(s)_in_op` /
+///   `remove_member_in_op`'s account arms) take this lock SHARED
+///   ([`Self::lock_graph_shared_in_op`]) plus an EXCLUSIVE per-member
+///   lock (`MEMBER_LOCK_CLASS`, `crate::account_set_member` — the
+///   module that owns the member-edge table's writes and keyed on the
+///   member account id). The two locks are two separate awaited
+///   statements — coarse in `account_set/repo.rs`, per-member in
+///   `account_set_member` — sequenced by the `AccountSets` SERVICE
+///   (`mod.rs`), which is what guarantees the acquisition order.
 ///   Shared-vs-exclusive fences them against structure mutations,
 ///   while account-member mutations for *different* members run
 ///   concurrently — each validation involves only its own member's
@@ -58,11 +62,11 @@ use super::{
 ///   *same* member, whose interleaved check-then-write sequences could
 ///   otherwise commit a double membership.
 /// - The create-inside-set fast path (`Accounts::create_*` with
-///   `NewAccount::initial_account_sets`) takes NEITHER this lock nor
+///   `NewAccount::initial_account_set`) takes NEITHER this lock nor
 ///   any class-1 lock — only the class-2 per-member EXCLUSIVE, via
-///   `crate::membership_write`. Sound only because the account is
+///   `crate::account_set_member`. Sound only because the account is
 ///   created in the same op with exactly one membership; the invariant
-///   argument lives on the `NewAccount::initial_account_sets` field
+///   argument lives on the `NewAccount::initial_account_set` field
 ///   docs.
 ///
 /// Ordering: the coarse lock is always acquired before the per-member
@@ -88,48 +92,10 @@ const ADDVISORY_LOCK_ID: i32 = 123456;
 /// `classid` namespace for the coarse membership-graph lock (2-arg
 /// form), keyed on [`ADDVISORY_LOCK_ID`]. Must stay disjoint from
 /// `EC_SET_LOCK_CLASS` (= 1) and `MEMBER_LOCK_CLASS` (= 2, in
-/// `crate::membership_write`).
+/// `crate::account_set_member`).
 const GRAPH_LOCK_CLASS: i32 = 3;
 
-pub mod members_cursor {
-    use cala_types::account_set::{
-        AccountSetMember, AccountSetMemberByExternalId, AccountSetMemberId,
-    };
-    use serde::{Deserialize, Serialize};
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMemberByCreatedAtCursor {
-        pub id: AccountSetMemberId,
-        pub member_created_at: chrono::DateTime<chrono::Utc>,
-    }
-
-    impl From<&AccountSetMember> for AccountSetMemberByCreatedAtCursor {
-        fn from(member: &AccountSetMember) -> Self {
-            Self {
-                id: member.id,
-                member_created_at: member.created_at,
-            }
-        }
-    }
-
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct AccountSetMemberByExternalIdCursor {
-        pub id: AccountSetMemberId,
-        pub external_id: Option<String>,
-    }
-
-    impl From<&AccountSetMemberByExternalId> for AccountSetMemberByExternalIdCursor {
-        fn from(member: &AccountSetMemberByExternalId) -> Self {
-            Self {
-                id: member.id,
-                external_id: member.external_id.clone(),
-            }
-        }
-    }
-}
-
 use account_set_cursor::*;
-use members_cursor::*;
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
@@ -165,14 +131,16 @@ impl AccountSetRepo {
         }
     }
 
-    /// Takes the account-member half of the membership lock protocol (see
-    /// [`ADDVISORY_LOCK_ID`]): SHARED coarse lock, then EXCLUSIVE
-    /// per-member lock. Two statements so the acquisition order is
-    /// guaranteed.
-    pub(super) async fn lock_for_account_member_op(
+    /// Take the SHARED half of the coarse membership-graph lock protocol
+    /// for an account-member mutation (see [`ADDVISORY_LOCK_ID`]). The
+    /// EXCLUSIVE per-member lock is taken separately, by
+    /// `AccountSetMembers::lock_members_in_op`
+    /// (`crate::account_set_member`) — the `AccountSets` service
+    /// sequences the two so acquisition order (coarse before per-member)
+    /// is guaranteed.
+    pub(super) async fn lock_graph_shared_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        account_id: AccountId,
     ) -> Result<(), AccountSetError> {
         sqlx::query!(
             "SELECT pg_advisory_xact_lock_shared($1, $2)",
@@ -181,7 +149,6 @@ impl AccountSetRepo {
         )
         .execute(db.as_executor())
         .await?;
-        crate::membership_write::lock_member_accounts(db, &[account_id]).await?;
         Ok(())
     }
 
@@ -261,387 +228,6 @@ impl AccountSetRepo {
         if row.conflict {
             return Err(AccountSetError::MemberAlreadyAdded);
         }
-        Ok(())
-    }
-
-    pub async fn list_children_by_created_at(
-        &self,
-        id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
-        AccountSetError,
-    > {
-        self.list_children_by_created_at_in_op(&self.pool, id, args)
-            .await
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "account_set.list_children_by_created_at_in_op",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub async fn list_children_by_created_at_in_op(
-        &self,
-        op: impl es_entity::IntoOneTimeExecutor<'_>,
-        account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
-        AccountSetError,
-    > {
-        let es_entity::PaginatedQueryArgs { first, after } = args;
-        let (member_id, created_at) = if let Some(after) = after {
-            (Some(after.id), Some(after.member_created_at))
-        } else {
-            (None, None)
-        };
-
-        let id = match member_id {
-            Some(member_id) => match member_id {
-                AccountSetMemberId::Account(id) => Some(id),
-                AccountSetMemberId::AccountSet(id) => Some(id.into()),
-            },
-            None => None,
-        };
-
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query!(
-                r#"
-            WITH member_accounts AS (
-              SELECT
-                member_account_id AS member_id,
-                member_account_id,
-                NULL::uuid AS member_account_set_id,
-                created_at
-              FROM cala_account_set_member_accounts
-              WHERE
-                account_set_id = $4
-                AND (COALESCE((created_at, member_account_id) < ($3, $2), $2 IS NULL))
-              ORDER BY created_at DESC, member_account_id DESC
-              LIMIT $1
-            ), member_sets AS (
-              SELECT
-                member_account_set_id AS member_id,
-                NULL::uuid AS member_account_id,
-                member_account_set_id,
-                created_at
-              FROM cala_account_set_member_account_sets
-              WHERE
-                account_set_id = $4
-                AND (COALESCE((created_at, member_account_set_id) < ($3, $2), $2 IS NULL))
-              ORDER BY created_at DESC, member_account_set_id DESC
-              LIMIT $1
-            ), all_members AS (
-              SELECT * FROM member_accounts
-              UNION ALL
-              SELECT * FROM member_sets
-            )
-            SELECT * FROM all_members
-            ORDER BY created_at DESC, member_id DESC
-            LIMIT $1
-          "#,
-                (first + 1) as i64,
-                id.map(uuid::Uuid::from),
-                created_at,
-                uuid::Uuid::from(account_set_id),
-            ))
-            .await?;
-        let has_next_page = rows.len() > first;
-        let mut end_cursor = None;
-        if let Some(last) = rows.last() {
-            let id = last
-                .member_account_id
-                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
-                .or_else(|| {
-                    last.member_account_set_id
-                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
-                });
-            end_cursor = Some(AccountSetMemberByCreatedAtCursor {
-                id: id.expect("member_id not set"),
-                member_created_at: last.created_at.expect("created_at not set"),
-            });
-        }
-
-        let account_set_members = rows
-            .into_iter()
-            .take(first)
-            .map(
-                |row| match (row.member_account_id, row.member_account_set_id) {
-                    (Some(member_account_id), _) => AccountSetMember::from((
-                        AccountSetMemberId::Account(AccountId::from(member_account_id)),
-                        row.created_at.expect("created at should always be present"),
-                    )),
-                    (_, Some(member_account_set_id)) => AccountSetMember::from((
-                        AccountSetMemberId::AccountSet(AccountSetId::from(member_account_set_id)),
-                        row.created_at.expect("created at should always be present"),
-                    )),
-                    _ => unreachable!(),
-                },
-            )
-            .collect::<Vec<AccountSetMember>>();
-
-        Ok(es_entity::PaginatedQueryRet {
-            entities: account_set_members,
-            has_next_page,
-            end_cursor,
-        })
-    }
-
-    pub async fn list_children_by_external_id(
-        &self,
-        id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<
-            AccountSetMemberByExternalId,
-            AccountSetMemberByExternalIdCursor,
-        >,
-        AccountSetError,
-    > {
-        self.list_children_by_external_id_in_op(&self.pool, id, args)
-            .await
-    }
-
-    pub async fn list_children_by_external_id_in_op(
-        &self,
-        op: impl es_entity::IntoOneTimeExecutor<'_>,
-        account_set_id: AccountSetId,
-        args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<
-            AccountSetMemberByExternalId,
-            AccountSetMemberByExternalIdCursor,
-        >,
-        AccountSetError,
-    > {
-        let es_entity::PaginatedQueryArgs { first, after } = args;
-        let (member_id, external_id) = if let Some(after) = after {
-            (Some(after.id), after.external_id)
-        } else {
-            (None, None)
-        };
-
-        let id = match member_id {
-            Some(member_id) => match member_id {
-                AccountSetMemberId::Account(id) => Some(id),
-                AccountSetMemberId::AccountSet(id) => Some(id.into()),
-            },
-            None => None,
-        };
-
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query!(
-                r#"
-            WITH member_accounts AS (
-              SELECT
-                member_account_id AS member_id,
-                member_account_id,
-                NULL::uuid AS member_account_set_id,
-                a.external_id
-              FROM cala_account_set_member_accounts m
-              LEFT JOIN cala_accounts a ON m.member_account_id = a.id
-              WHERE
-                m.account_set_id = $4
-                AND (
-                  ($3::varchar IS NULL) OR
-                  (a.external_id IS NULL AND $3::varchar IS NOT NULL) OR
-                  (a.external_id > $3::varchar) OR
-                  (a.external_id = $3::varchar AND member_account_id > $2)
-                )
-              ORDER BY a.external_id ASC NULLS LAST, member_account_id ASC
-              LIMIT $1
-            ), member_sets AS (
-              SELECT
-                member_account_set_id AS member_id,
-                NULL::uuid AS member_account_id,
-                member_account_set_id,
-                s.external_id
-              FROM cala_account_set_member_account_sets m
-              LEFT JOIN cala_account_sets s ON m.member_account_set_id = s.id
-              WHERE
-                m.account_set_id = $4
-                AND (
-                  ($3::varchar IS NULL) OR
-                  (s.external_id IS NULL AND $3::varchar IS NOT NULL) OR
-                  (s.external_id > $3::varchar) OR
-                  (s.external_id = $3::varchar AND member_account_set_id > $2)
-                )
-              ORDER BY s.external_id ASC NULLS LAST, member_account_set_id ASC
-              LIMIT $1
-            ), all_members AS (
-              SELECT * FROM member_accounts
-              UNION ALL
-              SELECT * FROM member_sets
-            )
-            SELECT * FROM all_members
-            ORDER BY external_id ASC NULLS LAST, member_id ASC
-            LIMIT $1
-        "#,
-                (first + 1) as i64,
-                id.map(uuid::Uuid::from),
-                external_id,
-                uuid::Uuid::from(account_set_id),
-            ))
-            .await?;
-
-        let has_next_page = rows.len() > first;
-        let mut end_cursor = None;
-        if let Some(last) = rows.last() {
-            let id = last
-                .member_account_id
-                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
-                .or_else(|| {
-                    last.member_account_set_id
-                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
-                });
-            end_cursor = Some(AccountSetMemberByExternalIdCursor {
-                id: id.expect("member_id not set"),
-                external_id: last.external_id.clone(),
-            });
-        }
-
-        let account_set_members = rows
-            .into_iter()
-            .take(first)
-            .map(
-                |row| match (row.member_account_id, row.member_account_set_id) {
-                    (Some(member_account_id), _) => AccountSetMemberByExternalId {
-                        id: AccountSetMemberId::Account(AccountId::from(member_account_id)),
-                        external_id: row.external_id,
-                    },
-                    (_, Some(member_account_set_id)) => AccountSetMemberByExternalId {
-                        id: AccountSetMemberId::AccountSet(AccountSetId::from(
-                            member_account_set_id,
-                        )),
-                        external_id: row.external_id,
-                    },
-                    _ => unreachable!(),
-                },
-            )
-            .collect::<Vec<AccountSetMemberByExternalId>>();
-
-        Ok(es_entity::PaginatedQueryRet {
-            entities: account_set_members,
-            has_next_page,
-            end_cursor,
-        })
-    }
-
-    /// Batch variant of [`lock_for_account_member_op`
-    /// ](Self::lock_for_account_member_op): SHARED coarse lock, then
-    /// EXCLUSIVE per-member locks for every account, all member locks in
-    /// one id-ordered statement.
-    pub(super) async fn lock_for_account_members_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
-    ) -> Result<(), AccountSetError> {
-        sqlx::query!(
-            "SELECT pg_advisory_xact_lock_shared($1, $2)",
-            GRAPH_LOCK_CLASS,
-            ADDVISORY_LOCK_ID
-        )
-        .execute(db.as_executor())
-        .await?;
-        crate::membership_write::lock_member_accounts(db, account_ids).await?;
-        Ok(())
-    }
-
-    /// Single direct-edge account-member insert (plus the outbox event).
-    ///
-    /// Precondition: the caller has taken the account-member lock
-    /// protocol for `account_id` ([`lock_for_account_member_op`
-    /// ](Self::lock_for_account_member_op)) and passed the
-    /// path-uniqueness check
-    /// (`SetGraphCache::assert_no_double_membership_in_op`) in this same
-    /// op — the sequence `AccountSets::add_member_in_op` enforces.
-    pub(super) async fn insert_member_account(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account_set_id: AccountSetId,
-        account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        // A single direct edge: ancestor sets are resolved by the
-        // read-time walk, so there is no closure to materialize. The
-        // write itself is homed in `crate::membership_write`, shared
-        // with the create-inside-set fast path.
-        crate::membership_write::insert_member_accounts(
-            db,
-            &self.publisher,
-            &[(account_set_id, account_id)],
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    /// Batch variant of [`insert_member_account`
-    /// ](Self::insert_member_account): one direct-edge insert covering
-    /// every `(account_set_id, account_id)` pair, plus their outbox
-    /// events.
-    ///
-    /// Precondition: same as the single-pair form — the caller has taken
-    /// the batch lock protocol ([`lock_for_account_members_op`
-    /// ](Self::lock_for_account_members_op)) and passed the
-    /// path-uniqueness check for all pairs in this same op — the
-    /// sequence `AccountSets::add_members_in_op` enforces.
-    pub(super) async fn insert_member_accounts(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        members: &[AccountMembership],
-    ) -> Result<(), AccountSetError> {
-        // The write itself is homed in `crate::membership_write`, shared
-        // with the create-inside-set fast path.
-        let pairs: Vec<(AccountSetId, AccountId)> = members
-            .iter()
-            .map(|membership| (membership.account_set_id, membership.account_id))
-            .collect();
-        crate::membership_write::insert_member_accounts(db, &self.publisher, &pairs).await?;
-
-        Ok(())
-    }
-
-    #[instrument(
-        level = "debug",
-        name = "account_set.remove_member_account",
-        skip_all,
-        err(level = "warn")
-    )]
-    pub async fn remove_member_account(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account_set_id: AccountSetId,
-        account_id: AccountId,
-    ) -> Result<(), AccountSetError> {
-        self.lock_for_account_member_op(db, account_id).await?;
-        // Delete the single direct edge; there are no materialized
-        // ancestor rows to scrub. The lock keeps same-member add/remove
-        // interleavings serialized (see ADDVISORY_LOCK_ID).
-        sqlx::query!(
-            r#"
-          DELETE FROM cala_account_set_member_accounts
-          WHERE account_set_id = $1 AND member_account_id = $2
-          "#,
-            account_set_id as AccountSetId,
-            account_id as AccountId,
-        )
-        .execute(db.as_executor())
-        .await?;
-
-        self.publisher
-            .publish_all(
-                db,
-                std::iter::once(crate::outbox::OutboxEventPayload::AccountSetMemberRemoved {
-                    account_set_id,
-                    member_id: crate::account_set::AccountSetMemberId::Account(account_id),
-                }),
-            )
-            .await?;
-
         Ok(())
     }
 

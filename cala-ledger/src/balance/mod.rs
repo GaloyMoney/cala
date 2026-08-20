@@ -28,7 +28,7 @@
 //! while a poster that starts after an attach took its EXCLUSIVE blocks
 //! *before* reading set mappings and resumes seeing the new membership.
 //!
-//! The create-inside-set fast path (`NewAccount::initial_account_sets`)
+//! The create-inside-set fast path (`NewAccount::initial_account_set`)
 //! is exempt from the fence: the account row is uncommitted so no
 //! balance history can exist (the guard is vacuously satisfied), and no
 //! posting to a not-yet-visible account can be in flight — from first

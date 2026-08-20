@@ -12,6 +12,7 @@ use error::*;
 use crate::{
     account::Accounts,
     account_set::AccountSets,
+    account_set_member::AccountSetMembers,
     balance::Balances,
     entry::Entries,
     journal::Journals,
@@ -76,14 +77,22 @@ impl CalaLedger {
 
         let clock = config.clock;
         let publisher = OutboxPublisher::init(&pool, &clock).await?;
-        let accounts = Accounts::new(&pool, &publisher, &clock);
+        let account_set_members = AccountSetMembers::new(&pool, &publisher);
+        let accounts = Accounts::new(&pool, &publisher, &account_set_members, &clock);
         let journals = Journals::new(&pool, &publisher, &clock);
         let tx_templates = TxTemplates::new(&pool, &publisher, &clock);
         let transactions = Transactions::new(&pool);
         let entries = Entries::new(&pool);
         let balances = Balances::new(&pool, &journals);
         let velocities = Velocities::new(&pool, &clock);
-        let account_sets = AccountSets::new(&pool, &publisher, &accounts, &balances, &clock);
+        let account_sets = AccountSets::new(
+            &pool,
+            &publisher,
+            &accounts,
+            &balances,
+            &account_set_members,
+            &clock,
+        );
         let postings = Postings::new(
             &publisher,
             &tx_templates,

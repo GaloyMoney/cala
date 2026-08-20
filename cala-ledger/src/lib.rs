@@ -135,9 +135,9 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
+mod account_set_member;
 mod cel_context;
 mod ec_rollup;
-mod membership_write;
 mod param;
 
 pub mod account;

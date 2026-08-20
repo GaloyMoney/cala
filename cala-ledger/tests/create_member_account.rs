@@ -1,9 +1,10 @@
 //! Tests for the lock-free create-inside-set fast path
-//! (`NewAccount::initial_account_sets`): a freshly created account joins
+//! (`NewAccount::initial_account_set`): a freshly created account joins
 //! exactly one account set in the same atomic operation, taking ONLY the
 //! class-2 per-member advisory lock — no coarse membership-graph lock,
 //! no class-1 balance-history guard lock, no path-uniqueness walk. The
-//! invariant argument lives on the `initial_account_sets` field docs.
+//! invariant argument lives on the `initial_account_set` field docs
+//! (k=1 is enforced at the type level — an `Option`, not a collection).
 //!
 //! Style mirrors `account_set_membership_locks.rs`: blocking assertions
 //! hold one operation's transaction open and observe whether a second
@@ -220,7 +221,7 @@ async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()
     Ok(())
 }
 
-/// §3.7-2: an empty `initial_account_sets` is a plain create — no
+/// §3.7-2: an unset `initial_account_set` is a plain create — no
 /// membership rows, account fully usable.
 #[tokio::test]
 async fn empty_field_is_plain_create() -> anyhow::Result<()> {
@@ -335,37 +336,10 @@ async fn fast_path_completes_under_exclusive_structure_lock() -> anyhow::Result<
     Ok(())
 }
 
-/// §3.7-5: cardinality refusal — more than one initial set is rejected;
-/// k≥2 must route through the classic locked protocol.
-#[tokio::test]
-async fn multiple_initial_sets_rejected() -> anyhow::Result<()> {
-    let (cala, _jobs, _pool) = init_cala().await?;
-    let journal = cala.journals().create(helpers::test_journal()).await?;
-    let set_one = cala
-        .account_sets()
-        .create(new_set(journal.id(), "multi-1"))
-        .await?;
-    let set_two = cala
-        .account_sets()
-        .create(new_set(journal.id(), "multi-2"))
-        .await?;
-
-    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
-    let new_account = NewAccount::builder()
-        .id(uuid::Uuid::now_v7())
-        .name(format!("Multi set account {code}"))
-        .code(code)
-        .initial_account_sets(vec![set_one.id(), set_two.id()])
-        .build()
-        .unwrap();
-
-    let res = cala.accounts().create(new_account).await;
-    assert!(matches!(
-        res,
-        Err(AccountError::MultipleInitialAccountSets { .. })
-    ));
-    Ok(())
-}
+// §3.7-5 (retired): cardinality refusal is no longer a test — k≥2 initial
+// sets is not representable at all (`initial_account_set: Option<AccountSetId>`).
+// See the rework addendum §2 for why k≥2 cannot be made lock-free (it is
+// not a v1 limit to relax, so there is nothing left to assert here).
 
 /// §3.7-6: an unknown target set is rejected, and the whole op (account
 /// row included) rolls back.
@@ -596,5 +570,117 @@ async fn set_backing_accounts_unaffected() -> anyhow::Result<()> {
         direct_membership_count(&pool, set.id(), account_id).await?,
         1
     );
+    Ok(())
+}
+
+/// The objid a class-2 lock on `account_id` surfaces as in `pg_locks`
+/// (`hashtext(...)::bigint & 4294967295`, matching how PostgreSQL folds
+/// the signed int4 hash into pg_locks' unsigned display column).
+async fn class2_objid(pool: &sqlx::PgPool, account_id: AccountId) -> anyhow::Result<i64> {
+    Ok(
+        sqlx::query_scalar::<_, i64>("SELECT hashtext($1)::bigint & 4294967295")
+            .bind(account_id.to_string())
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
+/// `(any row granted, any row waiting)` for a class-2 lock's objid. A
+/// contended lock surfaces as TWO `pg_locks` rows for the same
+/// (classid, objid) — one `granted = true` (the holder) and one
+/// `granted = false` (the queued waiter) — so this must check for the
+/// waiter's EXISTENCE, not fetch a single (order-unspecified) row: an
+/// earlier version of this helper used `fetch_optional`, which silently
+/// returns whichever of the two rows Postgres happens to emit first —
+/// flaky in exactly the way this test exists to rule out.
+async fn class2_lock_state(pool: &sqlx::PgPool, objid: i64) -> anyhow::Result<(bool, bool)> {
+    let rows: Vec<bool> = sqlx::query_scalar(
+        r#"
+        SELECT granted FROM pg_locks
+        WHERE locktype = 'advisory' AND classid = 2 AND objid = $1
+          AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+        "#,
+    )
+    .bind(objid)
+    .fetch_all(pool)
+    .await?;
+    Ok((rows.iter().any(|g| *g), rows.iter().any(|g| !*g)))
+}
+
+/// §4a revert-to-red: the fast path's consolidated statement establishes
+/// class-2 lock order ON THE PG SIDE (`ORDER BY` inside an `AS
+/// MATERIALIZED` CTE one level below the volatile lock call) — never by
+/// relying on the caller's array order. Proof: pre-take the HIGHER of two
+/// account ids' class-2 lock from an independent session, then run a
+/// two-account fast-path `create_all` covering both (built in
+/// DESCENDING id order, so array order is deliberately the wrong order).
+/// If ordering were caller-order (or unfenced — the CTE inlined, the
+/// lock evaluated before the Sort), `create_all` would either block
+/// immediately without ever holding the lower id's lock, or race
+/// nondeterministically. The canonical (ascending) order predicts
+/// exactly one observable state: `create_all` acquires the LOWER lock
+/// (uncontended) and then blocks waiting on the HIGHER one.
+#[tokio::test]
+async fn fast_path_members_locked_in_canonical_order() -> anyhow::Result<()> {
+    let (cala, _jobs, pool) = init_cala().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let set_a = cala
+        .account_sets()
+        .create(new_set(journal.id(), "order-fast-a"))
+        .await?;
+    let set_b = cala
+        .account_sets()
+        .create(new_set(journal.id(), "order-fast-b"))
+        .await?;
+
+    let mut lo = new_account_in(set_a.id());
+    let mut hi = new_account_in(set_b.id());
+    if lo.id > hi.id {
+        std::mem::swap(&mut lo, &mut hi);
+    }
+    let (lo_id, hi_id) = (lo.id, hi.id);
+    let lo_objid = class2_objid(&pool, lo_id).await?;
+    let hi_objid = class2_objid(&pool, hi_id).await?;
+
+    // Independent session pre-takes the HIGHER id's class-2 lock, held
+    // open in its own uncommitted transaction.
+    let mut blocker_tx = pool.begin().await?;
+    sqlx::query("SELECT pg_advisory_xact_lock(2, hashtext($1::text))")
+        .bind(hi_id.to_string())
+        .execute(&mut *blocker_tx)
+        .await?;
+
+    // Deliberately wrong-order input: hi first, lo second.
+    let create = tokio::spawn({
+        let cala = cala.clone();
+        async move { cala.accounts().create_all(vec![hi, lo]).await }
+    });
+
+    // Give the statement a moment to start and take whatever it takes.
+    tokio::time::sleep(MUST_STILL_BE_PENDING).await;
+    let (lo_granted, lo_waiting) = class2_lock_state(&pool, lo_objid).await?;
+    assert!(
+        lo_granted && !lo_waiting,
+        "canonical (ascending) order must acquire the lower id's lock \
+         first (uncontended), regardless of input array order — \
+         got granted={lo_granted}, waiting={lo_waiting}"
+    );
+    let (hi_granted, hi_waiting) = class2_lock_state(&pool, hi_objid).await?;
+    assert!(
+        hi_granted && hi_waiting,
+        "the higher id's lock must show both the independent session's \
+         hold (granted) AND the fast-path create queued behind it \
+         (waiting) — got granted={hi_granted}, waiting={hi_waiting}"
+    );
+
+    // Release the blocker; the fast-path create must now complete.
+    blocker_tx.rollback().await?;
+    let accounts = tokio::time::timeout(MUST_COMPLETE, create)
+        .await
+        .expect("fast-path create must complete once the higher lock is released")??;
+    assert_eq!(accounts.len(), 2);
+
+    assert_eq!(direct_membership_count(&pool, set_a.id(), lo_id).await?, 1);
+    assert_eq!(direct_membership_count(&pool, set_b.id(), hi_id).await?, 1);
     Ok(())
 }

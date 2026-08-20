@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM cala_account_set_member_accounts\n            WHERE account_set_id = $1 AND member_account_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7bde7f4d4469125e566841e062d196076f2cb00e07a7c46e6215c338e8d1b38c"
+}
