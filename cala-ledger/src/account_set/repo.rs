@@ -77,15 +77,14 @@ use super::{
 /// violate this.)
 ///
 /// Key-space hygiene: the lock lives in the 2-arg advisory key space
-/// under its own `classid` ([`GRAPH_LOCK_CLASS`]). It used to be the
-/// 1-arg key `123456` — but the 1-arg space is shared with the
-/// `hashtext(journal‖account‖currency)` per-balance poster locks and
-/// the velocity balance locks, so any tuple hashing to exactly 123456
-/// would have taken the graph lock EXCLUSIVE from the poster path
-/// (silent global serialization, ~2⁻³² per key). The 1-arg and 2-arg
-/// forms are DIFFERENT lock spaces that do not mutually exclude, so
-/// every acquisition site must always agree on the form — they all go
-/// through this module and use ([`GRAPH_LOCK_CLASS`],
+/// under its own `classid` ([`GRAPH_LOCK_CLASS`]). The 1-arg space is
+/// shared with the `hashtext(journal‖account‖currency)` per-balance
+/// poster locks and the velocity balance locks, so a tuple hashing to
+/// exactly 123456 there would take the graph lock EXCLUSIVE from the
+/// poster path (silent global serialization, ~2⁻³² per key). The 1-arg
+/// and 2-arg forms are DIFFERENT lock spaces that do not mutually
+/// exclude, so every acquisition site must always agree on the form —
+/// they all go through this module and use ([`GRAPH_LOCK_CLASS`],
 /// [`ADDVISORY_LOCK_ID`]).
 const ADDVISORY_LOCK_ID: i32 = 123456;
 

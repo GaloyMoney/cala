@@ -143,10 +143,10 @@ async fn member_created_payload(
     .await?)
 }
 
-/// §3.7-1: batch happy path. Three fresh accounts each join a different
-/// set in one `create_all`; memberships exist, ancestor resolution sees
-/// them, and the outbox event is byte-identical (modulo ids) to the one
-/// the classic create-then-attach flow emits.
+/// Batch happy path: three fresh accounts each join a different set in
+/// one `create_all`; memberships exist, ancestor resolution sees them,
+/// and the outbox event is byte-identical (modulo ids) to the one the
+/// classic create-then-attach flow emits.
 #[tokio::test]
 async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()> {
     let (cala, _jobs, pool) = init_cala().await?;
@@ -163,7 +163,6 @@ async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()
             .create(new_set(journal.id(), "fast-batch-3"))
             .await?,
     ];
-    // An ancestor above the first set, so the walk has something to climb.
     let parent = cala
         .account_sets()
         .create(new_set(journal.id(), "fast-batch-parent"))
@@ -182,8 +181,6 @@ async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()
         );
     }
 
-    // Ancestor resolution: the first account reaches its set AND the
-    // ancestor above it, each via exactly one path.
     let paths = ancestor_path_counts(&pool, accounts[0].id()).await?;
     let mut resolved: Vec<uuid::Uuid> = paths.iter().map(|(id, _)| *id).collect();
     resolved.sort();
@@ -195,7 +192,6 @@ async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()
     assert_eq!(resolved, expected);
     assert!(paths.iter().all(|(_, n)| *n == 1));
 
-    // Event byte-parity with the classic create-then-attach flow.
     let classic_set = cala
         .account_sets()
         .create(new_set(journal.id(), "fast-batch-classic"))
@@ -221,8 +217,8 @@ async fn batch_create_attaches_and_matches_classic_events() -> anyhow::Result<()
     Ok(())
 }
 
-/// §3.7-2: an unset `initial_account_set` is a plain create — no
-/// membership rows, account fully usable.
+/// An unset `initial_account_set` is a plain create — no membership
+/// rows, account fully usable.
 #[tokio::test]
 async fn empty_field_is_plain_create() -> anyhow::Result<()> {
     let (cala, _jobs, pool) = init_cala().await?;
@@ -241,9 +237,9 @@ async fn empty_field_is_plain_create() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// §3.7-3: lock footprint. While a fast-path create is open (pre-commit)
-/// it holds EXACTLY the class-2 per-member advisory lock for its account
-/// — not the coarse membership-graph lock (key 123456, any form, any
+/// Lock footprint: while a fast-path create is open (pre-commit) it
+/// holds EXACTLY the class-2 per-member advisory lock for its account —
+/// not the coarse membership-graph lock (key 123456, any form, any
 /// mode) and no class-1 lock.
 #[tokio::test]
 async fn fast_path_lock_footprint() -> anyhow::Result<()> {
@@ -260,7 +256,6 @@ async fn fast_path_lock_footprint() -> anyhow::Result<()> {
     let mut op = cala.begin_operation().await?;
     cala.accounts().create_in_op(&mut op, new_account).await?;
 
-    // Inspect from a second connection while the op is open.
     let advisory_locks = sqlx::query_as::<_, (i64, i64)>(
         r#"
         SELECT classid::bigint, objid::bigint FROM pg_locks
@@ -291,10 +286,10 @@ async fn fast_path_lock_footprint() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// §3.7-4: the whole-point no-convoy regression test. While a structure
-/// mutation holds the coarse membership-graph lock EXCLUSIVE (an open
-/// `add_member_set`), a fast-path create COMPLETES — the classic attach
-/// would block here (see `structure_ops_fence_account_member_ops` in
+/// No-convoy: while a structure mutation holds the coarse
+/// membership-graph lock EXCLUSIVE (an open `add_member_set`), a
+/// fast-path create COMPLETES — the classic attach would block here
+/// (see `structure_ops_fence_account_member_ops` in
 /// `account_set_membership_locks.rs`).
 #[tokio::test]
 async fn fast_path_completes_under_exclusive_structure_lock() -> anyhow::Result<()> {
@@ -314,13 +309,11 @@ async fn fast_path_completes_under_exclusive_structure_lock() -> anyhow::Result<
         .create(new_set(journal.id(), "no-convoy-target"))
         .await?;
 
-    // Hold a structure mutation open: coarse lock EXCLUSIVE until commit.
     let mut op = cala.begin_operation().await?;
     cala.account_sets()
         .add_member_in_op(&mut op, parent.id(), child.id())
         .await?;
 
-    // The fast-path create must NOT queue behind it.
     let new_account = new_account_in(target.id());
     let account_id = new_account.id;
     let account = tokio::time::timeout(MUST_COMPLETE, cala.accounts().create(new_account))
@@ -336,13 +329,8 @@ async fn fast_path_completes_under_exclusive_structure_lock() -> anyhow::Result<
     Ok(())
 }
 
-// §3.7-5 (retired): cardinality refusal is no longer a test — k≥2 initial
-// sets is not representable at all (`initial_account_set: Option<AccountSetId>`).
-// See the rework addendum §2 for why k≥2 cannot be made lock-free (it is
-// not a v1 limit to relax, so there is nothing left to assert here).
-
-/// §3.7-6: an unknown target set is rejected, and the whole op (account
-/// row included) rolls back.
+/// An unknown target set is rejected, and the whole op (account row
+/// included) rolls back.
 #[tokio::test]
 async fn missing_set_rejected() -> anyhow::Result<()> {
     let (cala, _jobs, _pool) = init_cala().await?;
@@ -356,7 +344,6 @@ async fn missing_set_rejected() -> anyhow::Result<()> {
         res,
         Err(AccountError::InitialAccountSetNotFound(id)) if id == missing
     ));
-    // Atomic: the account row rolled back with the failed membership.
     assert!(matches!(
         cala.accounts().find(account_id).await,
         Err(AccountError::CouldNotFindById(_))
@@ -364,7 +351,7 @@ async fn missing_set_rejected() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// §3.7-7: the retained class-2 per-member EXCLUSIVE is load-bearing. A
+/// The retained class-2 per-member EXCLUSIVE is load-bearing. A
 /// concurrent *classic* attach of the same fresh account (leaked id)
 /// must block on it while the fast-path op is open, and — once unblocked
 /// — run its double-membership check against the committed membership
@@ -386,11 +373,9 @@ async fn same_account_classic_race_blocks_on_member_lock() -> anyhow::Result<()>
     let new_account = new_account_in(set_one.id());
     let account_id = new_account.id;
 
-    // Fast-path create held open (class-2 EXCLUSIVE on the account).
     let mut op = cala.begin_operation().await?;
     cala.accounts().create_in_op(&mut op, new_account).await?;
 
-    // Classic attach of the same (leaked) account id must block.
     let cala2 = cala.clone();
     let set_one_id = set_one.id();
     let mut blocked = tokio::spawn(async move {
@@ -408,12 +393,9 @@ async fn same_account_classic_race_blocks_on_member_lock() -> anyhow::Result<()>
 
     op.commit().await?;
 
-    // Unblocked, its path-uniqueness check sees committed membership
-    // {S1}: a second path to S1 is rejected...
     let res = blocked.await?;
     assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
 
-    // ...while a disjoint set is fine, classically.
     cala.account_sets()
         .add_member(set_two.id(), account_id)
         .await?;
@@ -428,8 +410,8 @@ async fn same_account_classic_race_blocks_on_member_lock() -> anyhow::Result<()>
     Ok(())
 }
 
-/// §3.7-8: fast-path create into S concurrent with a structure op adding
-/// an ancestor edge above S, in BOTH commit orders. Each account ends up
+/// A fast-path create into S concurrent with a structure op adding an
+/// ancestor edge above S, in BOTH commit orders. Each account ends up
 /// with exactly one path to every ancestor, and the EC rollup folds its
 /// postings into the (EC) ancestor exactly once.
 #[tokio::test]
@@ -437,8 +419,6 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
     let (cala, mut jobs, pool) = init_cala().await?;
     let journal = cala.journals().create(helpers::test_journal()).await?;
 
-    // Two disjoint hierarchies, one per commit order. Parents are EC so
-    // the rollup fold is observable.
     let parent_a = cala
         .account_sets()
         .create(new_ec_set(journal.id(), "order-a-parent"))
@@ -456,7 +436,6 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
         .create(new_set(journal.id(), "order-b-leaf"))
         .await?;
 
-    // Order 1: structure op open first, fast create commits first.
     let mut structure_op = cala.begin_operation().await?;
     cala.account_sets()
         .add_member_in_op(&mut structure_op, parent_a.id(), leaf_a.id())
@@ -468,7 +447,6 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
         .expect("fast-path create must not block on the open structure op")?;
     structure_op.commit().await?;
 
-    // Order 2: fast create open first, structure op commits first.
     let mut fast_op = cala.begin_operation().await?;
     let new_account = new_account_in(leaf_b.id());
     let account_b = new_account.id;
@@ -483,7 +461,6 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
     .expect("structure op must not block on the open fast-path create")?;
     fast_op.commit().await?;
 
-    // Exactly one path from each account to each of its ancestors.
     for (account_id, leaf, parent) in [
         (account_a, &leaf_a, &parent_a),
         (account_b, &leaf_b, &parent_b),
@@ -503,8 +480,6 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
         );
     }
 
-    // The EC rollup folds each account's postings into its EC ancestor
-    // exactly once (a double path would double-count).
     let (sender, _) = helpers::test_accounts();
     let sender = cala.accounts().create(sender).await?;
     let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
@@ -529,8 +504,8 @@ async fn concurrent_structure_op_yields_single_path_and_single_fold() -> anyhow:
     Ok(())
 }
 
-/// §3.7-9: `AccountSets::create_*` builds set-backing accounts
-/// internally — those must NOT take the fast path (no membership rows),
+/// `AccountSets::create_*` builds set-backing accounts internally —
+/// those must NOT take the fast path (no membership rows),
 /// and the sets stay fully usable.
 #[tokio::test]
 async fn set_backing_accounts_unaffected() -> anyhow::Result<()> {
@@ -562,7 +537,6 @@ async fn set_backing_accounts_unaffected() -> anyhow::Result<()> {
         );
     }
 
-    // The set is usable: a fast-path member lands in it.
     let new_account = new_account_in(set.id());
     let account_id = new_account.id;
     cala.accounts().create(new_account).await?;
@@ -588,11 +562,9 @@ async fn class2_objid(pool: &sqlx::PgPool, account_id: AccountId) -> anyhow::Res
 /// `(any row granted, any row waiting)` for a class-2 lock's objid. A
 /// contended lock surfaces as TWO `pg_locks` rows for the same
 /// (classid, objid) — one `granted = true` (the holder) and one
-/// `granted = false` (the queued waiter) — so this must check for the
-/// waiter's EXISTENCE, not fetch a single (order-unspecified) row: an
-/// earlier version of this helper used `fetch_optional`, which silently
-/// returns whichever of the two rows Postgres happens to emit first —
-/// flaky in exactly the way this test exists to rule out.
+/// `granted = false` (the queued waiter) — so this checks for the
+/// waiter's EXISTENCE rather than fetching a single (order-unspecified)
+/// row.
 async fn class2_lock_state(pool: &sqlx::PgPool, objid: i64) -> anyhow::Result<(bool, bool)> {
     let rows: Vec<bool> = sqlx::query_scalar(
         r#"
@@ -607,16 +579,16 @@ async fn class2_lock_state(pool: &sqlx::PgPool, objid: i64) -> anyhow::Result<(b
     Ok((rows.iter().any(|g| *g), rows.iter().any(|g| !*g)))
 }
 
-/// §4a revert-to-red: the fast path's consolidated statement establishes
-/// class-2 lock order ON THE PG SIDE (`ORDER BY` inside an `AS
-/// MATERIALIZED` CTE one level below the volatile lock call) — never by
-/// relying on the caller's array order. Proof: pre-take the HIGHER of two
-/// account ids' class-2 lock from an independent session, then run a
-/// two-account fast-path `create_all` covering both (built in
-/// DESCENDING id order, so array order is deliberately the wrong order).
-/// If ordering were caller-order (or unfenced — the CTE inlined, the
-/// lock evaluated before the Sort), `create_all` would either block
-/// immediately without ever holding the lower id's lock, or race
+/// The fast path's consolidated statement establishes class-2 lock
+/// order ON THE PG SIDE (`ORDER BY` inside an `AS MATERIALIZED` CTE one
+/// level below the volatile lock call) — never by relying on the
+/// caller's array order. Proof: pre-take the HIGHER of two account ids'
+/// class-2 lock from an independent session, then run a two-account
+/// fast-path `create_all` covering both (built in DESCENDING id order,
+/// so array order is deliberately the wrong order). If ordering were
+/// caller-order (or unfenced — the CTE inlined, the lock evaluated
+/// before the Sort), `create_all` would either block immediately
+/// without ever holding the lower id's lock, or race
 /// nondeterministically. The canonical (ascending) order predicts
 /// exactly one observable state: `create_all` acquires the LOWER lock
 /// (uncontended) and then blocks waiting on the HIGHER one.
@@ -642,21 +614,17 @@ async fn fast_path_members_locked_in_canonical_order() -> anyhow::Result<()> {
     let lo_objid = class2_objid(&pool, lo_id).await?;
     let hi_objid = class2_objid(&pool, hi_id).await?;
 
-    // Independent session pre-takes the HIGHER id's class-2 lock, held
-    // open in its own uncommitted transaction.
     let mut blocker_tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(2, hashtext($1::text))")
         .bind(hi_id.to_string())
         .execute(&mut *blocker_tx)
         .await?;
 
-    // Deliberately wrong-order input: hi first, lo second.
     let create = tokio::spawn({
         let cala = cala.clone();
         async move { cala.accounts().create_all(vec![hi, lo]).await }
     });
 
-    // Give the statement a moment to start and take whatever it takes.
     tokio::time::sleep(MUST_STILL_BE_PENDING).await;
     let (lo_granted, lo_waiting) = class2_lock_state(&pool, lo_objid).await?;
     assert!(
@@ -673,7 +641,6 @@ async fn fast_path_members_locked_in_canonical_order() -> anyhow::Result<()> {
          (waiting) — got granted={hi_granted}, waiting={hi_waiting}"
     );
 
-    // Release the blocker; the fast-path create must now complete.
     blocker_tx.rollback().await?;
     let accounts = tokio::time::timeout(MUST_COMPLETE, create)
         .await

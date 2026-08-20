@@ -244,12 +244,6 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                // Account-member attach sequence: coarse SHARED, then
-                // per-member EXCLUSIVE (two statements — the service
-                // sequences them so acquisition order is guaranteed),
-                // then the path-uniqueness check (in-memory on the
-                // set-graph cache, SQL walk fallback), then the
-                // direct-edge insert the check's verdict fences.
                 self.repo.lock_graph_shared_in_op(&mut *op).await?;
                 self.account_set_members
                     .lock_members_in_op(&mut *op, &[id])
@@ -268,10 +262,6 @@ impl AccountSets {
                     .await?;
             }
             AccountSetMemberId::AccountSet(id) => {
-                // Structure mutation: the same protocol as the batch
-                // path — exclusive coarse lock, combined-graph validation
-                // via the epoch-validated cache (with its op-local SQL
-                // fallback), then one insert + one epoch bump.
                 let edge = SetMembership {
                     account_set_id,
                     member_account_set_id: id,
@@ -356,11 +346,6 @@ impl AccountSets {
             });
         }
 
-        // Batch attach sequence, mirroring the single-pair path: coarse
-        // SHARED, then per-member EXCLUSIVE for every account (all member
-        // locks in one PG-side-ordered statement), one path-uniqueness
-        // check covering all pairs (and their interactions with each
-        // other), one insert.
         let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
         self.repo.lock_graph_shared_in_op(op).await?;
         self.account_set_members
@@ -409,10 +394,8 @@ impl AccountSets {
     /// single proposed edge (from here or from `add_member_in_op`) runs
     /// through the same combined-graph machinery: with a warm cache it
     /// validates in memory, and its SQL fallback is one flat edge read —
-    /// bounded by the edge table, unlike the retired single-attach CTE
-    /// whose `target_reach` was an uncapped downward closure scanned
-    /// inside the exclusive section. The exclusive membership-graph lock
-    /// is held for the whole op, so very large batches will block other
+    /// bounded by the edge table. The exclusive membership-graph lock is
+    /// held for the whole op, so very large batches will block other
     /// structure and account-member writers for the duration of
     /// validation and insert.
     #[instrument(
@@ -591,9 +574,6 @@ impl AccountSets {
 
         match member {
             AccountSetMemberId::Account(id) => {
-                // Same coarse-then-per-member sequencing as attach (see
-                // `add_member_in_op`'s account arm) — the lock also keeps
-                // same-member add/remove interleavings serialized.
                 self.repo.lock_graph_shared_in_op(op).await?;
                 self.account_set_members
                     .lock_members_in_op(op, &[id])

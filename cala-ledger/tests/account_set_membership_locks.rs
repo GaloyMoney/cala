@@ -565,7 +565,6 @@ async fn coarse_lock_uses_two_arg_form_only() -> anyhow::Result<()> {
         .await?)
     }
 
-    // EXCLUSIVE side: an open structure mutation.
     let mut op = cala.begin_operation().await?;
     cala.account_sets()
         .add_member_in_op(&mut op, parent.id(), child.id())
@@ -582,7 +581,6 @@ async fn coarse_lock_uses_two_arg_form_only() -> anyhow::Result<()> {
     assert!(rows.iter().any(|(_, mode)| mode == "ExclusiveLock"));
     op.commit().await?;
 
-    // SHARED side: an open account-member mutation.
     let mut op = cala.begin_operation().await?;
     cala.account_sets()
         .add_member_in_op(&mut op, member_set.id(), account.id())
@@ -603,8 +601,8 @@ async fn coarse_lock_uses_two_arg_form_only() -> anyhow::Result<()> {
 }
 
 /// The classic-path counterpart to `fast_path_members_locked_in_canonical_order`
-/// (`create_member_account.rs`) — same §4a revert-to-red, exercised
-/// against `AccountSetMembers::lock_members_in_op`'s batch statement
+/// (`create_member_account.rs`), exercised against
+/// `AccountSetMembers::lock_members_in_op`'s batch statement
 /// (`AccountSets::add_members`) instead of the fast path's consolidated
 /// CTE. Canonical class-2 order is established on the PG side (`ORDER
 /// BY` inside `AS MATERIALIZED`, one level below the volatile lock
@@ -639,11 +637,11 @@ async fn classic_batch_members_locked_in_canonical_order() -> anyhow::Result<()>
                 .await?,
         )
     }
-    // `(any row granted, any row waiting)`. A contended lock surfaces as
-    // TWO `pg_locks` rows for the same (classid, objid) — one
-    // `granted = true` (holder), one `granted = false` (queued waiter)
-    // — so this checks for the waiter's EXISTENCE rather than fetching
-    // a single (order-unspecified) row.
+    /// `(any row granted, any row waiting)`. A contended lock surfaces
+    /// as TWO `pg_locks` rows for the same (classid, objid) — one
+    /// `granted = true` (holder), one `granted = false` (queued
+    /// waiter) — so this checks for the waiter's EXISTENCE rather than
+    /// fetching a single (order-unspecified) row.
     async fn class2_lock_state(pool: &sqlx::PgPool, objid: i64) -> anyhow::Result<(bool, bool)> {
         let rows: Vec<bool> = sqlx::query_scalar(
             r#"
@@ -661,14 +659,12 @@ async fn classic_batch_members_locked_in_canonical_order() -> anyhow::Result<()>
     let lo_objid = class2_objid(&pool, lo_id).await?;
     let hi_objid = class2_objid(&pool, hi_id).await?;
 
-    // Independent session pre-takes the HIGHER id's class-2 lock.
     let mut blocker_tx = pool.begin().await?;
     sqlx::query("SELECT pg_advisory_xact_lock(2, hashtext($1::text))")
         .bind(hi_id.to_string())
         .execute(&mut *blocker_tx)
         .await?;
 
-    // Deliberately wrong-order input: hi first, lo second.
     let attach = tokio::spawn({
         let cala = cala.clone();
         let set_id = set.id();

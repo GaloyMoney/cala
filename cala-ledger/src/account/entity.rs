@@ -300,14 +300,13 @@ pub struct NewAccount {
     /// point to be relaxed later — it is the boundary of this fast
     /// path's invariant.
     ///
-    /// Design-reviewed caveat (accepted): the fast path *relies on* the
-    /// set-level uniqueness invariant instead of re-verifying
-    /// account-level uniqueness per call. A pre-existing corrupted set
-    /// graph (a diamond above S) would double-count the new account
-    /// without being detected at attach time; the classic path's
-    /// path-count would have caught it. The invariant is re-verified on
-    /// every structure mutation and the soak drift-check remains the
-    /// backstop.
+    /// Accepted caveat: the fast path *relies on* the set-level
+    /// uniqueness invariant instead of re-verifying account-level
+    /// uniqueness per call. A pre-existing corrupted set graph (a
+    /// diamond above S) would double-count the new account without
+    /// being detected at attach time; the classic path's path-count
+    /// would have caught it. The invariant is re-verified on every
+    /// structure mutation and the soak drift-check remains the backstop.
     ///
     /// # Transient — MUST stay out of persisted state
     ///

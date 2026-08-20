@@ -171,10 +171,9 @@ impl AccountSetMemberRepo {
     /// `NewAccount`).
     ///
     /// The `account_set_id` FK IS the set-existence check — race-free and
-    /// authoritative where an earlier design used a separate advisory
-    /// probe. On an FK violation naming that constraint, this re-probes
-    /// (`Self::missing_account_sets_in_op`) to report every missing id;
-    /// the member-account FK cannot fire here (the account rows were
+    /// authoritative. On an FK violation naming that constraint, this
+    /// re-probes ([`Self::missing_account_sets`]) to report every missing
+    /// id; the member-account FK cannot fire here (the account rows were
     /// inserted earlier in the same op).
     pub(crate) async fn attach_new_accounts_in_op(
         &self,
@@ -212,15 +211,6 @@ impl AccountSetMemberRepo {
         match result {
             Ok(_) => {}
             Err(sqlx::Error::Database(e)) if is_account_set_fk_violation(e.as_ref()) => {
-                // `db`'s transaction is now aborted (PG rejects every
-                // further statement on it with 25P02 until rollback) — the
-                // probe below deliberately runs on `self.pool`, a fresh
-                // connection, not `db`. Correct as well as necessary: the
-                // fast path never creates its target set in the same op
-                // (`NewAccount::initial_account_set` only ever references
-                // an existing one), so the probe needs no uncommitted
-                // op-local state — a committed-only read answers "does
-                // this id name a set" exactly as the caller needs it.
                 let missing = self.missing_account_sets(&account_set_ids).await?;
                 return Err(AccountSetMemberError::AccountSetsNotFound(missing));
             }
@@ -231,9 +221,11 @@ impl AccountSetMemberRepo {
         Ok(())
     }
 
-    /// Deliberately takes NO operation/executor — see the call site's
-    /// comment for why this must run on `self.pool`, a connection
-    /// independent of the caller's (by now aborted) transaction.
+    /// Deliberately takes NO operation/executor: this only ever runs
+    /// after its caller's insert has already failed, so it reads
+    /// committed state on `self.pool` — a connection independent of the
+    /// caller's now-aborted transaction, which cannot accept further
+    /// statements until it rolls back.
     async fn missing_account_sets(
         &self,
         set_ids: &[AccountSetId],
