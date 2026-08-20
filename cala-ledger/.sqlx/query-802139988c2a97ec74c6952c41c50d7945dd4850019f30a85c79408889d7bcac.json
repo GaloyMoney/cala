@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH deleted AS (\n              DELETE FROM job_executions\n              WHERE id = $1 AND poller_instance_id = $2\n              RETURNING id, queue_id\n          ), cleanup AS (\n              DELETE FROM job_execution_states s USING deleted d\n              WHERE s.id = d.id AND NOT $3::boolean\n          ), head AS (\n              -- The oldest parked sibling of the freed queue, by the same\n              -- (execute_at, id) tiebreak the claim query uses -- ordering\n              -- by execute_at alone would let this promote a different row,\n              -- and so a different TYPE, than every peer would independently\n              -- agree is the head.\n              SELECT p.id FROM deleted d\n              CROSS JOIN LATERAL (\n                  SELECT id FROM job_executions\n                  WHERE state = 'parked' AND queue_id = d.queue_id\n                  ORDER BY execute_at, id\n                  LIMIT 1\n              ) p\n              WHERE d.queue_id IS NOT NULL\n          ), promoted AS (\n              -- Only the completer of a queue's single running job can ever\n              -- reach here for that queue (Invariant A), so there is exactly\n              -- one promoter at a time -- no SKIP LOCKED needed.\n              UPDATE job_executions je SET state = 'pending'\n              FROM head h WHERE je.id = h.id\n              RETURNING je.job_type\n          )\n          SELECT d.queue_id AS \"queue_id?\", p.job_type AS \"next_in_queue?\"\n          FROM deleted d LEFT JOIN promoted p ON TRUE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queue_id?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "next_in_queue?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "802139988c2a97ec74c6952c41c50d7945dd4850019f30a85c79408889d7bcac"
+}

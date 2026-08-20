@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH input AS (\n                SELECT * FROM UNNEST($1::uuid[], $2::text[], $3::text[], $4::timestamptz[])\n                    AS t(id, job_type, queue_id, execute_at)\n            ), ins AS (\n                INSERT INTO job_executions\n                    (id, job_type, queue_id, unique_key, state, attempt_index, execute_at, alive_at, created_at)\n                SELECT id, job_type, queue_id, NULL, 'pending', 1, execute_at,\n                       COALESCE($5, NOW()), COALESCE($5, NOW())\n                FROM input\n                ON CONFLICT (queue_id) WHERE state IN ('pending','running') AND queue_id IS NOT NULL\n                DO NOTHING\n                RETURNING id, queue_id\n            ), parked AS (\n                INSERT INTO job_executions\n                    (id, job_type, queue_id, unique_key, state, attempt_index, execute_at, alive_at, created_at)\n                SELECT i.id, i.job_type, i.queue_id, NULL, 'parked', 1, i.execute_at,\n                       COALESCE($5, NOW()), COALESCE($5, NOW())\n                FROM input i\n                WHERE i.id NOT IN (SELECT id FROM ins)\n                RETURNING id, queue_id\n            )\n            SELECT r.id AS \"id!: JobId\", TRUE AS \"landed_pending!\", NULL::uuid AS \"occupant_id?\"\n            FROM ins r\n            UNION ALL\n            SELECT p.id AS \"id!: JobId\", FALSE AS \"landed_pending!\",\n                COALESCE(\n                    (SELECT w.id FROM ins w WHERE w.queue_id = p.queue_id),\n                    (SELECT o.id FROM job_executions o\n                     WHERE o.queue_id = p.queue_id AND o.state = 'pending')\n                ) AS \"occupant_id?\"\n            FROM parked p\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "landed_pending!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "occupant_id?",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "5a42b90c2b5abc386c7874659cf271847d54d8a4839b6d1d0310718c0ce70fd7"
+}

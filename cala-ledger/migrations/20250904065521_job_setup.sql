@@ -43,7 +43,18 @@ CREATE TABLE job_events (
   UNIQUE(id, sequence)
 );
 
-CREATE TYPE JobExecutionState AS ENUM ('pending', 'running');
+-- `parked`: a queued row (`queue_id IS NOT NULL`) whose queue already has a
+-- live row. Unqueued rows are never parked -- nothing to block them.
+--
+-- Invariant A (exclusion): per `queue_id`, at most one row in state
+-- `pending` or `running` -- enforced below by `idx_job_executions_queue_active`.
+-- Invariant B (order): the active (`pending`/`running`) row of a queue is
+-- its min-`(execute_at, id)` live-or-parked row. Maintained by the write
+-- paths (insert-swap in `execution_hooks.rs`, retry/reschedule/reclaim-swap
+-- in `dispatcher.rs`/`batch_dispatcher.rs`/`poller.rs`); claim correctness
+-- does not depend on it (exclusion is Invariant A alone), but scheduling
+-- semantics do -- a queue's backlog must still drain oldest-first.
+CREATE TYPE JobExecutionState AS ENUM ('pending', 'parked', 'running');
 
 CREATE TABLE job_executions (
   id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
@@ -58,47 +69,52 @@ CREATE TABLE job_executions (
   created_at TIMESTAMPTZ NOT NULL
 );
 
--- Execution rows exist iff a job is pending/running (deleted on terminal, see
--- `dispatcher.rs`/`batch_dispatcher.rs`), so this index makes "at most one
--- LIVE job per (job_type, unique_key)" structural and index-exact at spawn
--- time — the enforcement point for `KeyedJobSpawner::spawn`. A key becomes
--- respawnable the instant its live row is deleted. Resident jobs never carry
--- a `unique_key` (they're enforced absolutely by `idx_jobs_job_type_resident`
+-- Execution rows exist iff a job is pending/parked/running (deleted on
+-- terminal, see `dispatcher.rs`/`batch_dispatcher.rs`), so this index makes
+-- "at most one LIVE job per (job_type, unique_key)" structural and
+-- index-exact at spawn time -- the enforcement point for
+-- `KeyedJobSpawner::spawn`. A key becomes respawnable the instant its live
+-- row is deleted. Spans all states deliberately (no `state` predicate): a
+-- keyed row is never parked in practice (keyed spawns never set `queue_id`),
+-- but the index does not rely on that -- it must keep blocking re-spawn
+-- regardless of what value `state` holds. Resident jobs never carry a
+-- `unique_key` (they're enforced absolutely by `idx_jobs_job_type_resident`
 -- above), so they're entirely outside this index's partial predicate.
 CREATE UNIQUE INDEX idx_job_executions_job_type_unique_key
   ON job_executions (job_type, unique_key)
   WHERE unique_key IS NOT NULL;
 
--- The claim path's index set is measured, not assumed: see PERFORMANCE.md
--- ("Indexes: the write-path trade-off") for why it is these three and not a
--- merged or covering variant.
-
--- Serves `min_wait` and the stale-pending reporter. Global execute_at order,
--- which neither claim index below provides.
+-- CLAIM PATH, the only index it needs. `state = 'pending'` contains ONLY
+-- already-claimable rows -- every queue's blocked backlog sits in `parked`
+-- instead -- so a single ordered prefix scan serves queued and unqueued
+-- rows together, bounded by what the poll can admit. `id` trails
+-- `execute_at` to make the order total, so that prefix is well defined
+-- instead of an arbitrary cut through a group of rows sharing a timestamp
+-- (bulk spawns give a whole batch one). See PERFORMANCE.md ("Claim
+-- admission") for the measurements behind this shape.
+--
+-- Also serves `min_wait` and the stale-pending reporter on its leading column.
 CREATE INDEX idx_job_executions_pending_execute_at
-  ON job_executions(execute_at)
+  ON job_executions(execute_at, id)
   WHERE state = 'pending';
 
--- CLAIM PATH, queued half. Supports both queue-walk seeks
--- (`MIN(queue_id) > cursor`) and each queue's head row
--- (`queue_id = ? ORDER BY execute_at LIMIT 1`), which is what makes claim
--- cost O(queues examined) rather than O(pending rows).
-CREATE INDEX idx_job_executions_pending_queue_head
-  ON job_executions(queue_id, execute_at)
-  WHERE state = 'pending' AND queue_id IS NOT NULL;
+-- Exclusion constraint (Invariant A) AND the insert-time occupancy probe:
+-- `spawner.rs`'s park-or-take insert infers this index via
+-- `ON CONFLICT (queue_id) WHERE state IN ('pending','running') AND queue_id
+-- IS NOT NULL`. A queue's active slot -- pending or running -- is unique by
+-- construction; every other spawn to that queue lands `parked` instead.
+CREATE UNIQUE INDEX idx_job_executions_queue_active
+  ON job_executions (queue_id)
+  WHERE state IN ('pending', 'running') AND queue_id IS NOT NULL;
 
--- CLAIM PATH, unqueued half. Rows without a queue_id can never be blocked by
--- a running sibling, so they are claimed in plain execute_at order, per type.
--- `job_type` MUST lead, or a registered type with no pending work scans every
--- unqueued row instead of costing one empty probe.
-CREATE INDEX idx_job_executions_pending_unqueued
-  ON job_executions(job_type, execute_at)
-  WHERE state = 'pending' AND queue_id IS NULL;
-
--- Queue eligibility: does this queue already have a job running?
-CREATE INDEX idx_job_executions_running_queue_id
-  ON job_executions(queue_id)
-  WHERE state = 'running' AND queue_id IS NOT NULL;
+-- Promote path: given a queue whose active row just vacated (completed,
+-- reschedule-swap, reclaim-swap), find its oldest parked sibling. One
+-- index-only descent per queue, independent of that queue's parked depth.
+-- `id` trails `execute_at` for the same total-order reason as the claim
+-- index above -- every instance/completer must resolve the same sibling.
+CREATE INDEX idx_job_executions_parked_queue_head
+  ON job_executions(queue_id, execute_at, id)
+  WHERE state = 'parked';
 
 ALTER TABLE job_executions SET (
   fillfactor = 70,
