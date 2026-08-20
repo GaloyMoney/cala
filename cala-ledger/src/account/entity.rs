@@ -222,10 +222,8 @@ pub struct NewAccount {
     /// honored natively by `Accounts::create_in_op` /
     /// `Accounts::create_all_in_op`.
     ///
-    /// `Option`, not a collection: **at most one set, enforced at the
-    /// type level.** This is not a conservative v1 limit — k≥2 initial
-    /// sets cannot be made lock-free at all (see below), so there is no
-    /// value in a shape that pretends otherwise. Multiple sets at
+    /// At most one set, enforced at the type level — see "Why k≥2
+    /// initial sets cannot be made lock-free" below. Multiple sets at
     /// creation: plain create, then classic `AccountSets::add_member_in_op`
     /// calls.
     ///
