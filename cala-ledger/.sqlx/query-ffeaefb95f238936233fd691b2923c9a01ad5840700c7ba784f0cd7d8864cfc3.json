@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH to_delete AS MATERIALIZED (\n                    SELECT id FROM job_executions\n                    WHERE id = ANY($1) AND poller_instance_id = $2\n                    ORDER BY queue_id, id\n                    FOR UPDATE\n                ), deleted AS (\n                    DELETE FROM job_executions je USING to_delete t WHERE je.id = t.id\n                    RETURNING je.id, je.queue_id\n                ), cleanup AS (\n                    DELETE FROM job_execution_states s USING deleted d WHERE s.id = d.id\n                )\n                SELECT id AS \"id!: JobId\", queue_id AS \"queue_id?\"\n                FROM deleted\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "queue_id?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "ffeaefb95f238936233fd691b2923c9a01ad5840700c7ba784f0cd7d8864cfc3"
+}

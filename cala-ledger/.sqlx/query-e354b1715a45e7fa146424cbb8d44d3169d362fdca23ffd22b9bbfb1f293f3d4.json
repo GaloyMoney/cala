@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked AS MATERIALIZED (\n                SELECT id, queue_id, job_type, state FROM job_executions\n                WHERE queue_id = ANY($1) AND state IN ('pending', 'running')\n                ORDER BY queue_id, id\n                FOR KEY SHARE\n            )\n            SELECT queue_id AS \"queue_id!\", job_type AS \"job_type!\",\n                   (state = 'pending') AS \"claimable!\"\n            FROM locked\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "queue_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "claimable!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false,
+      null
+    ]
+  },
+  "hash": "e354b1715a45e7fa146424cbb8d44d3169d362fdca23ffd22b9bbfb1f293f3d4"
+}

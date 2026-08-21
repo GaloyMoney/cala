@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH locked AS MATERIALIZED (\n            SELECT je.id FROM job_executions je\n            WHERE je.state = 'running'\n              AND je.alive_at < $1::timestamptz\n              AND je.job_type = ANY($2)\n              AND (je.poller_instance_id IS DISTINCT FROM $4 OR je.id <> ALL($5))\n            ORDER BY je.queue_id, je.id\n            FOR NO KEY UPDATE\n        )\n        UPDATE job_executions je\n        SET state = 'pending', execute_at = $3, attempt_index = attempt_index + 1, poller_instance_id = NULL\n        FROM locked l WHERE je.id = l.id\n        RETURNING je.id AS \"id!: JobId\", je.job_type AS \"job_type!: JobType\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type!: JobType",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Timestamptz",
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f1125bc627825540d799741f15703f39401b3fb50755e188e6626e08c89e871c"
+}

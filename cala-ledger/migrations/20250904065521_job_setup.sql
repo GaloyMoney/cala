@@ -87,15 +87,17 @@ CREATE UNIQUE INDEX idx_job_executions_job_type_unique_key
 -- CLAIM PATH, the only index it needs. `state = 'pending'` contains ONLY
 -- already-claimable rows -- every queue's blocked backlog sits in `parked`
 -- instead -- so a single ordered prefix scan serves queued and unqueued
--- rows together, bounded by what the poll can admit. `id` trails
--- `execute_at` to make the order total, so that prefix is well defined
--- instead of an arbitrary cut through a group of rows sharing a timestamp
--- (bulk spawns give a whole batch one). See PERFORMANCE.md ("Claim
--- admission") for the measurements behind this shape.
---
--- Also serves `min_wait` and the stale-pending reporter on its leading column.
+-- rows together, bounded by what the poll can admit. Leads with `job_type`
+-- because every consumer probes per type (the poll's per-type window,
+-- `claim_due_heads_in_op`, `min_wait`, the stale-pending reporter) --
+-- without it, each probe filter-scans the whole pending set instead of its
+-- own type's slice. `id` trails `execute_at` to make the per-type order
+-- total, so that prefix is well defined instead of an arbitrary cut through
+-- a group of rows sharing a timestamp (bulk spawns give a whole batch one).
+-- See PERFORMANCE.md ("Claim admission") for the measurements behind this
+-- shape.
 CREATE INDEX idx_job_executions_pending_execute_at
-  ON job_executions(execute_at, id)
+  ON job_executions(job_type, execute_at, id)
   WHERE state = 'pending';
 
 -- Exclusion constraint (Invariant A) AND the insert-time occupancy probe:

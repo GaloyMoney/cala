@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH heads AS (\n                -- At most one row per input queue (the LATERAL's LIMIT 1\n                -- against deduped input), so no DISTINCT is needed.\n                SELECT p.id\n                FROM UNNEST($1::text[]) AS q(queue_id)\n                CROSS JOIN LATERAL (\n                    SELECT id FROM job_executions\n                    WHERE state = 'parked' AND queue_id = q.queue_id\n                    ORDER BY execute_at, id\n                    LIMIT 1\n                ) p\n                WHERE NOT EXISTS (\n                    SELECT 1 FROM job_executions a\n                    WHERE a.queue_id = q.queue_id AND a.state IN ('pending', 'running')\n                )\n            ), locked AS MATERIALIZED (\n                -- Lock every head in (queue_id, id) order before the UPDATE\n                -- below touches any of them -- the same global order\n                -- `lock_queue_occupants` and `Self::apply`'s own `locked` CTE\n                -- use. A bare `UPDATE ... FROM heads` has no ordering\n                -- guarantee of its own (`heads`'s row order is not a lock\n                -- order), so a multi-queue batch completion freeing several\n                -- queues here could otherwise acquire in planner/`UNNEST`\n                -- order and deadlock against a concurrent spawn's pin or\n                -- swap touching the same rows in the opposite order.\n                SELECT je.id FROM job_executions je\n                WHERE je.id IN (SELECT id FROM heads)\n                ORDER BY je.queue_id, je.id\n                FOR NO KEY UPDATE\n            )\n            UPDATE job_executions je SET state = 'pending'\n            FROM locked l WHERE je.id = l.id\n            RETURNING je.job_type, je.execute_at AS \"execute_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "execute_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "35ffe70c0d0b7c1d63e9cb42577e9f3359c7eb9c9a0a6230d0e3e75daaabf1d2"
+}
