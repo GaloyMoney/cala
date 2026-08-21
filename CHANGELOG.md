@@ -1,3 +1,16 @@
+# [cala release v0.26.1](https://github.com/GaloyMoney/cala/releases/tag/0.26.1)
+
+
+
+### Features
+
+- Batch-attach a velocity control to N accounts (#858)
+
+### Miscellaneous Tasks
+
+- Bump job
+- Bump thiserror in the all-dependencies group (#856)
+
 # [cala release v0.26.0](https://github.com/GaloyMoney/cala/releases/tag/0.26.0)
 
 
