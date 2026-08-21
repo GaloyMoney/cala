@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_velocity_account_controls (account_id, velocity_control_id, values)\n            SELECT account_id, velocity_control_id, values\n            FROM UNNEST($1::uuid[], $2::uuid[], $3::jsonb[])\n                AS v(account_id, velocity_control_id, values)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "466f96bc7968e18045691e3942342ff62413f10bb45400089fd02dfb0f85de70"
+}

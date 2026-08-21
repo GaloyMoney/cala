@@ -152,8 +152,48 @@ impl Velocities {
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        self.attach_control_to_account_or_account_set_in_op(db, control_id, account_id, params)
-            .await
+        self.attach_control_to_accounts_in_op(
+            db,
+            control_id,
+            std::slice::from_ref(&account_id),
+            params,
+        )
+        .await
+    }
+
+    /// Attach one control to N accounts in a fixed number of round trips
+    /// (find control, list its limits, one batched insert) instead of `3 *
+    /// account_ids.len()`.
+    ///
+    /// `params` is shared by every account in the batch — see the docs on
+    /// [`AccountControls::attach_control_to_accounts_in_op`]. Intra-batch
+    /// ordering is not observable: every account gets the same control,
+    /// condition, and evaluated limits, so no caller can come to depend on
+    /// an order here. `account_ids` is not deduplicated — attaching the
+    /// same `account_id` twice in one call hits the same
+    /// `UNIQUE(account_id, velocity_control_id)` constraint a second
+    /// singular call would, and aborts the whole batch, not just that row.
+    #[instrument(level = "debug", name = "velocity.attach_control_to_accounts_in_op", skip(self, db, account_ids), fields(control_id = %control_id, account_count = account_ids.len()), err(level = tracing::Level::WARN))]
+    pub async fn attach_control_to_accounts_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        control_id: VelocityControlId,
+        account_ids: &[AccountId],
+        params: impl Into<Params> + std::fmt::Debug,
+    ) -> Result<VelocityControl, VelocityError> {
+        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
+        let limits = self
+            .limits
+            .list_for_control(&mut *db, control_id)
+            .await?
+            .into_iter()
+            .map(|l| l.into_values())
+            .collect();
+
+        self.account_controls
+            .attach_control_to_accounts_in_op(db, control.values(), account_ids, limits, params)
+            .await?;
+        Ok(control)
     }
 
     #[instrument(level = "debug", name = "velocity.attach_control_to_account_set_in_op", skip(self, db), fields(control_id = %control_id, account_set_id = %account_set_id))]
