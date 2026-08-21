@@ -60,5 +60,14 @@ anyhow = { workspace = true }
 rand = { workspace = true }
 tokio-test = "0.4"
 rust_decimal_macros = { workspace = true }
+# Already resolved workspace-wide via tracing-opentelemetry's dependency on
+# it (see Cargo.lock) — no new dependency-tree surface, just reusing an
+# already-vetted version for a test-only span counter. Only the `registry`
+# feature (Registry + Layer + SubscriberExt) is needed — default features
+# would additionally pull in `fmt` (and its `nu-ansi-term` dependency),
+# which nothing here uses.
+tracing-subscriber = { version = "0.3", default-features = false, features = [
+  "registry",
+] }
 
 [build-dependencies]
