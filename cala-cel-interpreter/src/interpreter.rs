@@ -28,7 +28,7 @@ const COMPILE_STACK_BYTES: usize = 32 * 1024 * 1024;
 /// frames leave far less headroom than the parser needs, so compiling on the
 /// caller's thread can overflow the stack. The spawn cost is paid once per
 /// unique expression thanks to the memoization above.
-#[cached(max_size = 10000, cache_err = true)]
+#[cached(max_size = 10000)]
 #[instrument(name = "cel.compile", skip(source), fields(expression = %source), err(level = tracing::Level::WARN))]
 fn compile_program(source: String) -> Result<Arc<Program>, String> {
     let started = std::time::Instant::now();
