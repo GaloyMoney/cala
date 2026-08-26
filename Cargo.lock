@@ -899,9 +899,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.10"
+version = "0.12.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b46ec6f5ea842d48519daa7a59060667e5df7a8018390d9aefb9928f4241883"
+checksum = "01763a0eade587e3661b5c62f07359a1b0c4e78e04ae59563a6a4e859e9887d8"
 dependencies = [
  "async-stream",
  "chrono",
@@ -927,9 +927,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.10"
+version = "0.12.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c80cfaeb802cdfc853aaba00a123b2f8b4593f970ad5e1de7c9c77a503e7c260"
+checksum = "60e120de17396a3a74534e7cf103899a33d8eed6fb576497ebc4c2207e1ff665"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1648,9 +1648,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fade60a8d1d8d5875cd5eb83fe348c87005db173e908108ed8663f38cf44295e"
+version = "0.9.1"
+source = "git+https://github.com/GaloyMoney/obix?rev=54eae28f14674495ca381bbfc21fea0ac98bf284#54eae28f14674495ca381bbfc21fea0ac98bf284"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1671,9 +1670,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18609b1d1090810458687dbcb2c3f70125dd6d86da172b2395f1b326a2a99386"
+version = "0.9.1"
+source = "git+https://github.com/GaloyMoney/obix?rev=54eae28f14674495ca381bbfc21fea0ac98bf284#54eae28f14674495ca381bbfc21fea0ac98bf284"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
