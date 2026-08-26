@@ -17,12 +17,7 @@ cala-ledger = { path = "cala-ledger", version = "0.26.1" }
 cel = "0.14.3"
 es-entity = "0.12.7"
 job = { version = "0.13.4", features = ["es-entity"] }
-obix = {
-  git = "https://github.com/GaloyMoney/obix",
-  rev = "54eae28f14674495ca381bbfc21fea0ac98bf284",
-  version = "0.9.1",
-  default-features = false,
-}
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "54eae28f14674495ca381bbfc21fea0ac98bf284", version = "0.9.1", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "2.0", features = ["async"] }
