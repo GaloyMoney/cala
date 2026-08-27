@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
-      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
+      commitTitle: 'Merge pull request #27 from GaloyMoney/codex/auto-bump-es-entity...'
+      sha: 5789a00c20eee046fb9873b105aad060f0024956
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
-      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
+      commitTitle: 'Merge pull request #27 from GaloyMoney/codex/auto-bump-es-entity...'
+      sha: 5789a00c20eee046fb9873b105aad060f0024956
     path: .
   path: vendor
 kind: LockConfig
