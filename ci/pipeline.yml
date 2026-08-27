@@ -43,19 +43,19 @@ jobs:
       platform: linux
       image_resource: #@ nix_task_image_config()
       inputs:
+      - name: pipeline-tasks
       - name: repo
+      caches:
+      - path: /nix-cache
       run:
-        path: sh
+        path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
         args:
+          - sh
           - -exc
           - |
             set -euo pipefail
             cd repo
-            cachix use $CACHIX_CACHE_NAME
-            cachix watch-exec $CACHIX_CACHE_NAME -- nix flake check
-      params:
-        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+            nix flake check
 
 - name: integration-test
   plan:
@@ -69,19 +69,19 @@ jobs:
       platform: linux
       image_resource: #@ nix_task_image_config()
       inputs:
+        - name: pipeline-tasks
         - name: repo
+      caches:
+        - path: /nix-cache
       run:
-        path: sh
+        path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
         args:
+          - sh
           - -exc
           - |
             set -euo pipefail
             cd repo
-            cachix use $CACHIX_CACHE_NAME
-            cachix watch-exec $CACHIX_CACHE_NAME -- nix run .#nextest
-      params:
-        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+            nix run .#nextest
 
 - name: release
   serial: true
