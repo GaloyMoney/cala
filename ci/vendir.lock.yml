@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
-      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
+      commitTitle: 'Merge pull request #28 from GaloyMoney/codex/fix-local-nix-cache-review-comments...'
+      sha: 4c745197bae56b50cc41a65e375452848aa0a5c2
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #25 from GaloyMoney/fix/fuzz-preserve-on-crash...'
-      sha: 684789f73e3c5c04e8d9448d9dfc810d6febde53
+      commitTitle: 'Merge pull request #28 from GaloyMoney/codex/fix-local-nix-cache-review-comments...'
+      sha: 4c745197bae56b50cc41a65e375452848aa0a5c2
     path: .
   path: vendor
 kind: LockConfig

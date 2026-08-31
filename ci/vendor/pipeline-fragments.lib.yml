@@ -66,11 +66,14 @@ plan:
     - name: pipeline-tasks
     - name: repo
     caches:
+    - path: /nix-cache
     - path: cargo-home/registry/index
     - path: cargo-home/registry/cache
     - path: cargo-target-dir
     run:
-      path: pipeline-tasks/ci/vendor/tasks/check-code.sh
+      path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
+      args:
+      - pipeline-tasks/ci/vendor/tasks/check-code.sh
 #@ end
 
 #@ def nodejs_check_code():
@@ -134,14 +137,14 @@ plan:
         - name: pipeline-tasks
         - name: repo
       caches:
+      - path: /nix-cache
       - path: cargo-home/registry/index
       - path: cargo-home/registry/cache
       - path: cargo-target-dir
       run:
-        path: pipeline-tasks/ci/vendor/tasks/test-integration.sh
-      params:
-        CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-        CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+        path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
+        args:
+        - pipeline-tasks/ci/vendor/tasks/test-integration.sh
 #@ end
 
 #@ def bats_test():
@@ -160,14 +163,14 @@ plan:
     - name: pipeline-tasks
     - name: repo
     caches:
+    - path: /nix-cache
     - path: cargo-home/registry/index
     - path: cargo-home/registry/cache
     - path: cargo-target-dir
     run:
-      path: pipeline-tasks/ci/vendor/tasks/test-bats.sh
-    params:
-      CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-      CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
+      path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
+      args:
+      - pipeline-tasks/ci/vendor/tasks/test-bats.sh
 #@ end
 
 #@ def nodejs_audit(level = "high"):
@@ -548,21 +551,23 @@ plan:
     inputs:
     - { name: repo }
     - { name: corpus }
+    - { name: pipeline-tasks }
     outputs:
     - { name: corpus-out }
     - { name: artifacts-out }
     caches:
+    - { path: /nix-cache }
     - { path: cargo-home }
     - { path: cargo-target-dir }
     run:
-      path: sh
+      path: pipeline-tasks/ci/vendor/tasks/with-nix-cache.sh
       args:
+      - sh
       - -exc
       - |
         set -euo pipefail
         cd repo
-        cachix use $CACHIX_CACHE_NAME
-        cachix watch-exec $CACHIX_CACHE_NAME -- nix -L develop . -c sh -exc '
+        nix -L develop . -c sh -exc '
           set -euo pipefail
           export CARGO_HOME=$PWD/../cargo-home
           export CARGO_TARGET_DIR=$PWD/../cargo-target-dir
@@ -572,11 +577,9 @@ plan:
           bash ci/vendor/tasks/fuzz.sh
         '
     params:
-      CACHIX_AUTH_TOKEN: #@ data.values.cachix_auth_token
-      CACHIX_CACHE_NAME: #@ data.values.cachix_cache_name
       FUZZ_SECONDS: #@ fuzz_seconds
   ensure:
-    do:
+    in_parallel:
     - task: store-corpus
       config:
         platform: linux
