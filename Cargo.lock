@@ -1649,7 +1649,7 @@ dependencies = [
 [[package]]
 name = "obix"
 version = "0.9.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#d7630f1dd9f45a22482f905b30576a8c71c2288a"
+source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#1701e4252f4c073859a9d8db974d8fb5ae4cd5a9"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1671,7 +1671,7 @@ dependencies = [
 [[package]]
 name = "obix-macros"
 version = "0.9.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#d7630f1dd9f45a22482f905b30576a8c71c2288a"
+source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#1701e4252f4c073859a9d8db974d8fb5ae4cd5a9"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
