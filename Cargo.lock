@@ -1649,7 +1649,7 @@ dependencies = [
 [[package]]
 name = "obix"
 version = "0.9.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=fix%2Fkeyed-subscriptions-without-default-tables#0ea8f8806e9887f9b796326e85a0a06f79855a11"
+source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#d7630f1dd9f45a22482f905b30576a8c71c2288a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1671,7 +1671,7 @@ dependencies = [
 [[package]]
 name = "obix-macros"
 version = "0.9.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=fix%2Fkeyed-subscriptions-without-default-tables#0ea8f8806e9887f9b796326e85a0a06f79855a11"
+source = "git+https://github.com/GaloyMoney/obix?branch=task%2Fobix-keyed-subscribers-01a05142#d7630f1dd9f45a22482f905b30576a8c71c2288a"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",

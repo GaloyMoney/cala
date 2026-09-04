@@ -47,4 +47,4 @@ lto = true
 debug = true
 
 [patch.crates-io]
-obix = { git = "https://github.com/GaloyMoney/obix", branch = "fix/keyed-subscriptions-without-default-tables" }
+obix = { git = "https://github.com/GaloyMoney/obix", branch = "task/obix-keyed-subscribers-01a05142" }
