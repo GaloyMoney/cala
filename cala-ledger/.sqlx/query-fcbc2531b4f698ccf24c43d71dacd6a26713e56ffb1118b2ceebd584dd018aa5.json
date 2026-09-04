@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT s.subscriber_type AS \"subscriber_type!\", s.key AS \"key!\"\n            FROM cala_subscriptions s\n            JOIN unnest($1::varchar[], $2::varchar[]) AS q(subscriber_type, wake_key)\n              ON s.subscriber_type = q.subscriber_type\n             AND s.wake_keys @> ARRAY[q.wake_key]::varchar[]",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscriber_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "key!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "VarcharArray",
+        "VarcharArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "fcbc2531b4f698ccf24c43d71dacd6a26713e56ffb1118b2ceebd584dd018aa5"
+}

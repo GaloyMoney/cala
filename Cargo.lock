@@ -899,9 +899,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.10"
+version = "0.12.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b46ec6f5ea842d48519daa7a59060667e5df7a8018390d9aefb9928f4241883"
+checksum = "7e7eda8c5bc6f811fad5722d822e9131c438b870b4a8f4795d7fe31001ddddd2"
 dependencies = [
  "async-stream",
  "chrono",
@@ -927,9 +927,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.10"
+version = "0.12.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c80cfaeb802cdfc853aaba00a123b2f8b4593f970ad5e1de7c9c77a503e7c260"
+checksum = "37ec505540ceee70b70d48033f347219fa53c78600c216855a1a85deca9070da"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1442,9 +1442,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.13.4"
+version = "0.13.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2aeb2e75cb45f4856ae95c0520eace662e7b9f0d82c541e992a103779efb78b"
+checksum = "92993394691026be4da1380125bfd4a4eb2e2ad2e3531567bd7cffbbc2865484"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1648,9 +1648,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fade60a8d1d8d5875cd5eb83fe348c87005db173e908108ed8663f38cf44295e"
+version = "0.9.2-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=fix%2Fkeyed-subscriptions-without-default-tables#0ea8f8806e9887f9b796326e85a0a06f79855a11"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1671,9 +1670,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18609b1d1090810458687dbcb2c3f70125dd6d86da172b2395f1b326a2a99386"
+version = "0.9.2-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=fix%2Fkeyed-subscriptions-without-default-tables#0ea8f8806e9887f9b796326e85a0a06f79855a11"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",

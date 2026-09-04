@@ -17,7 +17,7 @@ cala-ledger = { path = "cala-ledger", version = "0.26.1-dev" }
 cel = "0.14.3"
 es-entity = "0.12.7"
 job = { version = "0.13.4", features = ["es-entity"] }
-obix = { version = "0.9.0", default-features = false }
+obix = { version = "0.9.2-dev", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "2.0", features = ["async"] }
@@ -45,3 +45,6 @@ lto = true
 
 [profile.bench]
 debug = true
+
+[patch.crates-io]
+obix = { git = "https://github.com/GaloyMoney/obix", branch = "fix/keyed-subscriptions-without-default-tables" }

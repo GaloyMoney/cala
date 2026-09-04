@@ -79,3 +79,35 @@ CREATE TABLE cala_inbox_events (
 
 CREATE INDEX cala_idx_inbox_events_status ON cala_inbox_events(status)
   WHERE status IN ('pending', 'processing', 'failed');
+
+-- Keyed-subscriber subscriptions: one row per (subscriber_type, key)
+-- identity. Row presence IS the subscription: absence means cancelled.
+-- Identity and terms only (key, wake keys, instance config, birth
+-- frontier); execution and progress live in the job crate's tables.
+--
+-- `wake_keys` are a liveness signal, not a delivery filter: they decide
+-- whom to wake when a member has passivated, matched by set overlap.
+-- Never empty (rejected at subscribe time).
+--
+-- `checkpoint` mirrors the member's durable cursor, written in the same
+-- transaction as the job's own checkpoint, so the waker can find members
+-- drifting out of the in-memory event cache without joining across the
+-- schema boundary. It is a lower bound: a stale value costs at worst a
+-- spurious, idempotent wake.
+CREATE TABLE cala_subscriptions (
+  subscriber_type  VARCHAR NOT NULL,
+  key              VARCHAR NOT NULL,
+  wake_keys        VARCHAR[] NOT NULL CHECK (cardinality(wake_keys) > 0),
+  instance_config  JSONB NOT NULL,
+  start_after      BIGINT NOT NULL,
+  checkpoint       BIGINT NOT NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (subscriber_type, key)
+);
+
+-- Backs the waker's catch-up scan: the members nearest the eviction cliff
+-- are woken first.
+CREATE INDEX cala_idx_subscriptions_checkpoint ON cala_subscriptions (checkpoint);
+
+-- Backs the waker's flush-time lookup on `wake_keys && $2::varchar[]`.
+CREATE INDEX cala_idx_subscriptions_wake_keys ON cala_subscriptions USING GIN (wake_keys);

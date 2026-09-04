@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM cala_subscriptions WHERE subscriber_type = $1 AND key = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a0c1ebd4e25dc893ff25135674979acc9da8335445e6a5b77cfca968199d6c47"
+}

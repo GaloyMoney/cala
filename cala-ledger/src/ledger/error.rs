@@ -39,7 +39,7 @@ pub enum LedgerError {
     #[error("LedgerError - EcRollupRegistration: {0}")]
     EcRollupRegistration(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error("LedgerError - EcRollupCheckpoint: {0}")]
-    EcRollupCheckpoint(obix::out::HandlerCheckpointError),
+    EcRollupCheckpoint(obix::out::SubscriptionError),
     #[error(
         "LedgerError - EcCaughtUpTimeout: EC rollup checkpoint {applied} had not reached the \
          outbox frontier {frontier} after waiting {waited:?}"
@@ -70,10 +70,10 @@ impl From<EntryError> for LedgerError {
 /// Manual, not `#[from]`: the timeout case is remapped so callers
 /// destructure ledger vocabulary (`applied`) rather than obix's
 /// (`checkpoint`). Everything else passes through.
-impl From<obix::out::HandlerCheckpointError> for LedgerError {
-    fn from(e: obix::out::HandlerCheckpointError) -> Self {
+impl From<obix::out::SubscriptionError> for LedgerError {
+    fn from(e: obix::out::SubscriptionError) -> Self {
         match e {
-            obix::out::HandlerCheckpointError::CaughtUpTimeout {
+            obix::out::SubscriptionError::CaughtUpTimeout {
                 checkpoint,
                 target,
                 waited,

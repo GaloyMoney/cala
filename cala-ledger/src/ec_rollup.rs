@@ -11,11 +11,11 @@
 //!
 //! ## Shape
 //!
-//! Built on obix's managed [`OutboxEventHandler`] batching runner:
+//! Built on obix's managed [`SingletonSubscriber`] batching runner:
 //! `TransactionCreated` and `EntryCreated` events are collected into the
 //! pending batch (pure memory writes — no transaction per event),
 //! everything else is skipped. When the batch lands the runner calls
-//! [`flush`](OutboxEventHandler::flush) once, **inside the transaction
+//! [`flush`](SingletonSubscriber::flush) once, **inside the transaction
 //! that commits the checkpoint** — the rollup writes and the stream
 //! position land atomically. Entries are applied straight from the
 //! stream when a transaction's whole event group landed in the batch
@@ -29,7 +29,7 @@
 //!   The runner guarantees this: flushed items and the checkpoint commit
 //!   in one transaction, so a mid-batch crash rolls back both and replay
 //!   re-collects only unapplied events.
-//! - **Single writer.** Registered via `register_event_handler` (a
+//! - **Single writer.** Registered via `register_singleton_subscriber` (a
 //!   *resident* job underneath), so exactly one instance runs
 //!   cluster-wide — no streaming-vs-streaming contention.
 //! - **Sole EC-set writer.** There is no separate pull/batch recalc to
@@ -50,8 +50,8 @@ use std::collections::{HashMap, HashSet};
 use job::{JobType, Jobs};
 use obix::{
     out::{
-        EventCtx, EventSubscription, FlushOp, Handled, HandlerStreamStatus, OutboxEventHandler,
-        OutboxEventJobConfig, PersistentOutboxEvent, RegisteredEventHandler,
+        EventCtx, StreamSelection, FlushOp, Handled, SubscriptionStreamStatus, SingletonSubscriber,
+        OutboxEventJobConfig, PersistentOutboxEvent, Subscription,
     },
     EventSequence,
 };
@@ -85,9 +85,9 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>, LedgerError> {
+) -> Result<Subscription<OutboxEventPayload, CalaMailboxTables>, LedgerError> {
     Ok(outbox
-        .register_event_handler(
+        .register_singleton_subscriber(
             jobs,
             OutboxEventJobConfig::new(EC_BALANCE_ROLLUP_JOB)
                 .with_max_batch_size(MAX_EVENTS_PER_BATCH),
@@ -196,8 +196,8 @@ struct EcBalanceRollupHandler {
     entries: Entries,
 }
 
-impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
-    const SUBSCRIPTION: EventSubscription = EventSubscription::PersistentOnly;
+impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
+    const SUBSCRIPTION: StreamSelection = StreamSelection::PersistentOnly;
 
     type Batch = EcRollupBatch;
 
@@ -312,13 +312,13 @@ pub struct EcRollupStatus {
     pub applied: EventSequence,
     /// The outbox frontier pinned when this snapshot was taken.
     pub frontier: EventSequence,
-    handle: RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>,
+    handle: Subscription<OutboxEventPayload, CalaMailboxTables>,
 }
 
 impl EcRollupStatus {
     pub(crate) fn new(
-        status: HandlerStreamStatus,
-        handle: RegisteredEventHandler<OutboxEventPayload, CalaMailboxTables>,
+        status: SubscriptionStreamStatus,
+        handle: Subscription<OutboxEventPayload, CalaMailboxTables>,
     ) -> Self {
         Self {
             applied: status.checkpoint,

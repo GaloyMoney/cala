@@ -1,6 +1,6 @@
 //! End-to-end tests for the streaming EC account-set balance rollup job.
 //!
-//! These exercise the obix `OutboxEventHandler` job that consumes the
+//! These exercise the obix `SingletonSubscriber` job that consumes the
 //! outbox and folds each committed transaction's leaf deltas into its
 //! ancestor EC account sets.
 //!

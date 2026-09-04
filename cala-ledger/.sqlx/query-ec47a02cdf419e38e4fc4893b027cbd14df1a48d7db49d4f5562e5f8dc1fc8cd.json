@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT subscriber_type, key\n            FROM cala_subscriptions\n            WHERE subscriber_type = ANY($1::varchar[]) AND checkpoint < $2\n            ORDER BY checkpoint ASC\n            LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "subscriber_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "key",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "VarcharArray",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "ec47a02cdf419e38e4fc4893b027cbd14df1a48d7db49d4f5562e5f8dc1fc8cd"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cala_subscriptions\n            SET checkpoint = GREATEST(checkpoint, $3)\n            WHERE subscriber_type = $1 AND key = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f4b05ab5b781b6d5a6bfaa7a691dcf2cef5c16ea8eb0bbb5b52cd4a197452c1"
+}
