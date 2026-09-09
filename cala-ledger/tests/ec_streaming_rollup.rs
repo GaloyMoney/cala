@@ -145,6 +145,31 @@ async fn post_to(fixture: &Fixture, recipient: AccountId, n: usize) -> anyhow::R
     Ok(())
 }
 
+/// Like `post_to`, but with a caller-chosen effective date — uses
+/// `helpers::velocity_template`'s overridable `effective` param rather than
+/// `fixture.tx_code`'s hardcoded `date()`.
+async fn post_dated(
+    fixture: &Fixture,
+    tx_code: &str,
+    recipient: AccountId,
+    effective: chrono::NaiveDate,
+    n: usize,
+) -> anyhow::Result<()> {
+    for _ in 0..n {
+        let mut params = Params::new();
+        params.insert("journal_id", fixture.journal_id.to_string());
+        params.insert("sender", fixture.sender.id());
+        params.insert("recipient", recipient);
+        params.insert("amount", POST_AMOUNT);
+        params.insert("effective", effective);
+        fixture
+            .cala
+            .post_transaction(TransactionId::new(), tx_code, params)
+            .await?;
+    }
+    Ok(())
+}
+
 async fn assert_member_sum(
     fixture: &Fixture,
     currency: Currency,
@@ -914,5 +939,241 @@ async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::
         }
         other => panic!("expected EcCaughtUpTimeout, got {other:?}"),
     }
+    Ok(())
+}
+
+/// The effective-balance fold must be correct for a batch that arrives
+/// out of order, not just for one posted chronologically. An **inline**
+/// (Synchronous) set holding the same member is the oracle: it already
+/// gets `effective` right (`update_cumulative_balances_in_op`, unchanged by
+/// this fix), and its balance is readable immediately since it is
+/// maintained inline, so it captures "what the answer should be" before
+/// the rollup even runs.
+///
+/// Posts (all before `start_poll`, so everything lands in one batch): 20
+/// transactions effective *today*, then 20 effective *yesterday*
+/// (backdated — must rewrite today's row), then 5 more effective *today*.
+#[tokio::test]
+async fn streaming_rollup_folds_backdated_batch_like_sequential() -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal_with_effective_balances()).await?;
+
+    let dated_tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    fixture
+        .cala
+        .tx_templates()
+        .create(helpers::velocity_template(&dated_tx_code))
+        .await?;
+
+    let recipient = fixture.members[0].id();
+    let inline_set = fixture
+        .cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("backdating inline reference set")
+                .journal_id(fixture.journal_id)
+                .balance_rollup(BalanceRollup::Synchronous)
+                .build()?,
+        )
+        .await?;
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "backdating EC set").await?;
+    for set in [inline_set.id(), ec_set.id()] {
+        fixture
+            .cala
+            .account_sets()
+            .add_member(set, recipient)
+            .await?;
+    }
+
+    let today = fixture.cala.clock().now().date_naive();
+    let yesterday = today - chrono::Duration::days(1);
+
+    post_dated(&fixture, &dated_tx_code, recipient, today, 20).await?;
+    post_dated(&fixture, &dated_tx_code, recipient, yesterday, 20).await?;
+    post_dated(&fixture, &dated_tx_code, recipient, today, 5).await?;
+    let total = POST_AMOUNT * Decimal::from(45);
+
+    jobs.start_poll().await?;
+
+    helpers::wait_for_effective(
+        &fixture.cala,
+        fixture.journal_id,
+        ec_set.id(),
+        usd,
+        today,
+        total,
+    )
+    .await?;
+
+    for date in [yesterday, today] {
+        let ec_bal = fixture
+            .cala
+            .balances()
+            .effective()
+            .find_cumulative(fixture.journal_id, ec_set.id(), usd, date)
+            .await?;
+        let inline_bal = fixture
+            .cala
+            .balances()
+            .effective()
+            .find_cumulative(fixture.journal_id, inline_set.id(), usd, date)
+            .await?;
+        assert_eq!(ec_bal.settled(), inline_bal.settled(), "settled at {date}");
+        assert_eq!(ec_bal.pending(), inline_bal.pending(), "pending at {date}");
+    }
+
+    let ec_range = fixture
+        .cala
+        .balances()
+        .effective()
+        .find_in_range(
+            fixture.journal_id,
+            ec_set.id().into(),
+            usd,
+            yesterday,
+            Some(today),
+        )
+        .await?;
+    let inline_range = fixture
+        .cala
+        .balances()
+        .effective()
+        .find_in_range(
+            fixture.journal_id,
+            inline_set.id().into(),
+            usd,
+            yesterday,
+            Some(today),
+        )
+        .await?;
+    assert_eq!(
+        ec_range.period.details.version, inline_range.period.details.version,
+        "version count over the backdated range must match the inline oracle",
+    );
+
+    Ok(())
+}
+
+/// Counts `tracing` spans by exact name (see `velocity.rs`'s
+/// `SpanCallCounter` for the rationale on registering it process-global
+/// rather than thread-local, and why that's safe under `cargo-nextest`).
+struct SpanCallCounter {
+    name: &'static str,
+    count: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+}
+
+impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for SpanCallCounter {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        _id: &tracing::span::Id,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        if attrs.metadata().name() == self.name {
+            self.count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+}
+
+/// One EC set's cumulative-effective balance must be read once per flush
+/// *group* that touches it, not once per transaction in that group, even
+/// when the group's transactions span several effective dates. This is the
+/// regression guard for the fix: temporarily reverting
+/// `Balances::apply_ec_rollup_group_in_op` to call
+/// `EffectiveBalances::apply_ec_rollup_in_op` once per transaction (the old
+/// per-tx loop) makes `find_ec_for_update` calls outnumber
+/// `apply_ec_rollup_batch_in_op` calls by 45x (one per transaction) instead
+/// of matching 1:1; restoring the batched fold makes it pass again.
+///
+/// The resident job may drain a backlog this size in one flush or several
+/// (an obix/job cadence this fix does not control and has no reason to —
+/// see the handoff's "Per-batch" framing), so the test doesn't assume a
+/// specific flush count. What it *does* assume: only one `(account,
+/// currency)` pair is touched here (the EC set member's single leaf fans
+/// into exactly one EC ancestor), so within any one group that pair's read
+/// is anchored at its own earliest date — one query per group touching it,
+/// never more, regardless of how many distinct dates that group's entries
+/// span.
+#[tokio::test]
+async fn streaming_rollup_reads_future_history_once_per_batch() -> anyhow::Result<()> {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use tracing_subscriber::prelude::*;
+
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal_with_effective_balances()).await?;
+
+    let dated_tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    fixture
+        .cala
+        .tx_templates()
+        .create(helpers::velocity_template(&dated_tx_code))
+        .await?;
+
+    let recipient = fixture.members[0].id();
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "once-per-batch EC set").await?;
+    fixture
+        .cala
+        .account_sets()
+        .add_member(ec_set.id(), recipient)
+        .await?;
+
+    let today = fixture.cala.clock().now().date_naive();
+    let yesterday = today - chrono::Duration::days(1);
+
+    post_dated(&fixture, &dated_tx_code, recipient, today, 20).await?;
+    post_dated(&fixture, &dated_tx_code, recipient, yesterday, 20).await?;
+    post_dated(&fixture, &dated_tx_code, recipient, today, 5).await?;
+    let total = POST_AMOUNT * Decimal::from(45);
+
+    let read_calls = Arc::new(AtomicUsize::new(0));
+    let group_calls = Arc::new(AtomicUsize::new(0));
+    let subscriber = tracing_subscriber::registry()
+        .with(SpanCallCounter {
+            name: "effective_balance.find_ec_for_update",
+            count: read_calls.clone(),
+        })
+        .with(SpanCallCounter {
+            name: "cala_ledger.balance.effective.apply_ec_rollup_batch_in_op",
+            count: group_calls.clone(),
+        });
+    tracing::subscriber::set_global_default(subscriber)
+        .expect("no other global tracing subscriber should be set in this test process");
+
+    jobs.start_poll().await?;
+    helpers::wait_for_effective(
+        &fixture.cala,
+        fixture.journal_id,
+        ec_set.id(),
+        usd,
+        today,
+        total,
+    )
+    .await?;
+
+    let read_calls = read_calls.load(Ordering::SeqCst);
+    let group_calls = group_calls.load(Ordering::SeqCst);
+    assert!(
+        read_calls >= 1,
+        "the rollup must have read this pair's history at least once",
+    );
+    assert_eq!(
+        read_calls, group_calls,
+        "one EC pair must cost exactly one find_ec_for_update call per \
+         batch group that touches it, not one per transaction in that \
+         group (read_calls={read_calls}, group_calls={group_calls})",
+    );
+    assert!(
+        read_calls < 45,
+        "45 backdated transactions must not cost 45 reads \
+         (read_calls={read_calls})",
+    );
+
     Ok(())
 }

@@ -259,13 +259,17 @@ impl Balances {
     /// EC-set advisory lock. Caller drives this per outbox batch and owns
     /// the commit/checkpoint (see [`crate::ec_rollup`]).
     ///
-    /// The settled pass is batched per journal: one mapping fetch, one
-    /// sorted lock+read pass over the union of involved (set, currency)
-    /// pairs — a single canonical lock acquisition per group rather than
-    /// one per transaction — and one snapshot insert; the per-transaction
-    /// folds chain in memory. The effective pass stays per transaction:
-    /// its reads are effective-date-dependent (back-dating replay), so
-    /// batching it would mean replaying across dates in memory.
+    /// Both passes are batched per journal group. The settled pass: one
+    /// mapping fetch, one sorted lock+read pass over the union of involved
+    /// (set, currency) pairs — a single canonical lock acquisition per
+    /// group rather than one per transaction — and one snapshot insert; the
+    /// per-transaction folds chain in memory. The effective pass mirrors
+    /// this: each pair's later history is read once, anchored at the
+    /// *earliest* effective date any transaction in the group gives it, and
+    /// every transaction's entries for that pair are folded into the same
+    /// in-memory replay before one insert — so a batch of backdated
+    /// transactions rewrites later history once per batch rather than once
+    /// per transaction (see `EffectiveBalances::apply_ec_rollup_batch_in_op`).
     #[instrument(
         level = "debug",
         name = "cala_ledger.balance.apply_ec_rollup_in_op",
@@ -366,34 +370,9 @@ impl Balances {
 
         let journal = self.journals.find_in_op(&mut *op, journal_id).await?;
         if journal.insert_effective_balances() {
-            for tx in group {
-                let mut tx_involved: HashSet<(AccountId, Currency)> = HashSet::new();
-                for entry in tx.entries.iter() {
-                    for set_id in ec_mappings.get(&entry.account_id).unwrap_or(&empty) {
-                        tx_involved.insert((AccountId::from(set_id), entry.currency));
-                    }
-                    if ec_leaves.contains(&entry.account_id) {
-                        tx_involved.insert((entry.account_id, entry.currency));
-                    }
-                }
-                if tx_involved.is_empty() {
-                    continue;
-                }
-                let (account_ids, currencies): (Vec<AccountId>, Vec<&str>) =
-                    tx_involved.into_iter().map(|(a, c)| (a, c.code())).unzip();
-                self.effective
-                    .apply_ec_rollup_in_op(
-                        op,
-                        journal_id,
-                        tx.entries,
-                        tx.effective,
-                        tx.created_at,
-                        ec_mappings.clone(),
-                        (account_ids, currencies),
-                        &ec_leaves,
-                    )
-                    .await?;
-            }
+            self.effective
+                .apply_ec_rollup_batch_in_op(op, journal_id, &group, &ec_mappings, &ec_leaves)
+                .await?;
         }
 
         Ok(())

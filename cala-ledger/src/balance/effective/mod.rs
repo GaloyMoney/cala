@@ -16,6 +16,7 @@ use super::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
     error::BalanceError,
+    EcRollupTxn,
 };
 
 use repo::*;
@@ -262,7 +263,7 @@ impl EffectiveBalances {
                 .chain(std::iter::once(entry.account_id))
             {
                 if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {
-                    data.push(effective, entry);
+                    data.push(effective, 0, created_at, entry);
                 }
             }
         }
@@ -282,49 +283,99 @@ impl EffectiveBalances {
     }
 
     /// EC counterpart of [`Self::update_cumulative_balances_in_op`] used by
-    /// the streaming rollup: fans each entry into its EC ancestor sets and,
-    /// for an entry whose leaf is an EC plain account (listed in
-    /// `ec_leaves`), into that leaf's own cumulative-effective balance too.
-    /// Reads via `find_ec_for_update`, which keeps the
-    /// `eventually_consistent = TRUE` rows (both EC sets and EC leaves).
-    #[allow(clippy::too_many_arguments)]
+    /// the streaming rollup: fans every transaction's entries in the batch
+    /// into their EC ancestor sets and, for an entry whose leaf is an EC
+    /// plain account (listed in `ec_leaves`), into that leaf's own
+    /// cumulative-effective balance too.
+    ///
+    /// Batched per pair rather than per transaction: each `(account,
+    /// currency)` pair's later history is read **once**, anchored at the
+    /// *earliest* effective date any of the batch's transactions gives it,
+    /// and every one of the batch's entries for that pair is folded into
+    /// the same in-memory replay before one insert. A backdated transaction
+    /// therefore still rewrites every later row for the pairs it touches,
+    /// but does so once per batch rather than once per transaction —
+    /// `SnapshotOrEntry`'s ordering (pre-existing rows before the batch's
+    /// own entries, then landing order) makes the fold equivalent to
+    /// applying the batch's transactions one at a time.
     #[instrument(
         level = "debug",
-        name = "cala_ledger.balance.effective.apply_ec_rollup_in_op",
+        name = "cala_ledger.balance.effective.apply_ec_rollup_batch_in_op",
         skip_all,
+        fields(txns_count = txns.len()),
         err(level = "warn")
     )]
-    pub(crate) async fn apply_ec_rollup_in_op(
+    pub(crate) async fn apply_ec_rollup_batch_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        entries: Vec<EntryValues>,
-        effective: NaiveDate,
-        created_at: DateTime<Utc>,
-        ec_mappings: HashMap<AccountId, Vec<AccountSetId>>,
-        balance_ids: (Vec<AccountId>, Vec<&str>),
+        txns: &[EcRollupTxn],
+        ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
     ) -> Result<(), BalanceError> {
-        let mut all_data = self
-            .repo
-            .find_ec_for_update(&mut *op, journal_id, balance_ids, effective)
-            .await?;
-        let empty = Vec::new();
-        for entry in entries.iter() {
-            for account_id in ec_mappings
-                .get(&entry.account_id)
-                .unwrap_or(&empty)
-                .iter()
+        let targets = |account_id: &AccountId| {
+            ec_mappings
+                .get(account_id)
+                .into_iter()
+                .flatten()
                 .map(AccountId::from)
-                .chain(ec_leaves.get(&entry.account_id).copied())
-            {
-                if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {
-                    data.push(effective, entry);
+                .chain(ec_leaves.get(account_id).copied())
+        };
+
+        // Each pair's later history only needs to be read from its
+        // *earliest* effective date in the batch — reading from the global
+        // minimum across all pairs would delete and rewrite rows for pairs
+        // whose own entries are all later, for no benefit.
+        let mut earliest: HashMap<(AccountId, Currency), NaiveDate> = HashMap::new();
+        for tx in txns {
+            for entry in tx.entries.iter() {
+                for target in targets(&entry.account_id) {
+                    earliest
+                        .entry((target, entry.currency))
+                        .and_modify(|date| *date = (*date).min(tx.effective))
+                        .or_insert(tx.effective);
                 }
             }
         }
+        if earliest.is_empty() {
+            return Ok(());
+        }
+
+        // One `find_ec_for_update` call per distinct earliest date — in
+        // practice a batch spans one or two dates, so this is one or two
+        // queries instead of one per transaction.
+        let mut by_date: HashMap<NaiveDate, (Vec<AccountId>, Vec<&str>)> = HashMap::new();
+        for (&(account_id, currency), &date) in earliest.iter() {
+            let (ids, currencies) = by_date.entry(date).or_default();
+            ids.push(account_id);
+            currencies.push(currency.code());
+        }
+        let mut all_data = HashMap::new();
+        for (date, ids) in by_date {
+            all_data.extend(
+                self.repo
+                    .find_ec_for_update(&mut *op, journal_id, ids, date)
+                    .await?,
+            );
+        }
+
+        for (tx_index, tx) in txns.iter().enumerate() {
+            for entry in tx.entries.iter() {
+                for target in targets(&entry.account_id) {
+                    if let Some(data) = all_data.get_mut(&(target, entry.currency)) {
+                        data.push(tx.effective, tx_index, tx.created_at, entry);
+                    }
+                }
+            }
+        }
+
+        let rewritten_at = txns
+            .iter()
+            .map(|tx| tx.created_at)
+            .max()
+            .expect("txns is non-empty: earliest was populated from it above");
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
+            data.re_calculate_snapshots(rewritten_at);
         }
 
         let new_balances = all_data
@@ -349,7 +400,7 @@ mod __fuzz {
         entry::EntryValues,
         primitives::{AccountId, Currency, JournalId},
     };
-    use chrono::NaiveDate;
+    use chrono::{NaiveDate, Utc};
     use serde::Deserialize;
 
     #[derive(Deserialize)]
@@ -363,6 +414,12 @@ mod __fuzz {
         effective: NaiveDate,
         kind: String,
         idx: usize,
+        /// Which transaction this op belongs to (landing order). Lets the
+        /// fuzzer generate mixed-date, mixed-transaction batches — the
+        /// shape `EffectiveBalanceData::re_calculate_snapshots` now folds
+        /// in one pass instead of one call per transaction.
+        #[serde(default)]
+        tx_index: usize,
     }
 
     pub fn fuzz_recalculate(data: &[u8]) {
@@ -384,6 +441,7 @@ mod __fuzz {
         let account_id = AccountId::from(uuid::Uuid::nil());
         let currency = Currency::USD;
         let last = last.map(|d| (d.effective, d.values));
+        let created_at = Utc::now();
 
         let mut updates: Vec<SnapshotOrEntry> = Vec::new();
         for op in &plan {
@@ -392,6 +450,8 @@ mod __fuzz {
                     if let Some(entry) = entries.get(op.idx) {
                         updates.push(SnapshotOrEntry::Entry {
                             effective: op.effective,
+                            tx_index: op.tx_index,
+                            created_at,
                             entry,
                         });
                     }
