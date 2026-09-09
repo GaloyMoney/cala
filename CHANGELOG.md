@@ -1,3 +1,22 @@
+# [cala release v0.26.2](https://github.com/GaloyMoney/cala/releases/tag/0.26.2)
+
+
+
+### Bug Fixes
+
+- Fold the EC rollup's effective-balance replay once per batch (#875)
+
+### Miscellaneous Tasks
+
+- Upgrade cel-rust (#874)
+- Bump cached from 2.0.2 to 3.1.1 in the all-dependencies group (#873)
+- Bump uuid in the all-dependencies group (#866)
+- Bump job to 0.13.10 (#864)
+- Bump obix to 0.9.1 (#862)
+- Bump es-entity to 0.12.15 (#865)
+- Bump cel (#870)
+- Do not cache compile_program errors (#859)
+
 # [cala release v0.26.1](https://github.com/GaloyMoney/cala/releases/tag/0.26.1)
 
 
