@@ -15,6 +15,10 @@
 #! Env vars (all optional):
 #!   FUZZ_SECONDS        seconds to fuzz each target (default: 60)
 #!   FUZZ_JOBS           libFuzzer `-jobs` per target; cores ~= #targets * FUZZ_JOBS
+#!   FUZZ_WATCHDOG_GRACE_SECONDS extra wall-clock seconds granted to each target
+#!                       on top of FUZZ_SECONDS before the hard watchdog kills
+#!                       it (covers cargo-fuzz startup + seed-corpus execution
+#!                       and slow-unit overshoot; default: 1800)
 #!   CORPUS_TARBALL_IN   glob of a corpus tarball to extract before fuzzing
 #!   CORPUS_TARBALL_OUT    path to write the evolved corpus tarball after fuzzing
 #!   ARTIFACTS_TARBALL_OUT path to write a tarball of crash/oom artifacts (if any)
@@ -26,6 +30,8 @@
 #! without `fuzz/seeds/` are unaffected (backward compatible).
 #!
 #! Requires: bash, git, cargo, tar, and cargo-fuzz (auto-installed if missing).
+#! A GNU coreutils `timeout` (or `gtimeout`) bounds each target's wall clock
+#! when present; without it fuzzing runs unguarded.
 
 set -euo pipefail
 
@@ -78,21 +84,56 @@ if [ -n "${FUZZ_JOBS:-}" ]; then
   JOBS_ARG="-jobs=$FUZZ_JOBS"
 fi
 
-echo "fuzzing ${#targets[@]} target(s) in parallel for ${FUZZ_SECONDS}s${JOBS_ARG:+ ($JOBS_ARG per target)}"
-pids=""
+#! Wall-clock watchdog: libFuzzer's -max_total_time only counts *between*
+#! inputs, and its SIGALRM -timeout is unreliable for targets that spawn
+#! threads (e.g. CEL compilation on a dedicated thread swallows the alarm).
+#! A target wedged inside one input must not hold the whole job hostage:
+#! bound each `cargo fuzz run` at FUZZ_SECONDS + grace wall-clock. SIGTERM
+#! lets libFuzzer print final stats and exit; --kill-after escalates to
+#! SIGKILL (signal goes to the whole process group, fuzzer included).
+FUZZ_WATCHDOG_GRACE_SECONDS="${FUZZ_WATCHDOG_GRACE_SECONDS:-1800}"
+WATCHDOG_CMD=""
+if command -v timeout >/dev/null 2>&1; then
+  WATCHDOG_CMD="timeout --signal=TERM --kill-after=60"
+elif command -v gtimeout >/dev/null 2>&1; then
+  WATCHDOG_CMD="gtimeout --signal=TERM --kill-after=60"
+else
+  echo "WARNING: coreutils timeout not found; fuzzing without a per-target wall-clock watchdog" >&2
+fi
+WATCHDOG_LIMIT=$((FUZZ_SECONDS + FUZZ_WATCHDOG_GRACE_SECONDS))
+
+run_target() {
+  #! One fuzz target, bounded by the wall-clock watchdog when available.
+  local target="$1"
+  cd fuzz
+  if [ -n "$WATCHDOG_CMD" ]; then
+    exec $WATCHDOG_CMD "$WATCHDOG_LIMIT" cargo fuzz run "$target" --sanitizer=none -- \
+      -max_total_time="$FUZZ_SECONDS" -timeout=25 $JOBS_ARG \
+      -artifact_prefix="artifacts/$target/"
+  fi
+  exec cargo fuzz run "$target" --sanitizer=none -- \
+    -max_total_time="$FUZZ_SECONDS" -timeout=25 $JOBS_ARG \
+    -artifact_prefix="artifacts/$target/"
+}
+
+echo "fuzzing ${#targets[@]} target(s) in parallel for ${FUZZ_SECONDS}s${JOBS_ARG:+ ($JOBS_ARG per target)}${WATCHDOG_CMD:+, wall-clock limit ${WATCHDOG_LIMIT}s per target}"
+declare -A target_of=()
 rc=0
 for target in "${targets[@]}"; do
-  (cd fuzz && cargo fuzz run "$target" --sanitizer=none -- \
-    -max_total_time="$FUZZ_SECONDS" -timeout=25 $JOBS_ARG \
-    -artifact_prefix="artifacts/$target/") &
-  pids="$pids $!"
+  run_target "$target" &
+  target_of[$!]=$target
 done
-for p in $pids; do
-  wait "$p" || rc=1
-done
+if [ ${#target_of[@]} -gt 0 ]; then
+  for p in "${!target_of[@]}"; do
+    if ! wait "$p"; then
+      rc=1
+      echo "fuzz target '${target_of[$p]}' exited non-zero (crash/OOM/timeout; 124 = watchdog hit) — see its output above"
+    fi
+  done
+fi
 
 if [ "$rc" -ne 0 ]; then
-  echo "==== FUZZ CRASH DETECTED ===="
+  echo "==== FUZZ FAILURE DETECTED ===="
   find fuzz/artifacts -type f -print || true
 fi
 

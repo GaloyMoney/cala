@@ -545,6 +545,12 @@ plan:
           echo "no existing corpus; bootstrapping from scratch"
         fi
 - task: fuzz
+  #! Hard wall-clock backstop for the whole task. The per-target watchdog in
+  #! fuzz.sh (FUZZ_SECONDS + FUZZ_WATCHDOG_GRACE_SECONDS) fires first; this
+  #! catches anything wedged below/around the fuzzer itself (nix, tar, ...).
+  #! +2h covers a cold cargo rebuild and corpus packaging; ensure steps
+  #! (corpus/artifact upload) still run when it trips.
+  timeout: #@ "{}h".format(int(fuzz_seconds) // 3600 + 2)
   config:
     platform: linux
     image_resource: #@ nix_task_image_config()
