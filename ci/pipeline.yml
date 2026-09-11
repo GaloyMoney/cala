@@ -29,7 +29,8 @@ jobs:
 #! Coverage-guided fuzzing (cargo-fuzz / libFuzzer), from galoy-concourse-shared.
 #! Self-bootstrapping (first run fuzzes from scratch — no manual seed), corpus
 #! persisted to GCS, Zenduty fires on crash. Default cadence: weekly Saturday
-#! 06:00 UTC for 24h; override via fuzz_job(fuzz_seconds="...").
+#! 06:00 UTC for 24h; override via fuzz_job(fuzz_seconds="..."). The job has a
+#! hard task timeout (fuzz time + 2h) plus a per-target wall-clock watchdog in fuzz.sh.
 - #@ fuzz_job()
 
 - name: check-code

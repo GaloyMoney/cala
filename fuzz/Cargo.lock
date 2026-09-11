@@ -20,6 +20,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75"
 dependencies = [
  "cfg-if",
+ "getrandom 0.3.4",
  "once_cell",
  "version_check",
  "zerocopy",
@@ -77,6 +78,17 @@ name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3fb67a6e08acf24fdeccbac2cb6ac4305825bd1f117462e0e6f2f193345ad56"
+
+[[package]]
+name = "async-lock"
+version = "3.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "290f7f2596bd5b78a9fec8088ccd89180d7f9f55b94b0576823bbbdc72ee8311"
+dependencies = [
+ "event-listener",
+ "event-listener-strategy",
+ "pin-project-lite",
+]
 
 [[package]]
 name = "async-stream"
@@ -273,27 +285,28 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cached"
-version = "2.0.2"
+version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc0df7748fe2f601e376916ab19e7bfc2c74461b8abe3bce2ce20036ad8de38f"
+checksum = "133b6b7d6a828c24d5055ef51e67457002b4017ae5ea3d1b1552ca35a44b1119"
 dependencies = [
  "ahash 0.8.12",
+ "async-lock",
  "cached_proc_macro",
  "cached_proc_macro_types",
- "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
  "parking_lot",
  "thiserror",
- "tokio",
  "web-time",
 ]
 
 [[package]]
 name = "cached_proc_macro"
-version = "2.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "66e734c52502e6cf54dce2ba07108906b04b8fe57f4f5e3ef7d58267b4abf060"
+checksum = "da80977bd46ecf98c593b651e393260f852678283989b8b7c4079304fe5e8936"
 dependencies = [
  "darling 0.20.11",
+ "proc-macro-crate",
  "proc-macro2",
  "quote",
  "syn 2.0.119",
@@ -301,13 +314,13 @@ dependencies = [
 
 [[package]]
 name = "cached_proc_macro_types"
-version = "1.0.0"
+version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26cf465651fa6ad902a2d327ba60c3a6bc61c6a2f4ad70d091cf20dfda0074ef"
+checksum = "f5813789573ae815c8b4be58c4428e0e7ae05f0227678ba9de332ded585b9159"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.22.2-dev"
+version = "0.26.3-dev"
 dependencies = [
  "cached",
  "cel",
@@ -323,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "cala-fuzz"
-version = "0.0.0"
+version = "0.26.3-dev"
 dependencies = [
  "arbitrary",
  "cala-cel-interpreter",
@@ -339,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.22.2-dev"
+version = "0.26.3-dev"
 dependencies = [
  "cached",
  "cala-cel-interpreter",
@@ -364,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.22.2-dev"
+version = "0.26.3-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -394,9 +407,9 @@ dependencies = [
 
 [[package]]
 name = "cel"
-version = "0.14.1"
+version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f836899841a6a942956b4252d070ada1b379c3476ff181ad5defcf9383e5851d"
+checksum = "2ae7daebcd4d032c9a5288790c2facde6fab3f9a9ff8d5028765e8b48a36eeb2"
 dependencies = [
  "antlr4rust",
  "chrono",
@@ -728,9 +741,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.3"
+version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c87798b941975265c631a0c4eb350bedad86ac4620012d82e21bc67c5dc44d0"
+checksum = "fb62689c86b23d41c9718c09a00950e26cca5f47041d3dc2132b4a4217697ac2"
 dependencies = [
  "async-stream",
  "chrono",
@@ -755,9 +768,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.3"
+version = "0.12.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3af0555969e3acd0f146741b43831761b32d72339e29944eefc581d4e0db3672"
+checksum = "b26aa12d3908f18fca75cf87db20615a9bf9f076528f927a1df8994d903778b7"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -787,6 +800,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
  "parking",
+ "pin-project-lite",
+]
+
+[[package]]
+name = "event-listener-strategy"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8be9f3dfaaffdae2972880079a491a1a8bb7cbed0b8dd7a347f668b4150a3b93"
+dependencies = [
+ "event-listener",
  "pin-project-lite",
 ]
 
@@ -1006,20 +1029,14 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.16.1"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "allocator-api2",
  "equivalent",
  "foldhash 0.2.0",
 ]
-
-[[package]]
-name = "hashbrown"
-version = "0.17.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "hashlink"
@@ -1248,9 +1265,9 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "job"
-version = "0.7.1"
+version = "0.13.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68bf46438d68f1d1497132533e03c69adc87a141c0b9effdcab4f27ba7b8908f"
+checksum = "fd7f771a403e78d9723fccd110d7cc1b87a2c4f5c52a60e1a2822fbedf40c471"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1468,9 +1485,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.7.1"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "735fd23fee9b8d68d4be63470e0fbf56cf7c73fb01c8d5cec2378abf44fc561d"
+checksum = "864b95b09c88a01c26dd47fed7f9b7da2919960bcce75bb8ac89679e85e6df89"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1491,9 +1508,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.7.1"
+version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c99cc2b1f9f11c16ad9a447f7cdcb150ff3f0bca10bc27353f670f5911ebabe6"
+checksum = "3d5e5effb6ad2ec13870aaa201c57afa07037c3f53e1726967ec173844603a95"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -2682,7 +2699,6 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "socket2",
  "tokio-macros",
