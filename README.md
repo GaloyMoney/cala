@@ -52,6 +52,37 @@ For a complete working example — including creating accounts, transaction temp
 make reset-deps rust-example
 ```
 
+## Entry events
+
+`OutboxEventPayload::EntryCreated { entry, effective }` carries the owning
+transaction's accounting date alongside `EntryValues`. On the wire, `effective`
+is an ISO date (`YYYY-MM-DD`) at the same level as `entry`. It is copied from the
+transaction when posting, not derived from the outbox event's recording time:
+a backdated posting can be recorded today and affect an earlier accounting day.
+Consumers can group entries by accounting date without joining transaction events.
+
+The transaction remains the authority for this date; callers cannot set it
+independently per entry. `EntryValues`, persisted entry entity events, and the
+entry database schema do not include it. Transaction and entry events commit
+atomically, but streaming batches can split a posting's event group; carrying
+`effective` does not guarantee posting-atomic delivery.
+
+### Upgrading entry event consumers
+
+`effective` is required when deserializing `EntryCreated`. Upgrading an existing
+outbox requires a coordinated stop of writers and consumers: backfill older
+`entry_created` payloads from the owning `cala_transactions.effective` (matched
+by `payload.entry.transaction_id`), then restart with the new version. Old
+writers cannot coexist with new consumers because they omit the required date.
+Archived copies need the same enrichment before replay. There is no fallback
+to the recording date or a sentinel date, and this release does not
+automatically backfill existing outbox data.
+
+Rust consumers that destructure `EntryCreated { entry }` must include `effective`
+or use `EntryCreated { entry, .. }`. The entry-only
+`From<&EntryEvent> for OutboxEventPayload` conversion is removed: constructing a
+public entry event requires the owning transaction's date.
+
 ## Developing
 
 ### Dependencies

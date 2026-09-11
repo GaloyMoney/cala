@@ -217,7 +217,7 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
                 };
                 Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
             }
-            Some(OutboxEventPayload::EntryCreated { entry }) => {
+            Some(OutboxEventPayload::EntryCreated { entry, .. }) => {
                 let entry = entry.clone();
                 Ok(ctx.collect_with(|batch| batch.push_entry(entry)))
             }

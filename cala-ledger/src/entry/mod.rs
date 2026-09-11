@@ -6,10 +6,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use tracing::instrument;
 
-use crate::{
-    outbox::*,
-    primitives::{AccountId, AccountSetId, JournalId, TransactionId},
-};
+use crate::primitives::{AccountId, AccountSetId, JournalId, TransactionId};
 
 pub use entity::*;
 use error::*;
@@ -141,15 +138,5 @@ impl Entries {
             a_sequence.cmp(&b_sequence)
         });
         Ok(entries)
-    }
-}
-
-impl From<&EntryEvent> for OutboxEventPayload {
-    fn from(event: &EntryEvent) -> Self {
-        match event {
-            EntryEvent::Initialized { values: entry } => OutboxEventPayload::EntryCreated {
-                entry: entry.clone(),
-            },
-        }
     }
 }

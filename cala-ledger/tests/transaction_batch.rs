@@ -10,6 +10,7 @@ use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetId, NewAccountSet},
     error::LedgerError,
+    outbox::OutboxEventPayload,
     posting::{PostingError, PostingInput, RejectionReason},
     tx_template::*,
     velocity::*,
@@ -752,40 +753,71 @@ async fn outbox_events_are_grouped_per_posting_not_by_type() -> anyhow::Result<(
             .fetch_one(&pool)
             .await?;
 
-    let posted = cala
+    // Backdated, non-monotone dates distinguish each posting's accounting
+    // date from the event recording date and from its neighbours in the batch.
+    let dates = [
+        chrono::NaiveDate::from_ymd_opt(2020, 3, 10).unwrap(),
+        chrono::NaiveDate::from_ymd_opt(2020, 3, 1).unwrap(),
+        chrono::NaiveDate::from_ymd_opt(2020, 3, 20).unwrap(),
+    ];
+    let params_for = |effective| {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender.id());
+        params.insert("recipient", recipient.id());
+        params.insert("effective", effective);
+        params
+    };
+    let mut posted = cala
         .post_transactions(
-            (0..3)
-                .map(|_| transfer(&code, journal.id(), sender.id(), recipient.id()))
+            dates
+                .iter()
+                .map(|date| PostingInput::new(TransactionId::new(), &code, params_for(*date)))
                 .collect(),
         )
         .await?;
+    posted.push(
+        cala.post_transaction(TransactionId::new(), &code, params_for(dates[1]))
+            .await?,
+    );
 
-    // (payload type, owning transaction id) in outbox sequence order.
-    let rows = sqlx::query_as::<_, (String, String)>(
-        "SELECT payload->>'type', \
-                COALESCE(payload->'transaction'->>'id', payload->'entry'->>'transaction_id') \
-         FROM cala_persistent_outbox_events WHERE sequence > $1 ORDER BY sequence",
+    let events = sqlx::query_scalar::<_, sqlx::types::Json<OutboxEventPayload>>(
+        "SELECT payload FROM cala_persistent_outbox_events \
+         WHERE sequence > $1 ORDER BY sequence",
     )
     .bind(high_water)
     .fetch_all(&pool)
     .await?;
+    let rows: Vec<_> = events
+        .into_iter()
+        .map(|sqlx::types::Json(event)| match event {
+            OutboxEventPayload::TransactionCreated { transaction } => {
+                ("transaction_created", transaction.id, transaction.effective)
+            }
+            OutboxEventPayload::EntryCreated { entry, effective } => {
+                ("entry_created", entry.transaction_id, effective)
+            }
+            other => panic!("unexpected posting event: {other:?}"),
+        })
+        .collect();
 
-    // Build the expected sequence directly from what was posted: each
-    // transaction, then exactly its own entries, in posting order.
-    let mut expected: Vec<(String, String)> = Vec::new();
-    for tx in posted.iter() {
-        let tx_id = tx.id().to_string();
-        expected.push(("transaction_created".to_string(), tx_id.clone()));
+    // Each transaction is followed by exactly its own entries, carrying its
+    // effective date on the public event rather than on EntryValues.
+    let mut expected = Vec::new();
+    for (tx, effective) in posted.iter().zip(dates.into_iter().chain([dates[1]])) {
+        assert_eq!(tx.effective(), effective);
+        assert_ne!(tx.created_at().date_naive(), effective);
+        expected.push(("transaction_created", tx.id(), effective));
         let entries = cala.entries().list_for_transaction_id(tx.id()).await?;
+        assert_eq!(entries.len(), 6);
         for _ in 0..entries.len() {
-            expected.push(("entry_created".to_string(), tx_id.clone()));
+            expected.push(("entry_created", tx.id(), effective));
         }
     }
 
     assert_eq!(
         rows, expected,
-        "outbox must interleave per posting (tx, its entries, tx, its entries, ...), \
-         not group all transactions before all entries"
+        "outbox must preserve each posting's transaction/entry order and effective date"
     );
     Ok(())
 }
@@ -811,7 +843,7 @@ async fn a_multi_journal_batch_does_not_cross_ancestor_sets_between_journals() -
     let sender = cala.accounts().create(a).await?;
     let recipient = cala.accounts().create(b).await?;
 
-    let mut set_in = |journal_id, name: &str| {
+    let set_in = |journal_id, name: &str| {
         let s = NewAccountSet::builder()
             .id(AccountSetId::new())
             .name(name.to_string())

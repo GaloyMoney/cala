@@ -309,6 +309,7 @@ impl Postings {
             payloads.extend(values.iter().map(|entry| {
                 crate::outbox::OutboxEventPayload::EntryCreated {
                     entry: entry.clone(),
+                    effective: transaction.effective(),
                 }
             }));
         }

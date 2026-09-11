@@ -50,5 +50,8 @@ pub enum OutboxEventPayload {
     },
     EntryCreated {
         entry: EntryValues,
+        /// Accounting date copied from the owning transaction at posting time,
+        /// not the outbox event's recording date.
+        effective: chrono::NaiveDate,
     },
 }
