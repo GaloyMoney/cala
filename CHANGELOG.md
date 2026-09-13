@@ -1,3 +1,16 @@
+# [cala release v0.27.0](https://github.com/GaloyMoney/cala/releases/tag/0.27.0)
+
+
+
+### Features
+
+- [**breaking**] Add Transactions::find_by_id_in_op, widen _in_op reads (#880)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group with 3 updates (#876)
+- Put hard timeout to fuzzer (#877)
+
 # [cala release v0.26.2](https://github.com/GaloyMoney/cala/releases/tag/0.26.2)
 
 
