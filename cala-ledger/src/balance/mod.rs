@@ -113,7 +113,7 @@ impl Balances {
     )]
     pub async fn find_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
@@ -166,7 +166,7 @@ impl Balances {
     #[instrument(level = "debug", name = "cala_ledger.balance.find_all_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
     ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
         self.repo.find_all_in_op(op, ids).await
@@ -179,7 +179,7 @@ impl Balances {
     )]
     pub async fn list_for_account_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
@@ -195,7 +195,7 @@ impl Balances {
     #[instrument(level = "debug", name = "cala_ledger.balance.list_for_accounts_in_op", skip(self, op, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn list_for_accounts_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,

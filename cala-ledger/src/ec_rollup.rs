@@ -240,7 +240,7 @@ impl OutboxEventHandler<OutboxEventPayload> for EcBalanceRollupHandler {
         let fetched = if missing_ids.is_empty() {
             HashMap::new()
         } else {
-            self.entries.find_all_in_op(op, &missing_ids).await?
+            self.entries.find_all_in_op(&mut *op, &missing_ids).await?
         };
 
         let rollup_txns = batch.into_rollup_txns(fetched);

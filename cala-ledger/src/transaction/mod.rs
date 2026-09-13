@@ -54,6 +54,19 @@ impl Transactions {
 
     #[instrument(
         level = "debug",
+        name = "cala_ledger.transactions.find_by_id_in_op",
+        skip(self, op)
+    )]
+    pub async fn find_by_id_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        transaction_id: TransactionId,
+    ) -> Result<Transaction, TransactionError> {
+        Ok(self.repo.find_by_id_in_op(op, transaction_id).await?)
+    }
+
+    #[instrument(
+        level = "debug",
         name = "cala_ledger.transactions.list_for_template_id",
         skip(self)
     )]
@@ -78,6 +91,15 @@ impl Transactions {
         transaction_ids: &[TransactionId],
     ) -> Result<HashMap<TransactionId, T>, TransactionError> {
         Ok(self.repo.find_all(transaction_ids).await?)
+    }
+
+    #[instrument(level = "debug", name = "cala_ledger.transactions.find_all_in_op", skip(self, op, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
+    pub async fn find_all_in_op<T: From<Transaction>>(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        transaction_ids: &[TransactionId],
+    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
+        Ok(self.repo.find_all_in_op(op, transaction_ids).await?)
     }
 }
 
