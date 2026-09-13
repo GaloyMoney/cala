@@ -107,7 +107,7 @@ impl Accounts {
     #[instrument(level = "debug", name = "cala_ledger.accounts.find_all_in_op", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
-        db: &mut impl es_entity::AtomicOperation,
+        db: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, T>, AccountError> {
         Ok(self.repo.find_all_in_op(db, account_ids).await?)

@@ -104,7 +104,7 @@ impl AccountSetMembers {
 
     pub(crate) async fn list_by_created_at_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<members_cursor::AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
@@ -133,7 +133,7 @@ impl AccountSetMembers {
 
     pub(crate) async fn list_by_external_id_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<members_cursor::AccountSetMemberByExternalIdCursor>,
     ) -> Result<

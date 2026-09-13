@@ -601,7 +601,7 @@ impl AccountSets {
     #[instrument(level = "debug", name = "cala_ledger.account_sets.find_all_in_op", skip(self, op, account_set_ids), fields(account_set_ids_count = account_set_ids.len()))]
     pub async fn find_all_in_op<T: From<AccountSet>>(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_ids: &[AccountSetId],
     ) -> Result<HashMap<AccountSetId, T>, AccountSetError> {
         Ok(self.repo.find_all_in_op(op, account_set_ids).await?)
@@ -619,7 +619,7 @@ impl AccountSets {
     )]
     pub async fn find_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
     ) -> Result<AccountSet, AccountSetError> {
         Ok(self.repo.find_by_id_in_op(op, account_set_id).await?)
@@ -688,7 +688,7 @@ impl AccountSets {
     )]
     pub async fn list_for_name_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         name: String,
         args: es_entity::PaginatedQueryArgs<AccountSetByCreatedAtCursor>,
     ) -> Result<
@@ -708,7 +708,7 @@ impl AccountSets {
     )]
     pub async fn find_where_member_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
     ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
@@ -743,7 +743,7 @@ impl AccountSets {
 
     pub async fn list_members_by_created_at_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
@@ -775,7 +775,7 @@ impl AccountSets {
 
     pub async fn list_members_by_external_id_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: AccountSetId,
         args: es_entity::PaginatedQueryArgs<AccountSetMemberByExternalIdCursor>,
     ) -> Result<

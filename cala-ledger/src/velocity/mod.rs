@@ -279,7 +279,7 @@ impl Velocities {
     #[instrument(level = "debug", name = "velocity.list_limits_for_control_in_op", skip(self, op), fields(control_id = %control_id), err(level = tracing::Level::WARN))]
     pub async fn list_limits_for_control_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         control_id: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, VelocityError> {
         self.limits.list_for_control(op, control_id).await

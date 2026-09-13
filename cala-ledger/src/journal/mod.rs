@@ -66,7 +66,7 @@ impl Journals {
     )]
     pub async fn find_in_op(
         &self,
-        op: &mut impl es_entity::AtomicOperation,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
     ) -> Result<Journal, JournalError> {
         Ok(self.repo.find_by_id_in_op(op, journal_id).await?)
