@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #29 from GaloyMoney/codex/fail-safe-narinfo-list...'
-      sha: 6f10e75551bfdbdeee7e452ef6e851f6ffe4d019
+      commitTitle: 'Merge pull request #30 from GaloyMoney/cap-fuzzer-running-time...'
+      sha: 112cd76b5e7feeaf569021d244cf0f46c7f8f8b9
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #29 from GaloyMoney/codex/fail-safe-narinfo-list...'
-      sha: 6f10e75551bfdbdeee7e452ef6e851f6ffe4d019
+      commitTitle: 'Merge pull request #30 from GaloyMoney/cap-fuzzer-running-time...'
+      sha: 112cd76b5e7feeaf569021d244cf0f46c7f8f8b9
     path: .
   path: vendor
 kind: LockConfig
