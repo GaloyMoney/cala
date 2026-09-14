@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT wake_keys, instance_config, start_after AS \"start_after!: i64\", created_at\n            FROM cala_subscriptions\n            WHERE subscriber_type = $1 AND key = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "wake_keys",
+        "type_info": "VarcharArray"
+      },
+      {
+        "ordinal": 1,
+        "name": "instance_config",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "start_after!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e27cf018360b8433f062fd985f495c273195acee00932b2386b01ebcaae22e1a"
+}

@@ -38,7 +38,7 @@ pub struct CalaLedger {
     balances: Balances,
     postings: Postings,
     publisher: OutboxPublisher,
-    ec_rollup: obix::out::RegisteredEventHandler<
+    ec_rollup: obix::out::Subscription<
         crate::outbox::OutboxEventPayload,
         crate::outbox::CalaMailboxTables,
     >,

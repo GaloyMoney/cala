@@ -34,7 +34,7 @@ CREATE UNIQUE INDEX idx_jobs_job_type_resident
   WHERE resident;
 
 CREATE TABLE job_events (
-  id UUID NOT NULL REFERENCES jobs(id),
+  id UUID NOT NULL,
   sequence INT NOT NULL,
   event_type VARCHAR NOT NULL,
   event JSONB NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE job_events (
 CREATE TYPE JobExecutionState AS ENUM ('pending', 'parked', 'running');
 
 CREATE TABLE job_executions (
-  id UUID REFERENCES jobs(id) NOT NULL UNIQUE,
+  id UUID NOT NULL UNIQUE,
   job_type VARCHAR NOT NULL,
   queue_id VARCHAR,
   unique_key VARCHAR,

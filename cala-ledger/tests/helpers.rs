@@ -120,8 +120,7 @@ pub async fn init_pool_with(
 ) -> anyhow::Result<sqlx::PgPool> {
     let pg_con = std::env::var("PG_CON").unwrap();
     let pool = options.connect(&pg_con).await?;
-    use job::IncludeMigrations;
-    sqlx::migrate!().include_job_migrations().run(&pool).await?;
+    sqlx::migrate!().run(&pool).await?;
     Ok(pool)
 }
 
