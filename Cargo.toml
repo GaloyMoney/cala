@@ -15,9 +15,11 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.26.1" }
 
 cel = "0.14.3"
-es-entity = "0.12.7"
-job = { version = "0.13.4", features = ["es-entity"] }
-obix = { version = "0.9.0", default-features = false }
+# es-entity commit finalizers for operation-wide publications.
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "8676402d25d1e01264925e312bbe487b7bb1def0" }
+job = { version = "0.13.17", features = ["es-entity"] }
+# Canonical operation-wide publications; see the linked draft PRs.
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "a6589983567d7e6f978d738110a57d37e2ee6796", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "2.0", features = ["async"] }
@@ -45,3 +47,7 @@ lto = true
 
 [profile.bench]
 debug = true
+
+[patch.crates-io]
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "8676402d25d1e01264925e312bbe487b7bb1def0" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "8676402d25d1e01264925e312bbe487b7bb1def0" }

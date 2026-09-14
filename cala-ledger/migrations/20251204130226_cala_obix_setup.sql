@@ -7,7 +7,7 @@
 -- maintainer job (registered by the application).
 CREATE TABLE cala_persistent_outbox_events (
   id UUID NOT NULL DEFAULT gen_random_uuid(),
-  sequence BIGSERIAL,
+  sequence BIGINT NOT NULL,
   payload JSONB,
   tracing_context JSONB,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -29,6 +29,17 @@ CREATE TABLE cala_persistent_outbox_events_p0 PARTITION OF cala_persistent_outbo
 -- repair (`Partitions::recover_default`), not a correctness failure.
 CREATE TABLE cala_persistent_outbox_events_default
   PARTITION OF cala_persistent_outbox_events DEFAULT;
+
+CREATE TABLE cala_persistent_outbox_events_batch_head (
+  singleton BOOLEAN PRIMARY KEY CHECK (singleton),
+  last_sequence BIGINT NOT NULL CHECK (last_sequence >= 0)
+);
+INSERT INTO cala_persistent_outbox_events_batch_head VALUES (TRUE, 0);
+
+CREATE TABLE cala_persistent_outbox_events_batches (
+  first_sequence BIGINT NOT NULL CHECK (first_sequence > 0),
+  last_sequence BIGINT PRIMARY KEY CHECK (last_sequence >= first_sequence)
+);
 
 -- Ephemeral outbox events
 CREATE TABLE cala_ephemeral_outbox_events (
