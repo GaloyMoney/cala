@@ -127,7 +127,7 @@
 //!         .await?;
 //!
 //!     let expected_balance = Decimal::new(-1, 0); // Define the expected balance
-//!     assert_eq!(account_balance.settled(), expected_balance);
+//!     assert_eq!(account_balance.settled()?, expected_balance);
 //!     Ok(())
 //! }
 //! ```

@@ -299,7 +299,7 @@ async fn poster_blocks_on_open_synchronous_attach_then_fans_into_new_parent() ->
         .find(journal.id(), sync_set.id(), usd)
         .await?;
     assert_eq!(
-        parent_balance.settled(),
+        parent_balance.settled().unwrap(),
         dec!(5),
         "the synchronous parent must include the concurrent posting's entries"
     );

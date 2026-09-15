@@ -150,8 +150,8 @@ async fn main() -> anyhow::Result<()> {
         .balances()
         .find(journal_id, recipient.id(), currency)
         .await?;
-    println!("sender settled BTC: {}", sender_balance.settled());
-    println!("recipient settled BTC: {}", recipient_balance.settled());
+    println!("sender settled BTC: {}", sender_balance.settled()?);
+    println!("recipient settled BTC: {}", recipient_balance.settled()?);
 
     Ok(())
 }

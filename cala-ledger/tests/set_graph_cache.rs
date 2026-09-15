@@ -192,7 +192,8 @@ async fn warm_resolution_matches_walk_fallback() -> anyhow::Result<()> {
             cala.balances()
                 .find(journal.id(), set_id, usd)
                 .await?
-                .settled(),
+                .settled()
+                .unwrap(),
             dec!(7),
             "cold-path posting must fan into every synchronous ancestor"
         );
@@ -211,7 +212,8 @@ async fn warm_resolution_matches_walk_fallback() -> anyhow::Result<()> {
             cala.balances()
                 .find(journal.id(), set_id, usd)
                 .await?
-                .settled(),
+                .settled()
+                .unwrap(),
             dec!(14),
             "warm-path posting must fan into the same synchronous ancestors"
         );
@@ -294,7 +296,8 @@ async fn same_op_create_attach_post_resolves_fresh_set() -> anyhow::Result<()> {
         cala.balances()
             .find(journal.id(), fresh_set.id(), usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(3),
         "a set created+attached+posted in one op must receive the posting inline"
     );
@@ -359,14 +362,16 @@ async fn same_op_add_member_set_then_stale_then_warm() -> anyhow::Result<()> {
         cala.balances()
             .find(journal.id(), t.id(), usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(5)
     );
     assert_eq!(
         cala.balances()
             .find(journal.id(), chain.s1, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(6),
         "the same-op posting must fan through the edge added in the same op"
     );
@@ -383,7 +388,8 @@ async fn same_op_add_member_set_then_stale_then_warm() -> anyhow::Result<()> {
         cala.balances()
             .find(journal.id(), chain.s1, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(11)
     );
 
@@ -399,14 +405,16 @@ async fn same_op_add_member_set_then_stale_then_warm() -> anyhow::Result<()> {
         cala.balances()
             .find(journal.id(), chain.s1, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(16)
     );
     assert_eq!(
         cala.balances()
             .find(journal.id(), chain.s3, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(16),
         "the whole chain above the grafted subtree must see every posting"
     );
@@ -452,7 +460,8 @@ async fn rolled_back_structure_change_does_not_poison_cache() -> anyhow::Result<
         .balances()
         .find(journal.id(), chain.s1, usd)
         .await?
-        .settled();
+        .settled()
+        .unwrap();
 
     // Graft t under s1 and post to b — then ROLL BACK the whole op.
     let mut op = cala.begin_operation().await?;
@@ -483,14 +492,16 @@ async fn rolled_back_structure_change_does_not_poison_cache() -> anyhow::Result<
         cala.balances()
             .find(journal.id(), t.id(), usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(9)
     );
     assert_eq!(
         cala.balances()
             .find(journal.id(), chain.s1, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         s1_before,
         "the rolled-back edge must not influence any later resolution"
     );
@@ -553,7 +564,8 @@ async fn cross_instance_structure_change_is_observed() -> anyhow::Result<()> {
             .balances()
             .find(journal.id(), chain.s1, usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(4),
         "a structure change committed by another instance must be visible immediately"
     );
@@ -562,7 +574,8 @@ async fn cross_instance_structure_change_is_observed() -> anyhow::Result<()> {
             .balances()
             .find(journal.id(), t.id(), usd)
             .await?
-            .settled(),
+            .settled()
+            .unwrap(),
         dec!(2)
     );
 

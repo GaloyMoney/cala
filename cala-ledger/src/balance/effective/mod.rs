@@ -69,7 +69,7 @@ impl EffectiveBalances {
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
+            (start, Some(end), version_diff) => BalanceRange::new(start, end, version_diff),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }
@@ -130,13 +130,14 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
-        Ok(ranges
-            .into_iter()
-            .filter_map(|(id, (start, start_version, end, end_version))| {
-                BalanceRange::from_bounds(start, start_version, end, end_version)
-                    .map(|range| (id, range))
-            })
-            .collect())
+        let mut out = HashMap::new();
+        for (id, (start, start_version, end, end_version)) in ranges {
+            if let Some(range) = BalanceRange::from_bounds(start, start_version, end, end_version)?
+            {
+                out.insert(id, range);
+            }
+        }
+        Ok(out)
     }
 
     #[instrument(

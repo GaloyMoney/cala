@@ -101,7 +101,7 @@ impl AccountVelocityLimit {
             }
             let balance =
                 crate::balance::BalanceWithDirection::new(limit.enforcement_direction, snapshot);
-            let requested = balance.available(limit.layer);
+            let requested = balance.available(limit.layer)?;
 
             if requested > limit.amount {
                 let err = LimitExceededError {
