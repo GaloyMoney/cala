@@ -69,7 +69,7 @@ impl EffectiveBalances {
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
-            (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
+            (start, Some(end), version_diff) => BalanceRange::new(start, end, version_diff),
             _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
         }
     }
@@ -130,13 +130,14 @@ impl EffectiveBalances {
         until: Option<NaiveDate>,
     ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
-        Ok(ranges
-            .into_iter()
-            .filter_map(|(id, (start, start_version, end, end_version))| {
-                BalanceRange::from_bounds(start, start_version, end, end_version)
-                    .map(|range| (id, range))
-            })
-            .collect())
+        let mut out = HashMap::new();
+        for (id, (start, start_version, end, end_version)) in ranges {
+            if let Some(range) = BalanceRange::from_bounds(start, start_version, end, end_version)?
+            {
+                out.insert(id, range);
+            }
+        }
+        Ok(out)
     }
 
     #[instrument(
@@ -268,7 +269,7 @@ impl EffectiveBalances {
             }
         }
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
+            data.re_calculate_snapshots(created_at)?;
         }
 
         let new_balances = all_data
@@ -375,7 +376,7 @@ impl EffectiveBalances {
             .max()
             .expect("txns is non-empty: earliest was populated from it above");
         for data in all_data.values_mut() {
-            data.re_calculate_snapshots(rewritten_at);
+            data.re_calculate_snapshots(rewritten_at)?;
         }
 
         let new_balances = all_data
@@ -469,7 +470,9 @@ mod __fuzz {
         }
 
         let mut data = EffectiveBalanceData::new(account_id, currency, last, 0, updates);
-        data.re_calculate_snapshots(chrono::Utc::now());
+        // An overflow is a legitimate fuzz outcome, not a crash: the
+        // harness only reports panics.
+        let _ = data.re_calculate_snapshots(chrono::Utc::now());
         let _ = data
             .into_snapshots(JournalId::from(uuid::Uuid::nil()))
             .count();

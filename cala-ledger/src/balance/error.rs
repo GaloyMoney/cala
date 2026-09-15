@@ -14,4 +14,8 @@ pub enum BalanceError {
     JournalLocked(JournalId),
     #[error("BalanceError - AccountLocked: Cannot update balances. The account {0} is locked")]
     AccountLocked(AccountId),
+    #[error(
+        "BalanceError - Overflow: balance amount for account {0} exceeded the representable range"
+    )]
+    Overflow(AccountId),
 }

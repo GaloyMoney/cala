@@ -373,7 +373,7 @@ impl AccountSetMemberRepo {
             ORDER BY created_at DESC, member_id DESC
             LIMIT $1
           "#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 id.map(uuid::Uuid::from),
                 created_at,
                 uuid::Uuid::from(account_set_id),
@@ -510,7 +510,7 @@ impl AccountSetMemberRepo {
             ORDER BY external_id ASC NULLS LAST, member_id ASC
             LIMIT $1
         "#,
-                (first + 1) as i64,
+                crate::clamped_page_limit(first),
                 id.map(uuid::Uuid::from),
                 external_id,
                 uuid::Uuid::from(account_set_id),

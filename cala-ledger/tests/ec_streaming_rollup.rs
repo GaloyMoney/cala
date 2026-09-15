@@ -183,7 +183,7 @@ async fn assert_member_sum(
             .find(fixture.journal_id, m.id(), currency)
             .await
         {
-            Ok(b) => sum += b.settled(),
+            Ok(b) => sum += b.settled().unwrap(),
             Err(BalanceError::NotFound(..)) => {}
             Err(e) => return Err(e.into()),
         }
@@ -348,7 +348,7 @@ async fn streaming_rollup_matches_inline_set_history() -> anyhow::Result<()> {
         .balances()
         .find(fixture.journal_id, ec_set.id(), usd)
         .await?;
-    assert_eq!(ec_bal.settled(), inline_bal.settled());
+    assert_eq!(ec_bal.settled().unwrap(), inline_bal.settled().unwrap());
     assert_eq!(
         ec_bal.details.version, inline_bal.details.version,
         "EC set must have the same per-event version count as the inline set",
@@ -673,7 +673,7 @@ async fn synchronous_plain_account_is_readable_immediately() -> anyhow::Result<(
         .balances()
         .find(fixture.journal_id, recipient, usd)
         .await?;
-    assert_eq!(bal.settled(), expected);
+    assert_eq!(bal.settled().unwrap(), expected);
     Ok(())
 }
 
@@ -724,7 +724,7 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
         .find(fixture.journal_id, ec_set.id(), usd)
         .await?;
     assert_eq!(
-        bal.settled(),
+        bal.settled().unwrap(),
         expected,
         "EC set balance must be complete immediately after the fence",
     );
@@ -736,7 +736,7 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
         .find_cumulative(fixture.journal_id, ec_set.id(), usd, today)
         .await?;
     assert_eq!(
-        effective.settled(),
+        effective.settled().unwrap(),
         expected,
         "cumulative-effective EC balance must be complete immediately after the fence",
     );
@@ -775,7 +775,7 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
         .find(fixture.journal_id, ec_set.id(), usd)
         .await?;
     assert_eq!(
-        bal.settled(),
+        bal.settled().unwrap(),
         expected,
         "second fence must reflect the second backlog immediately",
     );
@@ -887,7 +887,7 @@ async fn await_frontier_waits_for_a_previously_captured_sequence() -> anyhow::Re
         .find(fixture.journal_id, ec_set.id(), usd)
         .await?;
     assert_eq!(
-        bal.settled(),
+        bal.settled().unwrap(),
         expected,
         "EC set balance must be complete once the captured frontier is reached",
     );
@@ -1021,8 +1021,16 @@ async fn streaming_rollup_folds_backdated_batch_like_sequential() -> anyhow::Res
             .effective()
             .find_cumulative(fixture.journal_id, inline_set.id(), usd, date)
             .await?;
-        assert_eq!(ec_bal.settled(), inline_bal.settled(), "settled at {date}");
-        assert_eq!(ec_bal.pending(), inline_bal.pending(), "pending at {date}");
+        assert_eq!(
+            ec_bal.settled().unwrap(),
+            inline_bal.settled().unwrap(),
+            "settled at {date}"
+        );
+        assert_eq!(
+            ec_bal.pending().unwrap(),
+            inline_bal.pending().unwrap(),
+            "pending at {date}"
+        );
     }
 
     let ec_range = fixture

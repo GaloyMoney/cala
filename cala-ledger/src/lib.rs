@@ -127,7 +127,7 @@
 //!         .await?;
 //!
 //!     let expected_balance = Decimal::new(-1, 0); // Define the expected balance
-//!     assert_eq!(account_balance.settled(), expected_balance);
+//!     assert_eq!(account_balance.settled()?, expected_balance);
 //!     Ok(())
 //! }
 //! ```
@@ -176,4 +176,24 @@ pub mod fuzz {
     pub use crate::balance::fuzz_recalculate as effective_balance;
     pub use crate::ec_rollup::fuzz_batch as ec_rollup_batch;
     pub use crate::velocity::fuzz_enforce as velocity_enforce;
+}
+
+/// `LIMIT` argument for paginated queries that fetch `first + 1` rows
+/// to detect whether a next page exists. Clamped so an adversarially
+/// large `first` cannot overflow the `usize -> i64` conversion
+/// (`first + 1` panics in debug / wraps in release at `usize::MAX`,
+/// and values above `i64::MAX` wrap negative, which Postgres rejects).
+pub(crate) fn clamped_page_limit(first: usize) -> i64 {
+    first.saturating_add(1).min(i64::MAX as usize) as i64
+}
+
+#[cfg(test)]
+mod clamped_page_limit_tests {
+    #[test]
+    fn clamps_extreme_values() {
+        assert_eq!(super::clamped_page_limit(0), 1);
+        assert_eq!(super::clamped_page_limit(49), 50);
+        assert_eq!(super::clamped_page_limit(usize::MAX), i64::MAX);
+        assert_eq!(super::clamped_page_limit(i64::MAX as usize), i64::MAX);
+    }
 }
