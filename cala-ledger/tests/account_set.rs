@@ -460,7 +460,10 @@ async fn add_members_batch() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), recipient_set.id(), btc)
         .await?;
-    assert_eq!(recipient_balance.settled(), recipient_set_balance.settled());
+    assert_eq!(
+        recipient_balance.settled().unwrap(),
+        recipient_set_balance.settled().unwrap()
+    );
     assert_eq!(
         recipient_balance.details.entry_id,
         recipient_set_balance.details.entry_id
@@ -474,7 +477,10 @@ async fn add_members_batch() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), sender_set.id(), btc)
         .await?;
-    assert_eq!(sender_balance.settled(), sender_set_balance.settled());
+    assert_eq!(
+        sender_balance.settled().unwrap(),
+        sender_set_balance.settled().unwrap()
+    );
 
     // The grandparent receives both sides of the same transaction, so
     // its settled balance is zero.
@@ -482,7 +488,10 @@ async fn add_members_batch() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), parent_set.id(), btc)
         .await?;
-    assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
+    assert_eq!(
+        parent_balance.settled().unwrap(),
+        rust_decimal::Decimal::ZERO
+    );
 
     // Re-attaching an existing member errors (the account now has
     // balance history, so the batch no-history check fires first).
@@ -1348,7 +1357,10 @@ async fn balances() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), recipient_set.id(), btc)
         .await?;
-    assert_eq!(recipient_balance.settled(), recipient_set_balance.settled());
+    assert_eq!(
+        recipient_balance.settled().unwrap(),
+        recipient_set_balance.settled().unwrap()
+    );
     assert_eq!(
         recipient_balance.details.entry_id,
         recipient_set_balance.details.entry_id
@@ -1362,7 +1374,10 @@ async fn balances() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), sender_set.id(), btc)
         .await?;
-    assert_eq!(sender_balance.settled(), sender_set_balance.settled());
+    assert_eq!(
+        sender_balance.settled().unwrap(),
+        sender_set_balance.settled().unwrap()
+    );
     assert_eq!(
         sender_balance.details.entry_id,
         sender_set_balance.details.entry_id
@@ -1374,7 +1389,10 @@ async fn balances() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), parent_set.id(), btc)
         .await?;
-    assert_eq!(parent_balance.settled(), rust_decimal::Decimal::ZERO);
+    assert_eq!(
+        parent_balance.settled().unwrap(),
+        rust_decimal::Decimal::ZERO
+    );
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,

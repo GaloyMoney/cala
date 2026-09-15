@@ -7,9 +7,12 @@ use rand::distr::{Alphanumeric, SampleString};
 use cala_ledger::{account_set::NewAccountSet, balance::AccountBalance, tx_template::*, *};
 
 fn assert_balance_amounts_eq(actual: &AccountBalance, expected: &AccountBalance) {
-    assert_eq!(actual.settled(), expected.settled());
-    assert_eq!(actual.pending(), expected.pending());
-    assert_eq!(actual.encumbrance(), expected.encumbrance());
+    assert_eq!(actual.settled().unwrap(), expected.settled().unwrap());
+    assert_eq!(actual.pending().unwrap(), expected.pending().unwrap());
+    assert_eq!(
+        actual.encumbrance().unwrap(),
+        expected.encumbrance().unwrap()
+    );
 }
 
 fn assert_balance_amounts_sum(
@@ -17,11 +20,17 @@ fn assert_balance_amounts_sum(
     first: &AccountBalance,
     second: &AccountBalance,
 ) {
-    assert_eq!(actual.settled(), first.settled() + second.settled());
-    assert_eq!(actual.pending(), first.pending() + second.pending());
     assert_eq!(
-        actual.encumbrance(),
-        first.encumbrance() + second.encumbrance()
+        actual.settled().unwrap(),
+        first.settled().unwrap() + second.settled().unwrap()
+    );
+    assert_eq!(
+        actual.pending().unwrap(),
+        first.pending().unwrap() + second.pending().unwrap()
+    );
+    assert_eq!(
+        actual.encumbrance().unwrap(),
+        first.encumbrance().unwrap() + second.encumbrance().unwrap()
     );
 }
 
@@ -414,7 +423,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
             journal.id(),
             ec_set.id(),
             currency,
-            inline_balances[&currency].settled(),
+            inline_balances[&currency].settled().unwrap(),
         )
         .await?;
     }

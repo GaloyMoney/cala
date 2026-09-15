@@ -72,7 +72,7 @@ pub async fn wait_for_settled(
 ) -> anyhow::Result<()> {
     for _ in 0..300 {
         if let Ok(bal) = cala.balances().find(journal_id, account_id, currency).await {
-            if bal.settled() == expected {
+            if bal.settled().unwrap_or_default() == expected {
                 return Ok(());
             }
         }
@@ -99,7 +99,7 @@ pub async fn wait_for_effective(
             .find_cumulative(journal_id, account_id, currency, date)
             .await
         {
-            if bal.settled() == expected {
+            if bal.settled().unwrap_or_default() == expected {
                 return Ok(());
             }
         }

@@ -6,6 +6,10 @@
 
 - [**breaking**] Add Transactions::find_by_id_in_op, widen _in_op reads (#880)
 
+### Bug Fixes
+
+- [**breaking**] Return errors instead of panicking on decimal overflow in balance read paths — `AccountBalance::{settled,pending,encumbrance,available}` and `BalanceSnapshot::available` now return `Result`, and `BalanceRange` version diffs use saturating subtraction
+
 ### Miscellaneous Tasks
 
 - Bump the all-dependencies group with 3 updates (#876)
