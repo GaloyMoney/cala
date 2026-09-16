@@ -67,7 +67,10 @@ async fn transaction_post() -> anyhow::Result<()> {
         .balances()
         .find(journal.id(), recipient_account.id(), "BTC".parse().unwrap())
         .await?;
-    assert_eq!(recipient_balance.settled(), Decimal::from(1290 * 2));
+    assert_eq!(
+        recipient_balance.settled().unwrap(),
+        Decimal::from(1290 * 2)
+    );
     let all_balances = cala
         .balances()
         .find_all(&[
@@ -78,7 +81,7 @@ async fn transaction_post() -> anyhow::Result<()> {
     let sender_balance = all_balances
         .get(&(journal.id(), sender_account.id(), "BTC".parse().unwrap()))
         .unwrap();
-    assert_eq!(sender_balance.settled(), Decimal::from(-1290 * 2));
+    assert_eq!(sender_balance.settled().unwrap(), Decimal::from(-1290 * 2));
 
     Ok(())
 }

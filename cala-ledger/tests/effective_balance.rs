@@ -13,9 +13,12 @@ use cala_ledger::{
 };
 
 fn assert_balance_amounts_eq(actual: &AccountBalance, expected: &AccountBalance) {
-    assert_eq!(actual.settled(), expected.settled());
-    assert_eq!(actual.pending(), expected.pending());
-    assert_eq!(actual.encumbrance(), expected.encumbrance());
+    assert_eq!(actual.settled().unwrap(), expected.settled().unwrap());
+    assert_eq!(actual.pending().unwrap(), expected.pending().unwrap());
+    assert_eq!(
+        actual.encumbrance().unwrap(),
+        expected.encumbrance().unwrap()
+    );
 }
 
 fn assert_balance_amounts_sum(
@@ -23,11 +26,17 @@ fn assert_balance_amounts_sum(
     first: &AccountBalance,
     second: &AccountBalance,
 ) {
-    assert_eq!(actual.settled(), first.settled() + second.settled());
-    assert_eq!(actual.pending(), first.pending() + second.pending());
     assert_eq!(
-        actual.encumbrance(),
-        first.encumbrance() + second.encumbrance()
+        actual.settled().unwrap(),
+        first.settled().unwrap() + second.settled().unwrap()
+    );
+    assert_eq!(
+        actual.pending().unwrap(),
+        first.pending().unwrap() + second.pending().unwrap()
+    );
+    assert_eq!(
+        actual.encumbrance().unwrap(),
+        first.encumbrance().unwrap() + second.encumbrance().unwrap()
     );
 }
 
@@ -159,15 +168,15 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date1)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(1290));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(1290));
 
     let recipient_balance = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date1)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(100));
-    assert_eq!(recipient_balance.pending(), dec!(100));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(100));
+    assert_eq!(recipient_balance.pending().unwrap(), dec!(100));
 
     let mut params = Params::new();
     params.insert("journal_id", journal.id());
@@ -185,29 +194,29 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date2)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(1290));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(1290));
     let recipient_balance = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date2)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(100));
-    assert_eq!(recipient_balance.pending(), dec!(100));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(100));
+    assert_eq!(recipient_balance.pending().unwrap(), dec!(100));
 
     let recipient_balance = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date1)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(2580));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(2580));
 
     let recipient_balance = cala
         .balances()
         .effective()
         .find_cumulative(journal.id(), recipient_account.id(), Currency::USD, date1)
         .await?;
-    assert_eq!(recipient_balance.settled(), dec!(200));
-    assert_eq!(recipient_balance.pending(), dec!(200));
+    assert_eq!(recipient_balance.settled().unwrap(), dec!(200));
+    assert_eq!(recipient_balance.pending().unwrap(), dec!(200));
 
     let balances = cala
         .balances()
@@ -221,8 +230,8 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         )
         .await?;
     assert_eq!(balances.period.details.version, 2);
-    assert_eq!(balances.period.settled(), dec!(100));
-    assert_eq!(balances.period.pending(), dec!(100));
+    assert_eq!(balances.period.settled().unwrap(), dec!(100));
+    assert_eq!(balances.period.pending().unwrap(), dec!(100));
 
     let balances = cala
         .balances()
@@ -236,8 +245,8 @@ async fn transaction_post_with_effective_balances() -> anyhow::Result<()> {
         )
         .await?;
     assert_eq!(balances.period.details.version, 4);
-    assert_eq!(balances.period.settled(), dec!(200));
-    assert_eq!(balances.period.pending(), dec!(200));
+    assert_eq!(balances.period.settled().unwrap(), dec!(200));
+    assert_eq!(balances.period.pending().unwrap(), dec!(200));
 
     Ok(())
 }
@@ -554,7 +563,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
             ec_set.id(),
             currency,
             date,
-            inline_balances[&currency].settled(),
+            inline_balances[&currency].settled().unwrap(),
         )
         .await?;
     }
@@ -966,7 +975,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
             ec_set.id(),
             currency,
             from,
-            inline_cumulative.settled(),
+            inline_cumulative.settled().unwrap(),
         )
         .await?;
     }
@@ -1075,7 +1084,7 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         .effective()
         .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date2)
         .await?;
-    assert_eq!(inline_d2.settled(), dec!(3870));
+    assert_eq!(inline_d2.settled().unwrap(), dec!(3870));
 
     // Wait for the rollup to fold all three transactions (incl. the
     // back-dated one) into the EC set's cumulative effective balance.
@@ -1085,7 +1094,7 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         ec_set.id(),
         Currency::BTC,
         date2,
-        inline_d2.settled(),
+        inline_d2.settled().unwrap(),
     )
     .await?;
 
@@ -1106,11 +1115,11 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
             .find_cumulative(journal.id(), inline_set.id(), Currency::BTC, date)
             .await?;
         assert_eq!(
-            ec.settled(),
-            inline.settled(),
+            ec.settled().unwrap(),
+            inline.settled().unwrap(),
             "BTC (EC vs inline) at {date}"
         );
-        assert_eq!(ec.settled(), expected, "BTC expected at {date}");
+        assert_eq!(ec.settled().unwrap(), expected, "BTC expected at {date}");
     }
 
     // USD settled + pending at date2 match inline too.
@@ -1125,13 +1134,13 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         .find_cumulative(journal.id(), ec_set.id(), Currency::USD, date2)
         .await?;
     assert_eq!(
-        ec_usd.settled(),
-        inline_usd.settled(),
+        ec_usd.settled().unwrap(),
+        inline_usd.settled().unwrap(),
         "USD settled at date2"
     );
     assert_eq!(
-        ec_usd.pending(),
-        inline_usd.pending(),
+        ec_usd.pending().unwrap(),
+        inline_usd.pending().unwrap(),
         "USD pending at date2"
     );
 
