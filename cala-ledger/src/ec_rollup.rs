@@ -46,6 +46,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use job::{JobType, Jobs};
 use obix::{
@@ -204,7 +205,7 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
     async fn handle_persistent<'inv>(
         &self,
         ctx: EventCtx<'inv, Self::Batch>,
-        event: &PersistentOutboxEvent<OutboxEventPayload>,
+        event: &Arc<PersistentOutboxEvent<OutboxEventPayload>>,
     ) -> Result<Handled<'inv>, Box<dyn std::error::Error + Send + Sync>> {
         match &event.payload {
             Some(OutboxEventPayload::TransactionCreated { transaction }) => {

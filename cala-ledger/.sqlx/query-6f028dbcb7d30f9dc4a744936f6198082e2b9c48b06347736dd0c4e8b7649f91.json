@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, sequence, payload, tracing_context, recorded_at\n            FROM cala_persistent_outbox_events\n            WHERE sequence > $1\n              AND sequence <= $2\n            ORDER BY sequence ASC",
+  "query": "\n            INSERT INTO cala_persistent_outbox_events (sequence)\n            SELECT unnest($1::bigint[]) AS sequence\n            ON CONFLICT (sequence) DO NOTHING\n            RETURNING id, sequence AS \"sequence!: i64\", payload, tracing_context, recorded_at, commit_xid AS \"commit_xid!\"",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,7 @@
       },
       {
         "ordinal": 1,
-        "name": "sequence",
+        "name": "sequence!: i64",
         "type_info": "Int8"
       },
       {
@@ -27,12 +27,16 @@
         "ordinal": 4,
         "name": "recorded_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "commit_xid!",
+        "type_info": "Int8"
       }
     ],
     "parameters": {
       "Left": [
-        "Int8",
-        "Int8"
+        "Int8Array"
       ]
     },
     "nullable": [
@@ -40,8 +44,9 @@
       false,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "fd1773cb0943111b2424b64c1c8199b2ea77590bdbd3916beadfcb78471bedb7"
+  "hash": "6f028dbcb7d30f9dc4a744936f6198082e2b9c48b06347736dd0c4e8b7649f91"
 }

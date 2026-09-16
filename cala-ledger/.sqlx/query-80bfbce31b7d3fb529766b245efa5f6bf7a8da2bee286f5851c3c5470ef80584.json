@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH to_reschedule AS MATERIALIZED (\n                    SELECT je.id, u.execute_at\n                    FROM job_executions je\n                    JOIN UNNEST($1::uuid[], $2::timestamptz[]) AS u(id, execute_at)\n                      ON je.id = u.id\n                    WHERE je.poller_instance_id = $3\n                    ORDER BY je.queue_id, je.id\n                    FOR UPDATE\n                )\n                UPDATE job_executions AS je\n                SET state = 'pending', execute_at = t.execute_at, attempt_index = 1,\n                    poller_instance_id = NULL\n                FROM to_reschedule t\n                WHERE je.id = t.id\n                RETURNING je.id AS \"id!: JobId\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TimestamptzArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "80bfbce31b7d3fb529766b245efa5f6bf7a8da2bee286f5851c3c5470ef80584"
+}

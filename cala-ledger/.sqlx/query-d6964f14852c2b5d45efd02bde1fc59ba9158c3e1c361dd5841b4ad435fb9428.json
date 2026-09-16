@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE job_executions je\n               SET execute_at = LEAST(je.execute_at, t.target)\n              FROM UNNEST($2::text[], $3::timestamptz[]) AS t(unique_key, target)\n             WHERE je.job_type = $1\n               AND je.unique_key = t.unique_key\n               AND je.state = 'pending'\n               AND je.attempt_index <= 1\n               AND je.execute_at > t.target\n            RETURNING je.unique_key AS \"unique_key!\", je.execute_at AS \"execute_at!\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unique_key!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "execute_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "d6964f14852c2b5d45efd02bde1fc59ba9158c3e1c361dd5841b4ad435fb9428"
+}

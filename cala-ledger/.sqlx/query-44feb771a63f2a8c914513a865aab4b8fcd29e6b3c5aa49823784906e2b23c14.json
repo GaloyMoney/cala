@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT unique_key AS \"unique_key!\", id AS \"id: JobId\" FROM job_executions\n               WHERE job_type = $1 AND unique_key = ANY($2)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unique_key!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "id: JobId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "44feb771a63f2a8c914513a865aab4b8fcd29e6b3c5aa49823784906e2b23c14"
+}

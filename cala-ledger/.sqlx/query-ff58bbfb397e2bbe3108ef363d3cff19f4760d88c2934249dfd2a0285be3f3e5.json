@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH ordered AS MATERIALIZED (\n                SELECT DISTINCT key FROM UNNEST($1::text[]) AS t(key) ORDER BY key\n            )\n            SELECT pg_advisory_xact_lock($2, hashtext(concat($3::text, ':', key)))\n            FROM ordered\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "pg_advisory_xact_lock",
+        "type_info": "Void"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ff58bbfb397e2bbe3108ef363d3cff19f4760d88c2934249dfd2a0285be3f3e5"
+}

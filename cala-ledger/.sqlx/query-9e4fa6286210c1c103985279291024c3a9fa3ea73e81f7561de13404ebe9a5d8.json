@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    WITH deleted AS (\n                        DELETE FROM job_executions\n                        WHERE id = $1 AND poller_instance_id = $2\n                        RETURNING id, queue_id\n                    ), cleanup AS (\n                        DELETE FROM job_execution_states s USING deleted d\n                        WHERE s.id = d.id AND NOT $3::boolean\n                    )\n                    SELECT id AS \"id!: JobId\", queue_id AS \"queue_id?\"\n                    FROM deleted\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "queue_id?",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "9e4fa6286210c1c103985279291024c3a9fa3ea73e81f7561de13404ebe9a5d8"
+}
