@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH orphan_queues AS (\n            SELECT DISTINCT p.queue_id\n            FROM job_executions p\n            WHERE p.state = 'parked'\n              AND NOT EXISTS (\n                  SELECT 1 FROM job_executions a\n                  WHERE a.queue_id = p.queue_id AND a.state IN ('pending', 'running')\n              )\n        ), heads AS (\n            SELECT h.id FROM orphan_queues oq\n            CROSS JOIN LATERAL (\n                SELECT id FROM job_executions\n                WHERE state = 'parked' AND queue_id = oq.queue_id\n                ORDER BY execute_at, id\n                LIMIT 1\n            ) h\n        ), locked AS MATERIALIZED (\n            SELECT je.id FROM job_executions je\n            WHERE je.id IN (SELECT id FROM heads)\n            ORDER BY je.queue_id, je.id\n            FOR NO KEY UPDATE\n        )\n        UPDATE job_executions je SET state = 'pending'\n        FROM locked l WHERE je.id = l.id AND je.state = 'parked'\n        RETURNING je.job_type\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_type",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "25b23d03c8f4c17eaef798fa5fe60bb473e308127b8bf6803e545e4c06b1d9a3"
+}

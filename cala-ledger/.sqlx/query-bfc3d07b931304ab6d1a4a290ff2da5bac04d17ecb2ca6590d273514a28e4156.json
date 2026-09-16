@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH locked AS MATERIALIZED (\n            SELECT je.id FROM job_executions je\n            WHERE je.poller_instance_id = $2 AND je.state = 'running'\n            ORDER BY je.queue_id, je.id\n            FOR NO KEY UPDATE\n        )\n        UPDATE job_executions je\n        SET state = 'pending',\n            execute_at = $1,\n            poller_instance_id = NULL\n        FROM locked l WHERE je.id = l.id\n        RETURNING je.id as \"id!: JobId\", je.attempt_index\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "attempt_index",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "bfc3d07b931304ab6d1a4a290ff2da5bac04d17ecb2ca6590d273514a28e4156"
+}

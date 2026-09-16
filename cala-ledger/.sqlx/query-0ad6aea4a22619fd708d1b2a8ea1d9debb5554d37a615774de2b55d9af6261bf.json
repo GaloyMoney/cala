@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT s.last_commit_seq AS \"last_commit_seq!: i64\",\n                   s.logged_through_sequence AS \"logged_through_sequence!: i64\",\n                   l.sequence AS \"logged_ahead?: i64\"\n            FROM cala_persistent_outbox_commit_log_state s\n            LEFT JOIN cala_persistent_outbox_commit_log l\n              ON l.sequence > s.logged_through_sequence\n            WHERE s.singleton\n            ORDER BY l.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "last_commit_seq!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "logged_through_sequence!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "logged_ahead?: i64",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "0ad6aea4a22619fd708d1b2a8ea1d9debb5554d37a615774de2b55d9af6261bf"
+}

@@ -147,15 +147,15 @@ impl Snapshots {
         name = "cala_ledger.balances.from_ec_entries",
         skip_all
     )]
-    pub(crate) fn from_ec_entries(
+    pub(crate) fn from_ec_entries<'a>(
         time: DateTime<Utc>,
         current_balances: HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
-        entries: &[EntryValues],
+        entries: impl IntoIterator<Item = &'a EntryValues>,
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
     ) -> Vec<BalanceSnapshot> {
         let mut fold = SnapshotFold::new(time, current_balances);
-        for entry in entries.iter() {
+        for entry in entries {
             for set in ec_mappings
                 .get(&entry.account_id)
                 .into_iter()

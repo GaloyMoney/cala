@@ -309,7 +309,7 @@ impl EffectiveBalances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        txns: &[EcRollupTxn],
+        txns: &[EcRollupTxn<'_>],
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
     ) -> Result<(), BalanceError> {
@@ -328,7 +328,7 @@ impl EffectiveBalances {
         // whose own entries are all later, for no benefit.
         let mut earliest: HashMap<(AccountId, Currency), NaiveDate> = HashMap::new();
         for tx in txns {
-            for entry in tx.entries.iter() {
+            for entry in tx.entries.iter().copied() {
                 for target in targets(&entry.account_id) {
                     earliest
                         .entry((target, entry.currency))
@@ -360,7 +360,7 @@ impl EffectiveBalances {
         }
 
         for (tx_index, tx) in txns.iter().enumerate() {
-            for entry in tx.entries.iter() {
+            for entry in tx.entries.iter().copied() {
                 for target in targets(&entry.account_id) {
                     if let Some(data) = all_data.get_mut(&(target, entry.currency)) {
                         data.push(tx.effective, tx_index, tx.created_at, entry);

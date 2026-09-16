@@ -46,6 +46,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
 
 use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 
 use job::{JobType, Jobs};
 use obix::{
@@ -100,15 +101,41 @@ pub(crate) async fn register_ec_balance_rollup(
 }
 
 /// A transaction pulled from a `TransactionCreated` event, carrying just
-/// what the rollup needs. `entry_ids` is the complete expected entry set,
-/// which is what makes stream-collected entries verifiable (see
-/// [`EcRollupBatch`]).
+/// what the rollup needs. [`entry_ids`](Self::entry_ids) is the complete
+/// expected entry set, which is what makes stream-collected entries
+/// verifiable (see [`EcRollupBatch`]).
+///
+/// The scalars are copied out (they are `Copy`); the id list is instead
+/// read back through `event`, the shared event the outbox decoded once,
+/// so collecting a transaction costs a refcount rather than a `Vec`
+/// allocation per transaction.
 struct PendingTx {
     id: TransactionId,
     journal_id: JournalId,
     effective: NaiveDate,
     created_at: DateTime<Utc>,
-    entry_ids: Vec<EntryId>,
+    event: Arc<PersistentOutboxEvent<OutboxEventPayload>>,
+}
+
+impl PendingTx {
+    fn entry_ids(&self) -> &[EntryId] {
+        match &self.event.payload {
+            Some(OutboxEventPayload::TransactionCreated { transaction }) => &transaction.entry_ids,
+            _ => unreachable!(
+                "PendingTx is only built from a TransactionCreated event in handle_persistent"
+            ),
+        }
+    }
+}
+
+/// The entry carried by a collected `EntryCreated` event.
+fn entry_of(event: &PersistentOutboxEvent<OutboxEventPayload>) -> &EntryValues {
+    match &event.payload {
+        Some(OutboxEventPayload::EntryCreated { entry }) => entry,
+        _ => unreachable!(
+            "EcRollupBatch::entries only ever holds EntryCreated events, pushed in handle_persistent"
+        ),
+    }
 }
 
 /// One batch landing's accumulator.
@@ -127,7 +154,7 @@ struct PendingTx {
 #[derive(Default)]
 struct EcRollupBatch {
     txns: Vec<PendingTx>,
-    entries: HashMap<TransactionId, Vec<EntryValues>>,
+    entries: HashMap<TransactionId, Vec<Arc<PersistentOutboxEvent<OutboxEventPayload>>>>,
 }
 
 impl EcRollupBatch {
@@ -135,11 +162,11 @@ impl EcRollupBatch {
         self.txns.push(tx);
     }
 
-    fn push_entry(&mut self, entry: EntryValues) {
+    fn push_entry(&mut self, event: Arc<PersistentOutboxEvent<OutboxEventPayload>>) {
         self.entries
-            .entry(entry.transaction_id)
+            .entry(entry_of(&event).transaction_id)
             .or_default()
-            .push(entry);
+            .push(event);
     }
 
     /// Entry ids that were *not* collected from the stream in this landing
@@ -152,9 +179,9 @@ impl EcRollupBatch {
                 let collected: HashSet<EntryId> = self
                     .entries
                     .get(&tx.id)
-                    .map(|entries| entries.iter().map(|e| e.id).collect())
+                    .map(|events| events.iter().map(|e| entry_of(e).id).collect())
                     .unwrap_or_default();
-                tx.entry_ids
+                tx.entry_ids()
                     .iter()
                     .copied()
                     .filter(move |id| !collected.contains(id))
@@ -165,17 +192,27 @@ impl EcRollupBatch {
     /// Assemble the applier's input in landing order: each transaction's
     /// stream-collected entries, topped up from the DB-`fetched` map where
     /// the group straddled a landing boundary, sorted by entry sequence.
-    fn into_rollup_txns(self, mut fetched: HashMap<EntryId, Entry>) -> Vec<EcRollupTxn> {
-        let EcRollupBatch { txns, mut entries } = self;
-        txns.into_iter()
+    ///
+    /// Entries are borrowed, never copied: stream-collected ones out of the
+    /// events this batch holds, fetched ones out of `fetched`. Both outlive
+    /// the applier call in [`flush`](EcBalanceRollupHandler::flush), and
+    /// stragglers left unused cost nothing.
+    fn rollup_txns<'a>(&'a self, fetched: &'a HashMap<EntryId, Entry>) -> Vec<EcRollupTxn<'a>> {
+        self.txns
+            .iter()
             .map(|tx| {
-                let mut entry_values = entries.remove(&tx.id).unwrap_or_default();
-                if entry_values.len() != tx.entry_ids.len() {
+                let entry_ids = tx.entry_ids();
+                let mut entry_values: Vec<&EntryValues> = self
+                    .entries
+                    .get(&tx.id)
+                    .map(|events| events.iter().map(|e| entry_of(e)).collect())
+                    .unwrap_or_default();
+                if entry_values.len() != entry_ids.len() {
                     entry_values.extend(
-                        tx.entry_ids
+                        entry_ids
                             .iter()
-                            .filter_map(|id| fetched.remove(id))
-                            .map(Entry::into_values),
+                            .filter_map(|id| fetched.get(id))
+                            .map(Entry::values),
                     );
                 }
                 entry_values.sort_by_key(|e| e.sequence);
@@ -204,7 +241,7 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
     async fn handle_persistent<'inv>(
         &self,
         ctx: EventCtx<'inv, Self::Batch>,
-        event: &PersistentOutboxEvent<OutboxEventPayload>,
+        event: &Arc<PersistentOutboxEvent<OutboxEventPayload>>,
     ) -> Result<Handled<'inv>, Box<dyn std::error::Error + Send + Sync>> {
         match &event.payload {
             Some(OutboxEventPayload::TransactionCreated { transaction }) => {
@@ -213,13 +250,13 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
                     journal_id: transaction.journal_id,
                     effective: transaction.effective,
                     created_at: transaction.created_at,
-                    entry_ids: transaction.entry_ids.clone(),
+                    event: Arc::clone(event),
                 };
                 Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
             }
-            Some(OutboxEventPayload::EntryCreated { entry }) => {
-                let entry = entry.clone();
-                Ok(ctx.collect_with(|batch| batch.push_entry(entry)))
+            Some(OutboxEventPayload::EntryCreated { .. }) => {
+                let event = Arc::clone(event);
+                Ok(ctx.collect_with(|batch| batch.push_entry(event)))
             }
             _ => Ok(ctx.skip()),
         }
@@ -243,7 +280,7 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
             self.entries.find_all_in_op(&mut *op, &missing_ids).await?
         };
 
-        let rollup_txns = batch.into_rollup_txns(fetched);
+        let rollup_txns = batch.rollup_txns(&fetched);
         self.balances.apply_ec_rollup_in_op(op, rollup_txns).await?;
         Ok(())
     }
@@ -265,6 +302,19 @@ mod __fuzz {
         entry_ids: Vec<EntryId>,
     }
 
+    /// Wrap a payload in the shared event shape the batch now collects.
+    /// The envelope fields are inert here — only the payload is read.
+    fn event(payload: OutboxEventPayload) -> Arc<PersistentOutboxEvent<OutboxEventPayload>> {
+        Arc::new(PersistentOutboxEvent {
+            id: obix::out::OutboxEventId::new(),
+            sequence: obix::EventSequence::from(0u64),
+            payload: Some(payload),
+            tracing_context: None,
+            recorded_at: Utc::now(),
+            commit_group: obix::CommitGroupId::from(0i64),
+        })
+    }
+
     pub fn fuzz_batch(data: &[u8]) {
         let parts: Vec<&[u8]> = data.split(|&b| b == 0xFF).collect();
         if parts.len() < 2 {
@@ -284,15 +334,31 @@ mod __fuzz {
                 journal_id: t.journal_id,
                 effective: t.effective,
                 created_at: t.created_at,
-                entry_ids: t.entry_ids.clone(),
+                event: event(OutboxEventPayload::TransactionCreated {
+                    transaction: cala_types::transaction::TransactionValues {
+                        id: t.id,
+                        journal_id: t.journal_id,
+                        effective: t.effective,
+                        created_at: t.created_at,
+                        entry_ids: t.entry_ids.clone(),
+                        // Inert: the batch only reads the fields above.
+                        version: 1,
+                        modified_at: t.created_at,
+                        tx_template_id: crate::primitives::TxTemplateId::new(),
+                        correlation_id: String::new(),
+                        external_id: None,
+                        description: None,
+                        metadata: None,
+                    },
+                }),
             });
         }
         for e in &entries {
-            batch.push_entry(e.clone());
+            batch.push_entry(event(OutboxEventPayload::EntryCreated { entry: e.clone() }));
         }
 
         let _missing = batch.missing_entry_ids();
-        let _rollup = batch.into_rollup_txns(HashMap::<EntryId, Entry>::new());
+        let _rollup = batch.rollup_txns(&HashMap::<EntryId, Entry>::new());
     }
 }
 

@@ -65,11 +65,14 @@ pub(crate) use snapshot::*;
 
 /// One committed transaction's contribution to a streaming-rollup batch
 /// (see [`Balances::apply_ec_rollup_in_op`]).
-pub(crate) struct EcRollupTxn {
+pub(crate) struct EcRollupTxn<'a> {
     pub journal_id: JournalId,
     pub effective: NaiveDate,
     pub created_at: DateTime<Utc>,
-    pub entries: Vec<EntryValues>,
+    /// Borrowed for the length of the flush: stream-collected entries point
+    /// into the shared events the outbox decoded once, DB-fetched ones into
+    /// the flush's `fetched` map. The applier only ever reads them.
+    pub entries: Vec<&'a EntryValues>,
 }
 
 #[derive(Clone)]
@@ -280,9 +283,9 @@ impl Balances {
     pub(crate) async fn apply_ec_rollup_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        txns: Vec<EcRollupTxn>,
+        txns: Vec<EcRollupTxn<'_>>,
     ) -> Result<(), BalanceError> {
-        let mut groups: Vec<(JournalId, Vec<EcRollupTxn>)> = Vec::new();
+        let mut groups: Vec<(JournalId, Vec<EcRollupTxn<'_>>)> = Vec::new();
         for tx in txns {
             match groups.iter_mut().find(|(j, _)| *j == tx.journal_id) {
                 Some((_, group)) => group.push(tx),
@@ -300,7 +303,7 @@ impl Balances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
-        group: Vec<EcRollupTxn>,
+        group: Vec<EcRollupTxn<'_>>,
     ) -> Result<(), BalanceError> {
         let member_account_ids: Vec<AccountId> = group
             .iter()
@@ -348,7 +351,7 @@ impl Balances {
             let new_balances = Snapshots::from_ec_entries(
                 tx.created_at,
                 current_balances.clone(),
-                &tx.entries,
+                tx.entries.iter().copied(),
                 &ec_mappings,
                 &ec_leaves,
             );

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH new_events AS (\n                   INSERT INTO cala_persistent_outbox_events (payload, tracing_context, recorded_at)\n                   SELECT unnest($1::jsonb[]) AS payload, $2::jsonb AS tracing_context, COALESCE($3::timestamptz, NOW()) AS recorded_at\n                   RETURNING id, sequence, recorded_at, commit_xid\n               )\n               SELECT ne.id AS \"id!\", ne.sequence AS \"sequence!\", ne.recorded_at AS \"recorded_at!\", ne.commit_xid AS \"commit_xid!\"\n               FROM new_events ne\n               ORDER BY ne.sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "sequence!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "recorded_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "commit_xid!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "JsonbArray",
+        "Jsonb",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9463b386cdfbeaa41e6a0e5b8b95ad6af995efc7f5c314d842740e903ee8fc9d"
+}
