@@ -126,7 +126,7 @@ impl Entries {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Vec<Entry>, EntryError> {
-        let mut entries = self
+        let (mut entries, _) = self
             .repo
             .list_for_transaction_id_by_created_at(
                 transaction_id,
@@ -134,7 +134,7 @@ impl Entries {
                 Default::default(),
             )
             .await?
-            .entities;
+            .into_parts();
         entries.sort_by(|a, b| {
             let a_sequence = a.values().sequence;
             let b_sequence = b.values().sequence;

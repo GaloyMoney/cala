@@ -1389,7 +1389,7 @@ async fn balances() -> anyhow::Result<()> {
         )
         .await?;
 
-    assert!(!ret.entities.is_empty());
+    assert!(!ret.entities().is_empty());
     Ok(())
 }
 
@@ -1501,50 +1501,50 @@ async fn members_pagination() -> anyhow::Result<()> {
         .list_members_by_created_at(parent.id(), query_args)
         .await?;
 
-    assert_eq!(ret.entities.len(), 2);
+    assert_eq!(ret.entities().len(), 2);
     assert!(ret.has_next_page);
     assert_eq!(
-        ret.entities[0].id.clone(),
+        ret.entities()[0].id.clone(),
         AccountSetMemberId::from(set_two.id())
     );
     assert_eq!(
-        ret.entities[1].id.clone(),
+        ret.entities()[1].id.clone(),
         AccountSetMemberId::from(account_one.id())
     );
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities()[0])),
     };
 
     let ret = cala
         .account_sets()
         .list_members_by_created_at(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities.len(), 2);
+    assert_eq!(ret.entities().len(), 2);
     assert!(ret.has_next_page);
     assert_eq!(
-        ret.entities[0].id.clone(),
+        ret.entities()[0].id.clone(),
         AccountSetMemberId::from(account_one.id())
     );
     assert_eq!(
-        ret.entities[1].id.clone(),
+        ret.entities()[1].id.clone(),
         AccountSetMemberId::from(set_one.id())
     );
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 2,
-        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities[1])),
+        after: Some(AccountSetMemberByCreatedAtCursor::from(&ret.entities()[1])),
     };
 
     let ret = cala
         .account_sets()
         .list_members_by_created_at(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities.len(), 1);
+    assert_eq!(ret.entities().len(), 1);
     assert!(!ret.has_next_page);
     assert_eq!(
-        ret.entities[0].id.clone(),
+        ret.entities()[0].id.clone(),
         AccountSetMemberId::from(account_two.id())
     );
 
@@ -1625,27 +1625,27 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
         .account_sets()
         .list_members_by_external_id(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities[0].external_id, Some(format!("a-{random}")));
+    assert_eq!(ret.entities()[0].external_id, Some(format!("a-{random}")));
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,
-        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities()[0])),
     };
     let ret = cala
         .account_sets()
         .list_members_by_external_id(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities[0].external_id, Some(format!("z-{random}")));
+    assert_eq!(ret.entities()[0].external_id, Some(format!("z-{random}")));
 
     let query_args = es_entity::PaginatedQueryArgs {
         first: 1,
-        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities[0])),
+        after: Some(AccountSetMemberByExternalIdCursor::from(&ret.entities()[0])),
     };
     let ret = cala
         .account_sets()
         .list_members_by_external_id(parent.id(), query_args)
         .await?;
-    assert_eq!(ret.entities[0].external_id, None);
+    assert_eq!(ret.entities()[0].external_id, None);
 
     Ok(())
 }

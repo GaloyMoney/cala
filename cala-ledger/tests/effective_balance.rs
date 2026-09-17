@@ -63,21 +63,21 @@ fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> 
     }
 }
 
-fn balances_by_currency<C>(
+fn balances_by_currency<C: std::fmt::Debug>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<Currency, AccountBalance> {
+    let (balances, _) = balances.into_parts();
     balances
-        .entities
         .into_iter()
         .map(|balance| (balance.details.currency, balance))
         .collect()
 }
 
-fn balances_by_id<C>(
+fn balances_by_id<C: std::fmt::Debug>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<BalanceId, AccountBalance> {
+    let (balances, _) = balances.into_parts();
     balances
-        .entities
         .into_iter()
         .map(|balance| {
             (
@@ -92,21 +92,21 @@ fn balances_by_id<C>(
         .collect()
 }
 
-fn ranges_by_currency<C>(
+fn ranges_by_currency<C: std::fmt::Debug>(
     ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
 ) -> HashMap<Currency, BalanceRange> {
+    let (ranges, _) = ranges.into_parts();
     ranges
-        .entities
         .into_iter()
         .map(|range| (range.close.details.currency, range))
         .collect()
 }
 
-fn ranges_by_id<C>(
+fn ranges_by_id<C: std::fmt::Debug>(
     ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
 ) -> HashMap<BalanceId, BalanceRange> {
+    let (ranges, _) = ranges.into_parts();
     ranges
-        .entities
         .into_iter()
         .map(|range| {
             (
@@ -1195,7 +1195,7 @@ async fn list_modified_since_basic() -> anyhow::Result<()> {
     assert!(!page.has_next_page);
 
     let tuples: HashSet<(AccountId, Currency, NaiveDate)> = page
-        .entities
+        .entities()
         .iter()
         .map(|s| (s.account_id, s.currency, s.effective))
         .collect();
@@ -1209,7 +1209,7 @@ async fn list_modified_since_basic() -> anyhow::Result<()> {
     .collect();
     assert_eq!(tuples, expected, "only the later day's tuples must appear");
 
-    for snapshot in &page.entities {
+    for snapshot in page.entities() {
         let fresh = cala
             .balances()
             .effective()
@@ -1289,8 +1289,8 @@ async fn list_modified_since_backdating_fanout() -> anyhow::Result<()> {
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
 
-    let recipient_btc: HashMap<NaiveDate, EffectiveBalanceSnapshot> = page
-        .entities
+    let (snapshots, _) = page.into_parts();
+    let recipient_btc: HashMap<NaiveDate, EffectiveBalanceSnapshot> = snapshots
         .into_iter()
         .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
         .map(|s| (s.effective, s))
@@ -1365,7 +1365,7 @@ async fn list_modified_since_latest_wins() -> anyhow::Result<()> {
         .await?;
 
     let recipient_btc_rows: Vec<&EffectiveBalanceSnapshot> = page
-        .entities
+        .entities()
         .iter()
         .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
         .collect();
@@ -1445,9 +1445,9 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
     assert!(!full.has_next_page);
-    assert_eq!(full.entities.len(), expected_count);
+    assert_eq!(full.entities().len(), expected_count);
     let expected_tuples: HashSet<(AccountId, Currency, NaiveDate)> = full
-        .entities
+        .entities()
         .iter()
         .map(|s| (s.account_id, s.currency, s.effective))
         .collect();
@@ -1456,25 +1456,24 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
     // Page through with a small page size; the union must match exactly,
     // with no duplicates or gaps across cursor boundaries.
     let mut collected = Vec::new();
-    let mut after = None;
+    let mut query = es_entity::PaginatedQueryArgs {
+        first: 3,
+        after: None,
+    };
     let mut pages = 0;
     loop {
         let page = cala
             .balances()
             .effective()
-            .list_modified_since(
-                journal.id(),
-                since,
-                es_entity::PaginatedQueryArgs { first: 3, after },
-            )
+            .list_modified_since(journal.id(), since, query)
             .await?;
         pages += 1;
-        assert!(page.entities.len() <= 3);
-        let has_next = page.has_next_page;
-        after = page.end_cursor;
-        collected.extend(page.entities);
-        if !has_next {
-            break;
+        assert!(page.entities().len() <= 3);
+        let (entities, next) = page.into_parts();
+        collected.extend(entities);
+        match next {
+            Some(next) => query = next,
+            None => break,
         }
     }
     assert!(pages > 1, "test setup should require multiple pages");
@@ -1502,12 +1501,12 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
             },
         )
         .await?;
-    assert_eq!(first_page.entities.len(), 1);
+    assert_eq!(first_page.entities().len(), 1);
     assert!(first_page.has_next_page);
     let boundary_tuple = (
-        first_page.entities[0].account_id,
-        first_page.entities[0].currency,
-        first_page.entities[0].effective,
+        first_page.entities()[0].account_id,
+        first_page.entities()[0].currency,
+        first_page.entities()[0].effective,
     );
 
     let rest = cala
@@ -1523,9 +1522,9 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         )
         .await?;
     assert!(!rest.has_next_page);
-    assert_eq!(rest.entities.len(), expected_count - 1);
+    assert_eq!(rest.entities().len(), expected_count - 1);
     assert!(
-        rest.entities
+        rest.entities()
             .iter()
             .all(|s| (s.account_id, s.currency, s.effective) != boundary_tuple),
         "the boundary tuple must not repeat on the next page"
@@ -1539,7 +1538,7 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         .effective()
         .list_modified_since(journal.id(), quiet_since, all_balances_query())
         .await?;
-    assert!(empty.entities.is_empty());
+    assert!(empty.entities().is_empty());
     assert!(!empty.has_next_page);
     assert!(empty.end_cursor.is_none());
 
@@ -1604,7 +1603,7 @@ async fn list_modified_since_excludes_untouched_tuples() -> anyhow::Result<()> {
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
 
-    let touched_ids: HashSet<AccountId> = page.entities.iter().map(|s| s.account_id).collect();
+    let touched_ids: HashSet<AccountId> = page.entities().iter().map(|s| s.account_id).collect();
     assert!(touched_ids.contains(&touched_account.id()));
     assert!(
         !touched_ids.contains(&untouched_account.id()),

@@ -295,11 +295,12 @@ impl EffectiveBalanceRepo {
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     #[instrument(
@@ -391,11 +392,12 @@ impl EffectiveBalanceRepo {
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     /// Backs [`super::EffectiveBalances::list_modified_since`]. `DISTINCT ON
@@ -478,11 +480,12 @@ impl EffectiveBalanceRepo {
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(EffectiveBalancesModifiedCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     #[instrument(
@@ -724,11 +727,12 @@ impl EffectiveBalanceRepo {
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     #[instrument(
@@ -871,11 +875,12 @@ impl EffectiveBalanceRepo {
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     fn balance_ranges_from_snapshots(ranges: BalanceRangeResult) -> Vec<BalanceRange> {
