@@ -238,11 +238,12 @@ impl BalanceRepo {
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     #[instrument(
@@ -312,11 +313,12 @@ impl BalanceRepo {
             .collect::<Vec<_>>();
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     /// Under an EXCLUSIVE lock on `member_id` (2-arg EC-set lock

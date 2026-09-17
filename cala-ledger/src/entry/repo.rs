@@ -102,11 +102,12 @@ impl EntryRepo {
             .last()
             .map(entry_cursor::EntryByCreatedAtCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     #[instrument(
@@ -214,10 +215,11 @@ impl EntryRepo {
             .last()
             .map(entry_cursor::EntryByCreatedAtCursor::from);
 
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 }
