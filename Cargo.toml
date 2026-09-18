@@ -17,7 +17,7 @@ cala-ledger = { path = "cala-ledger", version = "0.30.1-dev" }
 cel = "0.14.5"
 es-entity = "0.13.0"
 job = { version = "0.15.2", features = ["es-entity"] }
-obix = { version = "0.12.1", default-features = false }
+obix = { version = "0.12.2", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "3.1", features = ["async"] }
