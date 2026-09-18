@@ -1,3 +1,16 @@
+# [cala release v0.30.1](https://github.com/GaloyMoney/cala/releases/tag/0.30.1)
+
+
+
+### Bug Fixes
+
+- Idempotent InboxEventStatus in cala obix migration
+- Idempotent obix migration
+
+### Miscellaneous Tasks
+
+- Remove accidentally committed obix setup migration
+
 # [cala release v0.30.0](https://github.com/GaloyMoney/cala/releases/tag/0.30.0)
 
 
