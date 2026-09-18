@@ -49,7 +49,12 @@ CREATE TRIGGER cala_ephemeral_outbox_events_notify
   AFTER INSERT OR UPDATE ON cala_ephemeral_outbox_events
   FOR EACH ROW EXECUTE FUNCTION cala_notify_ephemeral_outbox_events();
 
-CREATE TYPE InboxEventStatus AS ENUM ('pending', 'processing', 'completed', 'failed');
+-- Idempotent so that multiple scoped obix instances can be used simultaneously.
+DO $$ BEGIN
+    CREATE TYPE InboxEventStatus AS ENUM ('pending', 'processing', 'completed', 'failed');
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
 
 CREATE TABLE cala_inbox_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
