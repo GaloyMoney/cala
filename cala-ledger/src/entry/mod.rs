@@ -134,7 +134,8 @@ impl Entries {
                 Default::default(),
             )
             .await?
-            .entities;
+            .into_parts()
+            .0;
         entries.sort_by(|a, b| {
             let a_sequence = a.values().sequence;
             let b_sequence = b.values().sequence;

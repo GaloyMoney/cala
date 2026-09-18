@@ -51,8 +51,8 @@ use std::sync::Arc;
 use job::{JobType, Jobs};
 use obix::{
     out::{
-        EventCtx, FlushOp, Handled, OutboxEventJobConfig, PersistentOutboxEvent,
-        SingletonSubscriber, StreamSelection, Subscription, SubscriptionStreamStatus,
+        EventCtx, EventDelivery, FlushOp, Handled, OutboxEventJobConfig, PersistentOutboxEvent,
+        SingletonSubscriber, StreamSelection, Subscription,
     },
     EventSequence,
 };
@@ -241,7 +241,7 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
     async fn handle_persistent<'inv>(
         &self,
         ctx: EventCtx<'inv, Self::Batch>,
-        event: &Arc<PersistentOutboxEvent<OutboxEventPayload>>,
+        event: &EventDelivery<OutboxEventPayload>,
     ) -> Result<Handled<'inv>, Box<dyn std::error::Error + Send + Sync>> {
         match &event.payload {
             Some(OutboxEventPayload::TransactionCreated { transaction }) => {
@@ -250,12 +250,12 @@ impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
                     journal_id: transaction.journal_id,
                     effective: transaction.effective,
                     created_at: transaction.created_at,
-                    event: Arc::clone(event),
+                    event: event.inner().clone(),
                 };
                 Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
             }
             Some(OutboxEventPayload::EntryCreated { .. }) => {
-                let event = Arc::clone(event);
+                let event = event.inner().clone();
                 Ok(ctx.collect_with(|batch| batch.push_entry(event)))
             }
             _ => Ok(ctx.skip()),
@@ -383,12 +383,13 @@ pub struct EcRollupStatus {
 
 impl EcRollupStatus {
     pub(crate) fn new(
-        status: SubscriptionStreamStatus,
+        applied: EventSequence,
+        frontier: EventSequence,
         handle: Subscription<OutboxEventPayload, CalaMailboxTables>,
     ) -> Self {
         Self {
-            applied: status.checkpoint,
-            frontier: status.frontier,
+            applied,
+            frontier,
             handle,
         }
     }
@@ -434,7 +435,7 @@ impl EcRollupStatus {
     /// `timeout` is mandatory: a wedged rollup surfaces as
     /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
     pub async fn await_completion(&self, timeout: std::time::Duration) -> Result<(), LedgerError> {
-        self.handle.await_sequence(self.frontier, timeout).await?;
+        self.handle.await_position(self.frontier, timeout).await?;
         Ok(())
     }
 

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT sequence AS \"sequence!: i64\", commit_seq AS \"commit_seq!: i64\",\n                   open_groups\n            FROM cala_persistent_outbox_commit_checkpoints\n            WHERE commit_seq <= $1\n            ORDER BY commit_seq DESC\n            LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "commit_seq!: i64",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "open_groups",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "d1cae6ee0ba1e91c2675e155035885cf65726d45300ddccea713f09a63146ecb"
+}

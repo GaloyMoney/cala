@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            -- Eligibility is decided INSIDE the locking CTE, not re-checked on\n            -- the UPDATE: a `FOR NO KEY UPDATE` scan that blocks resumes on\n            -- the LATEST committed row version (EvalPlanQual), so `movable`\n            -- is computed against the same version the UPDATE will write, and\n            -- the lock is held for the rest of the transaction so nothing can\n            -- change underneath it in between. That is also what lets the\n            -- flag be returned honestly -- reading it back off `je` would see\n            -- the row this statement just wrote.\n            WITH locked AS MATERIALIZED (\n                SELECT je.id,\n                       COALESCE(je.state = 'pending'\n                                AND je.attempt_index <= 1\n                                AND je.execute_at > $2, false) AS movable\n                FROM job_executions je\n                WHERE je.id IN (\n                        SELECT waiter_job_id FROM job_waiters WHERE job_id = ANY($1)\n                    )\n                ORDER BY je.queue_id, je.id\n                FOR NO KEY UPDATE\n            ), woken AS (\n                UPDATE job_executions je\n                   SET execute_at = CASE WHEN l.movable THEN LEAST(je.execute_at, $2)\n                                         ELSE je.execute_at END,\n                       woken_at = CASE WHEN l.movable THEN je.woken_at ELSE $2 END\n                  FROM locked l\n                 WHERE je.id = l.id\n                RETURNING je.id, je.job_type, l.movable AS movable\n            ), consumed AS (\n                DELETE FROM job_waiters WHERE job_id = ANY($1)\n            )\n            SELECT id AS \"id!: JobId\", job_type AS \"job_type!: JobType\"\n            FROM woken WHERE movable\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type!: JobType",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "698a5f8ba5a21209d73839eeb5d83735cb7a0a21eb066fb6e34f960be9b7b1dc"
+}

@@ -45,8 +45,8 @@ pub enum LedgerError {
          outbox frontier {frontier} after waiting {waited:?}"
     )]
     EcCaughtUpTimeout {
-        applied: obix::EventSequence,
-        frontier: obix::EventSequence,
+        applied: obix::StreamPosition,
+        frontier: obix::StreamPosition,
         waited: std::time::Duration,
     },
     #[error(

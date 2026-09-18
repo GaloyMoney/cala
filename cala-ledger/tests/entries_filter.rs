@@ -92,7 +92,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
 
     // No filter -> every entry in the journal, across both transactions.
     let all = page(&cala, journal.id(), EntriesFilter::default(), 100, None).await;
-    assert_eq!(all.entities.len(), 12);
+    assert_eq!(all.entities().len(), 12);
     assert!(!all.has_next_page);
 
     // effective == jan -> only the January transaction's entries.
@@ -108,9 +108,9 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert_eq!(only_jan.entities.len(), 6);
+    assert_eq!(only_jan.entities().len(), 6);
     assert!(only_jan
-        .entities
+        .entities()
         .iter()
         .all(|e| e.values().transaction_id == tx_jan));
 
@@ -127,9 +127,9 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert_eq!(only_jun.entities.len(), 6);
+    assert_eq!(only_jun.entities().len(), 6);
     assert!(only_jun
-        .entities
+        .entities()
         .iter()
         .all(|e| e.values().transaction_id == tx_jun));
 
@@ -146,11 +146,11 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert!(empty.entities.is_empty());
+    assert!(empty.entities().is_empty());
     assert!(empty.end_cursor.is_none());
 
     // created_at bounds derived from the entries themselves (avoids clock skew).
-    let max_created = all.entities.iter().map(|e| e.created_at()).max().unwrap();
+    let max_created = all.entities().iter().map(|e| e.created_at()).max().unwrap();
     let up_to_max = page(
         &cala,
         journal.id(),
@@ -162,7 +162,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert_eq!(up_to_max.entities.len(), 12);
+    assert_eq!(up_to_max.entities().len(), 12);
 
     let after_all = page(
         &cala,
@@ -175,7 +175,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert!(after_all.entities.is_empty());
+    assert!(after_all.entities().is_empty());
 
     // created + effective filters compose with AND.
     let combined = page(
@@ -191,7 +191,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         None,
     )
     .await;
-    assert_eq!(combined.entities.len(), 6);
+    assert_eq!(combined.entities().len(), 6);
 
     // Cursor pagination composes with a filter: 4 + 2 over the 6 June entries.
     let jun_filter = || EntriesFilter {
@@ -200,11 +200,11 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         ..Default::default()
     };
     let first_page = page(&cala, journal.id(), jun_filter(), 4, None).await;
-    assert_eq!(first_page.entities.len(), 4);
+    assert_eq!(first_page.entities().len(), 4);
     assert!(first_page.has_next_page);
 
     let second_page = page(&cala, journal.id(), jun_filter(), 4, first_page.end_cursor).await;
-    assert_eq!(second_page.entities.len(), 2);
+    assert_eq!(second_page.entities().len(), 2);
     assert!(!second_page.has_next_page);
 
     // Ascending direction: oldest first, ordered on (created_at, id) -- entries
@@ -219,12 +219,13 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         es_entity::ListDirection::Ascending,
     )
     .await;
-    assert_eq!(asc_first.entities.len(), 5);
+    assert_eq!(asc_first.entities().len(), 5);
     assert!(asc_first.has_next_page);
     assert!(asc_first
-        .entities
+        .entities()
         .windows(2)
         .all(|w| (w[0].created_at(), w[0].id) <= (w[1].created_at(), w[1].id)));
+    let mut ids: std::collections::HashSet<_> = asc_first.entities().iter().map(|e| e.id).collect();
 
     // Cursor continuation covers the rest with no gaps or overlap.
     let asc_rest = page_dir(
@@ -236,10 +237,9 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         es_entity::ListDirection::Ascending,
     )
     .await;
-    assert_eq!(asc_rest.entities.len(), 7);
+    assert_eq!(asc_rest.entities().len(), 7);
     assert!(!asc_rest.has_next_page);
-    let mut ids: std::collections::HashSet<_> = asc_first.entities.iter().map(|e| e.id).collect();
-    for entry in &asc_rest.entities {
+    for entry in asc_rest.entities() {
         assert!(ids.insert(entry.id));
     }
     assert_eq!(ids.len(), 12);
@@ -254,13 +254,13 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         es_entity::ListDirection::Ascending,
     )
     .await;
-    assert_eq!(jun_asc.entities.len(), 6);
+    assert_eq!(jun_asc.entities().len(), 6);
     assert!(jun_asc
-        .entities
+        .entities()
         .iter()
         .all(|e| e.values().transaction_id == tx_jun));
     assert!(jun_asc
-        .entities
+        .entities()
         .windows(2)
         .all(|w| (w[0].created_at(), w[0].id) <= (w[1].created_at(), w[1].id)));
 

@@ -413,11 +413,12 @@ impl AccountSetMemberRepo {
             )
             .collect::<Vec<AccountSetMember>>();
 
-        Ok(es_entity::PaginatedQueryRet {
-            entities: account_set_members,
+        Ok(es_entity::PaginatedQueryRet::new(
+            account_set_members,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 
     pub(crate) async fn list_by_external_id(
@@ -553,11 +554,12 @@ impl AccountSetMemberRepo {
             )
             .collect::<Vec<AccountSetMemberByExternalId>>();
 
-        Ok(es_entity::PaginatedQueryRet {
-            entities: account_set_members,
+        Ok(es_entity::PaginatedQueryRet::new(
+            account_set_members,
             has_next_page,
             end_cursor,
-        })
+            first,
+        ))
     }
 }
 

@@ -812,7 +812,7 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
             applied, frontier, ..
         }) => {
             assert_eq!(
-                u64::from(applied),
+                applied.value(),
                 0,
                 "a never-run rollup reports checkpoint BEGIN",
             );
@@ -929,7 +929,8 @@ async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::
             frontier, waited, ..
         }) => {
             assert_eq!(
-                frontier, unreachable,
+                frontier,
+                obix::StreamPosition::from(unreachable),
                 "error must report the exact target requested, not a resampled frontier",
             );
             assert!(

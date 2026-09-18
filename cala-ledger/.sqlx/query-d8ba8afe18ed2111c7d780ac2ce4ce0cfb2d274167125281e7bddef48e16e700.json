@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                WITH to_reschedule AS MATERIALIZED (\n                    SELECT je.id, u.execute_at, je.woken_at\n                    FROM job_executions je\n                    JOIN UNNEST($1::uuid[], $2::timestamptz[]) AS u(id, execute_at)\n                      ON je.id = u.id\n                    WHERE je.poller_instance_id = $3\n                    ORDER BY je.queue_id, je.id\n                    FOR UPDATE\n                )\n                -- `t.woken_at` is the PRE-update value (the CTE read it\n                -- before this statement's SET), which is what lets the same\n                -- statement both honour the mark and clear it.\n                UPDATE job_executions AS je\n                SET state = 'pending', attempt_index = 1, poller_instance_id = NULL,\n                    -- A park a wake already overtook: the callee landed while\n                    -- this job was still running, so the wake could not move\n                    -- the row (a running row has no `execute_at`) and left a\n                    -- mark. Honouring it HERE, in the park write itself, is\n                    -- what guarantees the row is never visible to\n                    -- `PromoteHeadsHook` carrying the deadline the mark\n                    -- overrides -- the hook would otherwise swap a queued\n                    -- waiter out to `parked` on that stale time, and lowering\n                    -- a parked row's `execute_at` breaks Invariant B.\n                    execute_at = CASE WHEN t.woken_at IS NOT NULL\n                                      THEN LEAST(t.execute_at, $4)\n                                      ELSE t.execute_at END,\n                    woken_at = NULL\n                FROM to_reschedule t\n                WHERE je.id = t.id\n                RETURNING je.id AS \"id!: JobId\", je.job_type,\n                          (t.woken_at IS NOT NULL) AS \"was_woken!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!: JobId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "job_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "was_woken!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TimestamptzArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "d8ba8afe18ed2111c7d780ac2ce4ce0cfb2d274167125281e7bddef48e16e700"
+}
