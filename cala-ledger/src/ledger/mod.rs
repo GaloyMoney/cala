@@ -289,7 +289,11 @@ impl CalaLedger {
     )]
     pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
         let snapshot = self.ec_rollup.load().await?;
-        let status = crate::EcRollupStatus::new(snapshot.stream_status(), self.ec_rollup.clone());
+        let status = crate::EcRollupStatus::new(
+            snapshot.checkpoint(),
+            snapshot.frontier(),
+            self.ec_rollup.clone(),
+        );
 
         let span = tracing::Span::current();
         span.record("applied", u64::from(status.applied));
@@ -321,7 +325,7 @@ impl CalaLedger {
         frontier: obix::EventSequence,
         timeout: std::time::Duration,
     ) -> Result<(), LedgerError> {
-        self.ec_rollup.await_sequence(frontier, timeout).await?;
+        self.ec_rollup.await_position(frontier, timeout).await?;
         Ok(())
     }
 

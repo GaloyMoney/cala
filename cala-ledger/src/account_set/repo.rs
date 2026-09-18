@@ -516,11 +516,12 @@ impl AccountSetRepo {
                 name: last.values().name.clone(),
             });
         }
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            query.first,
+        ))
     }
 
     pub async fn find_where_account_set_is_member(
@@ -564,11 +565,12 @@ impl AccountSetRepo {
                 name: last.values().name.clone(),
             });
         }
-        Ok(es_entity::PaginatedQueryRet {
+        Ok(es_entity::PaginatedQueryRet::new(
             entities,
             has_next_page,
             end_cursor,
-        })
+            query.first,
+        ))
     }
 
     /// One statement, one snapshot: the given accounts' **direct** set

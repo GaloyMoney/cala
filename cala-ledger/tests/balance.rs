@@ -32,21 +32,23 @@ fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> 
     }
 }
 
-fn balances_by_currency<C>(
+fn balances_by_currency<C: std::fmt::Debug>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<Currency, AccountBalance> {
     balances
-        .entities
+        .into_parts()
+        .0
         .into_iter()
         .map(|balance| (balance.details.currency, balance))
         .collect()
 }
 
-fn balances_by_id<C>(
+fn balances_by_id<C: std::fmt::Debug>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<BalanceId, AccountBalance> {
     balances
-        .entities
+        .into_parts()
+        .0
         .into_iter()
         .map(|balance| {
             (
