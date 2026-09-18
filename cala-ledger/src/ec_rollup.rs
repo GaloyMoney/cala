@@ -51,8 +51,8 @@ use std::sync::Arc;
 use job::{JobType, Jobs};
 use obix::{
     out::{
-        EventCtx, EventDelivery, FlushOp, Handled, OutboxEventJobConfig, PersistentOutboxEvent,
-        SingletonSubscriber, StreamSelection, Subscription,
+        EventCtx, EventDelivery, FlushOp, Handled, InsertOrder, OutboxEventJobConfig,
+        PersistentOutboxEvent, SingletonSubscriber, StreamSelection, Subscription,
     },
     EventSequence,
 };
@@ -86,7 +86,7 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<Subscription<OutboxEventPayload, CalaMailboxTables>, LedgerError> {
+) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, LedgerError> {
     Ok(outbox
         .register_singleton_subscriber(
             jobs,
@@ -378,14 +378,14 @@ pub struct EcRollupStatus {
     pub applied: EventSequence,
     /// The outbox frontier pinned when this snapshot was taken.
     pub frontier: EventSequence,
-    handle: Subscription<OutboxEventPayload, CalaMailboxTables>,
+    handle: Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>,
 }
 
 impl EcRollupStatus {
     pub(crate) fn new(
         applied: EventSequence,
         frontier: EventSequence,
-        handle: Subscription<OutboxEventPayload, CalaMailboxTables>,
+        handle: Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>,
     ) -> Self {
         Self {
             applied,

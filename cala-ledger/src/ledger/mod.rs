@@ -40,6 +40,7 @@ pub struct CalaLedger {
     publisher: OutboxPublisher,
     ec_rollup: obix::out::Subscription<
         crate::outbox::OutboxEventPayload,
+        obix::out::InsertOrder,
         crate::outbox::CalaMailboxTables,
     >,
 }
