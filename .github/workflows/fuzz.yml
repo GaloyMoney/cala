@@ -1,0 +1,28 @@
+name: "Fuzz"
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  fuzz:
+    name: Fuzz smoke test (10s/target)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v16
+      - name: Run the Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v8
+      - uses: actions/checkout@v4
+      - name: Cache fuzz build artifacts
+        uses: actions/cache@v4
+        with:
+          path: fuzz/target
+          key: fuzz-${{ runner.os }}-${{ hashFiles('fuzz/Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            fuzz-${{ runner.os }}-
+      - name: Run fuzz targets
+        env:
+          FUZZ_SECONDS: 10
+        run: nix run .#fuzz
