@@ -6,9 +6,9 @@ on:
 
 jobs:
   fuzz:
-    name: Fuzz smoke test (10s/target)
+    name: Fuzz repro (25m/target)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@v16
@@ -24,5 +24,5 @@ jobs:
             fuzz-${{ runner.os }}-
       - name: Run fuzz targets
         env:
-          FUZZ_SECONDS: 10
+          FUZZ_SECONDS: 1500
         run: nix run .#fuzz
