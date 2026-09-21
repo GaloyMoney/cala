@@ -15,9 +15,9 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.30.3-dev" }
 
 cel = "0.14.5"
-es-entity = "0.13.0"
-job = { version = "0.15.2", features = ["es-entity"] }
-obix = { version = "0.12.3", default-features = false }
+es-entity = "0.14.0"
+job = { git = "https://github.com/GaloyMoney/job.git", rev = "e9c5a71b33f72a1654da8bc3afd80d1d4ede788e", features = ["es-entity"] }
+obix = { git = "https://github.com/GaloyMoney/obix.git", rev = "40aa57f1a3488827be272f466bc6f9cdc1110b46", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }

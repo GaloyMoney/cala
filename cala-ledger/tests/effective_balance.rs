@@ -56,30 +56,26 @@ fn assert_balance_range_amounts_sum(
     assert_balance_amounts_sum(&actual.close, &first.close, &second.close);
 }
 
-fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> {
+fn all_balances_query<C>() -> es_entity::PaginatedQueryArgs<C> {
     es_entity::PaginatedQueryArgs {
         first: 100,
         after: None,
     }
 }
 
-fn balances_by_currency<C: std::fmt::Debug>(
+fn balances_by_currency<C>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<Currency, AccountBalance> {
-    balances
-        .into_parts()
-        .0
+    helpers::expect_single_page(balances)
         .into_iter()
         .map(|balance| (balance.details.currency, balance))
         .collect()
 }
 
-fn balances_by_id<C: std::fmt::Debug>(
+fn balances_by_id<C>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<BalanceId, AccountBalance> {
-    balances
-        .into_parts()
-        .0
+    helpers::expect_single_page(balances)
         .into_iter()
         .map(|balance| {
             (
@@ -94,23 +90,19 @@ fn balances_by_id<C: std::fmt::Debug>(
         .collect()
 }
 
-fn ranges_by_currency<C: std::fmt::Debug>(
+fn ranges_by_currency<C>(
     ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
 ) -> HashMap<Currency, BalanceRange> {
-    ranges
-        .into_parts()
-        .0
+    helpers::expect_single_page(ranges)
         .into_iter()
         .map(|range| (range.close.details.currency, range))
         .collect()
 }
 
-fn ranges_by_id<C: std::fmt::Debug>(
+fn ranges_by_id<C>(
     ranges: es_entity::PaginatedQueryRet<BalanceRange, C>,
 ) -> HashMap<BalanceId, BalanceRange> {
-    ranges
-        .into_parts()
-        .0
+    helpers::expect_single_page(ranges)
         .into_iter()
         .map(|range| {
             (
@@ -1196,7 +1188,7 @@ async fn list_modified_since_basic() -> anyhow::Result<()> {
         .effective()
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
-    assert!(!page.has_next_page);
+    assert!(!page.has_next_page());
 
     let tuples: HashSet<(AccountId, Currency, NaiveDate)> = page
         .entities()
@@ -1293,13 +1285,12 @@ async fn list_modified_since_backdating_fanout() -> anyhow::Result<()> {
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
 
-    let recipient_btc: HashMap<NaiveDate, EffectiveBalanceSnapshot> = page
-        .into_parts()
-        .0
-        .into_iter()
-        .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
-        .map(|s| (s.effective, s))
-        .collect();
+    let recipient_btc: HashMap<NaiveDate, EffectiveBalanceSnapshot> =
+        helpers::expect_single_page(page)
+            .into_iter()
+            .filter(|s| s.account_id == recipient_account.id() && s.currency == Currency::BTC)
+            .map(|s| (s.effective, s))
+            .collect();
 
     assert_eq!(
         recipient_btc.keys().copied().collect::<HashSet<_>>(),
@@ -1449,7 +1440,7 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         .effective()
         .list_modified_since(journal.id(), since, all_balances_query())
         .await?;
-    assert!(!full.has_next_page);
+    assert!(!full.has_next_page());
     assert_eq!(full.entities().len(), expected_count);
     let expected_tuples: HashSet<(AccountId, Currency, NaiveDate)> = full
         .entities()
@@ -1461,25 +1452,29 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
     // Page through with a small page size; the union must match exactly,
     // with no duplicates or gaps across cursor boundaries.
     let mut collected = Vec::new();
-    let mut after = None;
+    let mut query = es_entity::PaginatedQueryArgs {
+        first: 3,
+        after: None,
+    };
     let mut pages = 0;
     loop {
         let page = cala
             .balances()
             .effective()
-            .list_modified_since(
-                journal.id(),
-                since,
-                es_entity::PaginatedQueryArgs { first: 3, after },
-            )
+            .list_modified_since(journal.id(), since, query)
             .await?;
         pages += 1;
-        let (entities, next) = page.into_parts();
-        assert!(entities.len() <= 3);
-        collected.extend(entities);
-        match next {
-            Some(query) => after = query.after,
-            None => break,
+        assert!(page.entities().len() <= 3);
+        match page.into_page() {
+            es_entity::Page::Last { entities } => {
+                collected.extend(entities);
+                break;
+            }
+            es_entity::Page::HasNext { entities, next } => {
+                collected.extend(entities);
+                assert_eq!(next.first, 3);
+                query = next.into();
+            }
         }
     }
     assert!(pages > 1, "test setup should require multiple pages");
@@ -1508,7 +1503,7 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         )
         .await?;
     assert_eq!(first_page.entities().len(), 1);
-    assert!(first_page.has_next_page);
+    assert!(first_page.has_next_page());
     let boundary_tuple = (
         first_page.entities()[0].account_id,
         first_page.entities()[0].currency,
@@ -1523,11 +1518,11 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
             since,
             es_entity::PaginatedQueryArgs {
                 first: expected_count,
-                after: first_page.end_cursor,
+                after: first_page.into_end_cursor(),
             },
         )
         .await?;
-    assert!(!rest.has_next_page);
+    assert!(!rest.has_next_page());
     assert_eq!(rest.entities().len(), expected_count - 1);
     assert!(
         rest.entities()
@@ -1545,8 +1540,8 @@ async fn list_modified_since_pagination() -> anyhow::Result<()> {
         .list_modified_since(journal.id(), quiet_since, all_balances_query())
         .await?;
     assert!(empty.entities().is_empty());
-    assert!(!empty.has_next_page);
-    assert!(empty.end_cursor.is_none());
+    assert!(!empty.has_next_page());
+    assert!(empty.end_cursor().is_none());
 
     Ok(())
 }

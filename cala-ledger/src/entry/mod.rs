@@ -126,16 +126,19 @@ impl Entries {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Vec<Entry>, EntryError> {
-        let mut entries = self
+        let page = self
             .repo
             .list_for_transaction_id_by_created_at(
                 transaction_id,
                 Default::default(),
                 Default::default(),
             )
-            .await?
-            .into_parts()
-            .0;
+            .await?;
+        let mut entries = match page.into_page() {
+            es_entity::Page::Last { entities } | es_entity::Page::HasNext { entities, next: _ } => {
+                entities
+            }
+        };
         entries.sort_by(|a, b| {
             let a_sequence = a.values().sequence;
             let b_sequence = b.values().sequence;

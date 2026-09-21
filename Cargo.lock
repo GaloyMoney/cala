@@ -867,9 +867,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0fb3c5aea95b26c71cca017d41e18401425306ebbe584266710cf5480d80db65"
+checksum = "2f42ae98fbe3cd073aa177cdf5b57b8fb9d385237aea03589cfd9c6a86d57d61"
 dependencies = [
  "async-stream",
  "chrono",
@@ -895,9 +895,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.13.0"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59a928a22a5aff65307c4dabdc9cc2e87f3ac75bafe348467bbd4a500faadf4e"
+checksum = "789f9e2fde3b570d0baa18fb25a3d3144f974605fb5840d7f65a7a5dadc12b26"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1417,9 +1417,8 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.15.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5466e533e23142cb5ba79fc59b4acad91134cc23637842c77f93a72837b4400b"
+version = "0.15.4-dev"
+source = "git+https://github.com/GaloyMoney/job.git?rev=e9c5a71b33f72a1654da8bc3afd80d1d4ede788e#e9c5a71b33f72a1654da8bc3afd80d1d4ede788e"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1623,9 +1622,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2f757a32e2ba5c3cbe5e8440b17d8ff16c209026ce4b2135c9515003f906935"
+version = "0.12.4-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?rev=40aa57f1a3488827be272f466bc6f9cdc1110b46#40aa57f1a3488827be272f466bc6f9cdc1110b46"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1646,9 +1644,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.12.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f380213c9dcaac015773501f53de82af6e21853646739794877e71d2f4412312"
+version = "0.12.4-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?rev=40aa57f1a3488827be272f466bc6f9cdc1110b46#40aa57f1a3488827be272f466bc6f9cdc1110b46"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",

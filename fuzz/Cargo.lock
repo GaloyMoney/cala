@@ -285,9 +285,9 @@ checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
 name = "cached"
-version = "3.1.1"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "133b6b7d6a828c24d5055ef51e67457002b4017ae5ea3d1b1552ca35a44b1119"
+checksum = "c5a6cf8262820194a1488ece477f5fb5ba9256ef25229d525470e71d6e9a5835"
 dependencies = [
  "ahash 0.8.12",
  "async-lock",
@@ -301,9 +301,9 @@ dependencies = [
 
 [[package]]
 name = "cached_proc_macro"
-version = "3.0.0"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da80977bd46ecf98c593b651e393260f852678283989b8b7c4079304fe5e8936"
+checksum = "ece0579b43cf6e927b3370c7d44359c7122e7e52b3ea635bc8484da571442edb"
 dependencies = [
  "darling 0.20.11",
  "proc-macro-crate",
@@ -320,7 +320,7 @@ checksum = "f5813789573ae815c8b4be58c4428e0e7ae05f0227678ba9de332ded585b9159"
 
 [[package]]
 name = "cala-cel-interpreter"
-version = "0.26.3-dev"
+version = "0.30.3-dev"
 dependencies = [
  "cached",
  "cel",
@@ -336,7 +336,7 @@ dependencies = [
 
 [[package]]
 name = "cala-fuzz"
-version = "0.26.3-dev"
+version = "0.30.3-dev"
 dependencies = [
  "arbitrary",
  "cala-cel-interpreter",
@@ -352,7 +352,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger"
-version = "0.26.3-dev"
+version = "0.30.3-dev"
 dependencies = [
  "cached",
  "cala-cel-interpreter",
@@ -377,7 +377,7 @@ dependencies = [
 
 [[package]]
 name = "cala-ledger-core-types"
-version = "0.26.3-dev"
+version = "0.30.3-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
@@ -464,9 +464,9 @@ checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
 name = "convert_case"
-version = "0.11.0"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affbf0190ed2caf063e3def54ff444b449371d55c58e513a95ab98eca50adb49"
+checksum = "1af709f1f33454bf52eadfc8c78b3b9ef9cb26fb54d16dc9cd9a7299f899fd1b"
 dependencies = [
  "unicode-segmentation",
 ]
@@ -741,9 +741,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "es-entity"
-version = "0.12.15"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb62689c86b23d41c9718c09a00950e26cca5f47041d3dc2132b4a4217697ac2"
+checksum = "2f42ae98fbe3cd073aa177cdf5b57b8fb9d385237aea03589cfd9c6a86d57d61"
 dependencies = [
  "async-stream",
  "chrono",
@@ -768,9 +768,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.12.15"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b26aa12d3908f18fca75cf87db20615a9bf9f076528f927a1df8994d903778b7"
+checksum = "789f9e2fde3b570d0baa18fb25a3d3144f974605fb5840d7f65a7a5dadc12b26"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1265,9 +1265,8 @@ checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
 
 [[package]]
 name = "job"
-version = "0.13.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd7f771a403e78d9723fccd110d7cc1b87a2c4f5c52a60e1a2822fbedf40c471"
+version = "0.15.4-dev"
+source = "git+https://github.com/GaloyMoney/job.git?rev=e9c5a71b33f72a1654da8bc3afd80d1d4ede788e#e9c5a71b33f72a1654da8bc3afd80d1d4ede788e"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1485,9 +1484,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "864b95b09c88a01c26dd47fed7f9b7da2919960bcce75bb8ac89679e85e6df89"
+version = "0.12.4-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?rev=40aa57f1a3488827be272f466bc6f9cdc1110b46#40aa57f1a3488827be272f466bc6f9cdc1110b46"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1508,9 +1506,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.9.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d5e5effb6ad2ec13870aaa201c57afa07037c3f53e1726967ec173844603a95"
+version = "0.12.4-dev"
+source = "git+https://github.com/GaloyMoney/obix.git?rev=40aa57f1a3488827be272f466bc6f9cdc1110b46#40aa57f1a3488827be272f466bc6f9cdc1110b46"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
