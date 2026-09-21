@@ -135,9 +135,8 @@ impl Entries {
             )
             .await?;
         let mut entries = match page.into_page() {
-            es_entity::Page::Last { entities } | es_entity::Page::HasNext { entities, next: _ } => {
-                entities
-            }
+            es_entity::Page::Last { entities } => entities,
+            es_entity::Page::HasNext { entities, next: _ } => entities,
         };
         entries.sort_by(|a, b| {
             let a_sequence = a.values().sequence;
