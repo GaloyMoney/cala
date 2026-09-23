@@ -1,3 +1,11 @@
+# [cala release v0.31.0](https://github.com/GaloyMoney/cala/releases/tag/0.31.0)
+
+
+
+### Refactor
+
+- [**breaking**] Bump es-entity to 0.14.1, job to 0.16.1, obix to 0.13.1 (#892)
+
 # [cala release v0.30.2](https://github.com/GaloyMoney/cala/releases/tag/0.30.2)
 
 
