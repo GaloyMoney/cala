@@ -25,30 +25,26 @@ fn assert_balance_amounts_sum(
     );
 }
 
-fn all_balances_query<C: std::fmt::Debug>() -> es_entity::PaginatedQueryArgs<C> {
+fn all_balances_query<C>() -> es_entity::PaginatedQueryArgs<C> {
     es_entity::PaginatedQueryArgs {
         first: 100,
         after: None,
     }
 }
 
-fn balances_by_currency<C: std::fmt::Debug>(
+fn balances_by_currency<C>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<Currency, AccountBalance> {
-    balances
-        .into_parts()
-        .0
+    helpers::expect_single_page(balances)
         .into_iter()
         .map(|balance| (balance.details.currency, balance))
         .collect()
 }
 
-fn balances_by_id<C: std::fmt::Debug>(
+fn balances_by_id<C>(
     balances: es_entity::PaginatedQueryRet<AccountBalance, C>,
 ) -> HashMap<BalanceId, AccountBalance> {
-    balances
-        .into_parts()
-        .0
+    helpers::expect_single_page(balances)
         .into_iter()
         .map(|balance| {
             (
