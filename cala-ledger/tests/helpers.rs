@@ -6,6 +6,13 @@ use cala_ledger::{
     tx_template::*, AccountId, CalaLedger, Currency,
 };
 
+pub fn expect_single_page<T, C>(page: es_entity::PaginatedQueryRet<T, C>) -> Vec<T> {
+    match page.into_page() {
+        es_entity::Page::Last { entities } => entities,
+        es_entity::Page::HasNext { .. } => panic!("expected all test results in one page"),
+    }
+}
+
 pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
     init_pool_with(sqlx::postgres::PgPoolOptions::new()).await
 }

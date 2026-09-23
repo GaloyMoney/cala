@@ -93,7 +93,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
     // No filter -> every entry in the journal, across both transactions.
     let all = page(&cala, journal.id(), EntriesFilter::default(), 100, None).await;
     assert_eq!(all.entities().len(), 12);
-    assert!(!all.has_next_page);
+    assert!(!all.has_next_page());
 
     // effective == jan -> only the January transaction's entries.
     let only_jan = page(
@@ -147,7 +147,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
     )
     .await;
     assert!(empty.entities().is_empty());
-    assert!(empty.end_cursor.is_none());
+    assert!(empty.end_cursor().is_none());
 
     // created_at bounds derived from the entries themselves (avoids clock skew).
     let max_created = all.entities().iter().map(|e| e.created_at()).max().unwrap();
@@ -201,11 +201,18 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
     };
     let first_page = page(&cala, journal.id(), jun_filter(), 4, None).await;
     assert_eq!(first_page.entities().len(), 4);
-    assert!(first_page.has_next_page);
+    assert!(first_page.has_next_page());
 
-    let second_page = page(&cala, journal.id(), jun_filter(), 4, first_page.end_cursor).await;
+    let second_page = page(
+        &cala,
+        journal.id(),
+        jun_filter(),
+        4,
+        first_page.into_end_cursor(),
+    )
+    .await;
     assert_eq!(second_page.entities().len(), 2);
-    assert!(!second_page.has_next_page);
+    assert!(!second_page.has_next_page());
 
     // Ascending direction: oldest first, ordered on (created_at, id) -- entries
     // posted in the same transaction can share a created_at, so the id
@@ -220,7 +227,7 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
     )
     .await;
     assert_eq!(asc_first.entities().len(), 5);
-    assert!(asc_first.has_next_page);
+    assert!(asc_first.has_next_page());
     assert!(asc_first
         .entities()
         .windows(2)
@@ -233,12 +240,12 @@ async fn list_for_journal_id_filtered() -> anyhow::Result<()> {
         journal.id(),
         EntriesFilter::default(),
         100,
-        asc_first.end_cursor,
+        asc_first.into_end_cursor(),
         es_entity::ListDirection::Ascending,
     )
     .await;
     assert_eq!(asc_rest.entities().len(), 7);
-    assert!(!asc_rest.has_next_page);
+    assert!(!asc_rest.has_next_page());
     for entry in asc_rest.entities() {
         assert!(ids.insert(entry.id));
     }
