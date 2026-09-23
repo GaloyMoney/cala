@@ -120,6 +120,14 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
+        // Reject pathological sources before they reach the parser: cel's
+        // error formatter panics (and then aborts, mid-unwind) once error
+        // columns pass the u16 format-width ceiling — see
+        // `MAX_EXPRESSION_BYTES`. This also keeps oversized sources from
+        // occupying the compile cache (byte-unbounded by design).
+        if source.len() > MAX_EXPRESSION_BYTES {
+            return Err(CelError::ExpressionTooLarge(source.len()));
+        }
         let program = compile_program(source.clone()).map_err(CelError::CelParseError)?;
         Ok(Self { source, program })
     }
@@ -159,6 +167,39 @@ mod tests {
 
         let err = source.parse::<CelExpression>().unwrap_err();
         assert!(matches!(err, CelError::CelParseError(_)));
+    }
+
+    #[test]
+    fn oversized_expression_rejected_before_parser() {
+        // Regression: cel 0.14.x renders parse errors with a caret line whose
+        // width is the error column, and format widths are u16 — an error
+        // past column 65,535 panics inside `ParseError`'s Display and, firing
+        // while the parser unwinds, aborts the process (fuzz builds see
+        // `libFuzzer: deadly signal`). Rejected here instead, up front.
+        //
+        // The exact input class found by the `cel_compile` fuzz target:
+        // deeply nested parens, one very long line.
+        let source = "1+".to_string() + &"(".repeat(MAX_EXPRESSION_BYTES + 1);
+        assert!(source.len() > MAX_EXPRESSION_BYTES);
+
+        let err = source.parse::<CelExpression>().unwrap_err();
+        assert!(matches!(err, CelError::ExpressionTooLarge(n) if n == source.len()));
+    }
+
+    #[test]
+    fn long_but_legal_expression_still_compiles() {
+        // The bound must not reject legitimate long expressions: a
+        // near-limit string literal (single token, no parser recursion)
+        // parses and evaluates fine.
+        let source = format!("\"{}\"", "a".repeat(MAX_EXPRESSION_BYTES - 2));
+        assert_eq!(source.len(), MAX_EXPRESSION_BYTES);
+
+        let expr = source.parse::<CelExpression>().unwrap();
+        let context = CelContext::new();
+        assert_eq!(
+            expr.evaluate(&context).unwrap(),
+            CelValue::String("a".repeat(MAX_EXPRESSION_BYTES - 2).into())
+        );
     }
 
     #[test]
