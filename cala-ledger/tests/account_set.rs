@@ -2055,3 +2055,300 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+/// The raw uuid behind a member id: the `member_id` column the member
+/// listings order and paginate on, whichever edge table the member came
+/// from.
+fn member_uuid(id: AccountSetMemberId) -> uuid::Uuid {
+    match id {
+        AccountSetMemberId::Account(id) => id.into(),
+        AccountSetMemberId::AccountSet(id) => id.into(),
+    }
+}
+
+async fn create_account(
+    cala: &CalaLedger,
+    external_id: Option<String>,
+) -> anyhow::Result<AccountId> {
+    let mut builder = NewAccount::builder();
+    builder
+        .id(AccountId::new())
+        .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
+        .code(Alphanumeric.sample_string(&mut rand::rng(), 8));
+    if let Some(external_id) = external_id {
+        builder.external_id(external_id);
+    }
+    Ok(cala.accounts().create(builder.build()?).await?.id())
+}
+
+async fn create_account_set(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    external_id: Option<String>,
+) -> anyhow::Result<AccountSetId> {
+    let mut builder = NewAccountSet::builder();
+    builder
+        .id(AccountSetId::new())
+        .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
+        .journal_id(journal_id)
+        .balance_rollup(BalanceRollup::Synchronous);
+    if let Some(external_id) = external_id {
+        builder.external_id(external_id);
+    }
+    Ok(cala.account_sets().create(builder.build()?).await?.id())
+}
+
+/// Following the continuation es-entity derives from `end_cursor`
+/// (`PaginatedQueryRet::into_page`) must visit every member exactly once:
+/// the cursor has to name the last entity *returned*, not the look-ahead
+/// row that decides `has_next_page`.
+#[tokio::test]
+async fn members_by_created_at_continuation_covers_every_member() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala = CalaLedger::init(
+        CalaLedgerConfig::builder()
+            .pool(pool)
+            .exec_migrations(false)
+            .build()?,
+        &mut jobs,
+    )
+    .await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let parent = create_account_set(&cala, journal.id(), None).await?;
+
+    // Five members, accounts and sets interleaved, added one at a time so
+    // each has its own created_at. The listing is newest first.
+    let mut expected: Vec<AccountSetMemberId> = Vec::new();
+    for i in 0..5 {
+        let member = if i % 2 == 0 {
+            AccountSetMemberId::from(create_account(&cala, None).await?)
+        } else {
+            AccountSetMemberId::from(create_account_set(&cala, journal.id(), None).await?)
+        };
+        cala.account_sets().add_member(parent, member).await?;
+        expected.push(member);
+    }
+    expected.reverse();
+
+    let all = cala
+        .account_sets()
+        .list_members_by_created_at(
+            parent,
+            es_entity::PaginatedQueryArgs {
+                first: 100,
+                after: None,
+            },
+        )
+        .await?;
+    assert!(!all.has_next_page());
+    let listed: Vec<_> = all.entities().iter().map(|m| m.id).collect();
+    assert_eq!(listed, expected);
+
+    let mut walked = Vec::new();
+    let mut pages = 0;
+    let mut query = es_entity::PaginatedQueryArgs {
+        first: 2,
+        after: None,
+    };
+    loop {
+        assert!(
+            pages < 3,
+            "a two-wide walk over five members ends after three pages; the continuation is looping"
+        );
+        let page = cala
+            .account_sets()
+            .list_members_by_created_at(parent, query)
+            .await?;
+        pages += 1;
+        {
+            let last = page
+                .entities()
+                .last()
+                .expect("pages before exhaustion are non-empty");
+            let cursor = page
+                .end_cursor()
+                .expect("a non-empty page carries an end cursor");
+            assert_eq!(
+                cursor.id, last.id,
+                "end_cursor must name the last entity returned, not the look-ahead row"
+            );
+            assert_eq!(cursor.member_created_at, last.created_at);
+        }
+        match page.into_page() {
+            es_entity::Page::Last { entities } => {
+                walked.extend(entities.iter().map(|m| m.id));
+                break;
+            }
+            es_entity::Page::HasNext { entities, next } => {
+                walked.extend(entities.iter().map(|m| m.id));
+                query = next.into();
+            }
+        }
+    }
+    assert_eq!(pages, 3);
+    assert_eq!(
+        walked, expected,
+        "following the continuation must visit every member exactly once, in order"
+    );
+
+    Ok(())
+}
+
+/// Same contract for the external-id listing, whose order is external id
+/// ascending with NULLs last, then member id. A page size of 1 makes the
+/// walk resume from a cursor inside the NULL tail, which must continue
+/// after that member rather than restart from the top.
+#[tokio::test]
+async fn members_by_external_id_continuation_covers_every_member() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala = CalaLedger::init(
+        CalaLedgerConfig::builder()
+            .pool(pool)
+            .exec_migrations(false)
+            .build()?,
+        &mut jobs,
+    )
+    .await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let parent = create_account_set(&cala, journal.id(), None).await?;
+    let random = Alphanumeric.sample_string(&mut rand::rng(), 8);
+
+    // Three members with an external id (two accounts, one set) and three
+    // without (two accounts, one set).
+    let mut members: Vec<(AccountSetMemberId, Option<String>)> = Vec::new();
+    for external_id in [
+        Some(format!("b-{random}")),
+        None,
+        Some(format!("a-{random}")),
+        None,
+    ] {
+        let id = create_account(&cala, external_id.clone()).await?;
+        members.push((id.into(), external_id));
+    }
+    for external_id in [Some(format!("c-{random}")), None] {
+        let id = create_account_set(&cala, journal.id(), external_id.clone()).await?;
+        members.push((id.into(), external_id));
+    }
+    for (id, _) in &members {
+        cala.account_sets().add_member(parent, *id).await?;
+    }
+    members.sort_by(|(x_id, x_ext), (y_id, y_ext)| {
+        x_ext
+            .is_none()
+            .cmp(&y_ext.is_none())
+            .then_with(|| x_ext.cmp(y_ext))
+            .then_with(|| member_uuid(*x_id).cmp(&member_uuid(*y_id)))
+    });
+    let expected: Vec<AccountSetMemberId> = members.iter().map(|(id, _)| *id).collect();
+    let first_null = members
+        .iter()
+        .position(|(_, external_id)| external_id.is_none())
+        .expect("some members have no external id");
+
+    let all = cala
+        .account_sets()
+        .list_members_by_external_id(
+            parent,
+            es_entity::PaginatedQueryArgs {
+                first: 100,
+                after: None,
+            },
+        )
+        .await?;
+    assert!(!all.has_next_page());
+    let listed: Vec<_> = all.entities().iter().map(|m| m.id).collect();
+    assert_eq!(listed, expected);
+    let listed_external_ids: Vec<_> = all
+        .entities()
+        .iter()
+        .map(|m| m.external_id.clone())
+        .collect();
+    let expected_external_ids: Vec<_> = members.iter().map(|(_, e)| e.clone()).collect();
+    assert_eq!(listed_external_ids, expected_external_ids);
+
+    for first in [1usize, 2] {
+        let max_pages = expected.len().div_ceil(first);
+        let mut walked = Vec::new();
+        let mut pages = 0;
+        let mut query = es_entity::PaginatedQueryArgs { first, after: None };
+        loop {
+            assert!(
+                pages < max_pages,
+                "page size {first}: the continuation is looping instead of ending after {max_pages} pages"
+            );
+            let page = cala
+                .account_sets()
+                .list_members_by_external_id(parent, query)
+                .await?;
+            pages += 1;
+            {
+                let last = page
+                    .entities()
+                    .last()
+                    .expect("pages before exhaustion are non-empty");
+                let cursor = page
+                    .end_cursor()
+                    .expect("a non-empty page carries an end cursor");
+                assert_eq!(
+                    cursor.id, last.id,
+                    "page size {first}: end_cursor must name the last entity returned, not the look-ahead row"
+                );
+                assert_eq!(cursor.external_id, last.external_id);
+            }
+            match page.into_page() {
+                es_entity::Page::Last { entities } => {
+                    walked.extend(entities.iter().map(|m| m.id));
+                    break;
+                }
+                es_entity::Page::HasNext { entities, next } => {
+                    walked.extend(entities.iter().map(|m| m.id));
+                    query = next.into();
+                }
+            }
+        }
+        assert_eq!(pages, max_pages, "page size {first}");
+        assert_eq!(
+            walked, expected,
+            "page size {first}: following the continuation must visit every member exactly once, in order"
+        );
+    }
+
+    // Resuming from a cursor inside the NULL tail continues after that
+    // member; it must not fall back to an unfiltered listing.
+    let page = cala
+        .account_sets()
+        .list_members_by_external_id(
+            parent,
+            es_entity::PaginatedQueryArgs {
+                first: 100,
+                after: Some(AccountSetMemberByExternalIdCursor::from(
+                    &all.entities()[first_null],
+                )),
+            },
+        )
+        .await?;
+    assert!(!page.has_next_page());
+    let resumed: Vec<_> = page.entities().iter().map(|m| m.id).collect();
+    assert_eq!(resumed, expected[first_null + 1..]);
+
+    // Past the final member there is nothing left.
+    let page = cala
+        .account_sets()
+        .list_members_by_external_id(
+            parent,
+            es_entity::PaginatedQueryArgs {
+                first: 100,
+                after: Some(AccountSetMemberByExternalIdCursor::from(
+                    all.entities().last().expect("the set has members"),
+                )),
+            },
+        )
+        .await?;
+    assert!(page.entities().is_empty());
+    assert!(!page.has_next_page());
+    assert!(page.end_cursor().is_none());
+
+    Ok(())
+}
