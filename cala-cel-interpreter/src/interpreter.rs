@@ -120,6 +120,12 @@ impl TryFrom<String> for CelExpression {
     type Error = CelError;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
+        // Checked before compiling: oversized sources can panic cel's error
+        // formatter (see `MAX_EXPRESSION_BYTES`) and would otherwise occupy
+        // the byte-unbounded compile cache.
+        if source.len() > MAX_EXPRESSION_BYTES {
+            return Err(CelError::ExpressionTooLarge(source.len()));
+        }
         let program = compile_program(source.clone()).map_err(CelError::CelParseError)?;
         Ok(Self { source, program })
     }
@@ -159,6 +165,33 @@ mod tests {
 
         let err = source.parse::<CelExpression>().unwrap_err();
         assert!(matches!(err, CelError::CelParseError(_)));
+    }
+
+    #[test]
+    fn oversized_expression_rejected_before_parser() {
+        // The input class the `cel_compile` fuzz target found: one very long
+        // line of nested parens — see `MAX_EXPRESSION_BYTES`.
+        let source = "1+".to_string() + &"(".repeat(MAX_EXPRESSION_BYTES + 1);
+        assert!(source.len() > MAX_EXPRESSION_BYTES);
+
+        let err = source.parse::<CelExpression>().unwrap_err();
+        assert!(matches!(err, CelError::ExpressionTooLarge(n) if n == source.len()));
+    }
+
+    #[test]
+    fn long_but_legal_expression_still_compiles() {
+        // A string literal is a single token: a near-limit operator chain
+        // would instead recurse the parser and overflow the compile stack
+        // (`MAX_EXPRESSION_BYTES` does not bound parser recursion).
+        let source = format!("\"{}\"", "a".repeat(MAX_EXPRESSION_BYTES - 2));
+        assert_eq!(source.len(), MAX_EXPRESSION_BYTES);
+
+        let expr = source.parse::<CelExpression>().unwrap();
+        let context = CelContext::new();
+        assert_eq!(
+            expr.evaluate(&context).unwrap(),
+            CelValue::String("a".repeat(MAX_EXPRESSION_BYTES - 2).into())
+        );
     }
 
     #[test]

@@ -3,6 +3,22 @@ use thiserror::Error;
 
 use crate::cel_type::*;
 
+/// Hard upper bound on the byte length of an accepted CEL expression.
+///
+/// The `cel` crate (0.14.x) renders parse errors with a caret line whose
+/// width is the error's **column** (`write!(f, "\n| {:.>width$}", "^", ...)`
+/// in `parser.rs`), and Rust format widths are `u16`. A parse error past
+/// column 65,535 therefore panics with "Formatting argument out of range"
+/// inside `ParseError`'s `Display` — and because that panic fires while the
+/// parser is already unwinding, it escalates to a process abort (observed
+/// as `libFuzzer: deadly signal` in fuzz builds).
+///
+/// 65,000 leaves margin under the u16 ceiling for EOF-position columns
+/// (reported as `len + 1`) while staying far above any legitimate
+/// expression: velocity controls and tx-template params are hundreds of
+/// bytes.
+pub const MAX_EXPRESSION_BYTES: usize = 65_000;
+
 #[derive(Error, Debug)]
 pub enum ResultCoercionError {
     #[error("Error evaluating expression '{0}' - Could not coerce {1:?} into {2:?}")]
@@ -17,6 +33,10 @@ pub enum ResultCoercionError {
 pub enum CelError {
     #[error("CelError - CelParseError: {0}")]
     CelParseError(String),
+    #[error(
+        "CelError - ExpressionTooLarge: {0} bytes exceeds the {MAX_EXPRESSION_BYTES} byte limit"
+    )]
+    ExpressionTooLarge(usize),
     #[error("CelError - BadType: expected {0:?} found {1:?}")]
     BadType(CelType, CelType),
     #[error("CelError - UnknownIdentifier: {0}")]
