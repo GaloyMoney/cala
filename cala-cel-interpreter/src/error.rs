@@ -10,8 +10,8 @@ use crate::cel_type::*;
 /// in `parser.rs`), and Rust format widths are `u16`. A parse error past
 /// column 65,535 therefore panics with "Formatting argument out of range"
 /// inside `ParseError`'s `Display` — and because that panic fires while the
-/// parser is already unwinding, it escalates to a process abort (the fuzz
-/// suite sees `libFuzzer: deadly signal`; production would too).
+/// parser is already unwinding, it escalates to a process abort (observed
+/// as `libFuzzer: deadly signal` in fuzz builds).
 ///
 /// 65,000 leaves margin under the u16 ceiling for EOF-position columns
 /// (reported as `len + 1`) while staying far above any legitimate
