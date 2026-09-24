@@ -162,7 +162,9 @@ impl EffectiveBalanceRepo {
                 last_version = row.all_time_version.expect("all_time_version") as u32;
             }
         }
-        Ok((first, last, last_version - first_version))
+        // Saturate: an inverted range (until < from) can pair a "last"
+        // snapshot older than the "first" snapshot.
+        Ok((first, last, last_version.saturating_sub(first_version)))
     }
 
     #[instrument(
@@ -274,7 +276,7 @@ impl EffectiveBalanceRepo {
             ORDER BY h.currency ASC
             LIMIT $1
             "#,
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
             journal_id as JournalId,
             account_id as AccountId,
             date,
@@ -375,7 +377,7 @@ impl EffectiveBalanceRepo {
             date,
             after_account_id,
             after_currency.as_deref(),
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -464,7 +466,7 @@ impl EffectiveBalanceRepo {
             after_account_id,
             after_currency.as_deref(),
             after_effective,
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -695,7 +697,7 @@ impl EffectiveBalanceRepo {
                 account_id as "account_id: AccountId",
                 currency
             FROM last"#,
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
             journal_id as JournalId,
             account_id as AccountId,
             from,
@@ -723,7 +725,7 @@ impl EffectiveBalanceRepo {
         }
 
         let has_next_page = ranges.len() > first;
-        let mut entities = Self::balance_ranges_from_snapshots(ranges);
+        let mut entities = Self::balance_ranges_from_snapshots(ranges)?;
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
@@ -849,7 +851,7 @@ impl EffectiveBalanceRepo {
             until,
             after_account_id,
             after_currency.as_deref(),
-            (first + 1) as i64,
+            crate::clamped_page_limit(first),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -871,7 +873,7 @@ impl EffectiveBalanceRepo {
             }
         }
         let has_next_page = ret.len() > first;
-        let mut entities = Self::balance_ranges_from_snapshots(ret);
+        let mut entities = Self::balance_ranges_from_snapshots(ret)?;
         entities.truncate(first);
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
@@ -883,12 +885,22 @@ impl EffectiveBalanceRepo {
         ))
     }
 
-    fn balance_ranges_from_snapshots(ranges: BalanceRangeResult) -> Vec<BalanceRange> {
+    fn balance_ranges_from_snapshots(
+        ranges: BalanceRangeResult,
+    ) -> Result<Vec<BalanceRange>, BalanceError> {
         let mut ranges = ranges
             .into_iter()
-            .filter_map(|(_, (start, start_version, end, end_version))| {
-                end.map(|end| BalanceRange::new(start, end, end_version - start_version))
+            .map(|(_, (start, start_version, end, end_version))| {
+                // Saturate: an inverted range (until < from) can pair an
+                // end snapshot older than the start snapshot.
+                end.map(|end| {
+                    BalanceRange::new(start, end, end_version.saturating_sub(start_version))
+                })
+                .transpose()
             })
+            .collect::<Result<Vec<_>, BalanceError>>()?
+            .into_iter()
+            .flatten()
             .collect::<Vec<_>>();
 
         ranges.sort_by_key(|range| {
@@ -899,7 +911,7 @@ impl EffectiveBalanceRepo {
             )
         });
 
-        ranges
+        Ok(ranges)
     }
 
     #[instrument(

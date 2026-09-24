@@ -504,7 +504,7 @@ impl AccountSetRepo {
             account_id as AccountId,
             query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
             query.after.map(|c| c.name),
-            query.first as i64 + 1
+            crate::clamped_page_limit(query.first)
         )
         .fetch_n(op, query.first)
         .await?;
@@ -554,7 +554,7 @@ impl AccountSetRepo {
             account_set_id as AccountSetId,
             query.after.as_ref().map(|c| c.id) as Option<AccountSetId>,
             query.after.map(|c| c.name),
-            query.first as i64 + 1
+            crate::clamped_page_limit(query.first)
         )
         .fetch_n(op, query.first)
         .await?;

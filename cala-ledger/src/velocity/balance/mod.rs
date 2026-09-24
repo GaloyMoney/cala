@@ -202,12 +202,12 @@ impl VelocityBalances {
             for (limit, entry) in entries {
                 let new_balance = match latest_balance.take() {
                     Some(balance) => {
-                        crate::balance::Snapshots::update_snapshot(time, balance, entry)
+                        crate::balance::Snapshots::update_snapshot(time, balance, entry)?
                     }
                     // The snapshot belongs to the balance key's account
                     // (which may be an account *set* aggregating member
                     // entries), not necessarily to the entry's account.
-                    None => crate::balance::Snapshots::new_snapshot(time, key.account_id, entry),
+                    None => crate::balance::Snapshots::new_snapshot(time, key.account_id, entry)?,
                 };
 
                 let ctx = contexts

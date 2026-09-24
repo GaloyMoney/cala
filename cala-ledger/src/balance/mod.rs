@@ -354,7 +354,7 @@ impl Balances {
                 tx.entries.iter().copied(),
                 &ec_mappings,
                 &ec_leaves,
-            );
+            )?;
             for snapshot in new_balances.iter() {
                 // Per pair the highest version lands last, so last-write-wins
                 // leaves the map at each pair's latest snapshot.

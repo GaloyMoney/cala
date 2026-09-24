@@ -10,6 +10,7 @@ use cala_types::{
     primitives::{AccountId, Currency, EntryId, JournalId},
 };
 
+use crate::balance::error::BalanceError;
 use crate::balance::snapshot::Snapshots;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -138,12 +139,15 @@ impl<'a> EffectiveBalanceData<'a> {
     /// carries its transaction's `created_at` (see `SnapshotOrEntry::Entry`),
     /// so entries from different transactions in the same batch keep their
     /// own timestamps even though they're folded in one pass.
-    pub fn re_calculate_snapshots(&mut self, rewritten_at: DateTime<Utc>) {
+    pub fn re_calculate_snapshots(
+        &mut self,
+        rewritten_at: DateTime<Utc>,
+    ) -> Result<(), BalanceError> {
         // Nothing to recompute when there are no updates and no prior
         // snapshot to carry forward (the seeding path below indexes
         // `self.updates[0]`, which would otherwise panic).
         if self.updates.is_empty() {
-            return;
+            return Ok(());
         }
         self.updates.sort();
         let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
@@ -181,16 +185,16 @@ impl<'a> EffectiveBalanceData<'a> {
                 } => {
                     let created_at = *created_at;
                     last_effective = *effective;
-                    last_balance = Snapshots::update_snapshot(created_at, last_balance, entry);
+                    last_balance = Snapshots::update_snapshot(created_at, last_balance, entry)?;
                     diff_snapshot = if let Some(diff) = diff_snapshot {
-                        Some(Snapshots::update_snapshot(created_at, diff, entry))
+                        Some(Snapshots::update_snapshot(created_at, diff, entry)?)
                     } else {
                         let mut initial = Self::first_snapshot(created_at, self.account_id, entry);
                         initial.entry_id = last_balance.entry_id;
                         initial.encumbrance.entry_id = last_balance.encumbrance.entry_id;
                         initial.pending.entry_id = last_balance.pending.entry_id;
                         initial.settled.entry_id = last_balance.settled.entry_id;
-                        Some(Snapshots::update_snapshot(created_at, initial, entry))
+                        Some(Snapshots::update_snapshot(created_at, initial, entry)?)
                     };
                     *update = SnapshotOrEntry::Snapshot {
                         effective: *effective,
@@ -204,25 +208,38 @@ impl<'a> EffectiveBalanceData<'a> {
                     last_effective = *effective;
                     let diff = diff_snapshot.as_mut().expect("diff must be initialized");
                     values.modified_at = rewritten_at;
+                    let account_id = self.account_id;
+                    let add = |balance: &mut Decimal, delta: Decimal| {
+                        *balance = balance
+                            .checked_add(delta)
+                            .ok_or(BalanceError::Overflow(account_id))?;
+                        Ok::<(), BalanceError>(())
+                    };
                     if diff.encumbrance.cr_balance != Decimal::ZERO
                         || diff.encumbrance.dr_balance != Decimal::ZERO
                     {
-                        values.encumbrance.cr_balance += diff.encumbrance.cr_balance;
-                        values.encumbrance.dr_balance += diff.encumbrance.dr_balance;
+                        add(
+                            &mut values.encumbrance.cr_balance,
+                            diff.encumbrance.cr_balance,
+                        )?;
+                        add(
+                            &mut values.encumbrance.dr_balance,
+                            diff.encumbrance.dr_balance,
+                        )?;
                         values.encumbrance.modified_at = rewritten_at;
                     }
                     if diff.pending.cr_balance != Decimal::ZERO
                         || diff.pending.dr_balance != Decimal::ZERO
                     {
-                        values.pending.cr_balance += diff.pending.cr_balance;
-                        values.pending.dr_balance += diff.pending.dr_balance;
+                        add(&mut values.pending.cr_balance, diff.pending.cr_balance)?;
+                        add(&mut values.pending.dr_balance, diff.pending.dr_balance)?;
                         values.pending.modified_at = rewritten_at;
                     }
                     if diff.settled.cr_balance != Decimal::ZERO
                         || diff.settled.dr_balance != Decimal::ZERO
                     {
-                        values.settled.cr_balance += diff.settled.cr_balance;
-                        values.settled.dr_balance += diff.settled.dr_balance;
+                        add(&mut values.settled.cr_balance, diff.settled.cr_balance)?;
+                        add(&mut values.settled.dr_balance, diff.settled.dr_balance)?;
                         values.settled.modified_at = rewritten_at;
                     }
                     if values.entry_id == values.encumbrance.entry_id {
@@ -256,6 +273,7 @@ impl<'a> EffectiveBalanceData<'a> {
                 }
             }
         }
+        Ok(())
     }
 
     fn first_snapshot(
@@ -422,7 +440,7 @@ mod tests {
         let posted_at = Utc::now();
         data.push(effective, 0, posted_at, &entry);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -453,7 +471,7 @@ mod tests {
         let posted_at = Utc::now();
         data.push(day_one, 0, posted_at, &entry_one);
         data.push(day_two, 0, posted_at, &entry_two);
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         let journal_id = JournalId::new();
         let snapshots: Vec<EffectiveBalanceSnapshot> = data.into_snapshots(journal_id).collect();
@@ -486,7 +504,7 @@ mod tests {
         let posted_at = Utc::now();
         data.push(effective, 0, posted_at, &entry);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -515,7 +533,7 @@ mod tests {
         let posted_at = Utc::now();
         data.push(effective, 0, posted_at, &entry);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 1);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -540,7 +558,7 @@ mod tests {
         entry_two.sequence = 2;
         data.push(effective, 0, posted_at, &entry_two);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 2);
         assert!(matches!(data.updates[0], SnapshotOrEntry::Snapshot { .. }));
@@ -583,7 +601,7 @@ mod tests {
         entry_two.sequence = 2;
         data.push(effective, 0, posted_at, &entry_two);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 3);
 
@@ -596,6 +614,35 @@ mod tests {
         assert_eq!(snapshot.settled.entry_id, entry_two.id);
         assert_eq!(snapshot.pending.cr_balance, dec!(1));
         assert_eq!(snapshot.entry_id, snapshot.pending.entry_id);
+    }
+
+    #[test]
+    fn re_calculate_snapshots_errors_on_rewrite_overflow_instead_of_panicking() {
+        let account_id = AccountId::new();
+        let future = NaiveDate::from_ymd_opt(2023, 10, 2).unwrap();
+        let mut future_balance = random_snapshot();
+        future_balance.settled.cr_balance = Decimal::MAX;
+
+        let mut data = EffectiveBalanceData::new(
+            account_id,
+            Currency::USD,
+            None,
+            0,
+            vec![SnapshotOrEntry::Snapshot {
+                effective: future,
+                values: future_balance,
+            }],
+        );
+
+        let effective = NaiveDate::from_ymd_opt(2023, 10, 1).unwrap();
+        let entry = entry_values();
+        let posted_at = Utc::now();
+        data.push(effective, 0, posted_at, &entry);
+
+        let err = data
+            .re_calculate_snapshots(posted_at)
+            .expect_err("overflow during snapshot rewrite must be an error, not a panic");
+        assert!(matches!(err, BalanceError::Overflow(_)));
     }
 
     /// A pair's pre-existing later history and the batch's new entries must
@@ -628,7 +675,7 @@ mod tests {
         data.push(day, 0, posted_at, &entry_on_day);
         data.push(next_day, 1, posted_at, &entry_on_next_day);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         assert_eq!(data.updates.len(), 5);
         let (_, effective0) = data.updates[0].snapshot();
@@ -686,7 +733,7 @@ mod tests {
         data.push(day, 0, posted_at, &tx0_entry1);
         data.push(day, 0, posted_at, &tx0_entry2);
 
-        data.re_calculate_snapshots(posted_at);
+        data.re_calculate_snapshots(posted_at).unwrap();
 
         let ids: Vec<_> = data
             .updates
@@ -796,7 +843,7 @@ mod tests {
                     .collect(),
             );
             step.push(effective, 0, posted_at, &entries[tx_index]);
-            step.re_calculate_snapshots(posted_at);
+            step.re_calculate_snapshots(posted_at).unwrap();
             table.extend(step.into_snapshots(JournalId::new()));
         }
         table.sort_by_key(|s| s.all_time_version);
@@ -820,7 +867,7 @@ mod tests {
         for (tx_index, &effective) in tx_plan.iter().enumerate() {
             folded.push(effective, tx_index, posted_at, &entries[tx_index]);
         }
-        folded.re_calculate_snapshots(posted_at);
+        folded.re_calculate_snapshots(posted_at).unwrap();
         let mut folded_snapshots: Vec<_> = folded.into_snapshots(JournalId::new()).collect();
         folded_snapshots.sort_by_key(|s| s.all_time_version);
 

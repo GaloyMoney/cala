@@ -87,6 +87,7 @@ use cala_types::{balance::BalanceSnapshot, entry::EntryValues};
 
 use crate::{
     account_set::AccountSets,
+    balance::error::BalanceError,
     balance::Balances,
     outbox::OutboxPublisher,
     primitives::*,
@@ -275,7 +276,7 @@ impl Postings {
             hydrated.push(transaction);
         }
 
-        let snapshots = self.fold_balances(&hydrated, &entry_values, &read, &mappings, now);
+        let snapshots = self.fold_balances(&hydrated, &entry_values, &read, &mappings, now)?;
 
         // Velocity for the whole batch: one lock, one read, one write — or
         // nothing at all, when no limit's window matches (the common case for
@@ -545,7 +546,7 @@ impl Postings {
         read: &PostingState,
         mappings: &AncestorMappings,
         now: DateTime<Utc>,
-    ) -> Vec<BalanceSnapshot> {
+    ) -> Result<Vec<BalanceSnapshot>, BalanceError> {
         let mut journals: Vec<JournalId> =
             Self::dedup(transactions.iter().map(|tx| tx.values().journal_id));
         journals.sort_unstable();
@@ -597,9 +598,9 @@ impl Postings {
 
             all.extend(crate::balance::Snapshots::from_entries(
                 now, current, &entries, mappings,
-            ));
+            )?);
         }
-        all
+        Ok(all)
     }
 
     // ------------------------------------------------------------------
