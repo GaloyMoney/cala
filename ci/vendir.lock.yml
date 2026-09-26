@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #29 from GaloyMoney/codex/fail-safe-narinfo-list...'
-      sha: 6f10e75551bfdbdeee7e452ef6e851f6ffe4d019
+      commitTitle: 'Merge pull request #31 from GaloyMoney/fix/spelling-typos-action'
+      sha: 8aaee2b5105fe0d131292f3f3c7ace40741a0c61
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'Merge pull request #29 from GaloyMoney/codex/fail-safe-narinfo-list...'
-      sha: 6f10e75551bfdbdeee7e452ef6e851f6ffe4d019
+      commitTitle: 'Merge pull request #31 from GaloyMoney/fix/spelling-typos-action'
+      sha: 8aaee2b5105fe0d131292f3f3c7ace40741a0c61
     path: .
   path: vendor
 kind: LockConfig
