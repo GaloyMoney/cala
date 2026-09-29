@@ -1,34 +1,29 @@
 use thiserror::Error;
 
-use super::repo::{
-    EntryConstraint, EntryCreateError, EntryFindError, EntryModifyError, EntryQueryError,
-};
+use crate::error_support::{impl_lane_error_fail, impl_lane_error_fault};
 
-#[derive(Error, Debug)]
-pub enum EntryError {
-    #[error("EntryError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("EntryError - Create: {0}")]
-    Create(EntryCreateError),
-    #[error("EntryError - Modify: {0}")]
-    Modify(#[from] EntryModifyError),
-    #[error("EntryError - Find: {0}")]
-    Find(#[from] EntryFindError),
-    #[error("EntryError - Query: {0}")]
-    Query(#[from] EntryQueryError),
+use super::repo::{EntryConstraint, EntryConstraintViolation};
+
+#[derive(Debug, Clone, Error, errlanes::Rejection)]
+#[rejection(lift(EntryConstraintViolation))]
+pub enum EntryRejection {
     #[error(
-        "EntryError - EntryTargetsAccountSet: an entry may not be posted directly to an \
-         account-set backing account; an account set's balance is derived from its members"
+        "an entry may not be posted directly to an account-set backing account; \
+         an account set's balance is derived from its members"
     )]
+    #[rejection(key = EntryConstraint::AccountNotAccountSetFkey)]
     EntryTargetsAccountSet,
 }
 
-impl From<EntryCreateError> for EntryError {
-    fn from(error: EntryCreateError) -> Self {
-        if error.violated_constraint() == Some(EntryConstraint::AccountNotAccountSetFkey) {
-            Self::EntryTargetsAccountSet
-        } else {
-            Self::Create(error)
-        }
-    }
+#[derive(Debug, Error)]
+pub enum EntryError {
+    #[error(transparent)]
+    Rejected(#[from] EntryRejection),
+    #[error(transparent)]
+    Transient(#[from] errlanes::Transient),
+    #[error(transparent)]
+    Fatal(#[from] errlanes::Fatal),
 }
+
+impl_lane_error_fault!(EntryError);
+impl_lane_error_fail!(EntryError, EntryRejection, EntryConstraintViolation);

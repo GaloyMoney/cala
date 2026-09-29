@@ -15,7 +15,7 @@ use super::{
     cursor::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    error::BalanceError,
+    error::{BalanceError, BalanceRejection},
     EcRollupTxn,
 };
 
@@ -70,7 +70,7 @@ impl EffectiveBalances {
             .await?
         {
             (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
-            _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
+            _ => Err(BalanceRejection::NotFound(journal_id, account_id, currency).into()),
         }
     }
 

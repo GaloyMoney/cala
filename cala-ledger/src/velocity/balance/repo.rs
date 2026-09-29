@@ -191,10 +191,17 @@ impl VelocityBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let snapshot = row.values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let snapshot = row
+                .values
+                .map(|v| {
+                    serde_json::from_value::<BalanceSnapshot>(v).map_err(|e| {
+                        // A stored velocity balance snapshot that no longer
+                        // deserializes is corrupt state, not a caller-correctable
+                        // outcome.
+                        errlanes::Fatal::from_error(errlanes::FatalKind::CorruptState, e)
+                    })
+                })
+                .transpose()?;
             ret.insert(
                 VelocityBalanceKey {
                     window: Window::from(row.partition_window),

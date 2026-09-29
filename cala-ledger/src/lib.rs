@@ -138,6 +138,7 @@
 mod account_set_member;
 mod cel_context;
 mod ec_rollup;
+mod error_support;
 mod param;
 
 pub mod account;

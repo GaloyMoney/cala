@@ -106,7 +106,11 @@ impl Velocities {
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
         self.limits.add_limit_to_control(db, control, limit).await?;
-        Ok(self.controls.find_by_id_in_op(db, control).await?)
+        self.controls
+            .maybe_find_by_id_in_op(db, control)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control))
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
@@ -181,7 +185,11 @@ impl Velocities {
         account_ids: &[AccountId],
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
+        let control = self
+            .controls
+            .maybe_find_by_id_in_op(&mut *db, control_id)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)
@@ -219,7 +227,11 @@ impl Velocities {
         let account_id = account_id.into();
         tracing::Span::current().record("account_id", account_id.to_string());
 
-        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
+        let control = self
+            .controls
+            .maybe_find_by_id_in_op(&mut *db, control_id)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)

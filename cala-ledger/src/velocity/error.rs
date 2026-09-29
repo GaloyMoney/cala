@@ -3,110 +3,133 @@ use thiserror::Error;
 
 use cel_interpreter::CelError;
 
+use crate::error_support::{impl_lane_error_fail, impl_lane_error_fault_only};
+use crate::param::error::ParamRejection;
 use crate::primitives::*;
 
-use super::control::{
-    VelocityControlColumn, VelocityControlCreateError, VelocityControlFindError,
-    VelocityControlModifyError, VelocityControlQueryError,
-};
-use super::limit::{
-    VelocityLimitColumn, VelocityLimitCreateError, VelocityLimitFindError,
-    VelocityLimitModifyError, VelocityLimitQueryError,
-};
+use super::control::{VelocityControlConstraint, VelocityControlConstraintViolation};
+use super::limit::{VelocityLimitConstraint, VelocityLimitConstraintViolation};
 
-#[derive(Error, Debug)]
-pub enum VelocityError {
-    #[error("VelocityError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
+// Not `Clone`: carries `CelError` (from `cala-cel-interpreter`, out of this
+// rollout's scope), which does not implement it.
+#[derive(Debug, Error, errlanes::Rejection)]
+#[rejection(lift(VelocityControlConstraintViolation, VelocityLimitConstraintViolation))]
+pub enum VelocityRejection {
+    /// Not `#[from]`: see `param::error::ParamRejection::CelError` — the
+    /// wrapped type would need to implement `errlanes::Rejection`, and
+    /// `CelError` is out of this rollout's scope.
     #[error("VelocityError - CelError: {0}")]
-    CelError(#[from] CelError),
-    #[error("{0}")]
-    ParamError(#[from] crate::param::error::ParamError),
-    #[error("VelocityError - Could not find control by id: {0}")]
-    CouldNotFindControlById(VelocityControlId),
+    CelError(CelError),
+    #[error(transparent)]
+    Param(#[from] ParamRejection),
+    #[error("velocity control '{0}' not found")]
+    NotFoundControlById(VelocityControlId),
+    /// #5800: keeps `LimitExceededError`'s fields (limit/control ids) so a
+    /// consumer can match one level deep and learn *which* control
+    /// rejected, instead of matching four levels into an opaque
+    /// `PostingError`/`VelocityError` nest.
     #[error("VelocityError - Enforcement: {0}")]
-    Enforcement(#[from] LimitExceededError),
-    #[error("VelocityError - HydrationError: {0}")]
-    HydrationError(#[from] es_entity::EntityHydrationError),
-    #[error("VelocityError - VelocityControlCreate: {0}")]
-    VelocityControlCreate(VelocityControlCreateError),
-    #[error("VelocityError - VelocityControlModify: {0}")]
-    VelocityControlModify(#[from] VelocityControlModifyError),
-    #[error("VelocityError - VelocityControlFind: {0}")]
-    VelocityControlFind(VelocityControlFindError),
-    #[error("VelocityError - VelocityControlQuery: {0}")]
-    VelocityControlQuery(#[from] VelocityControlQueryError),
-    #[error("VelocityError - VelocityLimitCreate: {0}")]
-    VelocityLimitCreate(VelocityLimitCreateError),
-    #[error("VelocityError - VelocityLimitModify: {0}")]
-    VelocityLimitModify(#[from] VelocityLimitModifyError),
-    #[error("VelocityError - VelocityLimitFind: {0}")]
-    VelocityLimitFind(#[from] VelocityLimitFindError),
-    #[error("VelocityError - VelocityLimitQuery: {0}")]
-    VelocityLimitQuery(#[from] VelocityLimitQueryError),
-    #[error("VelocityError - control_id '{0}' already exists")]
+    Enforcement(LimitExceededError),
+    #[error("control_id '{0}' already exists")]
+    #[rejection(
+        key = VelocityControlConstraint::Pkey,
+        via = VelocityControlConstraintViolation,
+        with = control_id_taken
+    )]
     ControlIdAlreadyExists(String),
-    #[error("VelocityError - limit_id '{0}' already exists")]
+    #[error("limit_id '{0}' already exists")]
+    #[rejection(
+        key = VelocityLimitConstraint::Pkey,
+        via = VelocityLimitConstraintViolation,
+        with = limit_id_taken
+    )]
     LimitIdAlreadyExists(String),
-    #[error("VelocityError - Limit already added to Control")]
+    #[error("limit already added to control")]
     LimitAlreadyAddedToControl,
 }
 
-impl From<VelocityControlFindError> for VelocityError {
-    fn from(error: VelocityControlFindError) -> Self {
-        match error {
-            VelocityControlFindError::NotFound {
-                column: Some(VelocityControlColumn::Id),
-                value,
-                ..
-            } => Self::CouldNotFindControlById(value.parse().expect("invalid uuid")),
-            other => Self::VelocityControlFind(other),
-        }
-    }
+fn control_id_taken(cv: VelocityControlConstraintViolation) -> VelocityRejection {
+    VelocityRejection::ControlIdAlreadyExists(cv.value().unwrap_or_default().to_owned())
 }
+
+fn limit_id_taken(cv: VelocityLimitConstraintViolation) -> VelocityRejection {
+    VelocityRejection::LimitIdAlreadyExists(cv.value().unwrap_or_default().to_owned())
+}
+
+#[derive(Debug, Error)]
+pub enum VelocityError {
+    #[error(transparent)]
+    Rejected(#[from] VelocityRejection),
+    #[error(transparent)]
+    Transient(#[from] errlanes::Transient),
+    #[error(transparent)]
+    Fatal(#[from] errlanes::Fatal),
+}
+
+impl_lane_error_fault_only!(VelocityError);
+impl_lane_error_fail!(
+    VelocityError,
+    VelocityRejection,
+    VelocityControlConstraintViolation
+);
+impl_lane_error_fail!(
+    VelocityError,
+    VelocityRejection,
+    VelocityLimitConstraintViolation
+);
+
+/// `cala_velocity_control_limits` is a plain join table (no `EsRepo` of its
+/// own), so its unique-pair violation — a limit already attached to a
+/// control — cannot come through the generated `ConstraintViolation`/`Lift`
+/// path the way `ControlIdAlreadyExists`/`LimitIdAlreadyExists` do. The
+/// name below is confirmed against the live schema (`\d
+/// cala_velocity_control_limits` — Postgres's 63-byte identifier truncation
+/// makes this unguessable from the migration source alone), matched
+/// exactly rather than by substring.
+const VELOCITY_CONTROL_LIMITS_UNIQUE_CONSTRAINT: &str =
+    "cala_velocity_control_limits_velocity_control_id_velocity_l_key";
 
 impl From<sqlx::Error> for VelocityError {
-    fn from(error: sqlx::Error) -> Self {
-        if let Some(err) = error.as_database_error() {
-            if let Some(constraint) = err.constraint() {
-                if constraint
-                    .contains("cala_velocity_control_limits_velocity_control_id_velocity_l_key")
-                {
-                    return Self::LimitAlreadyAddedToControl;
-                }
+    fn from(e: sqlx::Error) -> Self {
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.constraint() == Some(VELOCITY_CONTROL_LIMITS_UNIQUE_CONSTRAINT) {
+                return VelocityRejection::LimitAlreadyAddedToControl.into();
             }
         }
-        Self::Sqlx(error)
+        errlanes::Fault::from(e).into()
     }
 }
 
-impl From<VelocityControlCreateError> for VelocityError {
-    fn from(error: VelocityControlCreateError) -> Self {
-        match error {
-            VelocityControlCreateError::ConstraintViolation {
-                column: Some(VelocityControlColumn::Id),
-                value,
-                ..
-            } => Self::ControlIdAlreadyExists(value.unwrap_or_default()),
-            other => Self::VelocityControlCreate(other),
-        }
+/// A stored velocity-context snapshot that no longer hydrates is corrupt
+/// state, not a caller-correctable outcome.
+impl From<es_entity::EntityHydrationError> for VelocityError {
+    fn from(e: es_entity::EntityHydrationError) -> Self {
+        Self::Fatal(errlanes::Fatal::from_error(
+            errlanes::FatalKind::CorruptState,
+            e,
+        ))
     }
 }
 
-impl From<VelocityLimitCreateError> for VelocityError {
-    fn from(error: VelocityLimitCreateError) -> Self {
-        match error {
-            VelocityLimitCreateError::ConstraintViolation {
-                column: Some(VelocityLimitColumn::Id),
-                value,
-                ..
-            } => Self::LimitIdAlreadyExists(value.unwrap_or_default()),
-            other => Self::VelocityLimitCreate(other),
-        }
+impl From<CelError> for VelocityError {
+    fn from(e: CelError) -> Self {
+        Self::Rejected(VelocityRejection::CelError(e))
     }
 }
 
-#[derive(Error, Debug)]
+impl From<ParamRejection> for VelocityError {
+    fn from(e: ParamRejection) -> Self {
+        Self::Rejected(VelocityRejection::Param(e))
+    }
+}
+
+impl From<LimitExceededError> for VelocityError {
+    fn from(e: LimitExceededError) -> Self {
+        Self::Rejected(VelocityRejection::Enforcement(e))
+    }
+}
+
+#[derive(Debug, Clone, Error)]
 #[error("Velocity limit exceeded")]
 pub struct LimitExceededError {
     pub account_id: AccountId,

@@ -39,7 +39,7 @@ use crate::{
     primitives::{AccountId, AccountSetId},
 };
 
-pub(crate) use error::AccountSetMemberError;
+pub(crate) use error::{AccountSetMemberError, AccountSetMemberRejection};
 pub use repo::members_cursor;
 use repo::AccountSetMemberRepo;
 

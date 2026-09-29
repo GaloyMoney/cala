@@ -1,74 +1,46 @@
 use thiserror::Error;
 
-use super::repo::{
-    TransactionColumn, TransactionCreateError, TransactionFindError, TransactionModifyError,
-    TransactionQueryError,
-};
+use crate::error_support::{impl_lane_error_fail, impl_lane_error_fault};
+
+use super::repo::{TransactionConstraint, TransactionConstraintViolation};
 use cala_types::primitives::TransactionId;
 
-#[derive(Error, Debug)]
-pub enum TransactionError {
-    #[error("TransactionError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("TransactionError - Create: {0}")]
-    Create(TransactionCreateError),
-    #[error("TransactionError - Modify: {0}")]
-    Modify(#[from] TransactionModifyError),
-    #[error("TransactionError - Find: {0}")]
-    Find(TransactionFindError),
-    #[error("TransactionError - Query: {0}")]
-    Query(#[from] TransactionQueryError),
-    #[error("TransactionError - NotFound: id '{0}' not found")]
-    CouldNotFindById(TransactionId),
-    #[error("TransactionError - NotFound: external id '{0}' not found")]
-    CouldNotFindByExternalId(String),
-    #[error("TransactionError - DuplicateExternalId: external_id '{0}' already exists")]
+#[derive(Debug, Clone, Error, errlanes::Rejection)]
+#[rejection(lift(TransactionConstraintViolation))]
+pub enum TransactionRejection {
+    #[error("transaction '{0}' not found")]
+    NotFoundById(TransactionId),
+    #[error("transaction with external id '{0}' not found")]
+    NotFoundByExternalId(String),
+    #[error("external_id '{0}' already exists")]
+    #[rejection(key = TransactionConstraint::ExternalIdKey, with = external_id_taken)]
     DuplicateExternalId(String),
-    #[error("TransactionError - DuplicateId: id '{0}' already exists")]
+    #[error("id '{0}' already exists")]
+    #[rejection(key = TransactionConstraint::Pkey, with = id_taken)]
     DuplicateId(String),
 }
 
-impl TransactionError {
-    pub fn was_not_found(&self) -> bool {
-        matches!(
-            self,
-            Self::CouldNotFindById(_) | Self::CouldNotFindByExternalId(_)
-        )
-    }
+fn external_id_taken(cv: TransactionConstraintViolation) -> TransactionRejection {
+    TransactionRejection::DuplicateExternalId(cv.value().unwrap_or_default().to_owned())
 }
 
-impl From<TransactionFindError> for TransactionError {
-    fn from(error: TransactionFindError) -> Self {
-        match error {
-            TransactionFindError::NotFound {
-                column: Some(TransactionColumn::Id),
-                value,
-                ..
-            } => Self::CouldNotFindById(value.parse().expect("invalid uuid")),
-            TransactionFindError::NotFound {
-                column: Some(TransactionColumn::ExternalId),
-                value,
-                ..
-            } => Self::CouldNotFindByExternalId(value),
-            other => Self::Find(other),
-        }
-    }
+fn id_taken(cv: TransactionConstraintViolation) -> TransactionRejection {
+    TransactionRejection::DuplicateId(cv.value().unwrap_or_default().to_owned())
 }
 
-impl From<TransactionCreateError> for TransactionError {
-    fn from(error: TransactionCreateError) -> Self {
-        match error {
-            TransactionCreateError::ConstraintViolation {
-                column: Some(TransactionColumn::ExternalId),
-                value,
-                ..
-            } => Self::DuplicateExternalId(value.unwrap_or_default()),
-            TransactionCreateError::ConstraintViolation {
-                column: Some(TransactionColumn::Id),
-                value,
-                ..
-            } => Self::DuplicateId(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
+#[derive(Debug, Error)]
+pub enum TransactionError {
+    #[error(transparent)]
+    Rejected(#[from] TransactionRejection),
+    #[error(transparent)]
+    Transient(#[from] errlanes::Transient),
+    #[error(transparent)]
+    Fatal(#[from] errlanes::Fatal),
 }
+
+impl_lane_error_fault!(TransactionError);
+impl_lane_error_fail!(
+    TransactionError,
+    TransactionRejection,
+    TransactionConstraintViolation
+);

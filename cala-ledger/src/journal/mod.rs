@@ -56,7 +56,11 @@ impl Journals {
 
     #[instrument(level = "debug", name = "cala_ledger.journals.find_by_id", skip(self))]
     pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id(journal_id).await?)
+        self.repo
+            .maybe_find_by_id(journal_id)
+            .await?
+            .ok_or(JournalRejection::NotFoundById(journal_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -69,7 +73,11 @@ impl Journals {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
     ) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id_in_op(op, journal_id).await?)
+        self.repo
+            .maybe_find_by_id_in_op(op, journal_id)
+            .await?
+            .ok_or(JournalRejection::NotFoundById(journal_id))
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
@@ -92,7 +100,11 @@ impl Journals {
 
     #[instrument(level = "debug", name = "cala_ledger.journal.find_by_code", skip(self))]
     pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_code(Some(code)).await?)
+        self.repo
+            .maybe_find_by_code(Some(code.clone()))
+            .await?
+            .ok_or(JournalRejection::NotFoundByCode(code))
+            .map_err(Into::into)
     }
 }
 

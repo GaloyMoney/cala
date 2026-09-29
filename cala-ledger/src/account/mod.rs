@@ -10,7 +10,7 @@ use tracing::instrument;
 use std::collections::HashMap;
 
 use crate::{
-    account_set_member::{AccountSetMemberError, AccountSetMembers},
+    account_set_member::{AccountSetMemberError, AccountSetMemberRejection, AccountSetMembers},
     outbox::*,
     primitives::{AccountSetId, Status},
 };
@@ -93,7 +93,11 @@ impl Accounts {
 
     #[instrument(level = "debug", name = "cala_ledger.accounts.find", skip_all)]
     pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_id(account_id).await?)
+        self.repo
+            .maybe_find_by_id(account_id)
+            .await?
+            .ok_or(AccountRejection::NotFoundById(account_id))
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", name = "cala_ledger.accounts.find_all", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
@@ -119,7 +123,11 @@ impl Accounts {
         skip(self)
     )]
     pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+        self.repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(AccountRejection::NotFoundByExternalId(external_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -128,7 +136,11 @@ impl Accounts {
         skip(self)
     )]
     pub async fn find_by_code(&self, code: String) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_code(code).await?)
+        self.repo
+            .maybe_find_by_code(code.clone())
+            .await?
+            .ok_or(AccountRejection::NotFoundByCode(code))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -141,7 +153,11 @@ impl Accounts {
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
     ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+        let mut account = self
+            .repo
+            .maybe_find_by_id_in_op(&mut *db, id)
+            .await?
+            .ok_or(AccountRejection::NotFoundById(id))?;
         if account.update_status(Status::Locked).did_execute() {
             self.persist_in_op(db, &mut account).await?;
         }
@@ -158,7 +174,11 @@ impl Accounts {
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
     ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+        let mut account = self
+            .repo
+            .maybe_find_by_id_in_op(&mut *db, id)
+            .await?
+            .ok_or(AccountRejection::NotFoundById(id))?;
         if account.update_status(Status::Active).did_execute() {
             self.persist_in_op(db, &mut account).await?;
         }
@@ -184,7 +204,7 @@ impl Accounts {
         account: &mut Account,
     ) -> Result<(), AccountError> {
         if account.is_account_set() {
-            return Err(AccountError::CannotUpdateAccountSetAccounts);
+            return Err(AccountRejection::CannotUpdateAccountSetAccounts.into());
         }
         self.repo.update_in_op(db, account).await?;
         Ok(())
@@ -222,12 +242,14 @@ impl Accounts {
             .attach_new_accounts_in_op(db, &pairs)
             .await
             .map_err(|e| match e {
-                AccountSetMemberError::AccountSetsNotFound(missing) => {
-                    AccountError::InitialAccountSetNotFound(
-                        *missing.first().expect("missing ids are never empty"),
-                    )
-                }
-                AccountSetMemberError::Sqlx(e) => AccountError::Sqlx(e),
+                AccountSetMemberError::Rejected(
+                    AccountSetMemberRejection::AccountSetsNotFound(missing),
+                ) => AccountRejection::InitialAccountSetNotFound(
+                    *missing.first().expect("missing ids are never empty"),
+                )
+                .into(),
+                AccountSetMemberError::Transient(t) => t.into(),
+                AccountSetMemberError::Fatal(f) => f.into(),
             })
     }
 

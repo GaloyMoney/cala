@@ -641,7 +641,10 @@ mod tests {
                 current_balances,
                 &entries_to_add,
             );
-            assert!(matches!(result, Err(VelocityError::Enforcement(_))));
+            assert!(matches!(
+                result,
+                Err(VelocityError::Rejected(VelocityRejection::Enforcement(_)))
+            ));
         }
     }
 }

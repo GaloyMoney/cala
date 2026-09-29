@@ -13,7 +13,7 @@ use cala_types::{
 use super::{
     account_balance::AccountBalance,
     cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
-    error::BalanceError,
+    error::{corrupt_snapshot, BalanceError, BalanceRejection},
 };
 
 const EC_SET_LOCK_CLASS: i32 = 1;
@@ -72,11 +72,15 @@ impl BalanceRepo {
             .await?;
 
         if let Some(row) = row {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
+                corrupt_snapshot(
+                    format!("journal {journal_id} account {account_id} currency {currency}"),
+                    e,
+                )
+            })?;
             Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency))
+            Err(BalanceRejection::NotFound(journal_id, account_id, currency).into())
         }
     }
 
@@ -175,8 +179,8 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values)
+                .map_err(|e| corrupt_snapshot("balance snapshot (find_all_in_op)", e))?;
             ret.insert(
                 (details.journal_id, details.account_id, details.currency),
                 AccountBalance::new(row.normal_balance_type, details),
@@ -231,11 +235,12 @@ impl BalanceRepo {
             .into_iter()
             .take(first)
             .map(|row| {
-                let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
+                    corrupt_snapshot("balance snapshot (list_for_account_in_op)", e)
+                })?;
+                Ok::<_, BalanceError>(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -306,11 +311,12 @@ impl BalanceRepo {
             .into_iter()
             .take(first)
             .map(|row| {
-                let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
+                    corrupt_snapshot("balance snapshot (list_for_accounts_in_op)", e)
+                })?;
+                Ok::<_, BalanceError>(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -709,12 +715,22 @@ impl BalanceRepo {
         let mut ret = HashMap::new();
         for row in rows {
             if row.status == Status::Locked {
-                return Err(BalanceError::AccountLocked(row.account_id));
+                return Err(BalanceRejection::AccountLocked(row.account_id).into());
             }
-            let snapshot = row.latest_values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let snapshot = row
+                .latest_values
+                .map(|v| {
+                    serde_json::from_value::<BalanceSnapshot>(v).map_err(|e| {
+                        corrupt_snapshot(
+                            format!(
+                                "journal {journal_id} account {} (find_ec_balances_for_update)",
+                                row.account_id
+                            ),
+                            e,
+                        )
+                    })
+                })
+                .transpose()?;
             ret.insert(
                 (
                     row.account_id,

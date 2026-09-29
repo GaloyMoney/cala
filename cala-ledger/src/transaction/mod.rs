@@ -37,7 +37,11 @@ impl Transactions {
         &self,
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+        self.repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(TransactionRejection::NotFoundByExternalId(external_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -49,7 +53,11 @@ impl Transactions {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id(transaction_id).await?)
+        self.repo
+            .maybe_find_by_id(transaction_id)
+            .await?
+            .ok_or(TransactionRejection::NotFoundById(transaction_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -62,7 +70,11 @@ impl Transactions {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id_in_op(op, transaction_id).await?)
+        self.repo
+            .maybe_find_by_id_in_op(op, transaction_id)
+            .await?
+            .ok_or(TransactionRejection::NotFoundById(transaction_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
