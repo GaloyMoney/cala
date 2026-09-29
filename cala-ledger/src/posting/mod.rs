@@ -95,7 +95,7 @@ use crate::{
     velocity::Velocities,
 };
 
-pub use error::{PostingError, RejectionReason};
+pub use error::{PostingError, PostingRejection, RejectionReason};
 
 /// Ancestor account sets per journal: `journal -> (leaf -> its sets in that
 /// journal)`. Keyed by journal because a leaf account has no journal of its
@@ -200,10 +200,11 @@ impl Postings {
         // ---- phase 1: lock (the fence) --------------------------------
         let mut keys = Self::entry_balance_keys(&prepared);
         if keys.account_ids.len() > error::MAX_DISTINCT_BALANCES_PER_BATCH {
-            return Err(PostingError::BatchTooManyAccounts {
+            return Err(PostingRejection::BatchTooManyAccounts {
                 distinct: keys.account_ids.len(),
                 max: error::MAX_DISTINCT_BALANCES_PER_BATCH,
-            });
+            }
+            .into());
         }
         let locked = self
             .repo
@@ -336,7 +337,13 @@ impl Postings {
             let posting = self
                 .tx_templates
                 .prepare_transaction(input.tx_id, &template.values, input.params.clone())
-                .map_err(|e| PostingError::rejected(index, input.tx_id, e))?;
+                .map_err(|e| match e {
+                    crate::tx_template::error::TxTemplateError::Rejected(r) => {
+                        PostingError::rejected(index, input.tx_id, RejectionReason::TxTemplate(r))
+                    }
+                    crate::tx_template::error::TxTemplateError::Transient(t) => t.into(),
+                    crate::tx_template::error::TxTemplateError::Fatal(f) => f.into(),
+                })?;
 
             if !seen_ids.insert(posting.tx_id) {
                 return Err(PostingError::rejected(
@@ -518,9 +525,9 @@ impl Postings {
         for account_id in ancestor_ids {
             if let Some(meta) = read.accounts.get(&account_id) {
                 if meta.locked {
-                    return Err(PostingError::BalanceError(
-                        crate::balance::error::BalanceError::AccountLocked(account_id),
-                    ));
+                    let err: crate::balance::error::BalanceError =
+                        crate::balance::error::BalanceRejection::AccountLocked(account_id).into();
+                    return Err(err.into());
                 }
             }
         }

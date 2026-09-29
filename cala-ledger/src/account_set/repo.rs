@@ -225,7 +225,7 @@ impl AccountSetRepo {
         .fetch_one(db.as_executor())
         .await?;
         if row.conflict {
-            return Err(AccountSetError::MemberAlreadyAdded);
+            return Err(AccountSetRejection::MemberAlreadyAdded.into());
         }
         Ok(())
     }

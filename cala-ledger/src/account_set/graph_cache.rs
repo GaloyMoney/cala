@@ -92,7 +92,7 @@ use tracing::instrument;
 use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
-    error::AccountSetError,
+    error::{AccountSetError, AccountSetRejection},
     graph_validation::{
         has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
         SetMembership,
@@ -519,7 +519,7 @@ impl SetGraphCache {
                 );
                 Ok(())
             }
-            Some(true) => Err(AccountSetError::MemberAlreadyAdded),
+            Some(true) => Err(AccountSetRejection::MemberAlreadyAdded.into()),
             // A set unknown to snapshot + overlay surfaced mid-walk. With
             // a matching epoch this should be unreachable — but the SQL
             // walk is always correct, so fall back rather than reason

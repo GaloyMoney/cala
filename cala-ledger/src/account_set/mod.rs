@@ -208,7 +208,11 @@ impl AccountSets {
                 tracing::Span::current().record("is_account", true);
                 tracing::Span::current().record("is_account_set", false);
                 tracing::Span::current().record("member_id", tracing::field::display(&id));
-                let set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
+                let set: AccountSet = self
+                    .repo
+                    .maybe_find_by_id_in_op(&mut *op, account_set_id)
+                    .await?
+                    .ok_or(AccountSetRejection::NotFoundById(account_set_id))?;
                 (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -221,13 +225,13 @@ impl AccountSets {
                     .await?;
                 let target = sets
                     .remove(&account_set_id)
-                    .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
+                    .ok_or(AccountSetRejection::NotFoundById(account_set_id))?;
                 let member_set = sets
                     .remove(&id)
-                    .ok_or(AccountSetError::CouldNotFindById(id))?;
+                    .ok_or(AccountSetRejection::NotFoundById(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(AccountSetError::JournalIdMismatch);
+                    return Err(AccountSetRejection::JournalIdMismatch.into());
                 }
 
                 (target, AccountId::from(id))
@@ -328,7 +332,7 @@ impl AccountSets {
         for membership in &members {
             let set = sets
                 .get(&membership.account_set_id)
-                .ok_or(AccountSetError::CouldNotFindById(membership.account_set_id))?;
+                .ok_or(AccountSetRejection::NotFoundById(membership.account_set_id))?;
             check_pairs.push((set.values().journal_id, membership.account_id));
         }
         let with_history = self
@@ -340,10 +344,11 @@ impl AccountSets {
                 .iter()
                 .find(|m| m.account_id == member_id)
                 .expect("member with history must be in input");
-            return Err(AccountSetError::MemberHasBalanceHistory {
+            return Err(AccountSetRejection::MemberHasBalanceHistory {
                 account_set_id: membership.account_set_id,
                 member_id,
-            });
+            }
+            .into());
         }
 
         let account_ids: Vec<AccountId> = members.iter().map(|m| m.account_id).collect();
@@ -437,15 +442,15 @@ impl AccountSets {
         for edge in &members {
             let account_set = sets
                 .get(&edge.account_set_id)
-                .ok_or(AccountSetError::CouldNotFindById(edge.account_set_id))?;
+                .ok_or(AccountSetRejection::NotFoundById(edge.account_set_id))?;
             let member_account_set =
                 sets.get(&edge.member_account_set_id)
-                    .ok_or(AccountSetError::CouldNotFindById(
+                    .ok_or(AccountSetRejection::NotFoundById(
                         edge.member_account_set_id,
                     ))?;
 
             if account_set.values().journal_id != member_account_set.values().journal_id {
-                return Err(AccountSetError::JournalIdMismatch);
+                return Err(AccountSetRejection::JournalIdMismatch.into());
             }
 
             check_pairs.push((
@@ -463,10 +468,11 @@ impl AccountSets {
                 .iter()
                 .find(|edge| AccountId::from(edge.member_account_set_id) == member_id)
                 .expect("member with history must be in input");
-            return Err(AccountSetError::MemberHasBalanceHistory {
+            return Err(AccountSetRejection::MemberHasBalanceHistory {
                 account_set_id: edge.account_set_id,
                 member_id,
-            });
+            }
+            .into());
         }
 
         self.repo.lock_for_set_membership_op(op).await?;
@@ -502,10 +508,11 @@ impl AccountSets {
             .member_has_balance_history_in_op(op, journal_id, member_id)
             .await?
         {
-            return Err(AccountSetError::MemberHasBalanceHistory {
+            return Err(AccountSetRejection::MemberHasBalanceHistory {
                 account_set_id,
                 member_id,
-            });
+            }
+            .into());
         }
         Ok(())
     }
@@ -541,7 +548,11 @@ impl AccountSets {
 
         let (account_set, member_id) = match member {
             AccountSetMemberId::Account(id) => {
-                let set = self.repo.find_by_id_in_op(&mut *op, account_set_id).await?;
+                let set: AccountSet = self
+                    .repo
+                    .maybe_find_by_id_in_op(&mut *op, account_set_id)
+                    .await?
+                    .ok_or(AccountSetRejection::NotFoundById(account_set_id))?;
                 (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -551,13 +562,13 @@ impl AccountSets {
                     .await?;
                 let target = sets
                     .remove(&account_set_id)
-                    .ok_or(AccountSetError::CouldNotFindById(account_set_id))?;
+                    .ok_or(AccountSetRejection::NotFoundById(account_set_id))?;
                 let member_set = sets
                     .remove(&id)
-                    .ok_or(AccountSetError::CouldNotFindById(id))?;
+                    .ok_or(AccountSetRejection::NotFoundById(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(AccountSetError::JournalIdMismatch);
+                    return Err(AccountSetRejection::JournalIdMismatch.into());
                 }
 
                 (target, AccountId::from(id))
@@ -609,7 +620,11 @@ impl AccountSets {
 
     #[instrument(level = "debug", name = "cala_ledger.account_sets.find", skip(self))]
     pub async fn find(&self, account_set_id: AccountSetId) -> Result<AccountSet, AccountSetError> {
-        Ok(self.repo.find_by_id(account_set_id).await?)
+        self.repo
+            .maybe_find_by_id(account_set_id)
+            .await?
+            .ok_or(AccountSetRejection::NotFoundById(account_set_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -622,7 +637,11 @@ impl AccountSets {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
     ) -> Result<AccountSet, AccountSetError> {
-        Ok(self.repo.find_by_id_in_op(op, account_set_id).await?)
+        self.repo
+            .maybe_find_by_id_in_op(op, account_set_id)
+            .await?
+            .ok_or(AccountSetRejection::NotFoundById(account_set_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -634,7 +653,11 @@ impl AccountSets {
         &self,
         external_id: String,
     ) -> Result<AccountSet, AccountSetError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+        self.repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(AccountSetRejection::NotFoundByExternalId(external_id))
+            .map_err(Into::into)
     }
 
     #[instrument(

@@ -63,11 +63,7 @@ impl CalaLedger {
                 }
                 pool_opts.connect(&pg_con).await?
             }
-            _ => {
-                return Err(LedgerError::ConfigError(
-                    "One of pg_con or pool must be set".to_string(),
-                ))
-            }
+            _ => return Err(error::config_error("One of pg_con or pool must be set")),
         };
         if config.exec_migrations {
             sqlx::migrate!()

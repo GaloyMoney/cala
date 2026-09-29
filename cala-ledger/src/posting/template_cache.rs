@@ -30,7 +30,10 @@ use cala_types::tx_template::TxTemplateValues;
 
 use crate::{
     primitives::TxTemplateId,
-    tx_template::{error::TxTemplateError, TxTemplateEvent},
+    tx_template::{
+        error::{TxTemplateError, TxTemplateRejection},
+        TxTemplateEvent,
+    },
 };
 
 use super::repo::PostingRepo;
@@ -145,7 +148,7 @@ impl TemplateCache {
         let mut resolved = HashMap::with_capacity(codes.len());
         for code in codes {
             let Some((id, version, event)) = fetched.remove(code) else {
-                return Err(TxTemplateError::NotFound);
+                return Err(TxTemplateRejection::NotFoundByCode(code.clone()).into());
             };
             let event: TxTemplateEvent = serde_json::from_value(event)?;
             resolved.insert(

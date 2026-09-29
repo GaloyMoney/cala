@@ -1,36 +1,30 @@
-use sqlx::error::DatabaseError;
 use thiserror::Error;
 
 use crate::{
-    account_set::error::AccountSetError,
-    balance::error::BalanceError,
+    account_set::error::{AccountSetError, AccountSetRejection},
+    balance::error::{BalanceError, BalanceRejection},
+    error_support::impl_lane_error_fault_only,
     primitives::{AccountId, JournalId, TransactionId},
-    tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    tx_template::error::{TxTemplateError, TxTemplateRejection},
+    velocity::error::{VelocityError, VelocityRejection},
 };
 
-/// The posting module's error — nested under
-/// [`crate::ledger::error::LedgerError`], never the other way around, exactly
-/// like every other domain error.
+/// The posting module's rejection, nested under
+/// [`crate::ledger::error::LedgerRejection`], never the other way around,
+/// exactly like every other domain rejection.
 ///
-/// Domain errors the flow passes through keep their own granularity via
-/// `#[from]`; failures specific to the posting path get their own variants
-/// here. [`Self::Rejected`] additionally attributes a failure to one posting
-/// of the submitted batch.
-#[derive(Error, Debug)]
-pub enum PostingError {
-    #[error("PostingError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("PostingError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
-    #[error("PostingError - TxTemplateError: {0}")]
-    TxTemplateError(#[from] TxTemplateError),
-    #[error("PostingError - VelocityError: {0}")]
-    VelocityError(#[from] VelocityError),
-    #[error("PostingError - AccountSetError: {0}")]
-    AccountSetError(#[from] AccountSetError),
-    #[error("PostingError - BalanceError: {0}")]
-    BalanceError(#[from] BalanceError),
+/// Domain rejections the flow passes through keep their own granularity
+/// via `#[from]`; failures specific to the posting path get their own
+/// variants here. [`Self::Rejected`] additionally attributes a rejection to
+/// one posting of the submitted batch.
+#[derive(Debug, Error, errlanes::Rejection)]
+pub enum PostingRejection {
+    /// The `cala_transactions` primary key rejected a write already
+    /// present in the table — an idempotent replay is the caller's to
+    /// interpret, so it is not attributed to a specific posting in the
+    /// batch the way [`Self::Rejected`] is.
+    #[error("duplicate transaction id in this batch")]
+    DuplicateTransactionId,
     /// A failure attributed to a specific posting within a batch.
     ///
     /// The batch API is all-or-nothing: the whole operation aborts on the
@@ -42,7 +36,7 @@ pub enum PostingError {
     /// nothing has been written when it surfaces. Infrastructure failures
     /// (constraint races, deadlocks, connection loss) are not attributable
     /// and surface through the other variants.
-    #[error("PostingError - Rejected: posting {index} ({tx_id}): {reason}")]
+    #[error("posting {index} ({tx_id}): {reason}")]
     Rejected {
         index: usize,
         tx_id: TransactionId,
@@ -53,11 +47,29 @@ pub enum PostingError {
     /// bare `out of shared memory` from Postgres that names neither the cause
     /// nor the fix — and that can strike unrelated concurrent transactions too.
     #[error(
-        "PostingError - BatchTooManyAccounts: this batch touches {distinct} distinct \
-         (journal, account, currency) balances; at most {max} may be locked in one batch. \
-         Split it — batch *size* is not the limit, the number of distinct accounts is."
+        "this batch touches {distinct} distinct (journal, account, currency) balances; \
+         at most {max} may be locked in one batch. Split it — batch *size* is not the \
+         limit, the number of distinct accounts is."
     )]
     BatchTooManyAccounts { distinct: usize, max: usize },
+    #[error(transparent)]
+    TxTemplate(#[from] TxTemplateRejection),
+    #[error(transparent)]
+    Velocity(#[from] VelocityRejection),
+    #[error(transparent)]
+    AccountSet(#[from] AccountSetRejection),
+    #[error(transparent)]
+    Balance(#[from] BalanceRejection),
+}
+
+#[derive(Debug, Error)]
+pub enum PostingError {
+    #[error(transparent)]
+    Rejected(#[from] PostingRejection),
+    #[error(transparent)]
+    Transient(#[from] errlanes::Transient),
+    #[error(transparent)]
+    Fatal(#[from] errlanes::Fatal),
 }
 
 impl PostingError {
@@ -71,30 +83,79 @@ impl PostingError {
         let span = tracing::Span::current();
         span.record("failed_posting_index", index);
         span.record("failed_posting_id", tracing::field::display(tx_id));
-        Self::Rejected {
+        PostingRejection::Rejected {
             index,
             tx_id,
             reason: Box::new(reason.into()),
         }
+        .into()
     }
 }
 
+impl_lane_error_fault_only!(PostingError);
+
+/// `cala_transactions`'s primary key is the only constraint this module's
+/// hand-written SQL treats as a rejection rather than `Fatal(Invariant)` —
+/// everything else (a `23`-class violation on some other constraint, a
+/// deadlock, connection loss, ...) goes through the generic classifier.
+const TRANSACTIONS_PKEY_CONSTRAINT: &str = "cala_transactions_pkey";
+
 impl From<sqlx::Error> for PostingError {
     fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
+        if let sqlx::Error::Database(ref db_err) = e {
+            if db_err.constraint() == Some(TRANSACTIONS_PKEY_CONSTRAINT) {
+                return PostingRejection::DuplicateTransactionId.into();
             }
-            e => Self::Sqlx(e),
+        }
+        errlanes::Fault::from(e).into()
+    }
+}
+
+impl From<TxTemplateError> for PostingError {
+    fn from(e: TxTemplateError) -> Self {
+        match e {
+            TxTemplateError::Rejected(r) => Self::Rejected(PostingRejection::TxTemplate(r)),
+            TxTemplateError::Transient(t) => Self::Transient(t),
+            TxTemplateError::Fatal(f) => Self::Fatal(f),
+        }
+    }
+}
+
+impl From<VelocityError> for PostingError {
+    fn from(e: VelocityError) -> Self {
+        match e {
+            VelocityError::Rejected(r) => Self::Rejected(PostingRejection::Velocity(r)),
+            VelocityError::Transient(t) => Self::Transient(t),
+            VelocityError::Fatal(f) => Self::Fatal(f),
+        }
+    }
+}
+
+impl From<AccountSetError> for PostingError {
+    fn from(e: AccountSetError) -> Self {
+        match e {
+            AccountSetError::Rejected(r) => Self::Rejected(PostingRejection::AccountSet(r)),
+            AccountSetError::Transient(t) => Self::Transient(t),
+            AccountSetError::Fatal(f) => Self::Fatal(f),
+        }
+    }
+}
+
+impl From<BalanceError> for PostingError {
+    fn from(e: BalanceError) -> Self {
+        match e {
+            BalanceError::Rejected(r) => Self::Rejected(PostingRejection::Balance(r)),
+            BalanceError::Transient(t) => Self::Transient(t),
+            BalanceError::Fatal(f) => Self::Fatal(f),
         }
     }
 }
 
 /// The business-level reason a posting was rejected.
-#[derive(Error, Debug)]
+#[derive(Debug, Error)]
 pub enum RejectionReason {
-    #[error("{0}")]
-    TxTemplate(#[from] TxTemplateError),
+    #[error(transparent)]
+    TxTemplate(#[from] TxTemplateRejection),
     #[error("account {0} does not exist")]
     AccountNotFound(AccountId),
     #[error(
