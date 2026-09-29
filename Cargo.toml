@@ -15,9 +15,10 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.31.1-dev" }
 
 cel = "0.14.5"
-es-entity = "0.14.1"
-job = { version = "0.16.1", features = ["es-entity"] }
-obix = { version = "0.13.1", default-features = false }
+es-entity = "=0.14.4-dev"
+job = { version = "=0.16.2-dev", features = ["es-entity"] }
+obix = { version = "=0.13.2-dev", default-features = false }
+errlanes = { version = "=0.14.4-dev", features = ["sqlx"] }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }
@@ -39,6 +40,15 @@ rust_decimal = "1.42"
 rusty-money = { version = "0.5", features = ["iso", "crypto"] }
 schemars = { version = "1.0", features = ["uuid1"] }
 rand = "0.10"
+
+# Temporary pre-release validation pins; remove when es-entity #245, job #226
+# and obix #164 are released.
+[patch.crates-io]
+es-entity       = { git = "https://github.com/GaloyMoney/es-entity", branch = "task/errlanes-repo-error-lanes-01a0ec55" }
+errlanes        = { git = "https://github.com/GaloyMoney/es-entity", branch = "task/errlanes-repo-error-lanes-01a0ec55" }
+errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", branch = "task/errlanes-repo-error-lanes-01a0ec55" }
+job             = { git = "https://github.com/GaloyMoney/job",       branch = "refactor/errlanes-job" }
+obix            = { git = "https://github.com/GaloyMoney/obix",      branch = "refactor/errlanes-obix" }
 
 [profile.release]
 lto = true

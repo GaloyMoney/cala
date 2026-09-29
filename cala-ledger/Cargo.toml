@@ -36,6 +36,7 @@ required-features = ["json-schema"]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
 es-entity = { workspace = true }
+errlanes = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
 
