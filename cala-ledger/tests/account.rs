@@ -1,6 +1,9 @@
 mod helpers;
 
-use cala_ledger::{account::error::AccountError, *};
+use cala_ledger::{
+    account::error::{AccountError, AccountRejection},
+    *,
+};
 
 #[tokio::test]
 async fn find_returns_not_found_by_id() -> anyhow::Result<()> {
@@ -14,8 +17,10 @@ async fn find_returns_not_found_by_id() -> anyhow::Result<()> {
 
     let id = AccountId::new();
     match cala.accounts().find(id).await {
-        Err(AccountError::CouldNotFindById(err_id)) => assert_eq!(err_id, id),
-        Err(other) => panic!("expected CouldNotFindById({id}), got: {other}"),
+        Err(AccountError::Rejected(AccountRejection::NotFoundById(err_id))) => {
+            assert_eq!(err_id, id)
+        }
+        Err(other) => panic!("expected NotFoundById({id}), got: {other}"),
         Ok(_) => panic!("expected not-found error, got Ok"),
     }
 

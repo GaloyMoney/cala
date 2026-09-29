@@ -3,7 +3,10 @@ mod helpers;
 use rand::distr::{Alphanumeric, SampleString};
 
 use cala_ledger::{
-    transaction::{error::TransactionError, Transaction},
+    transaction::{
+        error::{TransactionError, TransactionRejection},
+        Transaction,
+    },
     tx_template::*,
     *,
 };
@@ -43,9 +46,11 @@ async fn find_by_id_in_op_sees_uncommitted_write_pool_read_does_not() -> anyhow:
     assert_eq!(posted.id(), tx_id);
 
     match cala.transactions().find_by_id(tx_id).await {
-        Err(TransactionError::CouldNotFindById(err_id)) => assert_eq!(err_id, tx_id),
-        Err(other) => panic!("expected CouldNotFindById before commit, got err: {other}"),
-        Ok(_) => panic!("expected CouldNotFindById before commit, got Ok"),
+        Err(TransactionError::Rejected(TransactionRejection::NotFoundById(err_id))) => {
+            assert_eq!(err_id, tx_id)
+        }
+        Err(other) => panic!("expected NotFoundById before commit, got err: {other}"),
+        Ok(_) => panic!("expected NotFoundById before commit, got Ok"),
     }
 
     let seen_in_op = cala.transactions().find_by_id_in_op(&mut op, tx_id).await?;
