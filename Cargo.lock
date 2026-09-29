@@ -322,7 +322,6 @@ dependencies = [
  "cala-ledger-core-types",
  "chrono",
  "derive_builder",
- "errlanes",
  "es-entity",
  "futures",
  "job",
@@ -867,36 +866,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "errlanes"
-version = "0.14.4-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=task%2Ferrlanes-repo-error-lanes-01a0ec55#174096403caa90b14e088cbbf43f52b6c6191fb9"
-dependencies = [
- "errlanes-derive",
- "sqlx",
- "tokio",
-]
-
-[[package]]
-name = "errlanes-derive"
-version = "0.14.4-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=task%2Ferrlanes-repo-error-lanes-01a0ec55#174096403caa90b14e088cbbf43f52b6c6191fb9"
-dependencies = [
- "convert_case",
- "darling 0.24.0",
- "proc-macro2",
- "quote",
- "syn 3.0.3",
-]
-
-[[package]]
 name = "es-entity"
-version = "0.14.4-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=task%2Ferrlanes-repo-error-lanes-01a0ec55#174096403caa90b14e088cbbf43f52b6c6191fb9"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d763a47378d464e4d2b01d6c922a58171dfce77ff1bd88d178ebbb860c0dbc17"
 dependencies = [
  "async-stream",
  "chrono",
  "derive_builder",
- "errlanes",
  "es-entity-macros",
  "futures-core",
  "futures-util",
@@ -918,8 +895,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.14.4-dev"
-source = "git+https://github.com/GaloyMoney/es-entity?branch=task%2Ferrlanes-repo-error-lanes-01a0ec55#174096403caa90b14e088cbbf43f52b6c6191fb9"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd0cc572bebd395f88464e76ffcacb750fd8d48866f6455a0f85b33add2f4859"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1439,8 +1417,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.16.2-dev"
-source = "git+https://github.com/GaloyMoney/job?branch=refactor%2Ferrlanes-job#e9d60ef4541a2e79f4c5f516bda7b0806b1d3b45"
+version = "0.16.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c9d963b2769f32598a991afdc49c02e87da88cea4e9753ac6a954232c81002a"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1644,8 +1623,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.13.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=refactor%2Ferrlanes-obix#4ba39ac2c33e8c579d7b802ec783166d9fa48ca2"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d84094d6184a52b61c1dfada49942f5c9951565df2c39c7107ebdc95a74d7df8"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1666,8 +1646,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.13.2-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=refactor%2Ferrlanes-obix#4ba39ac2c33e8c579d7b802ec783166d9fa48ca2"
+version = "0.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e3e8d16379a89b1c943d1e5fe450f294e7b176f69cbefac45ddfd0e73333e1b"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -1689,9 +1670,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "opentelemetry"
-version = "0.33.0"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6cdb0b1b267eb9db3331b434ed9ddab10d50e280a9adf9d13e5233e2002b61b5"
+checksum = "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -1703,9 +1684,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry_sdk"
-version = "0.33.0"
+version = "0.32.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb39533d9d1c912123efd7d41d7e0c29d16917b60ce15b4c8d87cb1af7f67520"
+checksum = "9b59f80e1ac4d5ff7a2db8fb6c80badb7f0f3f858211fba08dd9aaec750894f9"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -3006,9 +2987,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.34.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a904802a1b902f43638b677ff2a650847e3b4404101b6c586d648e8c1e3e8fe"
+checksum = "adbc64cba7137545b8044cb1fe9814f7aacf3c6b5f9b45be8bb5db538befdb26"
 dependencies = [
  "js-sys",
  "opentelemetry",
