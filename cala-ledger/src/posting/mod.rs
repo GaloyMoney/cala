@@ -77,7 +77,7 @@ mod error;
 mod repo;
 mod template_cache;
 
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};

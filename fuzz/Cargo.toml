@@ -108,9 +108,9 @@ bench = false
 
 # Match the unpublished upstream revisions used by the parent workspace.
 [patch.crates-io]
-es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "a6b4ffcf1c40d906ea78e030ed04ea40188f79d0" }
-es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "a6b4ffcf1c40d906ea78e030ed04ea40188f79d0" }
-errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "a6b4ffcf1c40d906ea78e030ed04ea40188f79d0" }
-errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "a6b4ffcf1c40d906ea78e030ed04ea40188f79d0" }
-job = { git = "https://github.com/GaloyMoney/job", rev = "bfe07b22a18903a6f265de3f3de92ce1d4c91340" }
-obix = { git = "https://github.com/GaloyMoney/obix", rev = "4e679ea5def26fa2a602578bb9128b5864d501fe" }
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
+errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
+errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
+job = { git = "https://github.com/GaloyMoney/job", rev = "30f96bc6e15efae4d1e779bca24fdcc0319b808c" }
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "a7442a8fe752f937cd846b34c628142179694434" }

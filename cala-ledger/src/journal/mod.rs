@@ -2,7 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -43,7 +43,7 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_op(db, new_journal).await.lift()?;
+        let journal = self.repo.create_in_op(db, new_journal).await.widen()?;
         Ok(journal)
     }
 
@@ -95,7 +95,7 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        self.repo.update_in_op(db, journal).await.lift()?;
+        self.repo.update_in_op(db, journal).await.widen()?;
         Ok(())
     }
 

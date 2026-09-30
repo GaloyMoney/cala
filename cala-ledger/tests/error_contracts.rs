@@ -4,7 +4,7 @@ use std::error::Error;
 
 use cala_ledger::{
     account::{error::AccountRejection, NewAccount},
-    errlanes::{self, Fail, FatalKind, Lane, Rejection, ResultExt, Transient, TransientKind},
+    errlanes::{self, Fail, FatalKind, Lane, Rejection, Transient, TransientKind, WidenResult},
     posting::{PostingError, PostingRejection},
     velocity::error::{LimitExceededError, VelocityEnforcementError, VelocityEnforcementRejection},
     *,

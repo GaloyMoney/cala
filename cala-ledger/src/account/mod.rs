@@ -3,7 +3,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -63,7 +63,7 @@ impl Accounts {
         new_account: NewAccount,
     ) -> Result<Account, AccountError> {
         let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
-        let account = self.repo.create_in_op(db, new_account).await.lift()?;
+        let account = self.repo.create_in_op(db, new_account).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs).await?;
         Ok(account)
     }
@@ -87,7 +87,7 @@ impl Accounts {
     ) -> Result<Vec<Account>, AccountError> {
         let pairs = initial_membership_pairs(&new_accounts);
         tracing::Span::current().record("initial_set_count", pairs.len());
-        let accounts = self.repo.create_all_in_op(db, new_accounts).await.lift()?;
+        let accounts = self.repo.create_all_in_op(db, new_accounts).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs).await?;
         Ok(accounts)
     }
@@ -207,7 +207,7 @@ impl Accounts {
         if account.is_account_set() {
             return Err(AccountRejection::CannotUpdateAccountSetAccounts.into());
         }
-        self.repo.update_in_op(db, account).await.lift()?;
+        self.repo.update_in_op(db, account).await.widen()?;
         Ok(())
     }
 

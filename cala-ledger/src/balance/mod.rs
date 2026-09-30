@@ -42,7 +42,7 @@ mod repo;
 mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;

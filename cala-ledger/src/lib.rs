@@ -149,7 +149,7 @@
 //! Consumers use `.widen()?` to propagate between compatible failure types:
 //!
 //! ```
-//! use cala_ledger::{errlanes::ResultExt, posting::PostingError,
+//! use cala_ledger::{errlanes::WidenResult, posting::PostingError,
 //!     velocity::error::VelocityEnforcementError};
 //!
 //! fn propagate(result: Result<(), VelocityEnforcementError>) -> Result<(), PostingError> {
@@ -161,13 +161,13 @@
 //! A consumer cannot accidentally narrow an error that may deny into Cala's lanes:
 //!
 //! ```compile_fail
-//! use cala_ledger::{errlanes::{Fail, ResultExt}, posting::{PostingError, PostingRejection}};
+//! use cala_ledger::{errlanes::{Fail, WidenResult}, posting::{PostingError, PostingRejection}};
 //! fn cannot_drop_denied(result: Result<(), Fail<PostingRejection>>) -> Result<(), PostingError> {
 //!     result.widen()
 //! }
 //! ```
 //!
-//! Repository constraint mappings use `.lift()?`: accepted cases become named
+//! Repository constraint mappings use `.widen()?`: accepted cases become named
 //! domain rejections, while unaccepted constraints become fatal invariants.
 //! Conflict payloads retain typed optional attempted values and database sources;
 //! their default display omits attempted values. Use typed payloads and rejection

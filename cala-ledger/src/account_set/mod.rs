@@ -4,7 +4,7 @@ mod graph_cache;
 mod graph_validation;
 mod repo;
 
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -93,7 +93,7 @@ impl AccountSets {
             .expect("Failed to build account");
         self.accounts.create_in_op(db, new_account).await.widen()?;
 
-        let account_set = self.repo.create_in_op(db, new_account_set).await.lift()?;
+        let account_set = self.repo.create_in_op(db, new_account_set).await.widen()?;
 
         Ok(account_set)
     }
@@ -138,7 +138,7 @@ impl AccountSets {
             .repo
             .create_all_in_op(db, new_account_sets)
             .await
-            .lift()?;
+            .widen()?;
 
         Ok(account_sets)
     }
@@ -165,7 +165,7 @@ impl AccountSets {
         db: &mut impl es_entity::AtomicOperation,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
-        self.repo.update_in_op(db, account_set).await.lift()?;
+        self.repo.update_in_op(db, account_set).await.widen()?;
 
         self.accounts
             .update_velocity_context_values_in_op(db, account_set.values())

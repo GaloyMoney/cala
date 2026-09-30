@@ -6,7 +6,7 @@ pub mod error;
 mod limit;
 
 use chrono::{DateTime, Utc};
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -60,7 +60,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let res = self.limits.create_in_op(db, new_limit).await.lift()?;
+        let res = self.limits.create_in_op(db, new_limit).await.widen()?;
         Ok(res)
     }
 
@@ -81,7 +81,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let res = self.controls.create_in_op(db, new_control).await.lift()?;
+        let res = self.controls.create_in_op(db, new_control).await.widen()?;
         Ok(res)
     }
 

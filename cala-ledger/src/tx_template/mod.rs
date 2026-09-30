@@ -4,7 +4,7 @@ mod repo;
 pub mod error;
 
 use chrono::NaiveDate;
-use errlanes::ResultExt;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -108,7 +108,7 @@ impl TxTemplates {
         db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let tx_template = self.repo.create_in_op(db, new_tx_template).await.lift()?;
+        let tx_template = self.repo.create_in_op(db, new_tx_template).await.widen()?;
         Ok(tx_template)
     }
 
