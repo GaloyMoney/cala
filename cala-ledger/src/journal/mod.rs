@@ -2,6 +2,7 @@ mod entity;
 pub mod error;
 mod repo;
 
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use tracing::instrument;
@@ -42,7 +43,7 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         new_journal: NewJournal,
     ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_op(db, new_journal).await?;
+        let journal = self.repo.create_in_op(db, new_journal).await.widen()?;
         Ok(journal)
     }
 
@@ -50,13 +51,17 @@ impl Journals {
     pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, T>, JournalError> {
-        Ok(self.repo.find_all(journal_ids).await?)
+    ) -> Result<HashMap<JournalId, T>, crate::CalaFault> {
+        self.repo.find_all(journal_ids).await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.journals.find_by_id", skip(self))]
-    pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id(journal_id).await?)
+    pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalLookupError> {
+        self.repo
+            .maybe_find_by_id(journal_id)
+            .await?
+            .ok_or(JournalLookupRejection::NotFoundById(journal_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -68,8 +73,12 @@ impl Journals {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
-    ) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id_in_op(op, journal_id).await?)
+    ) -> Result<Journal, JournalLookupError> {
+        self.repo
+            .maybe_find_by_id_in_op(op, journal_id)
+            .await?
+            .ok_or(JournalLookupRejection::NotFoundById(journal_id))
+            .map_err(Into::into)
     }
 
     #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
@@ -86,13 +95,17 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         journal: &mut Journal,
     ) -> Result<(), JournalError> {
-        self.repo.update_in_op(db, journal).await?;
+        self.repo.update_in_op(db, journal).await.widen()?;
         Ok(())
     }
 
     #[instrument(level = "debug", name = "cala_ledger.journal.find_by_code", skip(self))]
-    pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_code(Some(code)).await?)
+    pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalLookupError> {
+        self.repo
+            .maybe_find_by_code(Some(code.clone()))
+            .await?
+            .ok_or(JournalLookupRejection::NotFoundByCode(code))
+            .map_err(Into::into)
     }
 }
 

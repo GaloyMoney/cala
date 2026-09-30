@@ -105,3 +105,12 @@ path = "fuzz_targets/primitives_parse.rs"
 test = false
 doc = false
 bench = false
+
+# Match the unpublished upstream revisions used by the parent workspace.
+[patch.crates-io]
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+job = { git = "https://github.com/GaloyMoney/job", rev = "3e2733a61986fc922f3c19b9f64df17fbc35462f" }
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "152d1360f44112881dfabb0f00fb764d6f60e392" }

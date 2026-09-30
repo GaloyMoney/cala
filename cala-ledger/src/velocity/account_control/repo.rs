@@ -3,7 +3,8 @@ use tracing::instrument;
 
 use crate::primitives::{AccountId, VelocityControlId};
 
-use super::{super::error::*, value::*};
+use super::value::*;
+use crate::CalaFault;
 
 #[derive(Debug, Clone)]
 pub struct AccountControlRepo {
@@ -27,7 +28,7 @@ impl AccountControlRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         control: AccountVelocityControl,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), CalaFault> {
         sqlx::query!(
             r#"INSERT INTO cala_velocity_account_controls (account_id, velocity_control_id, values)
             VALUES ($1, $2, $3)"#,
@@ -64,7 +65,7 @@ impl AccountControlRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         mut controls: Vec<AccountVelocityControl>,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), CalaFault> {
         if controls.is_empty() {
             return Ok(());
         }

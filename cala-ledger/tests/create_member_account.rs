@@ -22,8 +22,14 @@ use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
 
 use cala_ledger::{
-    account::{error::AccountError, NewAccount},
-    account_set::{error::AccountSetError, NewAccountSet},
+    account::{
+        error::{AccountError, AccountRejection},
+        NewAccount,
+    },
+    account_set::{
+        error::{AccountSetError, AccountSetRejection},
+        NewAccountSet,
+    },
     tx_template::Params,
     *,
 };
@@ -342,11 +348,11 @@ async fn missing_set_rejected() -> anyhow::Result<()> {
     let res = cala.accounts().create(new_account).await;
     assert!(matches!(
         res,
-        Err(AccountError::InitialAccountSetNotFound(id)) if id == missing
+        Err(AccountError::Rejected(AccountRejection::InitialAccountSetNotFound(id))) if id == missing
     ));
     assert!(matches!(
         cala.accounts().find(account_id).await,
-        Err(AccountError::CouldNotFindById(_))
+        Err(AccountError::Rejected(AccountRejection::NotFoundById(_)))
     ));
     Ok(())
 }
@@ -394,7 +400,12 @@ async fn same_account_classic_race_blocks_on_member_lock() -> anyhow::Result<()>
     op.commit().await?;
 
     let res = blocked.await?;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     cala.account_sets()
         .add_member(set_two.id(), account_id)

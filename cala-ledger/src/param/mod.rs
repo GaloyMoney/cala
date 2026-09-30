@@ -31,7 +31,7 @@ impl Params {
         mut self,
         clock: &ClockHandle,
         defs: Option<&Vec<ParamDefinition>>,
-    ) -> Result<CelContext, ParamError> {
+    ) -> Result<CelContext, ParamRejection> {
         let mut ctx = crate::cel_context::initialize(clock.clone());
         if let Some(defs) = defs {
             let mut cel_map = CelMap::new();
@@ -41,10 +41,13 @@ impl Params {
                         d.name.clone(),
                         d.r#type
                             .coerce_value(v)
-                            .map_err(ParamError::ParamTypeMismatch)?,
+                            .map_err(ParamRejection::ParamTypeMismatch)?,
                     );
                 } else if let Some(expr) = d.default.as_ref() {
-                    cel_map.insert(d.name.clone(), expr.evaluate(&ctx)?);
+                    cel_map.insert(
+                        d.name.clone(),
+                        expr.evaluate(&ctx).map_err(ParamRejection::CelError)?,
+                    );
                 }
             }
             ctx.add_variable("params", cel_map);

@@ -1,71 +1,55 @@
-use rust_decimal::Decimal;
+use super::repo::TxTemplateConstraintViolation;
+use crate::param::error::ParamRejection;
+use crate::primitives::TxTemplateId;
 use thiserror::Error;
 
-use cala_types::primitives::{Currency, Layer};
-use cel_interpreter::CelError;
-
-use super::repo::{
-    TxTemplateColumn, TxTemplateCreateError, TxTemplateFindError, TxTemplateModifyError,
-    TxTemplateQueryError,
-};
-
-#[derive(Error, Debug)]
-pub enum TxTemplateError {
-    #[error("TxTemplateError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("TxTemplateError - Create: {0}")]
-    Create(TxTemplateCreateError),
-    #[error("TxTemplateError - Modify: {0}")]
-    Modify(#[from] TxTemplateModifyError),
-    #[error("TxTemplateError - Find: {0}")]
-    Find(TxTemplateFindError),
-    #[error("TxTemplateError - Query: {0}")]
-    Query(#[from] TxTemplateQueryError),
-    #[error("TxTemplateError - DuplicateCode: code '{0}' already exists")]
-    DuplicateCode(String),
-    #[error("TxTemplateError - DuplicateId: id '{0}' already exists")]
-    DuplicateId(String),
-    #[error("TxTemplateError - CelError: {0}")]
-    CelError(#[from] CelError),
-    #[error("TxTemplateError - NotFound")]
-    NotFound,
-    #[error("TxTemplateError - SerdeJson: {0}")]
-    SerdeJson(#[from] serde_json::Error),
-    #[error("TxTemplateError - UnbalancedTransaction: currency {0}, layer {1:?}, amount {2}")]
-    UnbalancedTransaction(Currency, Layer, Decimal),
-    #[error("TxTemplateError - NotFound: code '{0}' not found")]
-    CouldNotFindByCode(String),
-    #[error("{0}")]
-    ParamError(#[from] crate::param::error::ParamError),
+#[derive(Debug, Error, errlanes::Rejection)]
+pub enum TxTemplateLookupRejection {
+    #[error("template with code '{0}' not found")]
+    NotFoundByCode(String),
 }
 
-impl From<TxTemplateFindError> for TxTemplateError {
-    fn from(error: TxTemplateFindError) -> Self {
-        match error {
-            TxTemplateFindError::NotFound {
-                column: Some(TxTemplateColumn::Code),
-                value,
-                ..
-            } => Self::CouldNotFindByCode(value),
-            other => Self::Find(other),
-        }
+#[errlanes::compose]
+#[derive(Debug, Error)]
+#[lift(TxTemplateLookupRejection, strict)]
+#[lift(TxTemplateConstraintViolation, unhandled = fatal)]
+pub enum TxTemplateRejection {
+    #[lift(TxTemplateLookupRejection::NotFoundByCode)]
+    #[error("template with code '{0}' not found")]
+    NotFoundByCode(String),
+    #[error("template code already exists: {0}")]
+    #[lift(TxTemplateConstraintViolation::CodeKey)]
+    #[rejection(code = "DUPLICATE_CODE")]
+    DuplicateCode(#[source] es_entity::ConstraintConflict<String>),
+    #[error("template ID already exists: {0}")]
+    #[lift(TxTemplateConstraintViolation::Pkey)]
+    #[rejection(code = "DUPLICATE_ID")]
+    DuplicateId(#[source] es_entity::ConstraintConflict<TxTemplateId>),
+}
+
+/// Evaluating a template adds no infrastructure failures or management outcomes.
+#[errlanes::compose]
+#[derive(Debug, Error)]
+#[lift(ParamRejection, strict)]
+pub enum TxTemplateEvaluationRejection {
+    #[lift(ParamRejection::ParamTypeMismatch)]
+    #[error("ParamError - ParamTypeMismatch: {0}")]
+    ParamTypeMismatch(String),
+    #[lift(ParamRejection::CelError)]
+    #[error("ParamError - CelError: {0}")]
+    CelError(#[source] cel_interpreter::CelError),
+    #[error("unbalanced transaction: currency {0}, layer {1:?}, amount {2}")]
+    UnbalancedTransaction(
+        crate::primitives::Currency,
+        crate::primitives::Layer,
+        rust_decimal::Decimal,
+    ),
+}
+impl From<cel_interpreter::CelError> for TxTemplateEvaluationRejection {
+    fn from(error: cel_interpreter::CelError) -> Self {
+        crate::param::error::ParamRejection::from(error).into()
     }
 }
 
-impl From<TxTemplateCreateError> for TxTemplateError {
-    fn from(error: TxTemplateCreateError) -> Self {
-        match error {
-            TxTemplateCreateError::ConstraintViolation {
-                column: Some(TxTemplateColumn::Code),
-                value,
-                ..
-            } => Self::DuplicateCode(value.unwrap_or_default()),
-            TxTemplateCreateError::ConstraintViolation {
-                column: Some(TxTemplateColumn::Id),
-                value,
-                ..
-            } => Self::DuplicateId(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
-}
+pub type TxTemplateError = errlanes::Fail<TxTemplateRejection, crate::CalaLanes>;
+pub type TxTemplateLookupError = errlanes::Fail<TxTemplateLookupRejection, crate::CalaLanes>;

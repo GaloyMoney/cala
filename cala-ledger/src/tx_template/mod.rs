@@ -4,6 +4,7 @@ mod repo;
 pub mod error;
 
 use chrono::NaiveDate;
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
@@ -107,7 +108,7 @@ impl TxTemplates {
         db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, TxTemplateError> {
-        let tx_template = self.repo.create_in_op(db, new_tx_template).await?;
+        let tx_template = self.repo.create_in_op(db, new_tx_template).await.widen()?;
         Ok(tx_template)
     }
 
@@ -115,8 +116,8 @@ impl TxTemplates {
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, T>, TxTemplateError> {
-        Ok(self.repo.find_all(tx_template_ids).await?)
+    ) -> Result<HashMap<TxTemplateId, T>, crate::CalaFault> {
+        self.repo.find_all(tx_template_ids).await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.tx_templates.list", skip(self))]
@@ -124,14 +125,19 @@ impl TxTemplates {
         &self,
         cursor: es_entity::PaginatedQueryArgs<TxTemplateByCodeCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, TxTemplateError>
+    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, crate::CalaFault>
     {
-        Ok(self.repo.list_by_code(cursor, direction).await?)
+        self.repo.list_by_code(cursor, direction).await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err(level = tracing::Level::WARN))]
     pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
-        Ok(self.repo.find_by_code(code.as_ref().to_string()).await?)
+        let code = code.as_ref().to_string();
+        self.repo
+            .maybe_find_by_code(code.clone())
+            .await?
+            .ok_or(TxTemplateRejection::NotFoundByCode(code))
+            .map_err(Into::into)
     }
 
     /// Evaluate a template body against its params.
@@ -150,7 +156,7 @@ impl TxTemplates {
         tx_id: TransactionId,
         tmpl: &TxTemplateValues,
         params: Params,
-    ) -> Result<PreparedTransaction, TxTemplateError> {
+    ) -> Result<PreparedTransaction, TxTemplateEvaluationRejection> {
         let ctx = params.into_context(&self.clock, tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
@@ -214,7 +220,7 @@ impl TxTemplates {
         transaction_id: TransactionId,
         journal_id: JournalId,
         ctx: &cel_interpreter::CelContext,
-    ) -> Result<Vec<NewEntry>, TxTemplateError> {
+    ) -> Result<Vec<NewEntry>, TxTemplateEvaluationRejection> {
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
         for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
@@ -261,7 +267,9 @@ impl TxTemplates {
 
         for ((c, l), v) in totals {
             if v != Decimal::ZERO {
-                return Err(TxTemplateError::UnbalancedTransaction(c, l, v));
+                return Err(TxTemplateEvaluationRejection::UnbalancedTransaction(
+                    c, l, v,
+                ));
             }
         }
 

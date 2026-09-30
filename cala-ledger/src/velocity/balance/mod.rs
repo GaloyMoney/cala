@@ -54,7 +54,7 @@ impl VelocityBalances {
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &crate::posting::AncestorMappings,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), VelocityEnforcementError> {
         if controls.is_empty() {
             return Ok(());
         }
@@ -137,7 +137,7 @@ impl VelocityBalances {
             VelocityBalanceKey,
             Vec<(&'a AccountVelocityLimit, &'a EntryValues)>,
         >,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), VelocityEnforcementRejection> {
         let empty = Vec::new();
         for entry in entries {
             for account_id in account_set_mappings
@@ -189,7 +189,8 @@ impl VelocityBalances {
         time: DateTime<Utc>,
         mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
         entries_to_add: &'a HashMap<VelocityBalanceKey, Vec<(&AccountVelocityLimit, &EntryValues)>>,
-    ) -> Result<HashMap<&'a VelocityBalanceKey, Vec<BalanceSnapshot>>, VelocityError> {
+    ) -> Result<HashMap<&'a VelocityBalanceKey, Vec<BalanceSnapshot>>, VelocityEnforcementRejection>
+    {
         let mut res = HashMap::new();
 
         for (key, entries) in entries_to_add.iter() {
@@ -641,7 +642,10 @@ mod tests {
                 current_balances,
                 &entries_to_add,
             );
-            assert!(matches!(result, Err(VelocityError::Enforcement(_))));
+            assert!(matches!(
+                result,
+                Err(VelocityEnforcementRejection::LimitExceeded(_))
+            ));
         }
     }
 }

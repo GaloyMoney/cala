@@ -77,6 +77,7 @@ mod error;
 mod repo;
 mod template_cache;
 
+use errlanes::WidenResult;
 use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
@@ -95,7 +96,9 @@ use crate::{
     velocity::Velocities,
 };
 
-pub use error::{PostingError, RejectionReason};
+pub use error::{
+    PostingError, PostingRejection, PostingRejectionSchema, RejectionReason, RejectionReasonSchema,
+};
 
 /// Ancestor account sets per journal: `journal -> (leaf -> its sets in that
 /// journal)`. Keyed by journal because a leaf account has no journal of its
@@ -194,16 +197,17 @@ impl Postings {
 
         // ---- prepare (client-side) ------------------------------------
         let codes: Vec<String> = Self::dedup(batch.iter().map(|p| p.tx_template_code.clone()));
-        let used = self.templates.resolve_in_op(db, &codes).await?;
+        let used = self.templates.resolve_in_op(db, &codes).await.widen()?;
         let mut prepared = self.prepare_all(&batch, &used)?;
 
         // ---- phase 1: lock (the fence) --------------------------------
         let mut keys = Self::entry_balance_keys(&prepared);
         if keys.account_ids.len() > error::MAX_DISTINCT_BALANCES_PER_BATCH {
-            return Err(PostingError::BatchTooManyAccounts {
+            return Err(PostingRejection::BatchTooManyAccounts {
                 distinct: keys.account_ids.len(),
                 max: error::MAX_DISTINCT_BALANCES_PER_BATCH,
-            });
+            }
+            .into());
         }
         let locked = self
             .repo
@@ -224,7 +228,7 @@ impl Postings {
         // Postgres resolves it by aborting one side with a retryable deadlock
         // error rather than hanging.
         if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
-            let refreshed = self.templates.refresh_in_op(db, &stale).await?;
+            let refreshed = self.templates.refresh_in_op(db, &stale).await.widen()?;
             let mut merged = used;
             merged.extend(refreshed);
             prepared = self.prepare_all(&batch, &merged)?;
@@ -288,12 +292,14 @@ impl Postings {
                 .collect();
         self.velocities
             .enforce_batch_in_op(db, now, &for_enforcement, &read.controls, &mappings)
-            .await?;
+            .await
+            .widen()?;
 
         // ---- phase 3: apply --------------------------------------------
         self.repo
             .insert_postings_and_balances_in_op(db, now, &rows, &snapshots)
-            .await?;
+            .await
+            .map_err(error::transaction_write_error)?;
 
         self.update_effective_balances(db, &hydrated, &entry_values, &read, &mappings, now)
             .await?;
@@ -336,10 +342,10 @@ impl Postings {
             let posting = self
                 .tx_templates
                 .prepare_transaction(input.tx_id, &template.values, input.params.clone())
-                .map_err(|e| PostingError::rejected(index, input.tx_id, e))?;
+                .map_err(|reason| error::rejected(index, input.tx_id, reason))?;
 
             if !seen_ids.insert(posting.tx_id) {
-                return Err(PostingError::rejected(
+                return Err(error::rejected(
                     index,
                     input.tx_id,
                     RejectionReason::DuplicateTransactionIdInBatch(posting.tx_id),
@@ -347,7 +353,7 @@ impl Postings {
             }
             if let Some(external_id) = posting.external_id.as_ref() {
                 if !seen_external.insert(external_id.clone()) {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         input.tx_id,
                         RejectionReason::DuplicateExternalIdInBatch(external_id.clone()),
@@ -374,14 +380,14 @@ impl Postings {
 
             match read.journals.get(&posting.journal_id) {
                 None => {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         tx_id,
                         RejectionReason::JournalNotFound(posting.journal_id),
                     ))
                 }
                 Some(journal) if journal.status == Status::Locked => {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         tx_id,
                         RejectionReason::JournalLocked(posting.journal_id),
@@ -393,14 +399,14 @@ impl Postings {
             for entry in posting.entries.iter() {
                 let account_id = entry.account_id();
                 let Some(meta) = read.accounts.get(&account_id) else {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         tx_id,
                         RejectionReason::AccountNotFound(account_id),
                     ));
                 };
                 if meta.is_account_set {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         tx_id,
                         RejectionReason::EntryTargetsAccountSet(account_id),
@@ -409,7 +415,7 @@ impl Postings {
                 // Locked is locked, regardless of whether the account's
                 // balances are maintained inline or by the streaming rollup.
                 if meta.locked {
-                    return Err(PostingError::rejected(
+                    return Err(error::rejected(
                         index,
                         tx_id,
                         RejectionReason::AccountLocked(account_id),
@@ -518,9 +524,7 @@ impl Postings {
         for account_id in ancestor_ids {
             if let Some(meta) = read.accounts.get(&account_id) {
                 if meta.locked {
-                    return Err(PostingError::BalanceError(
-                        crate::balance::error::BalanceError::AccountLocked(account_id),
-                    ));
+                    return Err(PostingRejection::AccountLocked(account_id).into());
                 }
             }
         }

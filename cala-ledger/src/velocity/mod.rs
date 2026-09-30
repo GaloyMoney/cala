@@ -6,6 +6,7 @@ pub mod error;
 mod limit;
 
 use chrono::{DateTime, Utc};
+use errlanes::WidenResult;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -59,7 +60,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, VelocityError> {
-        let res = self.limits.create_in_op(db, new_limit).await?;
+        let res = self.limits.create_in_op(db, new_limit).await.widen()?;
         Ok(res)
     }
 
@@ -80,7 +81,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, VelocityError> {
-        let res = self.controls.create_in_op(db, new_control).await?;
+        let res = self.controls.create_in_op(db, new_control).await.widen()?;
         Ok(res)
     }
 
@@ -106,7 +107,11 @@ impl Velocities {
         limit: VelocityLimitId,
     ) -> Result<VelocityControl, VelocityError> {
         self.limits.add_limit_to_control(db, control, limit).await?;
-        Ok(self.controls.find_by_id_in_op(db, control).await?)
+        self.controls
+            .maybe_find_by_id_in_op(db, control)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control))
+            .map_err(Into::into)
     }
 
     #[instrument(level = "debug", name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
@@ -181,7 +186,11 @@ impl Velocities {
         account_ids: &[AccountId],
         params: impl Into<Params> + std::fmt::Debug,
     ) -> Result<VelocityControl, VelocityError> {
-        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
+        let control = self
+            .controls
+            .maybe_find_by_id_in_op(&mut *db, control_id)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)
@@ -219,7 +228,11 @@ impl Velocities {
         let account_id = account_id.into();
         tracing::Span::current().record("account_id", account_id.to_string());
 
-        let control = self.controls.find_by_id_in_op(&mut *db, control_id).await?;
+        let control = self
+            .controls
+            .maybe_find_by_id_in_op(&mut *db, control_id)
+            .await?
+            .ok_or(VelocityRejection::NotFoundControlById(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)
@@ -257,7 +270,7 @@ impl Velocities {
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &crate::posting::AncestorMappings,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), VelocityEnforcementError> {
         self.balances
             .enforce_batch_in_op(db, created_at, postings, controls, account_set_mappings)
             .await
@@ -267,7 +280,7 @@ impl Velocities {
     pub async fn list_limits_for_control(
         &self,
         control_id: VelocityControlId,
-    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+    ) -> Result<Vec<VelocityLimit>, crate::CalaFault> {
         let mut op = self.limits.begin_op_with_clock(&self.clock).await?;
         let limits = self
             .list_limits_for_control_in_op(&mut op, control_id)
@@ -281,7 +294,7 @@ impl Velocities {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         control_id: VelocityControlId,
-    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+    ) -> Result<Vec<VelocityLimit>, crate::CalaFault> {
         self.limits.list_for_control(op, control_id).await
     }
 
@@ -289,16 +302,16 @@ impl Velocities {
     pub async fn find_all_limits<T: From<VelocityLimit>>(
         &self,
         limit_ids: &[VelocityLimitId],
-    ) -> Result<HashMap<VelocityLimitId, T>, VelocityError> {
-        Ok(self.limits.find_all(limit_ids).await?)
+    ) -> Result<HashMap<VelocityLimitId, T>, crate::CalaFault> {
+        self.limits.find_all(limit_ids).await
     }
 
     #[instrument(level = "debug", name = "velocity.find_all_controls", skip(self, control_ids), fields(count = control_ids.len()))]
     pub async fn find_all_controls<T: From<VelocityControl>>(
         &self,
         control_ids: &[VelocityControlId],
-    ) -> Result<HashMap<VelocityControlId, T>, VelocityError> {
-        Ok(self.controls.find_all(control_ids).await?)
+    ) -> Result<HashMap<VelocityControlId, T>, crate::CalaFault> {
+        self.controls.find_all(control_ids).await
     }
 }
 

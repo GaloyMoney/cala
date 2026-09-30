@@ -37,7 +37,11 @@ impl Transactions {
         &self,
         external_id: String,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+        self.repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(TransactionRejection::NotFoundByExternalId(external_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -49,7 +53,11 @@ impl Transactions {
         &self,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id(transaction_id).await?)
+        self.repo
+            .maybe_find_by_id(transaction_id)
+            .await?
+            .ok_or(TransactionRejection::NotFoundById(transaction_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -62,7 +70,11 @@ impl Transactions {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_id: TransactionId,
     ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id_in_op(op, transaction_id).await?)
+        self.repo
+            .maybe_find_by_id_in_op(op, transaction_id)
+            .await?
+            .ok_or(TransactionRejection::NotFoundById(transaction_id))
+            .map_err(Into::into)
     }
 
     #[instrument(
@@ -77,20 +89,19 @@ impl Transactions {
         direction: es_entity::ListDirection,
     ) -> Result<
         es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>,
-        TransactionError,
+        crate::CalaFault,
     > {
-        Ok(self
-            .repo
+        self.repo
             .list_for_tx_template_id_by_created_at(template_id, query, direction)
-            .await?)
+            .await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        Ok(self.repo.find_all(transaction_ids).await?)
+    ) -> Result<HashMap<TransactionId, T>, crate::CalaFault> {
+        self.repo.find_all(transaction_ids).await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.transactions.find_all_in_op", skip(self, op, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
@@ -98,8 +109,8 @@ impl Transactions {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        Ok(self.repo.find_all_in_op(op, transaction_ids).await?)
+    ) -> Result<HashMap<TransactionId, T>, crate::CalaFault> {
+        self.repo.find_all_in_op(op, transaction_ids).await
     }
 }
 

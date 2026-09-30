@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use cala_types::{balance::BalanceSnapshot, velocity::Window};
 
-use crate::{primitives::*, velocity::error::VelocityError};
+use crate::{primitives::*, CalaFault};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct VelocityBalanceKey {
@@ -38,7 +38,7 @@ impl VelocityBalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
-    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
+    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, CalaFault> {
         // The window participates in the lock key below, so it must
         // also participate in the canonical sort — keys differing only
         // by window map to distinct locks and need a deterministic
@@ -191,10 +191,17 @@ impl VelocityBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let snapshot = row.values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let snapshot = row
+                .values
+                .map(|v| {
+                    serde_json::from_value::<BalanceSnapshot>(v).map_err(|e| {
+                        // A stored velocity balance snapshot that no longer
+                        // deserializes is corrupt state, not a caller-correctable
+                        // outcome.
+                        errlanes::Fatal::from_error(errlanes::FatalKind::CorruptState, e)
+                    })
+                })
+                .transpose()?;
             ret.insert(
                 VelocityBalanceKey {
                     window: Window::from(row.partition_window),
@@ -220,7 +227,7 @@ impl VelocityBalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), CalaFault> {
         let mut journal_ids = Vec::new();
         let mut account_ids = Vec::new();
         let mut currencies = Vec::new();

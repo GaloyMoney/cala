@@ -25,15 +25,18 @@ use rust_decimal_macros::dec;
 
 use cala_ledger::{
     account::{Account, NewAccount},
-    account_set::{error::AccountSetError, AccountSet, AccountSetId, NewAccountSet},
-    balance::error::BalanceError,
-    error::LedgerError,
+    account_set::{
+        error::{AccountSetError, AccountSetRejection},
+        AccountSet, AccountSetId, NewAccountSet,
+    },
+    balance::error::{BalanceError, BalanceRejection},
+    error::{EcCaughtUpTimeout, LedgerError},
     job::Jobs,
     journal::NewJournal,
-    posting::{PostingError, RejectionReason},
+    posting::{PostingRejection, RejectionReason},
     primitives::BalanceRollup,
     tx_template::Params,
-    AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
+    AccountId, CalaFault, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
 };
 
 const N_MEMBERS: usize = 4;
@@ -184,7 +187,7 @@ async fn assert_member_sum(
             .await
         {
             Ok(b) => sum += b.settled(),
-            Err(BalanceError::NotFound(..)) => {}
+            Err(BalanceError::Rejected(BalanceRejection::NotFound(..))) => {}
             Err(e) => return Err(e.into()),
         }
     }
@@ -454,7 +457,7 @@ async fn streaming_rollup_maintains_ec_plain_account_leaf() -> anyhow::Result<()
                 .balances()
                 .find(fixture.journal_id, leaf.id(), usd)
                 .await,
-            Err(BalanceError::NotFound(..))
+            Err(BalanceError::Rejected(BalanceRejection::NotFound(..)))
         ),
         "EC plain account must have no inline balance before the rollup runs",
     );
@@ -570,7 +573,10 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
         assert!(
             matches!(
                 &result,
-                Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+                Err(LedgerError::Rejected(PostingRejection::Rejected {
+                    reason,
+                    ..
+                }))
                     if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_))
             ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
@@ -615,7 +621,12 @@ async fn ec_leaf_with_posted_entries_cannot_join_a_set() -> anyhow::Result<()> {
         .add_member(ec_set.id(), leaf.id())
         .await;
     assert!(
-        matches!(add, Err(AccountSetError::MemberHasBalanceHistory { .. })),
+        matches!(
+            add,
+            Err(AccountSetError::Rejected(
+                AccountSetRejection::MemberHasBalanceHistory { .. }
+            ))
+        ),
         "EC leaf with posted entries must not be attachable to a set",
     );
     Ok(())
@@ -643,7 +654,7 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+        Err(LedgerError::Rejected(PostingRejection::Rejected { reason, .. }))
             if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) =>
         {
             panic!("a missing account was misreported as targeting an account set")
@@ -782,10 +793,26 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Downcasts a `CalaFault::Transient` produced by a wedged/slow EC rollup
+/// back to its [`EcCaughtUpTimeout`] detail — the same technique
+/// `es_entity::NotFound` uses to ride a `Fatal`'s source (see
+/// `errlanes::Transient::source_arc`). A wedged rollup is retryable (the
+/// operator's alert is "still behind", not "broken"), so it is `Transient`,
+/// not `Fatal` — this is what proves it still carries the same detail a
+/// typed `EcCaughtUpTimeout` variant used to.
+fn ec_caught_up_detail(err: &CalaFault) -> &EcCaughtUpTimeout {
+    let CalaFault::Transient(t) = err else {
+        panic!("expected a Transient EcCaughtUpTimeout, got {err:?}");
+    };
+    t.source_arc()
+        .and_then(|s| s.downcast_ref::<EcCaughtUpTimeout>())
+        .unwrap_or_else(|| panic!("expected Transient's source to be EcCaughtUpTimeout, got {t:?}"))
+}
+
 /// A stopped (or wedged) rollup must surface as a rich, alertable
-/// [`LedgerError::EcCaughtUpTimeout`] — never a silent hang. The error
-/// carries the observed checkpoint and frontier so an operator can see
-/// exactly how far behind the stream is.
+/// `Transient` carrying [`EcCaughtUpTimeout`] — never a silent hang. The
+/// error carries the observed checkpoint and frontier so an operator can
+/// see exactly how far behind the stream is.
 #[tokio::test]
 async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<()> {
     let pool = helpers::init_isolated_pool().await?;
@@ -808,9 +835,10 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(std::time::Duration::ZERO)
         .await
     {
-        Err(LedgerError::EcCaughtUpTimeout {
-            applied, frontier, ..
-        }) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
+            let EcCaughtUpTimeout {
+                applied, frontier, ..
+            } = ec_caught_up_detail(err);
             assert_eq!(
                 applied.value(),
                 0,
@@ -818,7 +846,7 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
             );
             assert!(applied < frontier, "frontier must be ahead of checkpoint");
         }
-        other => panic!("expected EcCaughtUpTimeout, got {other:?}"),
+        other => panic!("expected a Transient EcCaughtUpTimeout, got {other:?}"),
     }
 
     // A nonzero timeout polls with backoff and reports how long it waited.
@@ -830,13 +858,14 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(timeout)
         .await
     {
-        Err(LedgerError::EcCaughtUpTimeout { waited, .. }) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
+            let EcCaughtUpTimeout { waited, .. } = ec_caught_up_detail(err);
             assert!(
-                waited >= timeout,
+                *waited >= timeout,
                 "error must report the full wait, got {waited:?}",
             );
         }
-        other => panic!("expected EcCaughtUpTimeout, got {other:?}"),
+        other => panic!("expected a Transient EcCaughtUpTimeout, got {other:?}"),
     }
     Ok(())
 }
@@ -925,20 +954,21 @@ async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::
 
     let timeout = std::time::Duration::from_millis(300);
     match fixture.cala.await_frontier(unreachable, timeout).await {
-        Err(LedgerError::EcCaughtUpTimeout {
-            frontier, waited, ..
-        }) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
+            let EcCaughtUpTimeout {
+                frontier, waited, ..
+            } = ec_caught_up_detail(err);
             assert_eq!(
-                frontier,
+                *frontier,
                 obix::StreamPosition::from(unreachable),
                 "error must report the exact target requested, not a resampled frontier",
             );
             assert!(
-                waited >= timeout,
+                *waited >= timeout,
                 "error must report the full wait, got {waited:?}",
             );
         }
-        other => panic!("expected EcCaughtUpTimeout, got {other:?}"),
+        other => panic!("expected a Transient EcCaughtUpTimeout, got {other:?}"),
     }
     Ok(())
 }

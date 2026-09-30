@@ -36,6 +36,7 @@ required-features = ["json-schema"]
 cala-types = { workspace = true }
 cel-interpreter = { workspace = true }
 es-entity = { workspace = true }
+errlanes = { workspace = true }
 job = { workspace = true }
 obix = { workspace = true }
 
@@ -56,6 +57,7 @@ rust_decimal = { workspace = true }
 schemars = { workspace = true, optional = true }
 
 [dev-dependencies]
+errlanes = { workspace = true, features = ["tokio"] }
 anyhow = { workspace = true }
 rand = { workspace = true }
 tokio-test = "0.4"
