@@ -49,9 +49,9 @@ debug = true
 
 # Temporary v2 validation pins; replace together after compatible releases.
 [patch.crates-io]
-es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
-es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
-errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
-errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "a5f224b1c56b56b6374f214cddb791b6aea99a87" }
-job = { git = "https://github.com/GaloyMoney/job", rev = "30f96bc6e15efae4d1e779bca24fdcc0319b808c" }
-obix = { git = "https://github.com/GaloyMoney/obix", rev = "a7442a8fe752f937cd846b34c628142179694434" }
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "800d1582acbb811f3ffa9cc227cc0f728789cf23" }
+job = { git = "https://github.com/GaloyMoney/job", rev = "3e2733a61986fc922f3c19b9f64df17fbc35462f" }
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "152d1360f44112881dfabb0f00fb764d6f60e392" }
