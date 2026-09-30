@@ -6,9 +6,9 @@ use rust_decimal::Decimal;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetUpdate, NewAccountSet},
-    error::{LedgerError, LedgerRejection},
+    error::LedgerError,
     posting::PostingRejection,
-    velocity::{error::VelocityRejection, *},
+    velocity::*,
     *,
 };
 
@@ -481,9 +481,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         Ok(())
@@ -585,9 +585,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -596,9 +596,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         Ok(())
@@ -691,9 +691,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         Ok(())
@@ -807,9 +807,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -818,9 +818,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         // Add first closing date and re-check
@@ -851,9 +851,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -862,9 +862,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         // Update closing date and re-check
@@ -882,9 +882,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -893,9 +893,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(
-                PostingRejection::Velocity(VelocityRejection::Enforcement(_))
-            )))
+            Err(LedgerError::Rejected(
+                PostingRejection::VelocityLimitExceeded(_)
+            ))
         ));
 
         Ok(())

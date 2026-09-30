@@ -14,10 +14,6 @@ use cel_interpreter::CelError;
 pub enum ParamRejection {
     #[error("ParamError - ParamTypeMismatch: {0}")]
     ParamTypeMismatch(String),
-    /// Not `#[from]`: `errlanes::Rejection`'s delegating-variant support
-    /// requires the wrapped type to itself implement `Rejection`, and
-    /// `CelError` lives in `cala-cel-interpreter`, outside this rollout's
-    /// scope. Call sites map explicitly instead.
     #[error("ParamError - CelError: {0}")]
-    CelError(CelError),
+    CelError(#[from] CelError),
 }

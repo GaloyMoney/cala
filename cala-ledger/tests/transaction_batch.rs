@@ -9,7 +9,7 @@ use rust_decimal::Decimal;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetId, NewAccountSet},
-    error::{LedgerError, LedgerRejection},
+    error::LedgerError,
     posting::{PostingInput, PostingRejection, RejectionReason},
     tx_template::*,
     velocity::*,
@@ -263,10 +263,7 @@ async fn a_rejected_posting_rolls_back_the_whole_batch() -> anyhow::Result<()> {
         .await;
 
     match result {
-        Err(LedgerError::Rejected(LedgerRejection::Posting(PostingRejection::Rejected {
-            index,
-            ..
-        }))) => {
+        Err(LedgerError::Rejected(PostingRejection::Rejected { index, .. })) => {
             assert_eq!(index, 1, "the second posting is the offender");
         }
         Err(other) => panic!("expected an attributed posting rejection, got {other:?}"),
@@ -312,10 +309,10 @@ async fn a_locked_account_rejects_its_batch() -> anyhow::Result<()> {
     assert!(
         matches!(
             &result,
-            Err(LedgerError::Rejected(LedgerRejection::Posting(PostingRejection::Rejected {
+            Err(LedgerError::Rejected(PostingRejection::Rejected {
                 reason,
                 ..
-            })))
+            }))
                 if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender.id())
         ),
         "expected AccountLocked, got {:?}",
@@ -348,10 +345,7 @@ async fn duplicate_transaction_ids_within_a_batch_are_rejected() -> anyhow::Resu
 
     let result = cala.post_transactions(vec![first, second]).await;
     match result {
-        Err(LedgerError::Rejected(LedgerRejection::Posting(PostingRejection::Rejected {
-            index,
-            ..
-        }))) => {
+        Err(LedgerError::Rejected(PostingRejection::Rejected { index, .. })) => {
             assert_eq!(index, 1)
         }
         Err(other) => panic!("expected a duplicate-id rejection, got {other:?}"),
@@ -650,9 +644,7 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
         .collect();
 
     match cala.post_transactions(batch).await {
-        Err(LedgerError::Rejected(LedgerRejection::Posting(
-            PostingRejection::BatchTooManyAccounts { distinct, max },
-        ))) => {
+        Err(LedgerError::Rejected(PostingRejection::BatchTooManyAccounts { distinct, max })) => {
             assert!(distinct > max, "{distinct} should exceed {max}");
         }
         Err(other) => panic!("expected BatchTooManyAccounts, got {other:?}"),

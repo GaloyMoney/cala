@@ -31,7 +31,7 @@ use cala_types::tx_template::TxTemplateValues;
 use crate::{
     primitives::TxTemplateId,
     tx_template::{
-        error::{TxTemplateError, TxTemplateRejection},
+        error::{TxTemplateLookupError, TxTemplateLookupRejection},
         TxTemplateEvent,
     },
 };
@@ -79,7 +79,7 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateLookupError> {
         let snapshot = self.load();
         let mut used = HashMap::new();
         let mut missing = Vec::new();
@@ -107,7 +107,7 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateLookupError> {
         self.fetch_and_install(op, codes).await
     }
 
@@ -143,14 +143,15 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateLookupError> {
         let mut fetched = self.inner.repo.resolve_templates_in_op(op, codes).await?;
         let mut resolved = HashMap::with_capacity(codes.len());
         for code in codes {
             let Some((id, version, event)) = fetched.remove(code) else {
-                return Err(TxTemplateRejection::NotFoundByCode(code.clone()).into());
+                return Err(TxTemplateLookupRejection::NotFoundByCode(code.clone()).into());
             };
-            let event: TxTemplateEvent = serde_json::from_value(event)?;
+            let event: TxTemplateEvent = serde_json::from_value(event)
+                .map_err(|e| errlanes::Fatal::from_error(errlanes::FatalKind::CorruptState, e))?;
             resolved.insert(
                 code.clone(),
                 ResolvedTemplate {

@@ -53,7 +53,10 @@ impl CalaLedger {
     /// `start_poll` to run it, and shut it down). The rollup only runs once
     /// `jobs` is polled.
     #[instrument(name = "cala_ledger.init", skip_all)]
-    pub async fn init(config: CalaLedgerConfig, jobs: &mut job::Jobs) -> Result<Self, LedgerError> {
+    pub async fn init(
+        config: CalaLedgerConfig,
+        jobs: &mut job::Jobs,
+    ) -> Result<Self, crate::CalaFault> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
             (None, Some(pg_con)) => {
@@ -69,7 +72,8 @@ impl CalaLedger {
             sqlx::migrate!()
                 .run(&pool)
                 .instrument(tracing::info_span!("cala_ledger.migrations"))
-                .await?;
+                .await
+                .map_err(error::migration_error)?;
         }
 
         let clock = config.clock;
@@ -131,7 +135,9 @@ impl CalaLedger {
         &self.clock
     }
 
-    pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
+    pub async fn begin_operation(
+        &self,
+    ) -> Result<es_entity::DbOpWithTime<'static>, crate::CalaFault> {
         let db_op = es_entity::DbOp::init_with_clock(&self.pool, &self.clock)
             .await?
             .with_clock_time();
@@ -270,7 +276,7 @@ impl CalaLedger {
         db: &mut impl es_entity::AtomicOperation,
         batch: Vec<PostingInput>,
     ) -> Result<Vec<Transaction>, LedgerError> {
-        Ok(self.postings.post_all_in_op(db, batch).await?)
+        self.postings.post_all_in_op(db, batch).await
     }
 
     /// Snapshot the rollup's position, pinning the outbox frontier as a
@@ -284,8 +290,12 @@ impl CalaLedger {
         skip_all,
         fields(applied, frontier, lag)
     )]
-    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
-        let snapshot = self.ec_rollup.load().await?;
+    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, crate::CalaFault> {
+        let snapshot = self
+            .ec_rollup
+            .load()
+            .await
+            .map_err(error::subscription_error)?;
         let status = crate::EcRollupStatus::new(
             snapshot.checkpoint(),
             snapshot.frontier(),
@@ -315,14 +325,17 @@ impl CalaLedger {
     /// sequence survived.
     ///
     /// `timeout` is mandatory: a wedged rollup surfaces as
-    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
+    /// a transient fault carrying [`EcCaughtUpTimeout`], never a silent hang.
     #[instrument(level = "debug", name = "cala_ledger.await_frontier", skip(self), fields(timeout = ?timeout))]
     pub async fn await_frontier(
         &self,
         frontier: obix::EventSequence,
         timeout: std::time::Duration,
-    ) -> Result<(), LedgerError> {
-        self.ec_rollup.await_position(frontier, timeout).await?;
+    ) -> Result<(), crate::CalaFault> {
+        self.ec_rollup
+            .await_position(frontier, timeout)
+            .await
+            .map_err(error::subscription_error)?;
         Ok(())
     }
 

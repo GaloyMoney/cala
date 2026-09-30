@@ -396,7 +396,8 @@ impl AccountSetRepo {
         .bind(&account_set_ids)
         .bind(&member_account_set_ids)
         .execute(db.as_executor())
-        .await?;
+        .await
+        .map_err(membership_write_error)?;
 
         sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
             .execute(db.as_executor())
@@ -674,7 +675,7 @@ impl AccountSetRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         // Adjacency-only membership: resolve each account's ancestor sets
         // by an upward recursive walk over the (tiny) set->set edge table,
         // seeded from the account's direct set memberships. UNION (not
@@ -763,7 +764,7 @@ impl AccountSetRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         if set_ids.is_empty() {
             return Ok(());
         }
@@ -790,7 +791,7 @@ impl AccountSetRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         set_ids: &[AccountSetId],
-    ) -> Result<Vec<SetGraphNode>, AccountSetError> {
+    ) -> Result<Vec<SetGraphNode>, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -825,7 +826,7 @@ impl AccountSetRepo {
     /// so epoch and graph come from a single snapshot. The set-graph
     /// cache's refresh read. Anchoring on the always-present epoch row
     /// guarantees >=1 row even with zero account sets.
-    pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, AccountSetError> {
+    pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT

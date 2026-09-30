@@ -13,7 +13,7 @@ use crate::{
     primitives::{AccountId, DebitOrCredit, Layer},
 };
 
-use super::error::VelocityError;
+use super::error::{VelocityError, VelocityRejection};
 
 use repo::*;
 pub(crate) use value::*;
@@ -112,7 +112,7 @@ impl AccountControls {
         clock: &ClockHandle,
         limits: Vec<VelocityLimitValues>,
         params: Params,
-    ) -> Result<Vec<AccountVelocityLimit>, VelocityError> {
+    ) -> Result<Vec<AccountVelocityLimit>, VelocityRejection> {
         let mut velocity_limits = Vec::new();
         for velocity in limits {
             let defs = velocity.params;

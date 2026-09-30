@@ -8,59 +8,6 @@ use cala_ledger::{
     *,
 };
 
-/// `AccountError` is a hand-rolled `{ Rejected, Transient, Fatal }` enum —
-/// cala's public errors stay ordinary thiserror enums, not
-/// `#[derive(errlanes::Failure)]` — so it does not implement
-/// `errlanes::Laned` and `errlanes::retry` cannot take it directly. This is
-/// exactly enough `Failure` surface (backed by a real, stored
-/// `errlanes::Fail<AccountRejection>`, not a value rebuilt per call) to
-/// drive `retry` over the public API below.
-struct AccountFailure(errlanes::Fail<AccountRejection>);
-
-impl std::fmt::Debug for AccountFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self.0, f)
-    }
-}
-
-impl std::fmt::Display for AccountFailure {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        std::fmt::Display::fmt(&self.0, f)
-    }
-}
-
-impl std::error::Error for AccountFailure {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        std::error::Error::source(&self.0)
-    }
-}
-
-impl errlanes::Failure for AccountFailure {
-    type Rejection = AccountRejection;
-
-    fn into_fail(self) -> errlanes::Fail<AccountRejection> {
-        self.0
-    }
-
-    fn from_fail(f: errlanes::Fail<AccountRejection>) -> Self {
-        Self(f)
-    }
-
-    fn as_fail(&self) -> &errlanes::Fail<AccountRejection> {
-        &self.0
-    }
-}
-
-impl From<AccountError> for AccountFailure {
-    fn from(e: AccountError) -> Self {
-        Self(match e {
-            AccountError::Rejected(r) => errlanes::Fail::Rejected(r),
-            AccountError::Transient(t) => errlanes::Fail::Transient(t),
-            AccountError::Fatal(f) => errlanes::Fail::Fatal(f),
-        })
-    }
-}
-
 #[tokio::test]
 async fn find_returns_not_found_by_id() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
@@ -156,17 +103,10 @@ async fn occ_conflict_on_account_update_is_transient_and_retry_converges() -> an
         async move {
             let mut account = match account.take() {
                 Some(account) => account,
-                None => cala
-                    .accounts()
-                    .find(id)
-                    .await
-                    .map_err(AccountFailure::from)?,
+                None => cala.accounts().find(id).await?,
             };
             toggle(&mut account);
-            cala.accounts()
-                .persist(&mut account)
-                .await
-                .map_err(AccountFailure::from)
+            cala.accounts().persist(&mut account).await
         }
     })
     .await;

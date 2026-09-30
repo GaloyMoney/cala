@@ -25,7 +25,10 @@ pub struct AccountVelocityControl {
 }
 
 impl AccountVelocityControl {
-    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, VelocityError> {
+    pub fn needs_enforcement(
+        &self,
+        ctx: &CelContext,
+    ) -> Result<bool, VelocityEnforcementRejection> {
         if let Some(condition) = &self.condition {
             let result: bool = condition.try_evaluate(ctx)?;
             Ok(result)
@@ -50,7 +53,7 @@ impl AccountVelocityLimit {
         &self,
         ctx: &CelContext,
         entry: &EntryValues,
-    ) -> Result<Option<Window>, VelocityError> {
+    ) -> Result<Option<Window>, VelocityEnforcementRejection> {
         if let Some(currency) = &self.currency {
             if currency != &entry.currency {
                 return Ok(None);
@@ -79,7 +82,7 @@ impl AccountVelocityLimit {
         ctx: &CelContext,
         time: DateTime<Utc>,
         snapshot: &BalanceSnapshot,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), VelocityEnforcementRejection> {
         if let Some(currency) = &self.currency {
             if currency != &snapshot.currency {
                 return Ok(());

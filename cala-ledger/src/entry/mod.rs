@@ -33,7 +33,7 @@ impl Entries {
         &self,
         entry_ids: &[EntryId],
     ) -> Result<HashMap<EntryId, Entry>, EntryError> {
-        Ok(self.repo.find_all(entry_ids).await?)
+        self.repo.find_all(entry_ids).await
     }
 
     #[instrument(level = "debug", name = "cala_ledger.entries.find_all_in_op", skip_all)]
@@ -42,7 +42,7 @@ impl Entries {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         entry_ids: &[EntryId],
     ) -> Result<HashMap<EntryId, Entry>, EntryError> {
-        Ok(self.repo.find_all_in_op(op, entry_ids).await?)
+        self.repo.find_all_in_op(op, entry_ids).await
     }
 
     #[instrument(
@@ -56,10 +56,9 @@ impl Entries {
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
     ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
-        Ok(self
-            .repo
+        self.repo
             .list_for_account_id_by_created_at(account_id, query, direction)
-            .await?)
+            .await
     }
 
     #[instrument(
@@ -89,10 +88,9 @@ impl Entries {
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
     ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
-        Ok(self
-            .repo
+        self.repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
-            .await?)
+            .await
     }
 
     /// List a journal's entries with optional inclusive filters on the entry

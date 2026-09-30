@@ -15,9 +15,10 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.31.1-dev" }
 
 cel = "0.14.5"
-es-entity = "0.14.1"
-job = { version = "0.16.1", features = ["es-entity"] }
-obix = { version = "0.13.1", default-features = false }
+es-entity = "=0.14.4-dev"
+errlanes = { version = "=0.14.4-dev", features = ["derive", "sqlx"] }
+job = { version = "=0.16.2-dev", features = ["es-entity"] }
+obix = { version = "=0.13.2-dev", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }
@@ -45,3 +46,12 @@ lto = true
 
 [profile.bench]
 debug = true
+
+# Temporary v2 validation pins; replace together after compatible releases.
+[patch.crates-io]
+es-entity = { git = "https://github.com/GaloyMoney/es-entity", rev = "36f765c75d827f72734910661502f7a33278180a" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "36f765c75d827f72734910661502f7a33278180a" }
+errlanes = { git = "https://github.com/GaloyMoney/es-entity", rev = "36f765c75d827f72734910661502f7a33278180a" }
+errlanes-derive = { git = "https://github.com/GaloyMoney/es-entity", rev = "36f765c75d827f72734910661502f7a33278180a" }
+job = { git = "https://github.com/GaloyMoney/job", rev = "5bdf0ed6264b23ac9563c59db2c17dd885e60bc6" }
+obix = { git = "https://github.com/GaloyMoney/obix", rev = "7f65437c5ead5c4b24283f7e3470d71421f6cbab" }

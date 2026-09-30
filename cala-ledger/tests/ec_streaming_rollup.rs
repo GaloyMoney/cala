@@ -30,13 +30,13 @@ use cala_ledger::{
         AccountSet, AccountSetId, NewAccountSet,
     },
     balance::error::{BalanceError, BalanceRejection},
-    error::{EcCaughtUpTimeout, LedgerError, LedgerRejection},
+    error::{EcCaughtUpTimeout, LedgerError},
     job::Jobs,
     journal::NewJournal,
     posting::{PostingRejection, RejectionReason},
     primitives::BalanceRollup,
     tx_template::Params,
-    AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
+    AccountId, CalaFault, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
 };
 
 const N_MEMBERS: usize = 4;
@@ -573,10 +573,10 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
         assert!(
             matches!(
                 &result,
-                Err(LedgerError::Rejected(LedgerRejection::Posting(PostingRejection::Rejected {
+                Err(LedgerError::Rejected(PostingRejection::Rejected {
                     reason,
                     ..
-                })))
+                }))
                     if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_))
             ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
@@ -654,10 +654,9 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(LedgerError::Rejected(LedgerRejection::Posting(PostingRejection::Rejected {
-            reason,
-            ..
-        }))) if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) => {
+        Err(LedgerError::Rejected(PostingRejection::Rejected { reason, .. }))
+            if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) =>
+        {
             panic!("a missing account was misreported as targeting an account set")
         }
         Err(_) => {} // a referential-integrity / not-found error — correct
@@ -794,15 +793,15 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Downcasts a `LedgerError::Transient` produced by a wedged/slow EC rollup
+/// Downcasts a `CalaFault::Transient` produced by a wedged/slow EC rollup
 /// back to its [`EcCaughtUpTimeout`] detail — the same technique
 /// `es_entity::NotFound` uses to ride a `Fatal`'s source (see
 /// `errlanes::Transient::source_arc`). A wedged rollup is retryable (the
 /// operator's alert is "still behind", not "broken"), so it is `Transient`,
 /// not `Fatal` — this is what proves it still carries the same detail a
 /// typed `EcCaughtUpTimeout` variant used to.
-fn ec_caught_up_detail(err: &LedgerError) -> &EcCaughtUpTimeout {
-    let LedgerError::Transient(t) = err else {
+fn ec_caught_up_detail(err: &CalaFault) -> &EcCaughtUpTimeout {
+    let CalaFault::Transient(t) = err else {
         panic!("expected a Transient EcCaughtUpTimeout, got {err:?}");
     };
     t.source_arc()
@@ -836,7 +835,7 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(std::time::Duration::ZERO)
         .await
     {
-        Err(ref err @ LedgerError::Transient(_)) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
             let EcCaughtUpTimeout {
                 applied, frontier, ..
             } = ec_caught_up_detail(err);
@@ -859,7 +858,7 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(timeout)
         .await
     {
-        Err(ref err @ LedgerError::Transient(_)) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
             let EcCaughtUpTimeout { waited, .. } = ec_caught_up_detail(err);
             assert!(
                 *waited >= timeout,
@@ -955,7 +954,7 @@ async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::
 
     let timeout = std::time::Duration::from_millis(300);
     match fixture.cala.await_frontier(unreachable, timeout).await {
-        Err(ref err @ LedgerError::Transient(_)) => {
+        Err(ref err @ CalaFault::Transient(_)) => {
             let EcCaughtUpTimeout {
                 frontier, waited, ..
             } = ec_caught_up_detail(err);

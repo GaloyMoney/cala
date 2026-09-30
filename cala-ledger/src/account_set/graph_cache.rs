@@ -277,7 +277,7 @@ impl SetGraphCache {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         let span = tracing::Span::current();
         let probe = DirectMembershipProbe {
             epoch: probe_epoch,
@@ -722,7 +722,7 @@ impl SetGraphCache {
         fields(epoch = tracing::field::Empty, sets = tracing::field::Empty),
         err(level = "warn")
     )]
-    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), AccountSetError> {
+    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), crate::CalaFault> {
         let Ok(_guard) = inner.refresh_lock.try_lock() else {
             return Ok(());
         };

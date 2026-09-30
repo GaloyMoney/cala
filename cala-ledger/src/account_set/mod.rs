@@ -4,6 +4,7 @@ mod graph_cache;
 mod graph_validation;
 mod repo;
 
+use errlanes::ResultExt;
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -90,9 +91,9 @@ impl AccountSets {
             .velocity_context_values(new_account_set.context_values())
             .build()
             .expect("Failed to build account");
-        self.accounts.create_in_op(db, new_account).await?;
+        self.accounts.create_in_op(db, new_account).await.widen()?;
 
-        let account_set = self.repo.create_in_op(db, new_account_set).await?;
+        let account_set = self.repo.create_in_op(db, new_account_set).await.lift()?;
 
         Ok(account_set)
     }
@@ -128,9 +129,16 @@ impl AccountSets {
                 .expect("Failed to build account");
             new_accounts.push(new_account);
         }
-        self.accounts.create_all_in_op(db, new_accounts).await?;
+        self.accounts
+            .create_all_in_op(db, new_accounts)
+            .await
+            .widen()?;
 
-        let account_sets = self.repo.create_all_in_op(db, new_account_sets).await?;
+        let account_sets = self
+            .repo
+            .create_all_in_op(db, new_account_sets)
+            .await
+            .lift()?;
 
         Ok(account_sets)
     }
@@ -157,11 +165,12 @@ impl AccountSets {
         db: &mut impl es_entity::AtomicOperation,
         account_set: &mut AccountSet,
     ) -> Result<(), AccountSetError> {
-        self.repo.update_in_op(db, account_set).await?;
+        self.repo.update_in_op(db, account_set).await.lift()?;
 
         self.accounts
             .update_velocity_context_values_in_op(db, account_set.values())
-            .await?;
+            .await
+            .widen()?;
 
         Ok(())
     }
@@ -363,7 +372,10 @@ impl AccountSets {
             .iter()
             .map(|m| (m.account_set_id, m.account_id))
             .collect();
-        self.account_set_members.add_in_op(op, &pairs).await?;
+        self.account_set_members
+            .add_in_op(op, &pairs)
+            .await
+            .map_err(error::membership_write_error)?;
 
         Ok(())
     }
@@ -829,7 +841,7 @@ impl AccountSets {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         self.set_graph_cache
             .resolve_from_probe_in_op(op, journal_id, probe_epoch, probe_seeds, entry_pairs)
             .await

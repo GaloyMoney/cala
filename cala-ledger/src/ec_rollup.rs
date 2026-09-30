@@ -62,9 +62,9 @@ use cala_types::entry::EntryValues;
 use crate::{
     balance::{Balances, EcRollupTxn},
     entry::{Entries, Entry},
-    ledger::error::LedgerError,
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
     primitives::{EntryId, JournalId, TransactionId},
+    CalaFault,
 };
 
 const EC_BALANCE_ROLLUP_JOB: JobType = JobType::new("cala.ec_balance_rollup");
@@ -86,7 +86,7 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, LedgerError> {
+) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, CalaFault> {
     Ok(outbox
         .register_singleton_subscriber(
             jobs,
@@ -403,8 +403,13 @@ impl EcRollupStatus {
         skip_all,
         fields(frontier = %self.frontier, applied, lag)
     )]
-    pub async fn refresh(&mut self) -> Result<(), LedgerError> {
-        self.applied = self.handle.load().await?.checkpoint();
+    pub async fn refresh(&mut self) -> Result<(), CalaFault> {
+        self.applied = self
+            .handle
+            .load()
+            .await
+            .map_err(crate::error::subscription_error)?
+            .checkpoint();
 
         let span = tracing::Span::current();
         span.record("applied", u64::from(self.applied));
@@ -433,9 +438,12 @@ impl EcRollupStatus {
     /// events as it drains cannot extend its own barrier.
     ///
     /// `timeout` is mandatory: a wedged rollup surfaces as
-    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
-    pub async fn await_completion(&self, timeout: std::time::Duration) -> Result<(), LedgerError> {
-        self.handle.await_position(self.frontier, timeout).await?;
+    /// a transient fault carrying [`crate::error::EcCaughtUpTimeout`], never a silent hang.
+    pub async fn await_completion(&self, timeout: std::time::Duration) -> Result<(), CalaFault> {
+        self.handle
+            .await_position(self.frontier, timeout)
+            .await
+            .map_err(crate::error::subscription_error)?;
         Ok(())
     }
 

@@ -1,12 +1,10 @@
 use thiserror::Error;
 
-use crate::error_support::{impl_lane_error_fail, impl_lane_error_fault};
-
-use super::repo::{AccountConstraint, AccountConstraintViolation};
+use super::repo::AccountConstraintViolation;
 use crate::primitives::{AccountId, AccountSetId};
 
-#[derive(Debug, Clone, Error, errlanes::Rejection)]
-#[rejection(lift(AccountConstraintViolation))]
+#[derive(Debug, Clone, Error, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountConstraintViolation, unhandled = fatal)]
 pub enum AccountRejection {
     #[error("account '{0}' not found")]
     NotFoundById(AccountId),
@@ -15,34 +13,17 @@ pub enum AccountRejection {
     #[error("account with code '{0}' not found")]
     NotFoundByCode(String),
     #[error("external id '{0}' already exists")]
-    #[rejection(key = AccountConstraint::ExternalIdKey, with = external_id_taken)]
-    ExternalIdAlreadyExists(String),
+    #[lift(AccountConstraintViolation::ExternalIdKey)]
+    #[rejection(code = "EXTERNAL_ID_ALREADY_EXISTS")]
+    ExternalIdAlreadyExists(#[source] es_entity::ConstraintConflict<Option<String>>),
     #[error("code '{0}' already exists")]
-    #[rejection(key = AccountConstraint::CodeKey, with = code_taken)]
-    CodeAlreadyExists(String),
+    #[lift(AccountConstraintViolation::CodeKey)]
+    #[rejection(code = "CODE_ALREADY_EXISTS")]
+    CodeAlreadyExists(#[source] es_entity::ConstraintConflict<String>),
     #[error("cannot update accounts backing an AccountSet")]
     CannotUpdateAccountSetAccounts,
     #[error("initial account set '{0}' not found")]
     InitialAccountSetNotFound(AccountSetId),
 }
 
-fn external_id_taken(cv: AccountConstraintViolation) -> AccountRejection {
-    AccountRejection::ExternalIdAlreadyExists(cv.value().unwrap_or_default().to_owned())
-}
-
-fn code_taken(cv: AccountConstraintViolation) -> AccountRejection {
-    AccountRejection::CodeAlreadyExists(cv.value().unwrap_or_default().to_owned())
-}
-
-#[derive(Debug, Error)]
-pub enum AccountError {
-    #[error(transparent)]
-    Rejected(#[from] AccountRejection),
-    #[error(transparent)]
-    Transient(#[from] errlanes::Transient),
-    #[error(transparent)]
-    Fatal(#[from] errlanes::Fatal),
-}
-
-impl_lane_error_fault!(AccountError);
-impl_lane_error_fail!(AccountError, AccountRejection, AccountConstraintViolation);
+pub type AccountError = errlanes::Fail<AccountRejection, crate::CalaLanes>;

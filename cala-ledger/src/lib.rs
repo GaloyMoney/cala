@@ -132,13 +132,53 @@
 //! }
 //! ```
 
+//! ## Error contracts
+//!
+//! Module error aliases use [`errlanes::Fail`] with [`CalaLanes`]: a typed
+//! caller-correctable rejection, a transient failure, or a fatal failure.
+//! Authorization belongs to the consumer, so Cala cannot produce Denied.
+//! Infrastructure-only APIs, including initialization and rollup status, return
+//! [`CalaFault`]. Pure validation returns its rejection directly.
+//!
+//! Posting and the ledger facade share the same rejection contract. Enforcement
+//! details are directly matchable as
+//! [`PostingRejection::VelocityLimitExceeded`](posting::PostingRejection::VelocityLimitExceeded).
+//! Batch input failures retain their transaction index, ID, and reason in
+//! [`PostingRejection::Rejected`](posting::PostingRejection::Rejected).
+//!
+//! Consumers use `.widen()?` to propagate between compatible failure types:
+//!
+//! ```
+//! use cala_ledger::{errlanes::ResultExt, posting::PostingError,
+//!     velocity::error::VelocityEnforcementError};
+//!
+//! fn propagate(result: Result<(), VelocityEnforcementError>) -> Result<(), PostingError> {
+//!     result.widen()?;
+//!     Ok(())
+//! }
+//! ```
+//!
+//! A consumer cannot accidentally narrow an error that may deny into Cala's lanes:
+//!
+//! ```compile_fail
+//! use cala_ledger::{errlanes::{Fail, ResultExt}, posting::{PostingError, PostingRejection}};
+//! fn cannot_drop_denied(result: Result<(), Fail<PostingRejection>>) -> Result<(), PostingError> {
+//!     result.widen()
+//! }
+//! ```
+//!
+//! Repository constraint mappings use `.lift()?`: accepted cases become named
+//! domain rejections, while unaccepted constraints become fatal invariants.
+//! Conflict payloads retain typed optional attempted values and database sources;
+//! their default display omits attempted values. Use typed payloads and rejection
+//! codes at a product boundary rather than displaying a failure's diagnostic text.
+
 #![cfg_attr(feature = "fail-on-warnings", deny(warnings))]
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod account_set_member;
 mod cel_context;
 mod ec_rollup;
-mod error_support;
 mod param;
 
 pub mod account;
@@ -152,7 +192,12 @@ pub mod transaction;
 pub mod tx_template;
 pub mod velocity;
 
+pub use errlanes;
 pub use es_entity;
+/// The infrastructure lanes Cala can produce; authorization belongs to its caller.
+pub type CalaLanes = errlanes::lanes!(Transient, Fatal);
+/// An infrastructure failure without a caller-correctable rejection.
+pub type CalaFault = errlanes::Fault<CalaLanes>;
 // Re-exported so consumers can pass a `job::Jobs` of the same `job` version
 // cala-ledger links into `CalaLedger::init` for EC-rollup registration.
 pub use job;

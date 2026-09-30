@@ -93,7 +93,7 @@ impl BalanceRepo {
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         self.find_all_in_op(&self.pool, ids).await
     }
 
@@ -110,7 +110,7 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
             .await
@@ -127,7 +127,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
             .await
@@ -143,7 +143,7 @@ impl BalanceRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -203,7 +203,7 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -238,7 +238,7 @@ impl BalanceRepo {
                 let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
                     corrupt_snapshot("balance snapshot (list_for_account_in_op)", e)
                 })?;
-                Ok::<_, BalanceError>(AccountBalance::new(row.normal_balance_type, details))
+                Ok::<_, crate::CalaFault>(AccountBalance::new(row.normal_balance_type, details))
             })
             .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
@@ -263,7 +263,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
@@ -314,7 +314,7 @@ impl BalanceRepo {
                 let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
                     corrupt_snapshot("balance snapshot (list_for_accounts_in_op)", e)
                 })?;
-                Ok::<_, BalanceError>(AccountBalance::new(row.normal_balance_type, details))
+                Ok::<_, crate::CalaFault>(AccountBalance::new(row.normal_balance_type, details))
             })
             .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
@@ -368,7 +368,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<bool, BalanceError> {
+    ) -> Result<bool, crate::CalaFault> {
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock($1::int4, hashtext(($2::uuid)::text))
@@ -417,7 +417,7 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         pairs: &[(JournalId, AccountId)],
-    ) -> Result<Vec<AccountId>, BalanceError> {
+    ) -> Result<Vec<AccountId>, crate::CalaFault> {
         if pairs.is_empty() {
             return Ok(Vec::new());
         }

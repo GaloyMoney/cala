@@ -79,7 +79,7 @@ impl EffectiveBalances {
         &self,
         ids: &[BalanceId],
         date: NaiveDate,
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         self.repo.find_all(ids, date).await
     }
 
@@ -96,7 +96,7 @@ impl EffectiveBalances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.repo
             .list_for_account(journal_id, account_id.into(), date, args)
@@ -115,7 +115,7 @@ impl EffectiveBalances {
         account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         self.repo
             .list_for_accounts(journal_id, account_ids, date, args)
@@ -128,7 +128,7 @@ impl EffectiveBalances {
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, BalanceRange>, crate::CalaFault> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
         Ok(ranges
             .into_iter()
@@ -153,7 +153,7 @@ impl EffectiveBalances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.repo
             .list_range_for_account(journal_id, account_id.into(), from, until, args)
@@ -173,7 +173,7 @@ impl EffectiveBalances {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, crate::CalaFault>
     {
         self.repo
             .list_range_for_accounts(journal_id, account_ids, from, until, args)
@@ -233,7 +233,7 @@ impl EffectiveBalances {
         args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.repo.list_modified_since(journal_id, since, args).await
     }
@@ -248,7 +248,7 @@ impl EffectiveBalances {
         created_at: DateTime<Utc>,
         mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), crate::CalaFault> {
         let mut all_data = self
             .repo
             .find_for_update(&mut *op, journal_id, balance_ids, effective)
@@ -312,7 +312,7 @@ impl EffectiveBalances {
         txns: &[EcRollupTxn<'_>],
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), crate::CalaFault> {
         let targets = |account_id: &AccountId| {
             ec_mappings
                 .get(account_id)
