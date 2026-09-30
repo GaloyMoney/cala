@@ -1,17 +1,23 @@
 use super::control::VelocityControlConstraintViolation;
 use super::limit::VelocityLimitConstraintViolation;
+use crate::param::error::ParamRejection;
 use crate::primitives::*;
 use rust_decimal::Decimal;
 use thiserror::Error;
 
 /// Control and limit management, distinct from posting enforcement.
-#[errlanes::rejection]
-#[derive(Debug, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
+#[lift(ParamRejection, strict)]
 #[lift(VelocityControlConstraintViolation, unhandled = fatal)]
 #[lift(VelocityLimitConstraintViolation, unhandled = fatal)]
 pub enum VelocityRejection {
-    #[flatten]
-    Param(crate::param::error::ParamRejection),
+    #[lift(ParamRejection::ParamTypeMismatch)]
+    #[error("ParamError - ParamTypeMismatch: {0}")]
+    ParamTypeMismatch(String),
+    #[lift(ParamRejection::CelError)]
+    #[error("ParamError - CelError: {0}")]
+    CelError(#[source] cel_interpreter::CelError),
     #[error("velocity control '{0}' not found")]
     NotFoundControlById(VelocityControlId),
     #[error("control ID already exists: {0}")]

@@ -1,4 +1,5 @@
 use super::repo::TxTemplateConstraintViolation;
+use crate::param::error::ParamRejection;
 use crate::primitives::TxTemplateId;
 use thiserror::Error;
 
@@ -8,12 +9,14 @@ pub enum TxTemplateLookupRejection {
     NotFoundByCode(String),
 }
 
-#[errlanes::rejection]
-#[derive(Debug, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
+#[lift(TxTemplateLookupRejection, strict)]
 #[lift(TxTemplateConstraintViolation, unhandled = fatal)]
 pub enum TxTemplateRejection {
-    #[flatten]
-    Lookup(TxTemplateLookupRejection),
+    #[lift(TxTemplateLookupRejection::NotFoundByCode)]
+    #[error("template with code '{0}' not found")]
+    NotFoundByCode(String),
     #[error("template code already exists: {0}")]
     #[lift(TxTemplateConstraintViolation::CodeKey)]
     #[rejection(code = "DUPLICATE_CODE")]
@@ -25,11 +28,16 @@ pub enum TxTemplateRejection {
 }
 
 /// Evaluating a template adds no infrastructure failures or management outcomes.
-#[errlanes::rejection]
-#[derive(Debug, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
+#[lift(ParamRejection, strict)]
 pub enum TxTemplateEvaluationRejection {
-    #[flatten]
-    Param(crate::param::error::ParamRejection),
+    #[lift(ParamRejection::ParamTypeMismatch)]
+    #[error("ParamError - ParamTypeMismatch: {0}")]
+    ParamTypeMismatch(String),
+    #[lift(ParamRejection::CelError)]
+    #[error("ParamError - CelError: {0}")]
+    CelError(#[source] cel_interpreter::CelError),
     #[error("unbalanced transaction: currency {0}, layer {1:?}, amount {2}")]
     UnbalancedTransaction(
         crate::primitives::Currency,

@@ -12,10 +12,11 @@ use cala_ledger::{
 use rust_decimal::Decimal;
 
 // Exercise the same public reexport a separate consuming crate composes.
-#[errlanes::rejection]
-#[derive(Debug, thiserror::Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, thiserror::Error)]
+#[allow(clippy::enum_variant_names)] // All imported cases intentionally share the Ledger prefix.
 enum ConsumerRejection {
-    #[flatten]
+    #[compose(flatten)]
     Ledger(cala_ledger::error::LedgerRejection),
 }
 
@@ -47,7 +48,7 @@ fn widening_enforcement_preserves_details_and_metadata() {
     let consumer: ConsumerRejection = rejection.into();
     assert_eq!(Into::<&'static str>::into(consumer.code()), code);
     assert_eq!(consumer.level(), level);
-    let ConsumerRejection::VelocityLimitExceeded(actual) = consumer else {
+    let ConsumerRejection::LedgerVelocityLimitExceeded(actual) = consumer else {
         panic!("the enforcement leaf must be directly matchable");
     };
     assert_eq!(actual.account_id, detail.account_id);
@@ -57,6 +58,39 @@ fn widening_enforcement_preserves_details_and_metadata() {
     assert_eq!(actual.direction, detail.direction);
     assert_eq!(actual.limit, detail.limit);
     assert_eq!(actual.requested, detail.requested);
+}
+
+#[test]
+fn explicit_lifts_preserve_unprefixed_public_cases_and_metadata() {
+    use cala_ledger::{
+        journal::error::{JournalLookupRejection, JournalRejection},
+        tx_template::error::{TxTemplateLookupRejection, TxTemplateRejection},
+    };
+
+    fn forward<S: Rejection + Error, D: Rejection + Error + From<S>>(source: S) -> D {
+        let code: &'static str = source.code().into();
+        let level = source.level();
+        let message = source.to_string();
+        let destination = D::from(source);
+        assert_eq!(Into::<&'static str>::into(destination.code()), code);
+        assert_eq!(destination.level(), level);
+        assert_eq!(destination.to_string(), message);
+        destination
+    }
+
+    let id = JournalId::new();
+    assert!(matches!(
+        forward(JournalLookupRejection::NotFoundById(id)),
+        JournalRejection::NotFoundById(actual) if actual == id
+    ));
+    assert!(matches!(
+        forward(JournalLookupRejection::NotFoundByCode("journal".into())),
+        JournalRejection::NotFoundByCode(code) if code == "journal"
+    ));
+    assert!(matches!(
+        forward(TxTemplateLookupRejection::NotFoundByCode("template".into())),
+        TxTemplateRejection::NotFoundByCode(code) if code == "template"
+    ));
 }
 
 #[test]

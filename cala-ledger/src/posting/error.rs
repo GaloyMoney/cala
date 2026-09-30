@@ -2,8 +2,8 @@ use crate::primitives::{AccountId, JournalId, TransactionId};
 use thiserror::Error;
 
 /// Rejections from posting. Batch attribution is retained; module-only paths are flattened.
-#[errlanes::rejection]
-#[derive(Debug, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
 pub enum PostingRejection {
     #[error("cannot update balances: the account {0} is locked")]
     AccountLocked(AccountId),
@@ -40,9 +40,9 @@ pub enum PostingRejection {
          limit, the number of distinct accounts is."
     )]
     BatchTooManyAccounts { distinct: usize, max: usize },
-    #[flatten(prefix = "TxTemplate")]
+    #[compose(flatten)]
     TxTemplate(crate::tx_template::error::TxTemplateLookupRejection),
-    #[flatten(prefix = "Velocity")]
+    #[compose(flatten)]
     Velocity(crate::velocity::error::VelocityEnforcementRejection),
 }
 
@@ -74,10 +74,10 @@ pub(super) fn transaction_write_error(error: sqlx::Error) -> PostingError {
     error.into()
 }
 
-#[errlanes::rejection]
-#[derive(Debug, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
 pub enum RejectionReason {
-    #[flatten(prefix = "TxTemplate")]
+    #[compose(flatten)]
     TxTemplate(crate::tx_template::error::TxTemplateEvaluationRejection),
     #[error("account {0} does not exist")]
     AccountNotFound(AccountId),

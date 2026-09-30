@@ -4,8 +4,8 @@ use crate::primitives::{AccountId, AccountSetId};
 
 use super::repo::AccountSetConstraintViolation;
 
-#[errlanes::rejection]
-#[derive(Debug, Clone, Error, errlanes::Lift)]
+#[errlanes::compose]
+#[derive(Debug, Clone, Error)]
 #[lift(AccountSetConstraintViolation, unhandled = fatal)]
 pub enum AccountSetRejection {
     #[error("account set '{0}' not found")]
@@ -54,7 +54,7 @@ pub enum AccountSetRejection {
         depth: i32,
         max: i32,
     },
-    #[flatten(prefix = "Account")]
+    #[compose(flatten)]
     Account(crate::account::error::AccountRejection),
 }
 
