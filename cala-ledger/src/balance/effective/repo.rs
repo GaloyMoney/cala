@@ -914,11 +914,6 @@ impl EffectiveBalanceRepo {
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
     ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
-        // Deleted future rows come back as plain rows, not a jsonb_agg per
-        // pair: Postgres caps one jsonb's total element size at 256MB, and a
-        // deep rewrite of a high-version pair (millions of cumulative
-        // effective versions on the EC rollup sets) blows through it and
-        // wedges the rollup subscription permanently.
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
@@ -1074,11 +1069,6 @@ impl EffectiveBalanceRepo {
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
     ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
-        // Deleted future rows come back as plain rows, not a jsonb_agg per
-        // pair: Postgres caps one jsonb's total element size at 256MB, and a
-        // deep rewrite of a high-version pair (millions of cumulative
-        // effective versions on the EC rollup sets) blows through it and
-        // wedges the rollup subscription permanently.
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
