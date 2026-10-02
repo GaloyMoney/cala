@@ -25,6 +25,9 @@ pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
 }
 
+type LatestSnapshots =
+    HashMap<(AccountId, String), (Option<(chrono::NaiveDate, BalanceSnapshot)>, u32)>;
+
 impl EffectiveBalanceRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
@@ -1001,10 +1004,7 @@ impl EffectiveBalanceRepo {
         .await?;
 
         let mut deleted: HashMap<(AccountId, String), Vec<SnapshotOrEntry>> = HashMap::new();
-        let mut latest: HashMap<
-            (AccountId, String),
-            (Option<(chrono::NaiveDate, BalanceSnapshot)>, u32),
-        > = HashMap::new();
+        let mut latest: LatestSnapshots = HashMap::new();
         for row in rows {
             if let (Some(deleted_effective), Some(deleted_values)) =
                 (row.deleted_effective, row.deleted_values)
@@ -1156,10 +1156,7 @@ impl EffectiveBalanceRepo {
         .await?;
 
         let mut deleted: HashMap<(AccountId, String), Vec<SnapshotOrEntry>> = HashMap::new();
-        let mut latest: HashMap<
-            (AccountId, String),
-            (Option<(chrono::NaiveDate, BalanceSnapshot)>, u32),
-        > = HashMap::new();
+        let mut latest: LatestSnapshots = HashMap::new();
         for row in rows {
             if let (Some(deleted_effective), Some(deleted_values)) =
                 (row.deleted_effective, row.deleted_values)
