@@ -44,6 +44,7 @@ impl SnapshotOrEntry<'_> {
         }
     }
 
+    #[cfg(any(test, feature = "fuzz"))]
     fn snapshot(&self) -> (BalanceSnapshot, NaiveDate) {
         match self {
             Self::Snapshot { values, effective } => (values.clone(), *effective),
@@ -64,6 +65,15 @@ impl SnapshotOrEntry<'_> {
     }
 }
 
+#[derive(Debug, Default)]
+struct FoldState {
+    started: bool,
+    last_balance: Option<BalanceSnapshot>,
+    last_effective: Option<NaiveDate>,
+    diff_snapshot: Option<BalanceSnapshot>,
+    emitted: u32,
+}
+
 #[derive(Debug)]
 pub(super) struct EffectiveBalanceData<'a> {
     account_id: AccountId,
@@ -71,6 +81,7 @@ pub(super) struct EffectiveBalanceData<'a> {
     last_snapshot: Option<(NaiveDate, BalanceSnapshot)>,
     latest_all_time_version: u32,
     updates: Vec<SnapshotOrEntry<'a>>,
+    fold: FoldState,
 }
 
 impl<'a> EffectiveBalanceData<'a> {
@@ -87,9 +98,11 @@ impl<'a> EffectiveBalanceData<'a> {
             last_snapshot,
             latest_all_time_version,
             updates,
+            fold: FoldState::default(),
         }
     }
 
+    #[cfg(any(test, feature = "fuzz"))]
     pub fn into_snapshots(
         self,
         journal_id: JournalId,
@@ -149,10 +162,6 @@ impl<'a> EffectiveBalanceData<'a> {
         let (mut last_balance, mut last_effective) = match self.last_snapshot.take() {
             Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),
             None => {
-                // Only legal when the earliest update is a batch entry: the
-                // read is anchored at this pair's earliest effective date, so
-                // every deleted row is strictly later than it, and the sort
-                // places same-date entries after same-date snapshots.
                 debug_assert!(
                     matches!(self.updates[0], SnapshotOrEntry::Entry { .. }),
                     "seeding without a prior snapshot requires the earliest \
@@ -240,22 +249,179 @@ impl<'a> EffectiveBalanceData<'a> {
                         values.pending.entry_id = diff.pending.entry_id;
                         diff.settled.entry_id = values.entry_id;
                     }
-                    // `last_balance` is the running "cumulative balance as
-                    // of where the walk has reached" — the baseline the
-                    // *next* `Entry` chains onto. The old per-transaction
-                    // path never needed this arm to feed it back: a single
-                    // transaction's entries always sorted strictly before
-                    // every rewritten row, so nothing ever followed a
-                    // rewrite. Batched across transactions, a later entry
-                    // can now land after one or more rewritten rows (same
-                    // date or a later one), so this rewritten row's own
-                    // post-diff values — cumulative amounts *and*
-                    // version — become the new baseline, exactly like an
-                    // `Entry`-produced row would.
                     last_balance = values.clone();
                 }
             }
         }
+    }
+
+    /// The batch entries pushed so far, handed to the streaming rewrite
+    /// driver (which feeds them back through [`Self::fold_next`] merged with
+    /// the pair's deleted rows).
+    pub fn take_updates(&mut self) -> Vec<SnapshotOrEntry<'a>> {
+        std::mem::take(&mut self.updates)
+    }
+
+    /// Fold one ordered update and return the finalized
+    /// [`EffectiveBalanceSnapshot`] it produces, `all_time_version` assigned
+    /// positionally across the whole rewrite. Used by the streaming rewrite
+    /// driver, which feeds updates one at a time instead of buffering the
+    /// pair's whole later history in `self.updates` first.
+    pub fn fold_next(
+        &mut self,
+        journal_id: JournalId,
+        update: SnapshotOrEntry,
+        rewritten_at: DateTime<Utc>,
+    ) -> EffectiveBalanceSnapshot {
+        let (snapshot, effective) = self.fold_one(update, rewritten_at);
+        EffectiveBalanceSnapshot {
+            journal_id,
+            account_id: self.account_id,
+            currency: self.currency,
+            effective,
+            version: snapshot.version,
+            all_time_version: self.fold.emitted + self.latest_all_time_version,
+            created_at: snapshot.created_at,
+            modified_at: snapshot.modified_at,
+            entry_id: snapshot.entry_id,
+            settled: snapshot.settled,
+            pending: snapshot.pending,
+            encumbrance: snapshot.encumbrance,
+        }
+    }
+
+    /// Seed the fold, then apply one ordered update — the single shared
+    /// implementation behind both the buffered replay
+    /// ([`Self::re_calculate_snapshots`]) and the streaming one
+    /// ([`Self::fold_next`]).
+    fn fold_one(
+        &mut self,
+        update: SnapshotOrEntry,
+        rewritten_at: DateTime<Utc>,
+    ) -> (BalanceSnapshot, NaiveDate) {
+        self.ensure_fold_seeded(&update);
+        let mut last_balance = self
+            .fold
+            .last_balance
+            .take()
+            .expect("fold must be seeded before applying updates");
+        let mut last_effective = self
+            .fold
+            .last_effective
+            .expect("fold must be seeded before applying updates");
+
+        if last_effective != *update.effective() {
+            last_balance.version = 0;
+        }
+        let (snapshot, effective) = match update {
+            SnapshotOrEntry::Entry {
+                effective,
+                created_at,
+                entry,
+                ..
+            } => {
+                last_effective = effective;
+                last_balance = Snapshots::update_snapshot(created_at, last_balance, entry);
+                self.fold.diff_snapshot = if let Some(diff) = self.fold.diff_snapshot.take() {
+                    Some(Snapshots::update_snapshot(created_at, diff, entry))
+                } else {
+                    let mut initial = Self::first_snapshot(created_at, self.account_id, entry);
+                    initial.entry_id = last_balance.entry_id;
+                    initial.encumbrance.entry_id = last_balance.encumbrance.entry_id;
+                    initial.pending.entry_id = last_balance.pending.entry_id;
+                    initial.settled.entry_id = last_balance.settled.entry_id;
+                    Some(Snapshots::update_snapshot(created_at, initial, entry))
+                };
+                (last_balance.clone(), effective)
+            }
+            SnapshotOrEntry::Snapshot {
+                effective,
+                mut values,
+            } => {
+                last_effective = effective;
+                let diff = self
+                    .fold
+                    .diff_snapshot
+                    .as_mut()
+                    .expect("diff must be initialized");
+                values.modified_at = rewritten_at;
+                if diff.encumbrance.cr_balance != Decimal::ZERO
+                    || diff.encumbrance.dr_balance != Decimal::ZERO
+                {
+                    values.encumbrance.cr_balance += diff.encumbrance.cr_balance;
+                    values.encumbrance.dr_balance += diff.encumbrance.dr_balance;
+                    values.encumbrance.modified_at = rewritten_at;
+                }
+                if diff.pending.cr_balance != Decimal::ZERO
+                    || diff.pending.dr_balance != Decimal::ZERO
+                {
+                    values.pending.cr_balance += diff.pending.cr_balance;
+                    values.pending.dr_balance += diff.pending.dr_balance;
+                    values.pending.modified_at = rewritten_at;
+                }
+                if diff.settled.cr_balance != Decimal::ZERO
+                    || diff.settled.dr_balance != Decimal::ZERO
+                {
+                    values.settled.cr_balance += diff.settled.cr_balance;
+                    values.settled.dr_balance += diff.settled.dr_balance;
+                    values.settled.modified_at = rewritten_at;
+                }
+                if values.entry_id == values.encumbrance.entry_id {
+                    diff.encumbrance.entry_id = values.entry_id;
+                    values.pending.entry_id = diff.pending.entry_id;
+                    values.settled.entry_id = diff.settled.entry_id;
+                }
+                if values.entry_id == values.pending.entry_id {
+                    values.encumbrance.entry_id = diff.encumbrance.entry_id;
+                    diff.pending.entry_id = values.entry_id;
+                    values.settled.entry_id = diff.settled.entry_id;
+                }
+                if values.entry_id == values.settled.entry_id {
+                    values.encumbrance.entry_id = diff.encumbrance.entry_id;
+                    values.pending.entry_id = diff.pending.entry_id;
+                    diff.settled.entry_id = values.entry_id;
+                }
+                // `last_balance` is the running "cumulative balance as of
+                // where the walk has reached" — the baseline the *next*
+                // `Entry` chains onto, exactly like an `Entry`-produced row
+                // would be.
+                last_balance = values.clone();
+                (values, effective)
+            }
+        };
+
+        self.fold.last_balance = Some(last_balance);
+        self.fold.last_effective = Some(last_effective);
+        self.fold.emitted += 1;
+        (snapshot, effective)
+    }
+
+    fn ensure_fold_seeded(&mut self, next: &SnapshotOrEntry) {
+        if self.fold.started {
+            return;
+        }
+        let (last_balance, last_effective) = match self.last_snapshot.take() {
+            Some((snapshot_date, snapshot)) => (snapshot, snapshot_date),
+            None => {
+                // Only legal when the earliest update is a batch entry: the
+                // read is anchored at this pair's earliest effective date, so
+                // every pre-existing row is strictly later than it, and the
+                // ordering places same-date entries after same-date rows.
+                debug_assert!(
+                    matches!(next, SnapshotOrEntry::Entry { .. }),
+                    "seeding without a prior snapshot requires the earliest \
+                     update to be a batch entry, not a pre-existing row",
+                );
+                let (entry, effective, created_at) = next.entry();
+                (
+                    Self::first_snapshot(created_at, self.account_id, entry),
+                    effective,
+                )
+            }
+        };
+        self.fold.started = true;
+        self.fold.last_balance = Some(last_balance);
+        self.fold.last_effective = Some(last_effective);
     }
 
     fn first_snapshot(

@@ -19,6 +19,7 @@ use super::{
     EcRollupTxn,
 };
 
+use data::{EffectiveBalanceData, SnapshotOrEntry};
 use repo::*;
 
 #[derive(Clone)]
@@ -267,17 +268,14 @@ impl EffectiveBalances {
                 }
             }
         }
-        for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
-        }
-
-        let new_balances = all_data
-            .into_values()
-            .flat_map(|data| data.into_snapshots(journal_id))
-            .collect();
-        self.repo
-            .insert_new_snapshots(op, journal_id, new_balances)
+        let mut out = Vec::new();
+        for ((account_id, currency), data) in all_data {
+            self.rewrite_pair_streaming(
+                &mut *op, journal_id, account_id, currency, effective, data, created_at, &mut out,
+            )
             .await?;
+        }
+        self.flush_rewrite_out(op, journal_id, &mut out).await?;
 
         Ok(())
     }
@@ -374,19 +372,118 @@ impl EffectiveBalances {
             .map(|tx| tx.created_at)
             .max()
             .expect("txns is non-empty: earliest was populated from it above");
-        for data in all_data.values_mut() {
-            data.re_calculate_snapshots(rewritten_at);
-        }
-
-        let new_balances = all_data
-            .into_values()
-            .flat_map(|data| data.into_snapshots(journal_id))
-            .collect();
-        self.repo
-            .insert_new_snapshots(op, journal_id, new_balances)
+        let mut out = Vec::new();
+        for ((account_id, currency), data) in all_data {
+            let anchor = earliest[&(account_id, currency)];
+            self.rewrite_pair_streaming(
+                &mut *op,
+                journal_id,
+                account_id,
+                currency,
+                anchor,
+                data,
+                rewritten_at,
+                &mut out,
+            )
             .await?;
+        }
+        self.flush_rewrite_out(op, journal_id, &mut out).await?;
 
         Ok(())
+    }
+
+    /// Replay one pair's rewrite in bounded slices: delete the pair's
+    /// futures after `anchor` piece by piece, fold each piece merged with
+    /// the pair's batch entries, and flush the rebuilt history in chunks —
+    /// all inside the caller's transaction. A backdated entry anchored
+    /// millions of versions back can no longer grow one statement, one
+    /// jsonb array, or the in-memory replay beyond a slice.
+    async fn rewrite_pair_streaming(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        anchor: NaiveDate,
+        mut data: EffectiveBalanceData<'_>,
+        rewritten_at: DateTime<Utc>,
+        out: &mut Vec<EffectiveBalanceSnapshot>,
+    ) -> Result<(), BalanceError> {
+        const REWRITE_SLICE: i64 = 50_000;
+        const REWRITE_FLUSH: usize = 5_000;
+        // Only rows strictly after the anchor are rewritten; `(anchor, i32::MAX)`
+        // as the initial cursor excludes every row on the anchor date itself.
+        let mut cursor = (anchor, i32::MAX);
+        let mut entries = data.take_updates();
+        entries.sort();
+        let mut entries = entries.into_iter().peekable();
+        loop {
+            let mut slice = self
+                .repo
+                .delete_futures_slice(
+                    &mut *op,
+                    journal_id,
+                    account_id,
+                    currency.code(),
+                    cursor,
+                    REWRITE_SLICE,
+                )
+                .await?;
+            // DELETE ... RETURNING does not guarantee row order; the replay
+            // folds in (effective, version) order, so sort the bounded slice.
+            slice.sort_by_key(|(effective, version, _)| (*effective, *version));
+            let has_more = slice.len() as i64 == REWRITE_SLICE;
+            for (effective, version, values) in slice {
+                while let Some(entry) = entries.peek() {
+                    // A pre-existing row sorts before any batch entry
+                    // sharing its effective date (see SnapshotOrEntry::cmp).
+                    if entry.effective() < &effective {
+                        let entry = entries.next().expect("entry was peeked");
+                        out.push(data.fold_next(journal_id, entry, rewritten_at));
+                        if out.len() >= REWRITE_FLUSH {
+                            self.flush_rewrite_out(&mut *op, journal_id, out).await?;
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                let values =
+                    serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+                out.push(data.fold_next(
+                    journal_id,
+                    SnapshotOrEntry::Snapshot { effective, values },
+                    rewritten_at,
+                ));
+                cursor = (effective, version);
+                if out.len() >= REWRITE_FLUSH {
+                    self.flush_rewrite_out(&mut *op, journal_id, out).await?;
+                }
+            }
+            if !has_more {
+                break;
+            }
+        }
+        for entry in entries {
+            out.push(data.fold_next(journal_id, entry, rewritten_at));
+            if out.len() >= REWRITE_FLUSH {
+                self.flush_rewrite_out(&mut *op, journal_id, out).await?;
+            }
+        }
+        Ok(())
+    }
+
+    async fn flush_rewrite_out(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        out: &mut Vec<EffectiveBalanceSnapshot>,
+    ) -> Result<(), BalanceError> {
+        if out.is_empty() {
+            return Ok(());
+        }
+        self.repo
+            .insert_new_snapshots(op, journal_id, std::mem::take(out))
+            .await
     }
 }
 
@@ -478,3 +575,229 @@ mod __fuzz {
 
 #[cfg(feature = "fuzz")]
 pub use __fuzz::fuzz_recalculate;
+
+#[cfg(test)]
+mod tests {
+    //! Oracle tests for the streaming rewrite fold: the buffered replay
+    //! (`re_calculate_snapshots` + `into_snapshots`) is the reference, and
+    //! the sliced merge the driver performs must reproduce it exactly.
+    use super::data::{EffectiveBalanceData, SnapshotOrEntry};
+    use super::*;
+    use cala_types::balance::{BalanceAmount, BalanceSnapshot};
+    use cala_types::primitives::{DebitOrCredit, EntryId, Layer, TransactionId};
+    use rust_decimal::Decimal;
+
+    fn journal_id() -> JournalId {
+        JournalId::from(uuid::Uuid::nil())
+    }
+
+    fn account_id() -> AccountId {
+        AccountId::from(uuid::Uuid::from_u128(42))
+    }
+
+    fn mk_snapshot(settled_dr: i64, version: u32) -> BalanceSnapshot {
+        let entry_id = EntryId::from(uuid::Uuid::from_u128(version as u128 + 1000));
+        let time = Utc::now();
+        BalanceSnapshot {
+            journal_id: journal_id(),
+            account_id: account_id(),
+            entry_id,
+            currency: Currency::USD,
+            settled: BalanceAmount {
+                dr_balance: Decimal::from(settled_dr),
+                cr_balance: Decimal::ZERO,
+                entry_id,
+                modified_at: time,
+            },
+            pending: BalanceAmount {
+                dr_balance: Decimal::ZERO,
+                cr_balance: Decimal::ZERO,
+                entry_id,
+                modified_at: time,
+            },
+            encumbrance: BalanceAmount {
+                dr_balance: Decimal::ZERO,
+                cr_balance: Decimal::ZERO,
+                entry_id,
+                modified_at: time,
+            },
+            version,
+            modified_at: time,
+            created_at: time,
+        }
+    }
+
+    fn mk_entry(id: u128, sequence: u32, units: i64) -> EntryValues {
+        EntryValues {
+            id: EntryId::from(uuid::Uuid::from_u128(id)),
+            version: 1,
+            transaction_id: TransactionId::from(uuid::Uuid::from_u128(7)),
+            journal_id: journal_id(),
+            account_id: account_id(),
+            entry_type: "TEST".to_string(),
+            sequence,
+            layer: Layer::Settled,
+            units: Decimal::from(units),
+            currency: Currency::USD,
+            direction: DebitOrCredit::Debit,
+            description: None,
+            metadata: None,
+        }
+    }
+
+    fn d(day: u32) -> NaiveDate {
+        NaiveDate::from_ymd_opt(2024, 1, day).unwrap()
+    }
+
+    fn e<'a>(effective: NaiveDate, tx_index: usize, entry: &'a EntryValues) -> SnapshotOrEntry<'a> {
+        SnapshotOrEntry::Entry {
+            effective,
+            tx_index,
+            created_at: Utc::now(),
+            entry,
+        }
+    }
+
+    fn s(effective: NaiveDate, snapshot: BalanceSnapshot) -> SnapshotOrEntry<'static> {
+        SnapshotOrEntry::Snapshot {
+            effective,
+            values: snapshot,
+        }
+    }
+
+    fn updates_fixture<'a>(
+        entry_a: &'a EntryValues,
+        entry_b: &'a EntryValues,
+    ) -> Vec<SnapshotOrEntry<'a>> {
+        vec![
+            s(d(3), mk_snapshot(100, 1)),
+            s(d(3), mk_snapshot(110, 2)),
+            s(d(5), mk_snapshot(130, 1)),
+            e(d(2), 0, entry_a),
+            e(d(3), 1, entry_a),
+            e(d(1), 2, entry_b),
+        ]
+    }
+
+    fn rows_fixture() -> Vec<(NaiveDate, BalanceSnapshot)> {
+        vec![
+            (d(3), mk_snapshot(100, 1)),
+            (d(3), mk_snapshot(110, 2)),
+            (d(5), mk_snapshot(130, 1)),
+        ]
+    }
+
+    fn buffered_reference<'a>(updates: Vec<SnapshotOrEntry<'a>>) -> Vec<EffectiveBalanceSnapshot> {
+        let mut data = EffectiveBalanceData::new(
+            account_id(),
+            Currency::USD,
+            Some((d(1), mk_snapshot(90, 7))),
+            11,
+            updates,
+        );
+        data.re_calculate_snapshots(Utc::now());
+        data.into_snapshots(journal_id()).collect()
+    }
+
+    fn snapshot_tuple(snap: &EffectiveBalanceSnapshot) -> (NaiveDate, u32, u32, Decimal, Decimal) {
+        (
+            snap.effective,
+            snap.version,
+            snap.all_time_version,
+            snap.settled.dr_balance,
+            snap.settled.cr_balance,
+        )
+    }
+
+    #[test]
+    fn streamed_fold_matches_buffered_reference() {
+        let entry_a = mk_entry(5001, 1, 10);
+        let entry_b = mk_entry(5002, 1, 25);
+        let expected: Vec<_> = buffered_reference(updates_fixture(&entry_a, &entry_b))
+            .iter()
+            .map(snapshot_tuple)
+            .collect();
+
+        let mut data = EffectiveBalanceData::new(
+            account_id(),
+            Currency::USD,
+            Some((d(1), mk_snapshot(90, 7))),
+            11,
+            Vec::new(),
+        );
+        let mut updates = updates_fixture(&entry_a, &entry_b);
+        updates.sort();
+        let actual: Vec<_> = updates
+            .into_iter()
+            .map(|u| data.fold_next(journal_id(), u, Utc::now()))
+            .map(|snap| snapshot_tuple(&snap))
+            .collect();
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn sliced_merge_reproduces_full_sort_order() {
+        // Simulate rewrite_pair_streaming's feed: rows stream in
+        // (effective, version) order in slices, and each row first emits the
+        // pending entries whose effective date is strictly before it — the
+        // same sequence a full sort produces.
+        let entry_a = mk_entry(5001, 1, 10);
+        let entry_b = mk_entry(5002, 1, 25);
+        let expected: Vec<_> = buffered_reference(updates_fixture(&entry_a, &entry_b))
+            .iter()
+            .map(snapshot_tuple)
+            .collect();
+
+        let mut entries: Vec<SnapshotOrEntry> = vec![
+            e(d(2), 0, &entry_a),
+            e(d(3), 1, &entry_a),
+            e(d(1), 2, &entry_b),
+        ];
+        entries.sort();
+        let mut entries = entries.into_iter().peekable();
+
+        let mut data = EffectiveBalanceData::new(
+            account_id(),
+            Currency::USD,
+            Some((d(1), mk_snapshot(90, 7))),
+            11,
+            Vec::new(),
+        );
+        let mut actual = Vec::new();
+        // Slice size 2 to cross a slice boundary mid-merge.
+        for slice in rows_fixture().chunks(2) {
+            for (effective, values) in slice {
+                while let Some(entry) = entries.peek() {
+                    if entry.effective() < effective {
+                        let entry = entries.next().unwrap();
+                        actual.push(snapshot_tuple(&data.fold_next(
+                            journal_id(),
+                            entry,
+                            Utc::now(),
+                        )));
+                    } else {
+                        break;
+                    }
+                }
+                actual.push(snapshot_tuple(&data.fold_next(
+                    journal_id(),
+                    SnapshotOrEntry::Snapshot {
+                        effective: *effective,
+                        values: values.clone(),
+                    },
+                    Utc::now(),
+                )));
+            }
+        }
+        for entry in entries {
+            actual.push(snapshot_tuple(&data.fold_next(
+                journal_id(),
+                entry,
+                Utc::now(),
+            )));
+        }
+
+        assert_eq!(actual, expected);
+    }
+}
