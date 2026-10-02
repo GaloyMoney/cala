@@ -25,6 +25,9 @@ pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
 }
 
+type LatestSnapshots =
+    HashMap<(AccountId, String), (Option<(chrono::NaiveDate, BalanceSnapshot)>, u32)>;
+
 impl EffectiveBalanceRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
@@ -948,17 +951,7 @@ impl EffectiveBalanceRepo {
               AND c.currency = f.currency
               AND c.effective = f.effective
               AND c.version = f.version
-            RETURNING c.account_id, c.currency, c.effective, c.values
-          ),
-          deleted AS (
-            SELECT
-              account_id,
-              currency,
-              jsonb_agg(
-                jsonb_build_object('effective', effective, 'values', values)
-              ) AS deleted_values
-            FROM delete_balances
-            GROUP BY account_id, currency
+            RETURNING c.account_id, c.currency, c.effective, c.version, c.values
           ),
           latest AS (
             SELECT
@@ -985,10 +978,22 @@ impl EffectiveBalanceRepo {
             l.values AS "values?: serde_json::Value",
             l.all_time_version AS "all_time_version?: i32",
             l.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+            NULL::date AS "deleted_effective?: chrono::NaiveDate",
+            NULL::int4 AS "deleted_version?: i32",
+            NULL::jsonb AS "deleted_values?: serde_json::Value"
           FROM latest l
-          LEFT JOIN deleted d
-            ON l.account_id = d.account_id AND l.currency = d.currency
+          UNION ALL
+          SELECT
+            d.account_id,
+            d.currency,
+            NULL::jsonb,
+            NULL::int4,
+            NULL::date,
+            d.effective,
+            d.version,
+            d.values
+          FROM delete_balances d
+          ORDER BY 1, 2, 6 NULLS FIRST, 7
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -998,8 +1003,23 @@ impl EffectiveBalanceRepo {
         .fetch_all(op.as_executor())
         .await?;
 
-        let mut ret = HashMap::new();
+        let mut deleted: HashMap<(AccountId, String), Vec<SnapshotOrEntry>> = HashMap::new();
+        let mut latest: LatestSnapshots = HashMap::new();
         for row in rows {
+            if let (Some(deleted_effective), Some(deleted_values)) =
+                (row.deleted_effective, row.deleted_values)
+            {
+                let snapshot = serde_json::from_value::<BalanceSnapshot>(deleted_values)
+                    .expect("Failed to deserialize balance snapshot");
+                deleted
+                    .entry((row.account_id, row.currency))
+                    .or_default()
+                    .push(SnapshotOrEntry::Snapshot {
+                        effective: deleted_effective,
+                        values: snapshot,
+                    });
+                continue;
+            }
             let last_snapshot = match (row.values, row.effective_date) {
                 (Some(values), Some(effective_date)) => {
                     let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
@@ -1008,18 +1028,24 @@ impl EffectiveBalanceRepo {
                 }
                 _ => None,
             };
+            let all_time_version = row.all_time_version.map(|v| v as u32).unwrap_or(0);
+            latest.insert(
+                (row.account_id, row.currency),
+                (last_snapshot, all_time_version),
+            );
+        }
 
-            let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
-                .expect("Failed to deserialize deleted values array");
-
-            let currency = row.currency.parse().expect("Failed to parse currency");
+        let mut ret = HashMap::new();
+        for ((account_id, currency), (last_snapshot, all_time_version)) in latest {
+            let parsed: Currency = currency.parse().expect("Failed to parse currency");
+            let updates = deleted.remove(&(account_id, currency)).unwrap_or_default();
             ret.insert(
-                (row.account_id, currency),
+                (account_id, parsed),
                 EffectiveBalanceData::new(
-                    row.account_id,
-                    currency,
+                    account_id,
+                    parsed,
                     last_snapshot,
-                    row.all_time_version.map(|v| v as u32).unwrap_or(0),
+                    all_time_version,
                     updates,
                 ),
             );
@@ -1077,17 +1103,7 @@ impl EffectiveBalanceRepo {
               AND c.currency = f.currency
               AND c.effective = f.effective
               AND c.version = f.version
-            RETURNING c.account_id, c.currency, c.effective, c.values
-          ),
-          deleted AS (
-            SELECT
-              account_id,
-              currency,
-              jsonb_agg(
-                jsonb_build_object('effective', effective, 'values', values)
-              ) AS deleted_values
-            FROM delete_balances
-            GROUP BY account_id, currency
+            RETURNING c.account_id, c.currency, c.effective, c.version, c.values
           ),
           latest AS (
             SELECT
@@ -1114,10 +1130,22 @@ impl EffectiveBalanceRepo {
             l.values AS "values?: serde_json::Value",
             l.all_time_version AS "all_time_version?: i32",
             l.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+            NULL::date AS "deleted_effective?: chrono::NaiveDate",
+            NULL::int4 AS "deleted_version?: i32",
+            NULL::jsonb AS "deleted_values?: serde_json::Value"
           FROM latest l
-          LEFT JOIN deleted d
-            ON l.account_id = d.account_id AND l.currency = d.currency
+          UNION ALL
+          SELECT
+            d.account_id,
+            d.currency,
+            NULL::jsonb,
+            NULL::int4,
+            NULL::date,
+            d.effective,
+            d.version,
+            d.values
+          FROM delete_balances d
+          ORDER BY 1, 2, 6 NULLS FIRST, 7
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -1127,8 +1155,23 @@ impl EffectiveBalanceRepo {
         .fetch_all(op.as_executor())
         .await?;
 
-        let mut ret = HashMap::new();
+        let mut deleted: HashMap<(AccountId, String), Vec<SnapshotOrEntry>> = HashMap::new();
+        let mut latest: LatestSnapshots = HashMap::new();
         for row in rows {
+            if let (Some(deleted_effective), Some(deleted_values)) =
+                (row.deleted_effective, row.deleted_values)
+            {
+                let snapshot = serde_json::from_value::<BalanceSnapshot>(deleted_values)
+                    .expect("Failed to deserialize balance snapshot");
+                deleted
+                    .entry((row.account_id, row.currency))
+                    .or_default()
+                    .push(SnapshotOrEntry::Snapshot {
+                        effective: deleted_effective,
+                        values: snapshot,
+                    });
+                continue;
+            }
             let last_snapshot = match (row.values, row.effective_date) {
                 (Some(values), Some(effective_date)) => {
                     let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
@@ -1137,18 +1180,24 @@ impl EffectiveBalanceRepo {
                 }
                 _ => None,
             };
+            let all_time_version = row.all_time_version.map(|v| v as u32).unwrap_or(0);
+            latest.insert(
+                (row.account_id, row.currency),
+                (last_snapshot, all_time_version),
+            );
+        }
 
-            let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
-                .expect("Failed to deserialize deleted values array");
-
-            let currency = row.currency.parse().expect("Failed to parse currency");
+        let mut ret = HashMap::new();
+        for ((account_id, currency), (last_snapshot, all_time_version)) in latest {
+            let parsed: Currency = currency.parse().expect("Failed to parse currency");
+            let updates = deleted.remove(&(account_id, currency)).unwrap_or_default();
             ret.insert(
-                (row.account_id, currency),
+                (account_id, parsed),
                 EffectiveBalanceData::new(
-                    row.account_id,
-                    currency,
+                    account_id,
+                    parsed,
                     last_snapshot,
-                    row.all_time_version.map(|v| v as u32).unwrap_or(0),
+                    all_time_version,
                     updates,
                 ),
             );

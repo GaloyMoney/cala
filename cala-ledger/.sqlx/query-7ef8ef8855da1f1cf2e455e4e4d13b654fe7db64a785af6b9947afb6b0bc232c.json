@@ -1,0 +1,67 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n          WITH eligible_accounts AS MATERIALIZED (\n            SELECT a.id\n            FROM cala_accounts a\n            WHERE a.id = ANY($2::uuid[])\n              AND a.eventually_consistent = FALSE\n          ),\n          pairs AS MATERIALIZED (\n            SELECT DISTINCT v.account_id, v.currency\n            FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)\n            JOIN eligible_accounts a ON a.id = v.account_id\n          ),\n          future_rows AS MATERIALIZED (\n            SELECT b.account_id, b.currency, b.effective, b.version\n            FROM pairs p\n            JOIN LATERAL (\n              SELECT c.account_id, c.currency, c.effective, c.version\n              FROM cala_cumulative_effective_balances c\n              WHERE c.journal_id = $1\n                AND c.account_id = p.account_id\n                AND c.currency = p.currency\n                AND c.effective > $4\n              ORDER BY c.effective, c.version\n            ) b ON TRUE\n          ),\n          delete_balances AS (\n            DELETE FROM cala_cumulative_effective_balances c\n            USING future_rows f\n            WHERE c.journal_id = $1\n              AND c.account_id = f.account_id\n              AND c.currency = f.currency\n              AND c.effective = f.effective\n              AND c.version = f.version\n            RETURNING c.account_id, c.currency, c.effective, c.version, c.values\n          ),\n          latest AS (\n            SELECT\n              p.account_id,\n              p.currency,\n              b.values,\n              b.all_time_version,\n              b.effective\n            FROM pairs p\n            LEFT JOIN LATERAL (\n              SELECT values, all_time_version, effective\n              FROM cala_cumulative_effective_balances\n              WHERE journal_id = $1\n                AND account_id = p.account_id\n                AND currency = p.currency\n                AND effective <= $4\n              ORDER BY all_time_version DESC\n              LIMIT 1\n            ) b ON TRUE\n          )\n          SELECT\n            l.account_id AS \"account_id!: AccountId\",\n            l.currency AS \"currency!\",\n            l.values AS \"values?: serde_json::Value\",\n            l.all_time_version AS \"all_time_version?: i32\",\n            l.effective AS \"effective_date?: chrono::NaiveDate\",\n            NULL::date AS \"deleted_effective?: chrono::NaiveDate\",\n            NULL::int4 AS \"deleted_version?: i32\",\n            NULL::jsonb AS \"deleted_values?: serde_json::Value\"\n          FROM latest l\n          UNION ALL\n          SELECT\n            d.account_id,\n            d.currency,\n            NULL::jsonb,\n            NULL::int4,\n            NULL::date,\n            d.effective,\n            d.version,\n            d.values\n          FROM delete_balances d\n          ORDER BY 1, 2, 6 NULLS FIRST, 7\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "currency!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "values?: serde_json::Value",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "all_time_version?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "effective_date?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 5,
+        "name": "deleted_effective?: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_version?: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "deleted_values?: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "Date"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "7ef8ef8855da1f1cf2e455e4e4d13b654fe7db64a785af6b9947afb6b0bc232c"
+}
