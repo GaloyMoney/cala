@@ -1,3 +1,12 @@
+# [cala release v0.31.1](https://github.com/GaloyMoney/cala/releases/tag/0.31.1)
+
+
+
+### Bug Fixes
+
+- Return deleted effective futures as rows, not one jsonb_agg per pair (#898)
+- Bound expression size to dodge cel parser's u16 caret-width panic (#894)
+
 # [cala release v0.31.0](https://github.com/GaloyMoney/cala/releases/tag/0.31.0)
 
 
