@@ -1,0 +1,39 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM cala_cumulative_effective_balances c\n            WHERE c.ctid IN (\n              SELECT c2.ctid\n              FROM cala_cumulative_effective_balances c2\n              WHERE c2.journal_id = $1\n                AND c2.account_id = $2\n                AND c2.currency = $3\n                AND (c2.effective, c2.version) > ($4, $5)\n              ORDER BY c2.effective, c2.version\n              LIMIT $6\n            )\n            RETURNING\n              c.effective AS \"effective!: chrono::NaiveDate\",\n              c.version AS \"version!: i32\",\n              c.values AS \"values!: serde_json::Value\"\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "effective!: chrono::NaiveDate",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 1,
+        "name": "version!: i32",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "values!: serde_json::Value",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Date",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "55a60685914f5710d4ad3c1068ce323ffa6dd1e57e41020283d2256f3716a4b9"
+}

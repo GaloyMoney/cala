@@ -86,6 +86,8 @@ impl EffectiveBalanceRepo {
         }
     }
 
+    const EC_INSERT_SNAPSHOT_BATCH_SIZE: usize = 5_000;
+
     #[instrument(
         level = "debug",
         name = "effective_balance.find_range",
@@ -927,39 +929,6 @@ impl EffectiveBalanceRepo {
             FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             JOIN eligible_accounts a ON a.id = v.account_id
           ),
-          future_rows AS MATERIALIZED (
-            SELECT b.account_id, b.currency, b.effective, b.version
-            FROM pairs p
-            JOIN LATERAL (
-              SELECT c.account_id, c.currency, c.effective, c.version
-              FROM cala_cumulative_effective_balances c
-              WHERE c.journal_id = $1
-                AND c.account_id = p.account_id
-                AND c.currency = p.currency
-                AND c.effective > $4
-              ORDER BY c.effective, c.version
-            ) b ON TRUE
-          ),
-          delete_balances AS (
-            DELETE FROM cala_cumulative_effective_balances c
-            USING future_rows f
-            WHERE c.journal_id = $1
-              AND c.account_id = f.account_id
-              AND c.currency = f.currency
-              AND c.effective = f.effective
-              AND c.version = f.version
-            RETURNING c.account_id, c.currency, c.effective, c.values
-          ),
-          deleted AS (
-            SELECT
-              account_id,
-              currency,
-              jsonb_agg(
-                jsonb_build_object('effective', effective, 'values', values)
-              ) AS deleted_values
-            FROM delete_balances
-            GROUP BY account_id, currency
-          ),
           latest AS (
             SELECT
               p.account_id,
@@ -984,11 +953,8 @@ impl EffectiveBalanceRepo {
             l.currency AS "currency!",
             l.values AS "values?: serde_json::Value",
             l.all_time_version AS "all_time_version?: i32",
-            l.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+            l.effective AS "effective_date?: chrono::NaiveDate"
           FROM latest l
-          LEFT JOIN deleted d
-            ON l.account_id = d.account_id AND l.currency = d.currency
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -1008,10 +974,6 @@ impl EffectiveBalanceRepo {
                 }
                 _ => None,
             };
-
-            let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
-                .expect("Failed to deserialize deleted values array");
-
             let currency = row.currency.parse().expect("Failed to parse currency");
             ret.insert(
                 (row.account_id, currency),
@@ -1020,7 +982,7 @@ impl EffectiveBalanceRepo {
                     currency,
                     last_snapshot,
                     row.all_time_version.map(|v| v as u32).unwrap_or(0),
-                    updates,
+                    Vec::new(),
                 ),
             );
         }
@@ -1056,39 +1018,6 @@ impl EffectiveBalanceRepo {
             FROM UNNEST($2::uuid[], $3::text[]) AS v(account_id, currency)
             JOIN eligible_accounts a ON a.id = v.account_id
           ),
-          future_rows AS MATERIALIZED (
-            SELECT b.account_id, b.currency, b.effective, b.version
-            FROM pairs p
-            JOIN LATERAL (
-              SELECT c.account_id, c.currency, c.effective, c.version
-              FROM cala_cumulative_effective_balances c
-              WHERE c.journal_id = $1
-                AND c.account_id = p.account_id
-                AND c.currency = p.currency
-                AND c.effective > $4
-              ORDER BY c.effective, c.version
-            ) b ON TRUE
-          ),
-          delete_balances AS (
-            DELETE FROM cala_cumulative_effective_balances c
-            USING future_rows f
-            WHERE c.journal_id = $1
-              AND c.account_id = f.account_id
-              AND c.currency = f.currency
-              AND c.effective = f.effective
-              AND c.version = f.version
-            RETURNING c.account_id, c.currency, c.effective, c.values
-          ),
-          deleted AS (
-            SELECT
-              account_id,
-              currency,
-              jsonb_agg(
-                jsonb_build_object('effective', effective, 'values', values)
-              ) AS deleted_values
-            FROM delete_balances
-            GROUP BY account_id, currency
-          ),
           latest AS (
             SELECT
               p.account_id,
@@ -1113,11 +1042,8 @@ impl EffectiveBalanceRepo {
             l.currency AS "currency!",
             l.values AS "values?: serde_json::Value",
             l.all_time_version AS "all_time_version?: i32",
-            l.effective AS "effective_date?: chrono::NaiveDate",
-            COALESCE(d.deleted_values, '[]'::jsonb) AS "deleted_values!: serde_json::Value"
+            l.effective AS "effective_date?: chrono::NaiveDate"
           FROM latest l
-          LEFT JOIN deleted d
-            ON l.account_id = d.account_id AND l.currency = d.currency
         "#,
             journal_id as JournalId,
             &account_ids as &[AccountId],
@@ -1137,10 +1063,6 @@ impl EffectiveBalanceRepo {
                 }
                 _ => None,
             };
-
-            let updates = serde_json::from_value::<Vec<SnapshotOrEntry>>(row.deleted_values)
-                .expect("Failed to deserialize deleted values array");
-
             let currency = row.currency.parse().expect("Failed to parse currency");
             ret.insert(
                 (row.account_id, currency),
@@ -1149,11 +1071,60 @@ impl EffectiveBalanceRepo {
                     currency,
                     last_snapshot,
                     row.all_time_version.map(|v| v as u32).unwrap_or(0),
-                    updates,
+                    Vec::new(),
                 ),
             );
         }
         Ok(ret)
+    }
+
+    /// Delete up to `limit` of a pair's future rows (strictly after
+    /// `after`) in `(effective, version)` order and return them for the
+    /// streaming replay. Slicing keeps a deep rewrite's statements and
+    /// memory bounded: a backdated entry anchored millions of versions back
+    /// replays in `limit`-sized pieces instead of one giant
+    /// delete-and-rebuild. All slices run inside the caller's transaction,
+    /// so the rewrite still commits atomically with the rest of the batch.
+    pub(super) async fn delete_futures_slice(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: &str,
+        after: (NaiveDate, i32),
+        limit: i64,
+    ) -> Result<Vec<(chrono::NaiveDate, i32, serde_json::Value)>, BalanceError> {
+        let rows = sqlx::query!(
+            r#"
+            DELETE FROM cala_cumulative_effective_balances c
+            WHERE c.ctid IN (
+              SELECT c2.ctid
+              FROM cala_cumulative_effective_balances c2
+              WHERE c2.journal_id = $1
+                AND c2.account_id = $2
+                AND c2.currency = $3
+                AND (c2.effective, c2.version) > ($4, $5)
+              ORDER BY c2.effective, c2.version
+              LIMIT $6
+            )
+            RETURNING
+              c.effective AS "effective!: chrono::NaiveDate",
+              c.version AS "version!: i32",
+              c.values AS "values!: serde_json::Value"
+            "#,
+            journal_id as JournalId,
+            account_id as AccountId,
+            currency,
+            after.0,
+            after.1,
+            limit,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.effective, row.version, row.values))
+            .collect())
     }
 
     #[instrument(
@@ -1166,6 +1137,21 @@ impl EffectiveBalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: Vec<EffectiveBalanceSnapshot>,
+    ) -> Result<(), BalanceError> {
+        // Sub-batch the UNNEST: the jsonb[] parameter of one statement
+        // cannot exceed Postgres's 256MB total jsonb element size, and a
+        // deep effective-history rewrite produces millions of rows.
+        for chunk in new_balances.chunks(Self::EC_INSERT_SNAPSHOT_BATCH_SIZE) {
+            self.insert_snapshot_chunk(op, journal_id, chunk).await?;
+        }
+        Ok(())
+    }
+
+    async fn insert_snapshot_chunk(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        new_balances: &[EffectiveBalanceSnapshot],
     ) -> Result<(), BalanceError> {
         let mut journal_ids = Vec::with_capacity(new_balances.len());
         let mut account_ids = Vec::with_capacity(new_balances.len());
