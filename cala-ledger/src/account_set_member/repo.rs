@@ -380,20 +380,6 @@ impl AccountSetMemberRepo {
             ))
             .await?;
         let has_next_page = rows.len() > first;
-        let mut end_cursor = None;
-        if let Some(last) = rows.last() {
-            let id = last
-                .member_account_id
-                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
-                .or_else(|| {
-                    last.member_account_set_id
-                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
-                });
-            end_cursor = Some(AccountSetMemberByCreatedAtCursor {
-                id: id.expect("member_id not set"),
-                member_created_at: last.created_at.expect("created_at not set"),
-            });
-        }
 
         let account_set_members = rows
             .into_iter()
@@ -412,6 +398,12 @@ impl AccountSetMemberRepo {
                 },
             )
             .collect::<Vec<AccountSetMember>>();
+        // es-entity continues from `end_cursor` (`PaginatedQueryRet::into_page`),
+        // so it must name the last member returned on this page, never the
+        // look-ahead row that only decides `has_next_page`.
+        let end_cursor = account_set_members
+            .last()
+            .map(AccountSetMemberByCreatedAtCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
             account_set_members,
@@ -462,6 +454,11 @@ impl AccountSetMemberRepo {
             None => None,
         };
 
+        // Seek predicate for the (external_id ASC NULLS LAST, member_id ASC)
+        // order. "No cursor" is keyed on the member id ($2), which every
+        // cursor carries: the external id ($3) is NULL both when there is no
+        // cursor and when the cursor sits in the NULLS LAST tail, and the
+        // latter must resume after that member rather than restart.
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query!(
@@ -477,10 +474,13 @@ impl AccountSetMemberRepo {
               WHERE
                 m.account_set_id = $4
                 AND (
-                  ($3::varchar IS NULL) OR
-                  (a.external_id IS NULL AND $3::varchar IS NOT NULL) OR
-                  (a.external_id > $3::varchar) OR
-                  (a.external_id = $3::varchar AND member_account_id > $2)
+                  ($2::uuid IS NULL) OR
+                  ($3::varchar IS NULL AND a.external_id IS NULL AND member_account_id > $2) OR
+                  ($3::varchar IS NOT NULL AND (
+                    a.external_id IS NULL OR
+                    a.external_id > $3::varchar OR
+                    (a.external_id = $3::varchar AND member_account_id > $2)
+                  ))
                 )
               ORDER BY a.external_id ASC NULLS LAST, member_account_id ASC
               LIMIT $1
@@ -495,10 +495,13 @@ impl AccountSetMemberRepo {
               WHERE
                 m.account_set_id = $4
                 AND (
-                  ($3::varchar IS NULL) OR
-                  (s.external_id IS NULL AND $3::varchar IS NOT NULL) OR
-                  (s.external_id > $3::varchar) OR
-                  (s.external_id = $3::varchar AND member_account_set_id > $2)
+                  ($2::uuid IS NULL) OR
+                  ($3::varchar IS NULL AND s.external_id IS NULL AND member_account_set_id > $2) OR
+                  ($3::varchar IS NOT NULL AND (
+                    s.external_id IS NULL OR
+                    s.external_id > $3::varchar OR
+                    (s.external_id = $3::varchar AND member_account_set_id > $2)
+                  ))
                 )
               ORDER BY s.external_id ASC NULLS LAST, member_account_set_id ASC
               LIMIT $1
@@ -519,20 +522,6 @@ impl AccountSetMemberRepo {
             .await?;
 
         let has_next_page = rows.len() > first;
-        let mut end_cursor = None;
-        if let Some(last) = rows.last() {
-            let id = last
-                .member_account_id
-                .map(|account_id| AccountSetMemberId::Account(account_id.into()))
-                .or_else(|| {
-                    last.member_account_set_id
-                        .map(|account_set_id| AccountSetMemberId::AccountSet(account_set_id.into()))
-                });
-            end_cursor = Some(AccountSetMemberByExternalIdCursor {
-                id: id.expect("member_id not set"),
-                external_id: last.external_id.clone(),
-            });
-        }
 
         let account_set_members = rows
             .into_iter()
@@ -553,6 +542,11 @@ impl AccountSetMemberRepo {
                 },
             )
             .collect::<Vec<AccountSetMemberByExternalId>>();
+        // See `list_by_created_at_in_op`: the cursor names the last member
+        // returned, not the look-ahead row.
+        let end_cursor = account_set_members
+            .last()
+            .map(AccountSetMemberByExternalIdCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
             account_set_members,
