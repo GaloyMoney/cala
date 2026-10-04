@@ -90,12 +90,11 @@ requested account, a velocity limit, or an invalid posting. Fault-only methods
 `CalaFault`. Bulk reads represent absent entities by omission from their result.
 
 ```rust,ignore
-use cala_ledger::{account::error::AccountRejection, errlanes::ResultExt};
+use cala_ledger::{account::error::AccountCodeNotFound, errlanes::ResultExt};
 
 match cala.accounts().find_by_code(code).await.rejected()? {
     Ok(account) => use_account(account),
-    Err(AccountRejection::CouldNotFindByCode(code)) => request_another_code(code),
-    Err(other) => handle_account_rejection(other),
+    Err(AccountCodeNotFound(code)) => request_another_code(code),
 }
 ```
 
@@ -107,10 +106,27 @@ are diagnostic sources, not a public branching contract. Required internal
 repository reads treat missing rows as invariants; public lookups that reject
 absence use optional repository reads and construct a typed rejection.
 
-Posting methods expose `PostingRejection` directly. Its `Rejected` variant keeps
-the batch index, transaction ID, and domain reason. Database failures never
-become attributed posting rejections. EC waits expose `EcCaughtUpTimeout` with
-the observed positions and deadline; a missing registered rollup is a fault.
+Single posting exposes `PostingRejection`; batch posting exposes
+`BatchPostingRejection`. Both are flat: preparation and direct validation cases
+carry `PostingRef { index, tx_id }` beside their leaf payloads. Only the batch
+contract includes duplicates within the submitted batch. Template absence,
+ancestor locks, velocity enforcement and apply-time conflicts remain
+unattributed; faults carry no posting index. Attributed cases retain the
+`CALA_POSTING_REJECTED` telemetry code.
+
+Service contracts describe the operation: template creation has ID/code
+conflicts, lookup has only a missing-code leaf, and pure preparation has no
+fault carrier. Account/journal persistence excludes primary-key conflicts.
+Account-only membership addition excludes graph cycles/depth and journal
+mismatch; removal excludes addition-only failures.
+
+CEL parsing, execution and coercion have separate contracts. `try_evaluate<T>`
+uses `CelTarget` to choose a concrete flat error family: scalar, external
+Layer/direction, Currency or JSON. Compiled expressions cannot report parse
+errors during evaluation. Pure helpers return bare rejection results; graph
+validation additionally has a fatal lane for corrupt stored graphs. EC waits
+expose `EcCaughtUpTimeout` with the observed positions and deadline; a missing
+registered rollup is a fault.
 
 SQL failures retain errlanes' classification. Stored JSON/currency decode
 failures are `Fatal(CorruptState)`; configuration/migration failures are
