@@ -1,3 +1,4 @@
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 mod repo;
 
@@ -8,7 +9,6 @@ use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
-use tracing::instrument;
 use uuid::Uuid;
 
 use crate::outbox::*;
@@ -90,48 +90,64 @@ impl TxTemplates {
         }
     }
 
-    #[instrument(name = "cala_ledger.tx_template.create", skip(self))]
+    #[es_entity::errlanes::instrument(name = "cala_ledger.tx_template.create", skip(self))]
     pub async fn create(
         &self,
         new_tx_template: NewTxTemplate,
-    ) -> Result<TxTemplate, TxTemplateError> {
+    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
         op.commit().await?;
         Ok(tx_template)
     }
 
-    #[instrument(name = "cala_ledger.tx_template.create_in_op", skip(self, db))]
+    #[es_entity::errlanes::instrument(
+        name = "cala_ledger.tx_template.create_in_op",
+        skip(self, db)
+    )]
     pub async fn create_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
-    ) -> Result<TxTemplate, TxTemplateError> {
-        let tx_template = self.repo.create_in_op(db, new_tx_template).await?;
+    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+        let tx_template = self.repo.create_in_op(db, new_tx_template).await.widen()?;
         Ok(tx_template)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, T>, TxTemplateError> {
-        Ok(self.repo.find_all(tx_template_ids).await?)
+    ) -> Result<HashMap<TxTemplateId, T>, crate::CalaFault> {
+        self.repo.find_all(tx_template_ids).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.tx_templates.list", skip(self))]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.tx_templates.list",
+        skip(self)
+    )]
     pub async fn list(
         &self,
         cursor: es_entity::PaginatedQueryArgs<TxTemplateByCodeCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, TxTemplateError>
+    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, crate::CalaFault>
     {
-        Ok(self.repo.list_by_code(cursor, direction).await?)
+        self.repo.list_by_code(cursor, direction).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()), err(level = tracing::Level::WARN))]
-    pub async fn find_by_code(&self, code: impl AsRef<str>) -> Result<TxTemplate, TxTemplateError> {
-        Ok(self.repo.find_by_code(code.as_ref().to_string()).await?)
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.tx_templates.find_by_code", skip(self), fields(code = %code.as_ref()))]
+    pub async fn find_by_code(
+        &self,
+        code: impl AsRef<str>,
+    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_code(code.as_ref().to_string())
+            .await?
+            .ok_or(TxTemplateRejection::CouldNotFindByCode(
+                code.as_ref().to_string(),
+            ))?)
     }
 
     /// Evaluate a template body against its params.
@@ -140,7 +156,7 @@ impl TxTemplates {
     /// which is what lets the posting flow run it before its first statement.
     /// The clock only seeds the CEL context (the `date()`/`now()` builtins
     /// available to template expressions).
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.tx_template.prepare_transaction",
         skip(self, tmpl, params)
@@ -150,7 +166,7 @@ impl TxTemplates {
         tx_id: TransactionId,
         tmpl: &TxTemplateValues,
         params: Params,
-    ) -> Result<PreparedTransaction, TxTemplateError> {
+    ) -> Result<PreparedTransaction, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
         let ctx = params.into_context(&self.clock, tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
@@ -196,7 +212,7 @@ impl TxTemplates {
         })
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "tx_template.prep_entries",
         skip(self, tmpl, ctx),
@@ -214,7 +230,7 @@ impl TxTemplates {
         transaction_id: TransactionId,
         journal_id: JournalId,
         ctx: &cel_interpreter::CelContext,
-    ) -> Result<Vec<NewEntry>, TxTemplateError> {
+    ) -> Result<Vec<NewEntry>, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
         for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
@@ -261,7 +277,7 @@ impl TxTemplates {
 
         for ((c, l), v) in totals {
             if v != Decimal::ZERO {
-                return Err(TxTemplateError::UnbalancedTransaction(c, l, v));
+                return Err(TxTemplateRejection::UnbalancedTransaction(c, l, v).into());
             }
         }
 

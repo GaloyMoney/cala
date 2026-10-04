@@ -60,13 +60,7 @@ fn with_db_name(url: &str, db: &str) -> String {
 /// itself — typically *after* posting its backlog. Keep the returned `Jobs`
 /// alive for the duration of the test (dropping it shuts the poller down).
 pub async fn init_jobs(pool: sqlx::PgPool) -> anyhow::Result<Jobs> {
-    Ok(Jobs::init(
-        JobSvcConfig::builder()
-            .pool(pool)
-            .build()
-            .map_err(anyhow::Error::msg)?,
-    )
-    .await?)
+    Ok(Jobs::init(JobSvcConfig::builder().pool(pool).build()?).await?)
 }
 
 /// Poll (up to ~30s) until `account_id`'s settled balance reaches `expected`.

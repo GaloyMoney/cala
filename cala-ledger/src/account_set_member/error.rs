@@ -1,18 +1,13 @@
-use thiserror::Error;
+use es_entity::errlanes;
 
 use crate::primitives::AccountSetId;
 
-/// Error type for [`super::AccountSetMembers::attach_new_accounts_in_op`] —
-/// the ONLY method on this module whose failure mode is a domain error
-/// rather than a bare `sqlx::Error`. Every other method (locks, the classic
-/// insert/remove, the member reads) propagates `sqlx::Error` directly:
-/// callers already sit behind `AccountSetError` / `AccountError`, both of
-/// which have a blanket `From<sqlx::Error>`, so a dedicated variant here
-/// would be pure ceremony.
-#[derive(Error, Debug)]
-pub(crate) enum AccountSetMemberError {
-    #[error("AccountSetMemberError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("AccountSetMemberError - AccountSetsNotFound: {0:?}")]
+/// Initial account-set IDs that do not exist. SQL failures travel in the
+/// surrounding carrier's fault lanes; the account service maps this rejection
+/// to its public initial-membership outcome.
+#[derive(errlanes::Rejection, Debug)]
+pub(crate) enum AccountSetMemberRejection {
+    #[error("AccountSetMemberRejection - AccountSetsNotFound: {0:?}")]
+    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ACCOUNT_SETS_NOT_FOUND")]
     AccountSetsNotFound(Vec<AccountSetId>),
 }

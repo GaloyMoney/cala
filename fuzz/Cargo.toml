@@ -105,3 +105,7 @@ path = "fuzz_targets/primitives_parse.rs"
 test = false
 doc = false
 bench = false
+
+# Match the root workspace's ID/foreign-key macro correction.
+[patch.crates-io]
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "0562aa777b3164d9542bdd9f9b39a11ddcb06d2f" }

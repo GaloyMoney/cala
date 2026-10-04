@@ -9,7 +9,7 @@ pub struct OutboxPublisher {
 }
 
 impl OutboxPublisher {
-    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, sqlx::Error> {
+    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, crate::CalaFault> {
         let config = obix::MailboxConfig::builder()
             .clock(clock.clone())
             .event_buffer_size(50_000)

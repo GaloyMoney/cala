@@ -43,7 +43,6 @@ cached = { workspace = true }
 chrono = { workspace = true }
 derive_builder = { workspace = true }
 sqlx = { workspace = true }
-thiserror = { workspace = true }
 uuid = { workspace = true }
 regex = { workspace = true }
 serde = { workspace = true }

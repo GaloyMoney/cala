@@ -65,6 +65,8 @@
 //! posting boundaries with no global ordering — that could deadlock concurrent
 //! batches, not batching itself.
 
+use es_entity::errlanes::ResultExt;
+
 use std::collections::HashMap;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -418,12 +420,11 @@ impl PostingRepo {
     /// lock wait does not refresh the snapshot) as well as wasteful (a wrong
     /// guess forces a second corrective batch, breaking single-sorted-batch
     /// acquisition).
-    #[tracing::instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.posting.read_posting_state",
         skip_all,
-        fields(accounts = account_ids.len(), journals = journal_ids.len()),
-        err(level = "warn")
+        fields(accounts = account_ids.len(), journals = journal_ids.len())
     )]
     pub(super) async fn read_posting_state_in_op(
         &self,
@@ -431,7 +432,7 @@ impl PostingRepo {
         account_ids: &[AccountId],
         journal_ids: &[JournalId],
         keys: &BalanceKeys,
-    ) -> Result<PostingState, sqlx::Error> {
+    ) -> Result<PostingState, crate::CalaFault> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -486,20 +487,20 @@ impl PostingRepo {
 
         Ok(PostingState {
             epoch: row.epoch,
-            seeds: Self::decode::<SeedRow>(row.seeds)
+            seeds: Self::decode::<SeedRow>(row.seeds)?
                 .into_iter()
                 .map(|SeedRow(account_id, account_set_id)| AccountMembership {
                     account_set_id,
                     account_id,
                 })
                 .collect(),
-            journals: Self::decode::<JournalRow>(row.journals)
+            journals: Self::decode::<JournalRow>(row.journals)?
                 .into_iter()
                 .map(|JournalRow(id, values)| (id, values))
                 .collect(),
-            accounts: Self::index_accounts(Self::decode(row.accounts)),
-            balances: Self::index_balances(Self::decode(row.balances)),
-            controls: Self::index_controls(Self::decode(row.controls)),
+            accounts: Self::index_accounts(Self::decode(row.accounts)?),
+            balances: Self::index_balances(Self::decode(row.balances)?),
+            controls: Self::index_controls(Self::decode(row.controls)?),
         })
     }
 
@@ -509,19 +510,18 @@ impl PostingRepo {
     /// Runs strictly after `lock_resolved_ancestors_in_op`, preserving
     /// lock-before-read for the ancestor rows exactly as the entry pairs get
     /// it from [`Self::lock_balances_and_probe_templates_in_op`].
-    #[tracing::instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.posting.read_ancestor_state",
         skip_all,
-        fields(pairs = keys.account_ids.len()),
-        err(level = "warn")
+        fields(pairs = keys.account_ids.len())
     )]
     pub(super) async fn read_ancestor_state_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         set_account_ids: &[AccountId],
         keys: &BalanceKeys,
-    ) -> Result<AncestorState, sqlx::Error> {
+    ) -> Result<AncestorState, crate::CalaFault> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -559,9 +559,9 @@ impl PostingRepo {
         .await?;
 
         Ok(AncestorState {
-            accounts: Self::index_accounts(Self::decode(row.accounts)),
-            balances: Self::index_balances(Self::decode(row.balances)),
-            controls: Self::index_controls(Self::decode(row.controls)),
+            accounts: Self::index_accounts(Self::decode(row.accounts)?),
+            balances: Self::index_balances(Self::decode(row.balances)?),
+            controls: Self::index_controls(Self::decode(row.controls)?),
         })
     }
 
@@ -776,11 +776,14 @@ impl PostingRepo {
         Ok(())
     }
 
-    fn decode<T: serde::de::DeserializeOwned>(value: Option<serde_json::Value>) -> Vec<T> {
+    fn decode<T: serde::de::DeserializeOwned>(
+        value: Option<serde_json::Value>,
+    ) -> Result<Vec<T>, crate::CalaFault> {
         match value {
-            Some(serde_json::Value::Null) | None => Vec::new(),
+            Some(serde_json::Value::Null) | None => Ok(Vec::new()),
             Some(value) => {
-                serde_json::from_value(value).expect("posting read: malformed aggregate")
+                Ok(serde_json::from_value(value)
+                    .classify::<crate::error::CouldNotDecodeStored>()?)
             }
         }
     }

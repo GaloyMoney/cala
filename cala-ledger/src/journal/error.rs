@@ -1,34 +1,21 @@
-use thiserror::Error;
+use super::repo::JournalConstraintViolation;
+use es_entity::errlanes;
 
-use super::repo::{
-    JournalColumn, JournalCreateError, JournalFindError, JournalModifyError, JournalQueryError,
-};
-
-#[derive(Error, Debug)]
-pub enum JournalError {
-    #[error("JournalError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("JournalError - Create: {0}")]
-    Create(JournalCreateError),
-    #[error("JournalError - Modify: {0}")]
-    Modify(#[from] JournalModifyError),
-    #[error("JournalError - Find: {0}")]
-    Find(#[from] JournalFindError),
-    #[error("JournalError - Query: {0}")]
-    Query(#[from] JournalQueryError),
-    #[error("JournalError - code '{0}' already exists")]
-    CodeAlreadyExists(String),
-}
-
-impl From<JournalCreateError> for JournalError {
-    fn from(error: JournalCreateError) -> Self {
-        match error {
-            JournalCreateError::ConstraintViolation {
-                column: Some(JournalColumn::Code),
-                value,
-                ..
-            } => Self::CodeAlreadyExists(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
+#[derive(errlanes::Rejection, errlanes::Lift, Debug)]
+#[lift(JournalConstraintViolation, unhandled = fatal)]
+pub enum JournalRejection {
+    #[error("journal '{0}' not found")]
+    #[rejection(code = "CALA_JOURNAL_COULD_NOT_FIND_BY_ID")]
+    CouldNotFindById(crate::JournalId),
+    #[error("journal code '{0}' not found")]
+    #[rejection(code = "CALA_JOURNAL_COULD_NOT_FIND_BY_CODE")]
+    CouldNotFindByCode(String),
+    #[error("duplicate id {0}")]
+    #[rejection(code = "CALA_JOURNAL_DUPLICATE_ID")]
+    #[lift(JournalConstraintViolation::Pkey, field = attempted)]
+    DuplicateId(crate::JournalId),
+    #[error("JournalRejection - code '{0:?}' already exists")]
+    #[rejection(code = "CALA_JOURNAL_CODE_ALREADY_EXISTS")]
+    #[lift(JournalConstraintViolation::CodeKey, field = attempted)]
+    CodeAlreadyExists(Option<Option<String>>),
 }

@@ -29,6 +29,7 @@
 //! `crate::account` or `crate::account_set` — keeping the module graph a
 //! DAG. It is not itself an `EsRepo`/entity: the edge is a plain relation
 //! plus an outbox event, not event-sourced.
+use es_entity::errlanes::{lanes, Fail};
 mod error;
 mod repo;
 
@@ -39,7 +40,7 @@ use crate::{
     primitives::{AccountId, AccountSetId},
 };
 
-pub(crate) use error::AccountSetMemberError;
+pub(crate) use error::AccountSetMemberRejection;
 pub use repo::members_cursor;
 use repo::AccountSetMemberRepo;
 
@@ -75,7 +76,7 @@ impl AccountSetMembers {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: &[(AccountSetId, AccountId)],
-    ) -> Result<(), AccountSetMemberError> {
+    ) -> Result<(), Fail<AccountSetMemberRejection, lanes!(Transient, Fatal)>> {
         self.repo.attach_new_accounts_in_op(db, pairs).await
     }
 

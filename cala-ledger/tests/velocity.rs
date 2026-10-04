@@ -6,9 +6,8 @@ use rust_decimal::Decimal;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetUpdate, NewAccountSet},
-    error::LedgerError,
-    posting::PostingError,
-    velocity::{error::VelocityError, *},
+    posting::PostingRejection,
+    velocity::{error::VelocityRejection, *},
     *,
 };
 
@@ -481,9 +480,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         Ok(())
@@ -585,9 +584,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -596,9 +595,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         Ok(())
@@ -691,9 +690,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         Ok(())
@@ -807,9 +806,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -818,9 +817,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         // Add first closing date and re-check
@@ -851,9 +850,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -862,9 +861,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         // Update closing date and re-check
@@ -882,9 +881,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_1_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         tx_params.insert("sender", account_2.id());
@@ -893,9 +892,9 @@ mod limit_via_account_sets {
             .await;
         assert!(matches!(
             account_2_send_res,
-            Err(LedgerError::PostingError(PostingError::VelocityError(
-                VelocityError::Enforcement(_)
-            )))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                PostingRejection::VelocityRejection(VelocityRejection::Enforcement(_))
+            ))
         ));
 
         Ok(())

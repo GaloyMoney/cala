@@ -79,3 +79,46 @@ Run unit tests with:
 ```bash
 make reset-deps next-watch
 ```
+
+## Errors
+
+Cala uses the error lanes re-exported at `cala_ledger::errlanes`. Methods that
+can reject caller input return `Fail<DomainRejection, lanes!(Transient, Fatal)>`.
+Match `Fail::Rejected` for outcomes such as a duplicate account code, a missing
+requested account, a velocity limit, or an invalid posting. Fault-only methods
+(including list/bulk reads, ledger initialization, and EC status refresh) return
+`CalaFault`. Bulk reads represent absent entities by omission from their result.
+
+```rust,ignore
+use cala_ledger::{account::error::AccountRejection, errlanes::ResultExt};
+
+match cala.accounts().find_by_code(code).await.rejected()? {
+    Ok(account) => use_account(account),
+    Err(AccountRejection::CouldNotFindByCode(code)) => request_another_code(code),
+    Err(other) => handle_account_rejection(other),
+}
+```
+
+`ResultExt::rejected()` exposes the domain outcome while `?` propagates faults.
+Use `.widen()` to lift between rejection families, `.map_rejected()` to add
+caller context without altering fault lanes, and `.narrow_rejected()` only when
+an internal invariant means no caller can correct a rejection. Fault payloads
+are diagnostic sources, not a public branching contract. Required internal
+repository reads treat missing rows as invariants; public lookups that reject
+absence use optional repository reads and construct a typed rejection.
+
+Posting methods expose `PostingRejection` directly. Its `Rejected` variant keeps
+the batch index, transaction ID, and domain reason. Database failures never
+become attributed posting rejections. EC waits expose `EcCaughtUpTimeout` with
+the observed positions and deadline; a missing registered rollup is a fault.
+
+SQL failures retain errlanes' classification. Stored JSON/currency decode
+failures are `Fatal(CorruptState)`; configuration/migration failures are
+`Fatal(Config)`. Errors entering the job runner retain their lanes through the
+boxed handler boundary. Callers own retry policy and transaction boundaries.
+
+Laned tracing spans record `error.lane`, `error.code`, `error.level`,
+`exception.message`, and `exception.type`. Rejection telemetry uses its stable
+code rather than rendering caller input. This is a breaking API change: replace
+matches on the former `*Error` enums with `Fail::Rejected(*Rejection::...)`, and
+use `CalaFault` for methods whose signatures no longer carry domain outcomes.

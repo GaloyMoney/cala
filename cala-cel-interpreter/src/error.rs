@@ -1,5 +1,5 @@
 use chrono::ParseError;
-use thiserror::Error;
+use es_entity::errlanes;
 
 use crate::cel_type::*;
 
@@ -19,7 +19,7 @@ use crate::cel_type::*;
 /// bytes.
 pub const MAX_EXPRESSION_BYTES: usize = 65_000;
 
-#[derive(Error, Debug)]
+#[derive(errlanes::Rejection, Debug)]
 pub enum ResultCoercionError {
     #[error("Error evaluating expression '{0}' - Could not coerce {1:?} into {2:?}")]
     BadCoreTypeCoercion(String, CelType, CelType),
@@ -29,13 +29,11 @@ pub enum ResultCoercionError {
     ExternalTypeCoercionError(String, String, &'static str, String),
 }
 
-#[derive(Error, Debug)]
+#[derive(errlanes::Rejection, Debug)]
 pub enum CelError {
     #[error("CelError - CelParseError: {0}")]
     CelParseError(String),
-    #[error(
-        "CelError - ExpressionTooLarge: {0} bytes exceeds the {MAX_EXPRESSION_BYTES} byte limit"
-    )]
+    #[error("CelError - ExpressionTooLarge: {0} bytes exceeds the expression byte limit")]
     ExpressionTooLarge(usize),
     #[error("CelError - BadType: expected {0:?} found {1:?}")]
     BadType(CelType, CelType),
@@ -52,7 +50,8 @@ pub enum CelError {
     #[error("CelError - WrongArgumentType: {0:?} instead of {1:?}")]
     WrongArgumentType(CelType, CelType),
     #[error("CelError - ChronoParseError: {0}")]
-    ChronoParseError(#[from] ParseError),
+    #[rejection(from)]
+    ChronoParseError(ParseError),
     #[error("CelError - UuidError: {0}")]
     UuidError(String),
     #[error("CelError - DecimalError: {0}")]
@@ -65,7 +64,8 @@ pub enum CelError {
     Unexpected(String),
 
     #[error("CelError - {0}")]
-    ResultCoercionError(#[from] ResultCoercionError),
+    #[rejection(from)]
+    ResultCoercionError(ResultCoercionError),
 
     #[error("Error evaluating cell expression '{0}' - {1}")]
     EvaluationError(String, Box<Self>),

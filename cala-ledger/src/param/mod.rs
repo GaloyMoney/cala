@@ -1,3 +1,4 @@
+use es_entity::errlanes::ResultExt;
 pub mod definition;
 pub mod error;
 
@@ -31,7 +32,7 @@ impl Params {
         mut self,
         clock: &ClockHandle,
         defs: Option<&Vec<ParamDefinition>>,
-    ) -> Result<CelContext, ParamError> {
+    ) -> Result<CelContext, ParamRejection> {
         let mut ctx = crate::cel_context::initialize(clock.clone());
         if let Some(defs) = defs {
             let mut cel_map = CelMap::new();
@@ -39,9 +40,7 @@ impl Params {
                 if let Some(v) = self.values.remove(&d.name) {
                     cel_map.insert(
                         d.name.clone(),
-                        d.r#type
-                            .coerce_value(v)
-                            .map_err(ParamError::ParamTypeMismatch)?,
+                        d.r#type.coerce_value(v).classify::<ParamRejection>()?,
                     );
                 } else if let Some(expr) = d.default.as_ref() {
                     cel_map.insert(d.name.clone(), expr.evaluate(&ctx)?);

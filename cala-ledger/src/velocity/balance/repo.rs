@@ -1,11 +1,11 @@
+use es_entity::errlanes::ResultExt;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::HashMap;
 
 use cala_types::{balance::BalanceSnapshot, velocity::Window};
 
-use crate::{primitives::*, velocity::error::VelocityError};
+use crate::primitives::*;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct VelocityBalanceKey {
@@ -28,17 +28,16 @@ impl VelocityBalanceRepo {
             _pool: pool.clone(),
         }
     }
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "velocity_balance.find_for_update",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub async fn find_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
-    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, VelocityError> {
+    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, crate::CalaFault> {
         // The window participates in the lock key below, so it must
         // also participate in the canonical sort — keys differing only
         // by window map to distinct locks and need a deterministic
@@ -191,14 +190,20 @@ impl VelocityBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let snapshot = row.values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let snapshot = row
+                .values
+                .map(|v| {
+                    serde_json::from_value::<BalanceSnapshot>(v)
+                        .classify::<crate::error::CouldNotDecodeStored>()
+                })
+                .transpose()?;
             ret.insert(
                 VelocityBalanceKey {
                     window: Window::from(row.partition_window),
-                    currency: row.currency.parse().expect("Could not parse currency"),
+                    currency: row
+                        .currency
+                        .parse()
+                        .classify::<crate::error::CouldNotDecodeCurrency>()?,
                     journal_id: row.journal_id,
                     account_id: row.account_id,
                     control_id: row.velocity_control_id,
@@ -210,17 +215,16 @@ impl VelocityBalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "velocity_balance.insert_new_snapshots",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(crate) async fn insert_new_snapshots(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), crate::CalaFault> {
         let mut journal_ids = Vec::new();
         let mut account_ids = Vec::new();
         let mut currencies = Vec::new();
@@ -253,7 +257,7 @@ impl VelocityBalanceRepo {
             latest_entry_ids.push(snapshot.entry_id);
             versions.push(snapshot.version as i32);
             values.push(
-                serde_json::to_value(snapshot).expect("Failed to serialize balance snapshot"),
+                serde_json::to_value(snapshot).classify::<crate::error::CouldNotSerialize>()?,
             );
         }
 

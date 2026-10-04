@@ -131,7 +131,7 @@ pub enum Layer {
     Encumbrance,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseLayerError {
     #[error("CalaCoreTypeError - UnknownLayer: {0:?}")]
     UnknownLayer(String),
@@ -221,7 +221,7 @@ impl PartialOrd for Currency {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseCurrencyError {
     #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
     UnknownCurrency(String),

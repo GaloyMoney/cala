@@ -1,6 +1,6 @@
+use es_entity::errlanes::{lanes, Fail};
 use es_entity::*;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::{HashMap, HashSet};
 
@@ -140,7 +140,7 @@ impl AccountSetRepo {
     pub(super) async fn lock_graph_shared_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         sqlx::query!(
             "SELECT pg_advisory_xact_lock_shared($1, $2)",
             GRAPH_LOCK_CLASS,
@@ -161,7 +161,7 @@ impl AccountSetRepo {
     /// the same account reaches twice — via an existing path, via the new
     /// edge, or across two pairs of the same batch — surfaces as a group
     /// with more than one row. Reported as
-    /// [`AccountSetError::MemberAlreadyAdded`], the same error the old
+    /// [`AccountSetRejection::MemberAlreadyAdded`], the same error the old
     /// closure's unique-constraint collision produced.
     ///
     /// The single-walk form is also what keeps the plan sane once the
@@ -188,7 +188,7 @@ impl AccountSetRepo {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         members: &[AccountMembership],
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
         // The parallel arrays the UNNEST needs are built here, at the SQL
         // boundary, so the ordered-pair shape never escapes into the caller.
         let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
@@ -225,7 +225,7 @@ impl AccountSetRepo {
         .fetch_one(db.as_executor())
         .await?;
         if row.conflict {
-            return Err(AccountSetError::MemberAlreadyAdded);
+            return Err(AccountSetRejection::MemberAlreadyAdded.into());
         }
         Ok(())
     }
@@ -235,7 +235,7 @@ impl AccountSetRepo {
     pub(super) async fn lock_for_set_membership_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         sqlx::query!(
             "SELECT pg_advisory_xact_lock($1, $2)",
             GRAPH_LOCK_CLASS,
@@ -250,7 +250,7 @@ impl AccountSetRepo {
     pub(super) async fn fetch_set_graph_epoch_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-    ) -> Result<i64, AccountSetError> {
+    ) -> Result<i64, crate::CalaFault> {
         Ok(
             sqlx::query_scalar("SELECT epoch FROM cala_account_set_graph_epoch")
                 .fetch_one(db.as_executor())
@@ -267,7 +267,7 @@ impl AccountSetRepo {
     pub(super) async fn fetch_set_membership_edges_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-    ) -> Result<Vec<SetMembership>, AccountSetError> {
+    ) -> Result<Vec<SetMembership>, crate::CalaFault> {
         let rows: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
             r#"
           SELECT account_set_id, member_account_set_id
@@ -286,7 +286,7 @@ impl AccountSetRepo {
         db: &mut impl es_entity::AtomicOperation,
         existing_edges: &[SetMembership],
         members: &[SetMembership],
-    ) -> Result<Vec<AccountMembership>, AccountSetError> {
+    ) -> Result<Vec<AccountMembership>, crate::CalaFault> {
         let member_account_set_ids: Vec<AccountSetId> = members
             .iter()
             .map(|edge| edge.member_account_set_id)
@@ -361,18 +361,17 @@ impl AccountSetRepo {
     /// graph epoch once for the whole batch, and publishes one outbox event
     /// per edge. All cycle, path, account, and depth checks happen in the
     /// caller's validation step before this runs.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.insert_member_sets",
         skip_all,
-        fields(count = members.len()),
-        err(level = "warn")
+        fields(count = members.len())
     )]
     pub(super) async fn insert_member_sets(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         members: &[SetMembership],
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         if members.is_empty() {
             return Ok(());
         }
@@ -419,18 +418,17 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.remove_member_set",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub async fn remove_member_set(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         // Structure mutation: EXCLUSIVE coarse lock (see ADDVISORY_LOCK_ID).
         sqlx::query!(
             "SELECT pg_advisory_xact_lock($1, $2)",
@@ -478,7 +476,7 @@ impl AccountSetRepo {
         &self,
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
     {
         self.find_where_account_is_member_in_op(&self.pool, account_id, query)
             .await
@@ -489,7 +487,7 @@ impl AccountSetRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -528,7 +526,7 @@ impl AccountSetRepo {
         &self,
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
     {
         self.find_where_account_set_is_member_in_op(&self.pool, account_set_id, query)
             .await
@@ -539,7 +537,7 @@ impl AccountSetRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, AccountSetError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
     {
         let (entities, has_next_page) = es_entity::es_query!(
             tbl_prefix = "cala",
@@ -599,7 +597,7 @@ impl AccountSetRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
-    ) -> Result<DirectMembershipProbe, AccountSetError> {
+    ) -> Result<DirectMembershipProbe, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -663,18 +661,17 @@ impl AccountSetRepo {
     /// ancestor sets are disjoint key classes (the set-guard FK), and every
     /// poster acquires the two phases in the same order, so the split
     /// acquisition cannot deadlock posters against each other.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.walk_mappings_and_lock_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn walk_mappings_and_lock_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         // Adjacency-only membership: resolve each account's ancestor sets
         // by an upward recursive walk over the (tiny) set->set edge table,
         // seeded from the account's direct set memberships. UNION (not
@@ -763,7 +760,7 @@ impl AccountSetRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), crate::CalaFault> {
         if set_ids.is_empty() {
             return Ok(());
         }
@@ -790,7 +787,7 @@ impl AccountSetRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         set_ids: &[AccountSetId],
-    ) -> Result<Vec<SetGraphNode>, AccountSetError> {
+    ) -> Result<Vec<SetGraphNode>, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -825,7 +822,7 @@ impl AccountSetRepo {
     /// so epoch and graph come from a single snapshot. The set-graph
     /// cache's refresh read. Anchoring on the always-present epoch row
     /// guarantees >=1 row even with zero account sets.
-    pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, AccountSetError> {
+    pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT
@@ -869,7 +866,7 @@ impl AccountSetRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &AccountSet,
         new_events: es_entity::LastPersisted<'_, AccountSetEvent>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), crate::CalaFault> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

@@ -1,5 +1,5 @@
 use cala_ledger::{
-    tx_template::{error::TxTemplateError, *},
+    tx_template::{error::TxTemplateRejection, *},
     *,
 };
 
@@ -86,7 +86,7 @@ pub async fn init(cala: &CalaLedger) -> anyhow::Result<()> {
         .build()
         .unwrap();
     match cala.tx_templates().create(template).await {
-        Err(TxTemplateError::DuplicateCode(_)) => Ok(()),
+        Err(cala_ledger::errlanes::Fail::Rejected(TxTemplateRejection::DuplicateCode(_))) => Ok(()),
         Err(e) => Err(e.into()),
         Ok(_) => Ok(()),
     }

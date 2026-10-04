@@ -25,8 +25,7 @@
 //!     let mut jobs = job::Jobs::init(
 //!         job::JobSvcConfig::builder()
 //!             .pool(pool.clone())
-//!             .build()
-//!             .map_err(anyhow::Error::msg)?,
+//!             .build()?,
 //!     )
 //!     .await?;
 //!     let cala_config = CalaLedgerConfig::builder()
@@ -151,7 +150,10 @@ pub mod transaction;
 pub mod tx_template;
 pub mod velocity;
 
+pub mod error;
+pub use error::CalaFault;
 pub use es_entity;
+pub use es_entity::errlanes;
 // Re-exported so consumers can pass a `job::Jobs` of the same `job` version
 // cala-ledger links into `CalaLedger::init` for EC-rollup registration.
 pub use job;
@@ -160,6 +162,7 @@ mod ledger;
 pub mod outbox;
 
 pub use ec_rollup::EcRollupStatus;
+pub use ledger::error::EcCaughtUpTimeout;
 pub use ledger::*;
 
 pub mod primitives {

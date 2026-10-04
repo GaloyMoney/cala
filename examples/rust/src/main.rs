@@ -19,13 +19,8 @@ async fn main() -> anyhow::Result<()> {
         .run(&pool)
         .await?;
     // The example never polls jobs; the EC rollup stays dormant.
-    let mut jobs = job::Jobs::init(
-        job::JobSvcConfig::builder()
-            .pool(pool.clone())
-            .build()
-            .map_err(anyhow::Error::msg)?,
-    )
-    .await?;
+    let mut jobs =
+        job::Jobs::init(job::JobSvcConfig::builder().pool(pool.clone()).build()?).await?;
     let cala_config = CalaLedgerConfig::builder()
         .pool(pool)
         .exec_migrations(false)

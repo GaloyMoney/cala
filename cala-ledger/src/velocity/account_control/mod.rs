@@ -1,10 +1,10 @@
+use es_entity::errlanes::{lanes, Fail};
 mod repo;
 mod value;
 
 use es_entity::clock::ClockHandle;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use cala_types::velocity::{VelocityControlValues, VelocityLimitValues};
 
@@ -13,7 +13,7 @@ use crate::{
     primitives::{AccountId, DebitOrCredit, Layer},
 };
 
-use super::error::VelocityError;
+use super::error::VelocityRejection;
 
 use repo::*;
 pub(crate) use value::*;
@@ -41,7 +41,7 @@ impl AccountControls {
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
         let velocity_limits = Self::evaluate_velocity_limits(&self.clock, limits, params.into())?;
 
         let control = AccountVelocityControl {
@@ -71,12 +71,11 @@ impl AccountControls {
     /// batch, the CEL evaluation that builds `velocity_limits` runs
     /// **once** for the whole batch and is cloned per account — the
     /// per-row difference is only `account_id`.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_control.attach_control_to_accounts_in_op",
         skip(self, db, limits, params),
-        fields(control_id = %control.id, account_count = account_ids.len()),
-        err(level = "warn")
+        fields(control_id = %control.id, account_count = account_ids.len())
     )]
     pub async fn attach_control_to_accounts_in_op(
         &self,
@@ -85,7 +84,7 @@ impl AccountControls {
         account_ids: &[AccountId],
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
         if account_ids.is_empty() {
             return Ok(());
         }
@@ -112,7 +111,7 @@ impl AccountControls {
         clock: &ClockHandle,
         limits: Vec<VelocityLimitValues>,
         params: Params,
-    ) -> Result<Vec<AccountVelocityLimit>, VelocityError> {
+    ) -> Result<Vec<AccountVelocityLimit>, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
         let mut velocity_limits = Vec::new();
         for velocity in limits {
             let defs = velocity.params;

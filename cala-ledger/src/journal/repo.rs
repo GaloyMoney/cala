@@ -34,7 +34,7 @@ impl JournalRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Journal,
         new_events: es_entity::LastPersisted<'_, JournalEvent>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), crate::CalaFault> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

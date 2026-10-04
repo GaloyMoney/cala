@@ -21,6 +21,7 @@
 //! cache-or-DB itself. The call graph is strictly service -> cache -> repo;
 //! the repo never calls back up into the cache.
 
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock},
@@ -30,7 +31,7 @@ use cala_types::tx_template::TxTemplateValues;
 
 use crate::{
     primitives::TxTemplateId,
-    tx_template::{error::TxTemplateError, TxTemplateEvent},
+    tx_template::{error::TxTemplateRejection, TxTemplateEvent},
 };
 
 use super::repo::PostingRepo;
@@ -76,7 +77,10 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<
+        HashMap<String, ResolvedTemplate>,
+        Fail<TxTemplateRejection, lanes!(Transient, Fatal)>,
+    > {
         let snapshot = self.load();
         let mut used = HashMap::new();
         let mut missing = Vec::new();
@@ -104,7 +108,10 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<
+        HashMap<String, ResolvedTemplate>,
+        Fail<TxTemplateRejection, lanes!(Transient, Fatal)>,
+    > {
         self.fetch_and_install(op, codes).await
     }
 
@@ -140,14 +147,18 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, TxTemplateError> {
+    ) -> Result<
+        HashMap<String, ResolvedTemplate>,
+        Fail<TxTemplateRejection, lanes!(Transient, Fatal)>,
+    > {
         let mut fetched = self.inner.repo.resolve_templates_in_op(op, codes).await?;
         let mut resolved = HashMap::with_capacity(codes.len());
         for code in codes {
             let Some((id, version, event)) = fetched.remove(code) else {
-                return Err(TxTemplateError::NotFound);
+                return Err(TxTemplateRejection::CouldNotFindByCode(code.clone()).into());
             };
-            let event: TxTemplateEvent = serde_json::from_value(event)?;
+            let event: TxTemplateEvent =
+                serde_json::from_value(event).classify::<crate::error::CouldNotDecodeStored>()?;
             resolved.insert(
                 code.clone(),
                 ResolvedTemplate {

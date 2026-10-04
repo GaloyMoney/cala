@@ -1,16 +1,16 @@
 //! [Account] holds a balance in a [Journal](crate::journal::Journal)
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 pub mod error;
 mod repo;
 
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::HashMap;
 
 use crate::{
-    account_set_member::{AccountSetMemberError, AccountSetMembers},
+    account_set_member::{AccountSetMemberRejection, AccountSetMembers},
     outbox::*,
     primitives::{AccountSetId, Status},
 };
@@ -42,15 +42,22 @@ impl Accounts {
         }
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.create", skip_all)]
-    pub async fn create(&self, new_account: NewAccount) -> Result<Account, AccountError> {
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.create",
+        skip_all
+    )]
+    pub async fn create(
+        &self,
+        new_account: NewAccount,
+    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
         Ok(account)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.create_in_op",
         skip(self, db),
@@ -60,78 +67,107 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account: NewAccount,
-    ) -> Result<Account, AccountError> {
+    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
-        let account = self.repo.create_in_op(db, new_account).await?;
+        let account = self.repo.create_in_op(db, new_account).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs).await?;
         Ok(account)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.create_all",
+        skip_all
+    )]
     pub async fn create_all(
         &self,
         new_accounts: Vec<NewAccount>,
-    ) -> Result<Vec<Account>, AccountError> {
+    ) -> Result<Vec<Account>, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let accounts = self.create_all_in_op(&mut op, new_accounts).await?;
         op.commit().await?;
         Ok(accounts)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len(), initial_set_count = tracing::field::Empty))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.accounts.create_all_in_op", skip(self, db, new_accounts), fields(count = new_accounts.len(), initial_set_count = tracing::field::Empty))]
     pub async fn create_all_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_accounts: Vec<NewAccount>,
-    ) -> Result<Vec<Account>, AccountError> {
+    ) -> Result<Vec<Account>, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(&new_accounts);
         tracing::Span::current().record("initial_set_count", pairs.len());
-        let accounts = self.repo.create_all_in_op(db, new_accounts).await?;
+        let accounts = self.repo.create_all_in_op(db, new_accounts).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs).await?;
         Ok(accounts)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.find", skip_all)]
-    pub async fn find(&self, account_id: AccountId) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_id(account_id).await?)
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.find",
+        skip_all
+    )]
+    pub async fn find(
+        &self,
+        account_id: AccountId,
+    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_id(account_id)
+            .await?
+            .ok_or(AccountRejection::CouldNotFindById(account_id))?)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.find_all", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.accounts.find_all", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all<T: From<Account>>(
         &self,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, T>, AccountError> {
-        Ok(self.repo.find_all(account_ids).await?)
+    ) -> Result<HashMap<AccountId, T>, crate::CalaFault> {
+        self.repo.find_all(account_ids).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.find_all_in_op", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.accounts.find_all_in_op", skip(self, db, account_ids), fields(account_ids_count = account_ids.len()))]
     pub async fn find_all_in_op<T: From<Account>>(
         &self,
         db: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, T>, AccountError> {
-        Ok(self.repo.find_all_in_op(db, account_ids).await?)
+    ) -> Result<HashMap<AccountId, T>, crate::CalaFault> {
+        self.repo.find_all_in_op(db, account_ids).await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.find_by_external_id",
         skip(self)
     )]
-    pub async fn find_by_external_id(&self, external_id: String) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+    pub async fn find_by_external_id(
+        &self,
+        external_id: String,
+    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(AccountRejection::CouldNotFindByExternalId(external_id))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.find_by_code",
         skip(self)
     )]
-    pub async fn find_by_code(&self, code: String) -> Result<Account, AccountError> {
-        Ok(self.repo.find_by_code(code).await?)
+    pub async fn find_by_code(
+        &self,
+        code: String,
+    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_code(code.clone())
+            .await?
+            .ok_or(AccountRejection::CouldNotFindByCode(code))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.lock_in_op",
         skip(self, db)
@@ -140,15 +176,19 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
-    ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+        let mut account = self
+            .repo
+            .maybe_find_by_id_in_op(&mut *db, id)
+            .await?
+            .ok_or(AccountRejection::CouldNotFindById(id))?;
         if account.update_status(Status::Locked).did_execute() {
             self.persist_in_op(db, &mut account).await?;
         }
         Ok(())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.unlock_in_op",
         skip(self, db)
@@ -157,36 +197,47 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
-    ) -> Result<(), AccountError> {
-        let mut account = self.repo.find_by_id_in_op(&mut *db, id).await?;
+    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+        let mut account = self
+            .repo
+            .maybe_find_by_id_in_op(&mut *db, id)
+            .await?
+            .ok_or(AccountRejection::CouldNotFindById(id))?;
         if account.update_status(Status::Active).did_execute() {
             self.persist_in_op(db, &mut account).await?;
         }
         Ok(())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.persist",
         skip(self, account)
     )]
-    pub async fn persist(&self, account: &mut Account) -> Result<(), AccountError> {
+    pub async fn persist(
+        &self,
+        account: &mut Account,
+    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
         Ok(())
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.accounts.persist_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.persist_in_op",
+        skip_all
+    )]
     pub async fn persist_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account: &mut Account,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         if account.is_account_set() {
-            return Err(AccountError::CannotUpdateAccountSetAccounts);
+            return Err(AccountRejection::CannotUpdateAccountSetAccounts.into());
         }
-        self.repo.update_in_op(db, account).await?;
+        self.repo.update_in_op(db, account).await.widen()?;
         Ok(())
     }
 
@@ -213,7 +264,7 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: Vec<(AccountSetId, AccountId)>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
         if pairs.is_empty() {
             return Ok(());
         }
@@ -221,17 +272,14 @@ impl Accounts {
         self.account_set_members
             .attach_new_accounts_in_op(db, &pairs)
             .await
-            .map_err(|e| match e {
-                AccountSetMemberError::AccountSetsNotFound(missing) => {
-                    AccountError::InitialAccountSetNotFound(
-                        *missing.first().expect("missing ids are never empty"),
-                    )
-                }
-                AccountSetMemberError::Sqlx(e) => AccountError::Sqlx(e),
+            .map_rejected(|AccountSetMemberRejection::AccountSetsNotFound(missing)| {
+                AccountRejection::InitialAccountSetNotFound(
+                    *missing.first().expect("missing ids are never empty"),
+                )
             })
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.update_velocity_context_values_in_op",
         skip_all
@@ -240,7 +288,7 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         values: impl Into<VelocityContextAccountValues>,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), crate::CalaFault> {
         self.repo
             .update_velocity_context_values_in_op(db, values.into())
             .await

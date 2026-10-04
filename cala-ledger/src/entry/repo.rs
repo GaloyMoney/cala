@@ -1,9 +1,8 @@
 use crate::primitives::{AccountId, AccountSetId, EntryId, JournalId, TransactionId};
 use es_entity::*;
 use sqlx::PgPool;
-use tracing::instrument;
 
-use super::{entity::*, error::*};
+use super::entity::*;
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
@@ -35,19 +34,20 @@ impl EntryRepo {
         Self { pool: pool.clone() }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "entry.list_for_account_set_id_by_created_at",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn list_for_account_set_id_by_created_at(
         &self,
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<entry_cursor::EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>, EntryError>
-    {
+    ) -> Result<
+        es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>,
+        crate::CalaFault,
+    > {
         let es_entity::PaginatedQueryArgs { first, after } = query;
         let (id, created_at) = if let Some(after) = after {
             (Some(after.id), Some(after.created_at))
@@ -110,11 +110,10 @@ impl EntryRepo {
         ))
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "entry.list_for_journal_id_filtered_by_created_at",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn list_for_journal_id_filtered_by_created_at(
         &self,
@@ -122,8 +121,10 @@ impl EntryRepo {
         filter: EntriesFilter,
         query: es_entity::PaginatedQueryArgs<entry_cursor::EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>, EntryError>
-    {
+    ) -> Result<
+        es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>,
+        crate::CalaFault,
+    > {
         let es_entity::PaginatedQueryArgs { first, after } = query;
         let (id, created_at) = if let Some(after) = after {
             (Some(after.id), Some(after.created_at))

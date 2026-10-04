@@ -44,6 +44,7 @@
 //!   routes future entries.
 
 use chrono::{DateTime, NaiveDate, Utc};
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -62,7 +63,7 @@ use cala_types::entry::EntryValues;
 use crate::{
     balance::{Balances, EcRollupTxn},
     entry::{Entries, Entry},
-    ledger::error::LedgerError,
+    ledger::error::EcCaughtUpTimeout,
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
     primitives::{EntryId, JournalId, TransactionId},
 };
@@ -86,8 +87,8 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, LedgerError> {
-    Ok(outbox
+) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, crate::CalaFault> {
+    outbox
         .register_singleton_subscriber(
             jobs,
             OutboxEventJobConfig::new(EC_BALANCE_ROLLUP_JOB)
@@ -97,7 +98,8 @@ pub(crate) async fn register_ec_balance_rollup(
                 entries: entries.clone(),
             },
         )
-        .await?)
+        .await
+        .narrow_rejected()
 }
 
 /// A transaction pulled from a `TransactionCreated` event, carrying just
@@ -397,14 +399,14 @@ impl EcRollupStatus {
     /// Re-read the committed checkpoint, keeping the pinned `frontier`, so
     /// repeated calls watch the lag drain toward the fence this snapshot
     /// captured.
-    #[tracing::instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.ec_rollup_status.refresh",
         skip_all,
         fields(frontier = %self.frontier, applied, lag)
     )]
-    pub async fn refresh(&mut self) -> Result<(), LedgerError> {
-        self.applied = self.handle.load().await?.checkpoint();
+    pub async fn refresh(&mut self) -> Result<(), crate::CalaFault> {
+        self.applied = self.handle.load().await.narrow_rejected()?.checkpoint();
 
         let span = tracing::Span::current();
         span.record("applied", u64::from(self.applied));
@@ -433,9 +435,12 @@ impl EcRollupStatus {
     /// events as it drains cannot extend its own barrier.
     ///
     /// `timeout` is mandatory: a wedged rollup surfaces as
-    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
-    pub async fn await_completion(&self, timeout: std::time::Duration) -> Result<(), LedgerError> {
-        self.handle.await_position(self.frontier, timeout).await?;
+    /// [`EcCaughtUpTimeout`], never a silent hang.
+    pub async fn await_completion(
+        &self,
+        timeout: std::time::Duration,
+    ) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
+        crate::ledger::await_rollup(&self.handle, self.frontier, timeout).await?;
         Ok(())
     }
 

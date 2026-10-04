@@ -1,99 +1,66 @@
-use sqlx::error::DatabaseError;
-use thiserror::Error;
+use es_entity::errlanes;
 
-use crate::{
-    account::error::AccountError, account_set::error::AccountSetError,
-    balance::error::BalanceError, entry::error::EntryError, journal::error::JournalError,
-    posting::PostingError, transaction::error::TransactionError,
-    tx_template::error::TxTemplateError, velocity::error::VelocityError,
-};
-
-#[derive(Error, Debug)]
-pub enum LedgerError {
-    #[error("LedgerError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("LedgerError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
-    #[error("LedgerError - Migrate: {0}")]
-    SqlxMigrate(#[from] sqlx::migrate::MigrateError),
-    #[error("LedgerError - Config: {0}")]
-    ConfigError(String),
-    #[error("LedgerError - AccountError: {0}")]
-    AccountError(#[from] AccountError),
-    #[error("LedgerError - AccountSetError: {0}")]
-    AccountSetError(#[from] AccountSetError),
-    #[error("LedgerError - JournalError: {0}")]
-    JournalError(#[from] JournalError),
-    #[error("LedgerError - TxTemplateError: {0}")]
-    TxTemplateError(#[from] TxTemplateError),
-    #[error("LedgerError - TransactionError: {0}")]
-    TransactionError(#[from] TransactionError),
-    #[error("LedgerError - EntryError: {0}")]
-    EntryError(EntryError),
-    #[error("LedgerError - BalanceError: {0}")]
-    BalanceError(#[from] BalanceError),
-    #[error("LedgerError - VelocityError: {0}")]
-    VelocityError(#[from] VelocityError),
-    #[error("LedgerError - PostingError: {0}")]
-    PostingError(#[from] PostingError),
-    #[error("LedgerError - EcRollupRegistration: {0}")]
-    EcRollupRegistration(#[from] Box<dyn std::error::Error + Send + Sync>),
-    #[error("LedgerError - EcRollupCheckpoint: {0}")]
-    EcRollupCheckpoint(obix::out::SubscriptionError),
-    #[error(
-        "LedgerError - EcCaughtUpTimeout: EC rollup checkpoint {applied} had not reached the \
-         outbox frontier {frontier} after waiting {waited:?}"
-    )]
-    EcCaughtUpTimeout {
-        applied: obix::StreamPosition,
-        frontier: obix::StreamPosition,
-        waited: std::time::Duration,
-    },
-    #[error(
-        "LedgerError - EntryTargetsAccountSet: an entry may not be posted directly to an \
-         account-set backing account; an account set's balance is derived from its members"
-    )]
-    EntryTargetsAccountSet,
+/// The EC rollup did not reach the requested fence before the caller's deadline.
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_EC_CAUGHT_UP_TIMEOUT")]
+#[error("EC rollup checkpoint {applied} had not reached {frontier} after {waited:?}")]
+pub struct EcCaughtUpTimeout {
+    pub applied: obix::StreamPosition,
+    pub frontier: obix::StreamPosition,
+    pub waited: std::time::Duration,
 }
 
-impl From<EntryError> for LedgerError {
-    fn from(e: EntryError) -> Self {
-        match e {
-            // Surface the posting-flow domain error at the top level so
-            // callers don't have to dig through the entry-error nesting.
-            EntryError::EntryTargetsAccountSet => Self::EntryTargetsAccountSet,
-            other => Self::EntryError(other),
-        }
-    }
-}
+impl errlanes::Lift<obix::out::SubscriptionRejection> for EcCaughtUpTimeout {
+    type Unmapped = obix::out::SubscriptionRejection;
 
-/// Manual, not `#[from]`: the timeout case is remapped so callers
-/// destructure ledger vocabulary (`applied`) rather than obix's
-/// (`checkpoint`). Everything else passes through.
-impl From<obix::out::SubscriptionError> for LedgerError {
-    fn from(e: obix::out::SubscriptionError) -> Self {
-        match e {
-            obix::out::SubscriptionError::CaughtUpTimeout {
+    fn lift(rejection: Self::Unmapped) -> Result<Self, Self::Unmapped> {
+        match rejection {
+            obix::out::SubscriptionRejection::CaughtUpTimeout {
                 checkpoint,
                 target,
                 waited,
-            } => Self::EcCaughtUpTimeout {
+            } => Ok(Self {
                 applied: checkpoint,
                 frontier: target,
                 waited,
-            },
-            other => Self::EcRollupCheckpoint(other),
+            }),
+            // Cala owns a registered singleton; a missing handle is an invariant.
+            other => Err(other),
         }
     }
 }
 
-impl From<sqlx::Error> for LedgerError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                LedgerError::DuplicateKey(err)
-            }
-            e => LedgerError::Sqlx(e),
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use errlanes::{lanes, Fail, FatalKind, ResultExt};
+    use obix::out::SubscriptionRejection;
+
+    #[test]
+    fn only_the_deadline_is_actionable_for_a_registered_rollup() {
+        let waited = std::time::Duration::from_millis(7);
+        let source = SubscriptionRejection::CaughtUpTimeout {
+            checkpoint: obix::StreamPosition::Insert(obix::EventSequence::from(3)),
+            target: obix::StreamPosition::Insert(obix::EventSequence::from(9)),
+            waited,
+        };
+        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> =
+            Err(source).widen();
+        let Fail::Rejected(timeout) = result.unwrap_err() else {
+            panic!("timeout")
+        };
+        assert_eq!(timeout.waited, waited);
+
+        let source = SubscriptionRejection::NoSuchJob {
+            subscriber_type: "rollup".into(),
+            key: "private-key".into(),
+        };
+        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> =
+            Err(source).widen();
+        let Fail::Fatal(fatal) = result.unwrap_err() else {
+            panic!("invariant")
+        };
+        assert_eq!(fatal.kind, FatalKind::Invariant);
+        assert!(!fatal.to_string().contains("private-key"));
     }
 }

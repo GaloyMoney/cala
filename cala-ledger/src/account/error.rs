@@ -1,75 +1,36 @@
-use thiserror::Error;
+use super::repo::AccountConstraintViolation;
+use es_entity::errlanes;
 
-use super::repo::{
-    AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError,
-};
 use crate::primitives::{AccountId, AccountSetId};
 
-#[derive(Error, Debug)]
-pub enum AccountError {
-    #[error("AccountError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("AccountError - Create: {0}")]
-    Create(AccountCreateError),
-    #[error("AccountError - Modify: {0}")]
-    Modify(#[from] AccountModifyError),
-    #[error("AccountError - Find: {0}")]
-    Find(AccountFindError),
-    #[error("AccountError - Query: {0}")]
-    Query(#[from] AccountQueryError),
-    #[error("AccountError - NotFound: id '{0}' not found")]
+#[derive(errlanes::Rejection, errlanes::Lift, Debug)]
+#[lift(AccountConstraintViolation, unhandled = fatal)]
+pub enum AccountRejection {
+    #[error("duplicate id {0}")]
+    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
+    #[lift(AccountConstraintViolation::Pkey, field = attempted)]
+    DuplicateId(AccountId),
+    #[error("AccountRejection - NotFound: id '{0}' not found")]
+    #[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_ID")]
     CouldNotFindById(AccountId),
-    #[error("AccountError - NotFound: external id '{0}' not found")]
+    #[error("AccountRejection - NotFound: external id '{0}' not found")]
+    #[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_EXTERNAL_ID")]
     CouldNotFindByExternalId(String),
-    #[error("AccountError - NotFound: code '{0}' not found")]
+    #[error("AccountRejection - NotFound: code '{0}' not found")]
+    #[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_CODE")]
     CouldNotFindByCode(String),
-    #[error("AccountError - external_id '{0}' already exists")]
-    ExternalIdAlreadyExists(String),
-    #[error("AccountError - code '{0}' already exists")]
-    CodeAlreadyExists(String),
-    #[error("AccountError - cannot update accounts backing an AccountSet")]
+    #[error("AccountRejection - external_id '{0:?}' already exists")]
+    #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
+    #[lift(AccountConstraintViolation::ExternalIdKey, field = attempted)]
+    ExternalIdAlreadyExists(Option<Option<String>>),
+    #[error("AccountRejection - code '{0:?}' already exists")]
+    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
+    #[lift(AccountConstraintViolation::CodeKey, field = attempted)]
+    CodeAlreadyExists(Option<String>),
+    #[error("AccountRejection - cannot update accounts backing an AccountSet")]
+    #[rejection(code = "CALA_ACCOUNT_CANNOT_UPDATE_ACCOUNT_SET_ACCOUNTS")]
     CannotUpdateAccountSetAccounts,
-    #[error("AccountError - initial account set '{0}' not found")]
+    #[error("AccountRejection - initial account set '{0}' not found")]
+    #[rejection(code = "CALA_ACCOUNT_INITIAL_ACCOUNT_SET_NOT_FOUND")]
     InitialAccountSetNotFound(AccountSetId),
-}
-
-impl From<AccountFindError> for AccountError {
-    fn from(error: AccountFindError) -> Self {
-        match error {
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::Id),
-                value,
-                ..
-            } => Self::CouldNotFindById(value.parse().expect("invalid uuid")),
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::ExternalId),
-                value,
-                ..
-            } => Self::CouldNotFindByExternalId(value),
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::Code),
-                value,
-                ..
-            } => Self::CouldNotFindByCode(value),
-            other => Self::Find(other),
-        }
-    }
-}
-
-impl From<AccountCreateError> for AccountError {
-    fn from(error: AccountCreateError) -> Self {
-        match error {
-            AccountCreateError::ConstraintViolation {
-                column: Some(AccountColumn::ExternalId),
-                value,
-                ..
-            } => Self::ExternalIdAlreadyExists(value.unwrap_or_default()),
-            AccountCreateError::ConstraintViolation {
-                column: Some(AccountColumn::Code),
-                value,
-                ..
-            } => Self::CodeAlreadyExists(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
 }

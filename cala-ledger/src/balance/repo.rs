@@ -1,5 +1,5 @@
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::{HashMap, HashSet};
 
@@ -13,7 +13,7 @@ use cala_types::{
 use super::{
     account_balance::AccountBalance,
     cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
-    error::BalanceError,
+    error::BalanceRejection,
 };
 
 const EC_SET_LOCK_CLASS: i32 = 1;
@@ -40,19 +40,19 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
         self.find_in_op(&self.pool, journal_id, account_id, currency)
             .await
     }
 
-    #[instrument(level = "debug", name = "balance.find_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(level = "debug", name = "balance.find_in_op", skip_all)]
     pub async fn find_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
         let row = op
             .into_executor()
             .fetch_optional(sqlx::query!(
@@ -72,33 +72,23 @@ impl BalanceRepo {
             .await?;
 
         if let Some(row) = row {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values)
+                .classify::<crate::error::CouldNotDecodeStored>()?;
             Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency))
+            Err(BalanceRejection::NotFound(journal_id, account_id, currency).into())
         }
     }
 
-    #[instrument(
-        level = "debug",
-        name = "balance.find_all",
-        skip_all,
-        err(level = "warn")
-    )]
+    #[es_entity::errlanes::instrument(level = "debug", name = "balance.find_all", skip_all)]
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         self.find_all_in_op(&self.pool, ids).await
     }
 
-    #[instrument(
-        level = "debug",
-        name = "balance.list_for_account",
-        skip_all,
-        err(level = "warn")
-    )]
+    #[es_entity::errlanes::instrument(level = "debug", name = "balance.list_for_account", skip_all)]
     pub(super) async fn list_for_account(
         &self,
         journal_id: JournalId,
@@ -106,40 +96,34 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "balance.list_for_accounts",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn list_for_accounts(
         &self,
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
             .await
     }
 
-    #[instrument(
-        level = "debug",
-        name = "balance.find_all_in_op",
-        skip_all,
-        err(level = "warn")
-    )]
+    #[es_entity::errlanes::instrument(level = "debug", name = "balance.find_all_in_op", skip_all)]
     pub(super) async fn find_all_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -175,8 +159,8 @@ impl BalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values)
+                .classify::<crate::error::CouldNotDecodeStored>()?;
             ret.insert(
                 (details.journal_id, details.account_id, details.currency),
                 AccountBalance::new(row.normal_balance_type, details),
@@ -185,11 +169,10 @@ impl BalanceRepo {
         Ok(ret)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "balance.list_for_account_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn list_for_account_in_op(
         &self,
@@ -199,7 +182,7 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -232,10 +215,10 @@ impl BalanceRepo {
             .take(first)
             .map(|row| {
                 let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                    .classify::<crate::error::CouldNotDecodeStored>()?;
+                Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -246,11 +229,10 @@ impl BalanceRepo {
         ))
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "balance.list_for_accounts_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn list_for_accounts_in_op(
         &self,
@@ -258,7 +240,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
@@ -307,10 +289,10 @@ impl BalanceRepo {
             .take(first)
             .map(|row| {
                 let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                    .classify::<crate::error::CouldNotDecodeStored>()?;
+                Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -351,18 +333,17 @@ impl BalanceRepo {
     /// that used to be acquired here fenced against the deleted
     /// watermark recalc's EXCLUSIVE-on-parent, and nothing takes an
     /// EXCLUSIVE on a parent set in the streaming design.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balances.member_has_balance_history_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn member_has_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<bool, BalanceError> {
+    ) -> Result<bool, crate::CalaFault> {
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock($1::int4, hashtext(($2::uuid)::text))
@@ -401,17 +382,16 @@ impl BalanceRepo {
     /// instead of checking pair by pair. See the single-pair method for
     /// why entries are checked (EC leaves write entries synchronously
     /// but history only via the rollup) and why parents are not locked.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balances.members_with_balance_history_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub(super) async fn members_with_balance_history_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         pairs: &[(JournalId, AccountId)],
-    ) -> Result<Vec<AccountId>, BalanceError> {
+    ) -> Result<Vec<AccountId>, crate::CalaFault> {
         if pairs.is_empty() {
             return Ok(Vec::new());
         }
@@ -461,7 +441,7 @@ impl BalanceRepo {
             .collect())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
     level = "debug",
     name = "cala_ledger.balances.insert_new_snapshots",
     skip(self, op, new_balances)
@@ -472,7 +452,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: Vec<BalanceSnapshot>,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), crate::CalaFault> {
         tracing::Span::current().record(
             "n_new_balances",
             tracing::field::display(new_balances.len()),
@@ -501,7 +481,7 @@ impl BalanceRepo {
                 currencies.push(balance.currency.code());
                 versions.push(balance.version as i32);
                 values.push(
-                    serde_json::to_value(balance).expect("Failed to serialize balance snapshot"),
+                    serde_json::to_value(balance).classify::<crate::error::CouldNotSerialize>()?,
                 );
             }
 
@@ -560,7 +540,7 @@ impl BalanceRepo {
     /// the inline `AccountSetRepo::fetch_mappings_in_op` but keeps only EC
     /// sets: exactly the ones the synchronous poster path deliberately
     /// skips (`find_for_update` filters `eventually_consistent = FALSE`).
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balances.fetch_ec_set_mappings",
         skip_all
@@ -570,7 +550,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, BalanceError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         // Adjacency-only membership: walk up the set->set edge table from
         // each account's direct memberships, then keep only EC ancestor
         // sets (the streaming rollup's targets). Mirrors
@@ -624,7 +604,7 @@ impl BalanceRepo {
     /// skips (`find_for_update` filters `eventually_consistent = FALSE`), so
     /// the streaming rollup must fold each entry into the leaf's own balance
     /// in addition to its EC ancestor sets.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balances.fetch_ec_leaf_accounts",
         skip_all
@@ -633,7 +613,7 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
-    ) -> Result<HashSet<AccountId>, BalanceError> {
+    ) -> Result<HashSet<AccountId>, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT a.id AS "id!: AccountId"
@@ -657,17 +637,21 @@ impl BalanceRepo {
     /// serialization point rather than a hard requirement. Unlike
     /// `find_for_update` this keeps `eventually_consistent = TRUE` rows —
     /// those are exactly the sets the streaming rollup owns.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balances.find_ec_balances_for_update",
         skip_all
     )]
+    #[allow(clippy::type_complexity)] // Keep the rejection and fault lanes explicit.
     pub(crate) async fn find_ec_balances_for_update(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<(AccountId, Currency), Option<BalanceSnapshot>>, BalanceError> {
+    ) -> Result<
+        HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
+        Fail<BalanceRejection, lanes!(Transient, Fatal)>,
+    > {
         // Acquire the shared advisory locks in canonical `AccountId` order
         // so overlapping callers serialize without deadlock. The `ORDER BY`
         // makes acquisition order canonical regardless of input order (see
@@ -709,16 +693,21 @@ impl BalanceRepo {
         let mut ret = HashMap::new();
         for row in rows {
             if row.status == Status::Locked {
-                return Err(BalanceError::AccountLocked(row.account_id));
+                return Err(BalanceRejection::AccountLocked(row.account_id).into());
             }
-            let snapshot = row.latest_values.map(|v| {
-                serde_json::from_value::<BalanceSnapshot>(v)
-                    .expect("Failed to deserialize balance snapshot")
-            });
+            let snapshot = row
+                .latest_values
+                .map(|v| {
+                    serde_json::from_value::<BalanceSnapshot>(v)
+                        .classify::<crate::error::CouldNotDecodeStored>()
+                })
+                .transpose()?;
             ret.insert(
                 (
                     row.account_id,
-                    row.currency.parse().expect("Could not parse currency"),
+                    row.currency
+                        .parse()
+                        .classify::<crate::error::CouldNotDecodeCurrency>()?,
                 ),
                 snapshot,
             );

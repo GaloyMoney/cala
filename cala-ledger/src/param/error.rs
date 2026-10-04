@@ -1,11 +1,18 @@
-use thiserror::Error;
+use es_entity::errlanes;
 
 use cel_interpreter::CelError;
 
-#[derive(Error, Debug)]
-pub enum ParamError {
-    #[error("ParamError - ParamTypeMismatch: {0}")]
+#[derive(errlanes::Rejection, Debug)]
+pub enum ParamRejection {
+    #[error("ParamRejection - ParamTypeMismatch: {0}")]
     ParamTypeMismatch(String),
-    #[error("ParamError - CelError: {0}")]
-    CelError(#[from] CelError),
+    #[error("ParamRejection - CelError: {0}")]
+    #[rejection(from)]
+    CelError(CelError),
+}
+
+impl From<String> for ParamRejection {
+    fn from(message: String) -> Self {
+        Self::ParamTypeMismatch(message)
+    }
 }

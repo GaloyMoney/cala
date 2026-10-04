@@ -83,16 +83,16 @@
 //! it. Memory: the whole graph is ~thousands of edges + meta — trivial,
 //! no eviction needed.
 
+use es_entity::errlanes::{lanes, Fail};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, RwLock},
 };
-use tracing::instrument;
 
 use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
-    error::AccountSetError,
+    error::AccountSetRejection,
     graph_validation::{
         has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
         SetMembership,
@@ -263,12 +263,11 @@ impl SetGraphCache {
     /// `probe_seeds` may cover accounts outside `journal_id` (a batch spanning
     /// journals resolves one journal at a time); expansion filters by journal,
     /// and the lock batch is built from `entry_pairs`, so extra seeds are inert.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.resolve_from_probe_in_op",
         skip(self, op, probe_seeds, entry_pairs),
-        fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty),
-        err(level = "warn")
+        fields(accounts = entry_pairs.0.len(), path = tracing::field::Empty)
     )]
     pub(super) async fn resolve_from_probe_in_op(
         &self,
@@ -277,7 +276,7 @@ impl SetGraphCache {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         let span = tracing::Span::current();
         let probe = DirectMembershipProbe {
             epoch: probe_epoch,
@@ -380,7 +379,7 @@ impl SetGraphCache {
     /// cache-surface form of
     /// [`AccountSetRepo::assert_no_double_membership`], which remains the
     /// rare-path fallback. Returns
-    /// [`AccountSetError::MemberAlreadyAdded`] if any `(account, set)`
+    /// [`AccountSetRejection::MemberAlreadyAdded`] if any `(account, set)`
     /// containment would be reachable via more than one membership path.
     ///
     /// Hot path: one probe statement (the accounts' live direct
@@ -414,18 +413,17 @@ impl SetGraphCache {
     /// unknown only as *seeds* (fresh sets attached in this op, no epoch
     /// bump) are resolved via the op-local overlay first, mirroring
     /// `fetch_mappings_in_op`'s supplement path.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.assert_no_double_membership",
         skip(self, op, members),
-        fields(pairs = members.len(), path = tracing::field::Empty),
-        err(level = "warn")
+        fields(pairs = members.len(), path = tracing::field::Empty)
     )]
     pub(super) async fn assert_no_double_membership_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[AccountMembership],
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
         let span = tracing::Span::current();
 
         let distinct_account_ids: Vec<AccountId> = {
@@ -519,7 +517,7 @@ impl SetGraphCache {
                 );
                 Ok(())
             }
-            Some(true) => Err(AccountSetError::MemberAlreadyAdded),
+            Some(true) => Err(AccountSetRejection::MemberAlreadyAdded.into()),
             // A set unknown to snapshot + overlay surfaced mid-walk. With
             // a matching epoch this should be unreachable — but the SQL
             // walk is always correct, so fall back rather than reason
@@ -542,18 +540,17 @@ impl SetGraphCache {
     /// affected components are selected in memory. A cold or stale snapshot
     /// falls back to one flat op-local edge read, which also sees same-op
     /// mutations that have already bumped the epoch.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_set.assert_valid_set_memberships",
         skip_all,
-        fields(count = members.len(), path = tracing::field::Empty),
-        err(level = "warn")
+        fields(count = members.len(), path = tracing::field::Empty)
     )]
     pub(super) async fn assert_valid_set_memberships_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[SetMembership],
-    ) -> Result<(), AccountSetError> {
+    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
         let span = tracing::Span::current();
         let snapshot = self.load();
         let epoch = self.inner.repo.fetch_set_graph_epoch_in_op(op).await?;
@@ -715,14 +712,13 @@ impl SetGraphCache {
     /// pool-side read — never an op executor, so uncommitted writes
     /// can't leak in). The epoch-monotonic install guard makes a slow
     /// refresh racing a faster one harmless.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.set_graph_cache.refresh",
         skip_all,
-        fields(epoch = tracing::field::Empty, sets = tracing::field::Empty),
-        err(level = "warn")
+        fields(epoch = tracing::field::Empty, sets = tracing::field::Empty)
     )]
-    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), AccountSetError> {
+    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), crate::CalaFault> {
         let Ok(_guard) = inner.refresh_lock.try_lock() else {
             return Ok(());
         };

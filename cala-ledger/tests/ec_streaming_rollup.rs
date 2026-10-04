@@ -25,12 +25,11 @@ use rust_decimal_macros::dec;
 
 use cala_ledger::{
     account::{Account, NewAccount},
-    account_set::{error::AccountSetError, AccountSet, AccountSetId, NewAccountSet},
-    balance::error::BalanceError,
-    error::LedgerError,
+    account_set::{error::AccountSetRejection, AccountSet, AccountSetId, NewAccountSet},
+    balance::error::BalanceRejection,
     job::Jobs,
     journal::NewJournal,
-    posting::{PostingError, RejectionReason},
+    posting::{PostingRejection, RejectionReason},
     primitives::BalanceRollup,
     tx_template::Params,
     AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
@@ -184,7 +183,7 @@ async fn assert_member_sum(
             .await
         {
             Ok(b) => sum += b.settled(),
-            Err(BalanceError::NotFound(..)) => {}
+            Err(cala_ledger::errlanes::Fail::Rejected(BalanceRejection::NotFound(..))) => {}
             Err(e) => return Err(e.into()),
         }
     }
@@ -454,7 +453,9 @@ async fn streaming_rollup_maintains_ec_plain_account_leaf() -> anyhow::Result<()
                 .balances()
                 .find(fixture.journal_id, leaf.id(), usd)
                 .await,
-            Err(BalanceError::NotFound(..))
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                BalanceRejection::NotFound(..)
+            ))
         ),
         "EC plain account must have no inline balance before the rollup runs",
     );
@@ -570,7 +571,7 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
         assert!(
             matches!(
                 &result,
-                Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+                Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Rejected { reason, .. }))
                     if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_))
             ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
@@ -615,7 +616,12 @@ async fn ec_leaf_with_posted_entries_cannot_join_a_set() -> anyhow::Result<()> {
         .add_member(ec_set.id(), leaf.id())
         .await;
     assert!(
-        matches!(add, Err(AccountSetError::MemberHasBalanceHistory { .. })),
+        matches!(
+            add,
+            Err(cala_ledger::errlanes::Fail::Rejected(
+                AccountSetRejection::MemberHasBalanceHistory { .. }
+            ))
+        ),
         "EC leaf with posted entries must not be attachable to a set",
     );
     Ok(())
@@ -643,9 +649,9 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
-            if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) =>
-        {
+        Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Rejected {
+            reason, ..
+        })) if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) => {
             panic!("a missing account was misreported as targeting an account set")
         }
         Err(_) => {} // a referential-integrity / not-found error — correct
@@ -783,7 +789,7 @@ async fn await_completion_fences_backlog_and_renews() -> anyhow::Result<()> {
 }
 
 /// A stopped (or wedged) rollup must surface as a rich, alertable
-/// [`LedgerError::EcCaughtUpTimeout`] — never a silent hang. The error
+/// [`cala_ledger::EcCaughtUpTimeout`] — never a silent hang. The error
 /// carries the observed checkpoint and frontier so an operator can see
 /// exactly how far behind the stream is.
 #[tokio::test]
@@ -808,9 +814,11 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(std::time::Duration::ZERO)
         .await
     {
-        Err(LedgerError::EcCaughtUpTimeout {
-            applied, frontier, ..
-        }) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(cala_ledger::EcCaughtUpTimeout {
+            applied,
+            frontier,
+            ..
+        })) => {
             assert_eq!(
                 applied.value(),
                 0,
@@ -830,7 +838,10 @@ async fn await_completion_times_out_when_rollup_is_stalled() -> anyhow::Result<(
         .await_completion(timeout)
         .await
     {
-        Err(LedgerError::EcCaughtUpTimeout { waited, .. }) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(cala_ledger::EcCaughtUpTimeout {
+            waited,
+            ..
+        })) => {
             assert!(
                 waited >= timeout,
                 "error must report the full wait, got {waited:?}",
@@ -925,9 +936,11 @@ async fn await_frontier_times_out_for_a_sequence_beyond_the_stream() -> anyhow::
 
     let timeout = std::time::Duration::from_millis(300);
     match fixture.cala.await_frontier(unreachable, timeout).await {
-        Err(LedgerError::EcCaughtUpTimeout {
-            frontier, waited, ..
-        }) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(cala_ledger::EcCaughtUpTimeout {
+            frontier,
+            waited,
+            ..
+        })) => {
             assert_eq!(
                 frontier,
                 obix::StreamPosition::from(unreachable),

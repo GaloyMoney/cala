@@ -1,36 +1,35 @@
-use sqlx::error::DatabaseError;
-use thiserror::Error;
+use es_entity::errlanes;
 
 use crate::{
-    account_set::error::AccountSetError,
-    balance::error::BalanceError,
+    balance::error::BalanceRejection,
     primitives::{AccountId, JournalId, TransactionId},
-    tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
+    tx_template::error::TxTemplateRejection,
+    velocity::error::VelocityRejection,
 };
 
-/// The posting module's error — nested under
-/// [`crate::ledger::error::LedgerError`], never the other way around, exactly
-/// like every other domain error.
-///
-/// Domain errors the flow passes through keep their own granularity via
-/// `#[from]`; failures specific to the posting path get their own variants
-/// here. [`Self::Rejected`] additionally attributes a failure to one posting
-/// of the submitted batch.
-#[derive(Error, Debug)]
-pub enum PostingError {
-    #[error("PostingError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("PostingError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
-    #[error("PostingError - TxTemplateError: {0}")]
-    TxTemplateError(#[from] TxTemplateError),
-    #[error("PostingError - VelocityError: {0}")]
-    VelocityError(#[from] VelocityError),
-    #[error("PostingError - AccountSetError: {0}")]
-    AccountSetError(#[from] AccountSetError),
-    #[error("PostingError - BalanceError: {0}")]
-    BalanceError(#[from] BalanceError),
+/// Caller-correctable posting outcomes. Infrastructure failures travel in
+/// the fault lanes. `Rejected` identifies an offending input within a batch.
+#[derive(errlanes::Rejection, Debug)]
+pub enum PostingRejection {
+    #[error("transaction id already posted")]
+    #[rejection(code = "CALA_POSTING_DUPLICATETRANSACTIONID")]
+    DuplicateTransactionId,
+    #[error("transaction external id already posted")]
+    #[rejection(code = "CALA_POSTING_DUPLICATEEXTERNALID")]
+    DuplicateExternalId,
+    #[error("entry targets an account-set backing account")]
+    #[rejection(code = "CALA_POSTING_ENTRYTARGETSACCOUNTSET")]
+    EntryTargetsAccountSet,
+
+    #[error("PostingRejection - TxTemplateRejection: {0}")]
+    #[rejection(delegate, from)]
+    TxTemplateRejection(TxTemplateRejection),
+    #[error("PostingRejection - VelocityRejection: {0}")]
+    #[rejection(delegate, from)]
+    VelocityRejection(VelocityRejection),
+    #[error("PostingRejection - BalanceRejection: {0}")]
+    #[rejection(delegate, from)]
+    BalanceRejection(BalanceRejection),
     /// A failure attributed to a specific posting within a batch.
     ///
     /// The batch API is all-or-nothing: the whole operation aborts on the
@@ -41,8 +40,10 @@ pub enum PostingError {
     /// statement runs**, which is what keeps the failure attributable:
     /// nothing has been written when it surfaces. Infrastructure failures
     /// (constraint races, deadlocks, connection loss) are not attributable
-    /// and surface through the other variants.
-    #[error("PostingError - Rejected: posting {index} ({tx_id}): {reason}")]
+    /// and surface through fault lanes. Known uniqueness conflicts remain
+    /// unattributed rejections.
+    #[error("PostingRejection - Rejected: posting {index} ({tx_id}): {reason}")]
+    #[rejection(code = "CALA_POSTING_REJECTED")]
     Rejected {
         index: usize,
         tx_id: TransactionId,
@@ -53,14 +54,14 @@ pub enum PostingError {
     /// bare `out of shared memory` from Postgres that names neither the cause
     /// nor the fix — and that can strike unrelated concurrent transactions too.
     #[error(
-        "PostingError - BatchTooManyAccounts: this batch touches {distinct} distinct \
+        "PostingRejection - BatchTooManyAccounts: this batch touches {distinct} distinct \
          (journal, account, currency) balances; at most {max} may be locked in one batch. \
          Split it — batch *size* is not the limit, the number of distinct accounts is."
     )]
     BatchTooManyAccounts { distinct: usize, max: usize },
 }
 
-impl PostingError {
+impl PostingRejection {
     pub(super) fn rejected(
         index: usize,
         tx_id: TransactionId,
@@ -79,38 +80,35 @@ impl PostingError {
     }
 }
 
-impl From<sqlx::Error> for PostingError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
-            }
-            e => Self::Sqlx(e),
-        }
-    }
-}
-
 /// The business-level reason a posting was rejected.
-#[derive(Error, Debug)]
+#[derive(errlanes::Rejection, Debug)]
 pub enum RejectionReason {
     #[error("{0}")]
-    TxTemplate(#[from] TxTemplateError),
+    #[rejection(delegate, from)]
+    TxTemplate(TxTemplateRejection),
     #[error("account {0} does not exist")]
+    #[rejection(code = "CALA_POSTING_ACCOUNT_NOT_FOUND")]
     AccountNotFound(AccountId),
     #[error(
         "an entry may not be posted directly to an account-set backing account \
          ({0}); an account set's balance is derived from its members"
     )]
+    #[rejection(code = "CALA_POSTING_ENTRY_TARGETS_ACCOUNT_SET")]
     EntryTargetsAccountSet(AccountId),
     #[error("account {0} is locked")]
+    #[rejection(code = "CALA_POSTING_ACCOUNT_LOCKED")]
     AccountLocked(AccountId),
     #[error("journal {0} is locked")]
+    #[rejection(code = "CALA_POSTING_JOURNAL_LOCKED")]
     JournalLocked(JournalId),
     #[error("journal {0} does not exist")]
+    #[rejection(code = "CALA_POSTING_JOURNAL_NOT_FOUND")]
     JournalNotFound(JournalId),
     #[error("duplicate transaction id {0} within the submitted batch")]
+    #[rejection(code = "CALA_POSTING_DUPLICATE_TRANSACTION_ID_IN_BATCH")]
     DuplicateTransactionIdInBatch(TransactionId),
     #[error("duplicate external id `{0}` within the submitted batch")]
+    #[rejection(code = "CALA_POSTING_DUPLICATE_EXTERNAL_ID_IN_BATCH")]
     DuplicateExternalIdInBatch(String),
 }
 
@@ -131,3 +129,28 @@ pub enum RejectionReason {
 /// with every other backend; a batch that fits alone can still fail beside
 /// concurrent traffic.
 pub(super) const MAX_DISTINCT_BALANCES_PER_BATCH: usize = 1_000;
+
+/// Classifies this write's known constraints; every other SQL failure keeps its native lane.
+#[derive(Debug, errlanes::Classify)]
+pub(crate) enum PostWrite {
+    #[classify(delegate)]
+    Domain(PostingRejection),
+    #[classify(delegate)]
+    Sqlx(sqlx::Error),
+}
+impl From<sqlx::Error> for PostWrite {
+    fn from(error: sqlx::Error) -> Self {
+        match error.as_database_error().and_then(|e| e.constraint()) {
+            Some("cala_transactions_pkey") => {
+                Self::Domain(PostingRejection::DuplicateTransactionId)
+            }
+            Some("cala_transactions_external_id_key") => {
+                Self::Domain(PostingRejection::DuplicateExternalId)
+            }
+            Some("cala_entries_account_not_account_set_fkey") => {
+                Self::Domain(PostingRejection::EntryTargetsAccountSet)
+            }
+            _ => Self::Sqlx(error),
+        }
+    }
+}
