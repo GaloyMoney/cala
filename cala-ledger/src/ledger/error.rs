@@ -1,33 +1,21 @@
 use es_entity::errlanes;
 
 /// The EC rollup did not reach the requested fence before the caller's deadline.
-#[derive(Debug, errlanes::Rejection)]
+/// Cala owns a registered singleton; a missing handle is an invariant fault.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[rejection(code = "CALA_EC_CAUGHT_UP_TIMEOUT")]
 #[error("EC rollup checkpoint {applied} had not reached {frontier} after {waited:?}")]
+#[lift(
+    obix::out::SubscriptionRejection,
+    variant = CaughtUpTimeout,
+    unhandled = fatal
+)]
 pub struct EcCaughtUpTimeout {
+    #[lift(from = checkpoint)]
     pub applied: obix::StreamPosition,
+    #[lift(from = target)]
     pub frontier: obix::StreamPosition,
     pub waited: std::time::Duration,
-}
-
-impl errlanes::Lift<obix::out::SubscriptionRejection> for EcCaughtUpTimeout {
-    type Unmapped = obix::out::SubscriptionRejection;
-
-    fn lift(rejection: Self::Unmapped) -> Result<Self, Self::Unmapped> {
-        match rejection {
-            obix::out::SubscriptionRejection::CaughtUpTimeout {
-                checkpoint,
-                target,
-                waited,
-            } => Ok(Self {
-                applied: checkpoint,
-                frontier: target,
-                waited,
-            }),
-            // Cala owns a registered singleton; a missing handle is an invariant.
-            other => Err(other),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -50,6 +38,14 @@ mod tests {
             panic!("timeout")
         };
         assert_eq!(timeout.waited, waited);
+        assert_eq!(
+            timeout.applied,
+            obix::StreamPosition::Insert(obix::EventSequence::from(3))
+        );
+        assert_eq!(
+            timeout.frontier,
+            obix::StreamPosition::Insert(obix::EventSequence::from(9))
+        );
 
         let source = SubscriptionRejection::NoSuchJob {
             subscriber_type: "rollup".into(),
