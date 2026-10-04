@@ -919,7 +919,7 @@ dependencies = [
 [[package]]
 name = "es-entity-macros"
 version = "0.16.5"
-source = "git+https://github.com/GaloyMoney/es-entity?rev=0562aa777b3164d9542bdd9f9b39a11ddcb06d2f#0562aa777b3164d9542bdd9f9b39a11ddcb06d2f"
+source = "git+https://github.com/GaloyMoney/es-entity?rev=49346fc294eea6b9dc6021cd1c7609d62ed0802b#49346fc294eea6b9dc6021cd1c7609d62ed0802b"
 dependencies = [
  "convert_case",
  "darling 0.24.0",

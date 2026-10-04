@@ -49,4 +49,4 @@ debug = true
 # also a foreign key. https://github.com/GaloyMoney/es-entity/pull/257
 # Keep only the macro fix pinned until its patch release.
 [patch.crates-io]
-es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "0562aa777b3164d9542bdd9f9b39a11ddcb06d2f" }
+es-entity-macros = { git = "https://github.com/GaloyMoney/es-entity", rev = "49346fc294eea6b9dc6021cd1c7609d62ed0802b" }
