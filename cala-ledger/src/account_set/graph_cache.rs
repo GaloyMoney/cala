@@ -83,7 +83,7 @@
 //! it. Memory: the whole graph is ~thousands of edges + meta — trivial,
 //! no eviction needed.
 
-use es_entity::errlanes::{lanes, Fail};
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     sync::{Arc, RwLock},
@@ -92,7 +92,7 @@ use std::{
 use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
-    error::AccountSetRejection,
+    error::{MemberAlreadyAdded, SetMembershipGraphRejection},
     graph_validation::{
         has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
         SetMembership,
@@ -379,7 +379,7 @@ impl SetGraphCache {
     /// cache-surface form of
     /// [`AccountSetRepo::assert_no_double_membership`], which remains the
     /// rare-path fallback. Returns
-    /// [`AccountSetRejection::MemberAlreadyAdded`] if any `(account, set)`
+    /// [`MemberAlreadyAdded`] if any `(account, set)`
     /// containment would be reachable via more than one membership path.
     ///
     /// Hot path: one probe statement (the accounts' live direct
@@ -423,7 +423,7 @@ impl SetGraphCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[AccountMembership],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>> {
         let span = tracing::Span::current();
 
         let distinct_account_ids: Vec<AccountId> = {
@@ -517,7 +517,7 @@ impl SetGraphCache {
                 );
                 Ok(())
             }
-            Some(true) => Err(AccountSetRejection::MemberAlreadyAdded.into()),
+            Some(true) => Err(MemberAlreadyAdded.into()),
             // A set unknown to snapshot + overlay surfaced mid-walk. With
             // a matching epoch this should be unreachable — but the SQL
             // walk is always correct, so fall back rather than reason
@@ -550,7 +550,7 @@ impl SetGraphCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[SetMembership],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<SetMembershipGraphRejection, lanes!(Transient, Fatal)>> {
         let span = tracing::Span::current();
         let snapshot = self.load();
         let epoch = self.inner.repo.fetch_set_graph_epoch_in_op(op).await?;
@@ -574,7 +574,7 @@ impl SetGraphCache {
             .repo
             .fetch_affected_account_memberships_in_op(op, &existing_edges, members)
             .await?;
-        validate_set_memberships(&existing_edges, members, &account_members)
+        validate_set_memberships(&existing_edges, members, &account_members).widen()
     }
 
     fn load(&self) -> Arc<GraphSnapshot> {

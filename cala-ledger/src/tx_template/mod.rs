@@ -94,7 +94,7 @@ impl TxTemplates {
     pub async fn create(
         &self,
         new_tx_template: NewTxTemplate,
-    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<TxTemplate, Fail<CreateTxTemplateRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let tx_template = self.create_in_op(&mut op, new_tx_template).await?;
         op.commit().await?;
@@ -109,7 +109,7 @@ impl TxTemplates {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
-    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<TxTemplate, Fail<CreateTxTemplateRejection, lanes!(Transient, Fatal)>> {
         let tx_template = self.repo.create_in_op(db, new_tx_template).await.widen()?;
         Ok(tx_template)
     }
@@ -140,14 +140,12 @@ impl TxTemplates {
     pub async fn find_by_code(
         &self,
         code: impl AsRef<str>,
-    ) -> Result<TxTemplate, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<TxTemplate, Fail<TxTemplateNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_code(code.as_ref().to_string())
             .await?
-            .ok_or(TxTemplateRejection::CouldNotFindByCode(
-                code.as_ref().to_string(),
-            ))?)
+            .ok_or(TxTemplateNotFound(code.as_ref().to_string()))?)
     }
 
     /// Evaluate a template body against its params.
@@ -156,7 +154,7 @@ impl TxTemplates {
     /// which is what lets the posting flow run it before its first statement.
     /// The clock only seeds the CEL context (the `date()`/`now()` builtins
     /// available to template expressions).
-    #[es_entity::errlanes::instrument(
+    #[tracing::instrument(
         level = "debug",
         name = "cala_ledger.tx_template.prepare_transaction",
         skip(self, tmpl, params)
@@ -166,7 +164,7 @@ impl TxTemplates {
         tx_id: TransactionId,
         tmpl: &TxTemplateValues,
         params: Params,
-    ) -> Result<PreparedTransaction, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<PreparedTransaction, PrepareTransactionRejection> {
         let ctx = params.into_context(&self.clock, tmpl.params.as_ref())?;
 
         let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
@@ -212,7 +210,7 @@ impl TxTemplates {
         })
     }
 
-    #[es_entity::errlanes::instrument(
+    #[tracing::instrument(
         level = "debug",
         name = "tx_template.prep_entries",
         skip(self, tmpl, ctx),
@@ -230,7 +228,7 @@ impl TxTemplates {
         transaction_id: TransactionId,
         journal_id: JournalId,
         ctx: &cel_interpreter::CelContext,
-    ) -> Result<Vec<NewEntry>, Fail<TxTemplateRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<NewEntry>, PrepareEntriesRejection> {
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
         for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
@@ -277,7 +275,7 @@ impl TxTemplates {
 
         for ((c, l), v) in totals {
             if v != Decimal::ZERO {
-                return Err(TxTemplateRejection::UnbalancedTransaction(c, l, v).into());
+                return Err(PrepareEntriesRejection::UnbalancedTransaction(c, l, v));
             }
         }
 

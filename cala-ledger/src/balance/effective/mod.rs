@@ -15,7 +15,7 @@ use super::{
     cursor::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    error::BalanceRejection,
+    error::BalanceNotFound,
     EcRollupTxn,
 };
 
@@ -45,7 +45,7 @@ impl EffectiveBalances {
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
         date: NaiveDate,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.repo
             .find(journal_id, account_id.into(), currency, date)
             .await
@@ -63,14 +63,14 @@ impl EffectiveBalances {
         currency: Currency,
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRange, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<BalanceRange, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         match self
             .repo
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
             (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
-            _ => Err(BalanceRejection::NotFound(journal_id, account_id, currency).into()),
+            _ => Err(BalanceNotFound(journal_id, account_id, currency).into()),
         }
     }
 

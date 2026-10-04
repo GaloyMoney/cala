@@ -40,7 +40,7 @@ use crate::{
     primitives::{AccountId, AccountSetId},
 };
 
-pub(crate) use error::AccountSetMemberRejection;
+pub(crate) use error::InitialAccountSetsNotFound;
 pub use repo::members_cursor;
 use repo::AccountSetMemberRepo;
 
@@ -76,7 +76,7 @@ impl AccountSetMembers {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: &[(AccountSetId, AccountId)],
-    ) -> Result<(), Fail<AccountSetMemberRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<InitialAccountSetsNotFound, lanes!(Transient, Fatal)>> {
         self.repo.attach_new_accounts_in_op(db, pairs).await
     }
 

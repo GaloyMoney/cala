@@ -4,7 +4,7 @@ use std::{
 };
 
 use cala_ledger::{
-    account::error::AccountRejection,
+    account::error::AccountExternalIdNotFound,
     errlanes::{self, lanes, Fail},
 };
 use tracing::{
@@ -37,8 +37,8 @@ impl<S: Subscriber> Layer<S> for Capture {
 
 #[errlanes::instrument(skip_all)]
 fn boundary(
-    error: Fail<AccountRejection, lanes!(Transient, Fatal)>,
-) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    error: Fail<AccountExternalIdNotFound, lanes!(Transient, Fatal)>,
+) -> Result<(), Fail<AccountExternalIdNotFound, lanes!(Transient, Fatal)>> {
     Err(error)
 }
 
@@ -48,9 +48,7 @@ fn lane_fields_distinguish_rejections_from_faults_without_rendering_caller_input
     let fields = Fields::default();
     let subscriber = tracing_subscriber::registry().with(Capture(fields.clone()));
     tracing::subscriber::with_default(subscriber, || {
-        let _ = boundary(
-            AccountRejection::CouldNotFindByExternalId("private-caller-input".into()).into(),
-        );
+        let _ = boundary(AccountExternalIdNotFound("private-caller-input".into()).into());
         {
             let recorded = fields.lock().unwrap();
             assert_eq!(

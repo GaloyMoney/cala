@@ -1,7 +1,8 @@
 use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 
-use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
+use crate::cel_error::*;
+use cel_interpreter::{CelResult, CelTarget, CelType, CelValue, ExternalTypeCoercion};
 
 es_entity::entity_id! { AccountId }
 impl From<AccountId> for cel_interpreter::CelValue {
@@ -77,13 +78,13 @@ pub enum DebitOrCredit {
 }
 
 impl TryFrom<CelResult<'_>> for DebitOrCredit {
-    type Error = ResultCoercionError;
+    type Error = ExternalTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "DEBIT" => Ok(DebitOrCredit::Debit),
             CelValue::String(v) if v.as_ref() == "CREDIT" => Ok(DebitOrCredit::Credit),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+            v => Err(ExternalTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&v),
                 "DebitOrCredit",
@@ -138,14 +139,14 @@ pub enum ParseLayerError {
 }
 
 impl TryFrom<CelResult<'_>> for Layer {
-    type Error = ResultCoercionError;
+    type Error = ExternalTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
             CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
             CelValue::String(v) if v.as_ref() == "ENCUMBRANCE" => Ok(Layer::Encumbrance),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+            v => Err(ExternalTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&v),
                 "Layer",
@@ -256,25 +257,33 @@ impl From<Currency> for &'static str {
 }
 
 impl TryFrom<CelResult<'_>> for Currency {
-    type Error = ResultCoercionError;
+    type Error = CurrencyCoercionRejection;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|e| {
-                ResultCoercionError::ExternalTypeCoercionError(
-                    format!("{expr:?}"),
-                    format!("{v:?}"),
-                    "Currency",
-                    format!("{e:?}"),
-                )
+                CurrencyCoercionRejection::InvalidCurrency {
+                    expression: format!("{expr:?}"),
+                    source: e,
+                }
             }),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
-                format!("{expr:?}"),
-                CelType::from(&v),
-                "Currency",
-            )),
+            v => {
+                Err(ExternalTypeCoercion(format!("{expr:?}"), CelType::from(&v), "Currency").into())
+            }
         }
     }
+}
+
+impl CelTarget<'_> for Layer {
+    type EvaluationRejection = ExternalEvaluationRejection;
+}
+
+impl CelTarget<'_> for DebitOrCredit {
+    type EvaluationRejection = ExternalEvaluationRejection;
+}
+
+impl CelTarget<'_> for Currency {
+    type EvaluationRejection = CurrencyEvaluationRejection;
 }
 
 #[cfg(test)]

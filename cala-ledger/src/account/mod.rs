@@ -10,7 +10,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 
 use crate::{
-    account_set_member::{AccountSetMemberRejection, AccountSetMembers},
+    account_set_member::AccountSetMembers,
     outbox::*,
     primitives::{AccountSetId, Status},
 };
@@ -50,7 +50,7 @@ impl Accounts {
     pub async fn create(
         &self,
         new_account: NewAccount,
-    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Account, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account = self.create_in_op(&mut op, new_account).await?;
         op.commit().await?;
@@ -67,10 +67,12 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account: NewAccount,
-    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Account, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
-        let account = self.repo.create_in_op(db, new_account).await.widen()?;
-        self.attach_initial_account_set_in_op(db, pairs).await?;
+        let account = self.insert_in_op(db, new_account).await.widen()?;
+        self.attach_initial_account_set_in_op(db, pairs)
+            .await
+            .widen()?;
         Ok(account)
     }
 
@@ -82,7 +84,7 @@ impl Accounts {
     pub async fn create_all(
         &self,
         new_accounts: Vec<NewAccount>,
-    ) -> Result<Vec<Account>, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<Account>, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let accounts = self.create_all_in_op(&mut op, new_accounts).await?;
         op.commit().await?;
@@ -94,11 +96,13 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_accounts: Vec<NewAccount>,
-    ) -> Result<Vec<Account>, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<Account>, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(&new_accounts);
         tracing::Span::current().record("initial_set_count", pairs.len());
-        let accounts = self.repo.create_all_in_op(db, new_accounts).await.widen()?;
-        self.attach_initial_account_set_in_op(db, pairs).await?;
+        let accounts = self.insert_all_in_op(db, new_accounts).await.widen()?;
+        self.attach_initial_account_set_in_op(db, pairs)
+            .await
+            .widen()?;
         Ok(accounts)
     }
 
@@ -110,12 +114,12 @@ impl Accounts {
     pub async fn find(
         &self,
         account_id: AccountId,
-    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Account, Fail<AccountNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id(account_id)
             .await?
-            .ok_or(AccountRejection::CouldNotFindById(account_id))?)
+            .ok_or(AccountNotFound(account_id))?)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.accounts.find_all", skip(self, account_ids), fields(account_ids_count = account_ids.len()))]
@@ -143,12 +147,12 @@ impl Accounts {
     pub async fn find_by_external_id(
         &self,
         external_id: String,
-    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Account, Fail<AccountExternalIdNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_external_id(Some(external_id.clone()))
             .await?
-            .ok_or(AccountRejection::CouldNotFindByExternalId(external_id))?)
+            .ok_or(AccountExternalIdNotFound(external_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -159,12 +163,12 @@ impl Accounts {
     pub async fn find_by_code(
         &self,
         code: String,
-    ) -> Result<Account, Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Account, Fail<AccountCodeNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_code(code.clone())
             .await?
-            .ok_or(AccountRejection::CouldNotFindByCode(code))?)
+            .ok_or(AccountCodeNotFound(code))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -176,14 +180,14 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
-    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<SetAccountStatusRejection, lanes!(Transient, Fatal)>> {
         let mut account = self
             .repo
             .maybe_find_by_id_in_op(&mut *db, id)
             .await?
-            .ok_or(AccountRejection::CouldNotFindById(id))?;
+            .ok_or(AccountNotFound(id))?;
         if account.update_status(Status::Locked).did_execute() {
-            self.persist_in_op(db, &mut account).await?;
+            self.persist_in_op(db, &mut account).await.widen()?;
         }
         Ok(())
     }
@@ -197,14 +201,14 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         id: AccountId,
-    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<SetAccountStatusRejection, lanes!(Transient, Fatal)>> {
         let mut account = self
             .repo
             .maybe_find_by_id_in_op(&mut *db, id)
             .await?
-            .ok_or(AccountRejection::CouldNotFindById(id))?;
+            .ok_or(AccountNotFound(id))?;
         if account.update_status(Status::Active).did_execute() {
-            self.persist_in_op(db, &mut account).await?;
+            self.persist_in_op(db, &mut account).await.widen()?;
         }
         Ok(())
     }
@@ -217,7 +221,7 @@ impl Accounts {
     pub async fn persist(
         &self,
         account: &mut Account,
-    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistAccountRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account).await?;
         op.commit().await?;
@@ -233,11 +237,54 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account: &mut Account,
-    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistAccountRejection, lanes!(Transient, Fatal)>> {
         if account.is_account_set() {
-            return Err(AccountRejection::CannotUpdateAccountSetAccounts.into());
+            return Err(PersistAccountRejection::CannotUpdateAccountSetAccounts.into());
         }
         self.repo.update_in_op(db, account).await.widen()?;
+        Ok(())
+    }
+
+    async fn insert_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account: NewAccount,
+    ) -> Result<Account, Fail<InsertAccountRejection, lanes!(Transient, Fatal)>> {
+        self.repo.create_in_op(db, account).await.widen()
+    }
+
+    async fn insert_all_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        accounts: Vec<NewAccount>,
+    ) -> Result<Vec<Account>, Fail<InsertAccountRejection, lanes!(Transient, Fatal)>> {
+        self.repo.create_all_in_op(db, accounts).await.widen()
+    }
+
+    pub(crate) async fn create_backing_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account: BackingAccount,
+    ) -> Result<(), Fail<CreateBackingAccountRejection, lanes!(Transient, Fatal)>> {
+        self.repo
+            .create_in_op(db, account.into_new())
+            .await
+            .widen()?;
+        Ok(())
+    }
+
+    pub(crate) async fn create_all_backing_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        accounts: Vec<BackingAccount>,
+    ) -> Result<(), Fail<CreateBackingAccountRejection, lanes!(Transient, Fatal)>> {
+        self.repo
+            .create_all_in_op(
+                db,
+                accounts.into_iter().map(BackingAccount::into_new).collect(),
+            )
+            .await
+            .widen()?;
         Ok(())
     }
 
@@ -264,7 +311,7 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: Vec<(AccountSetId, AccountId)>,
-    ) -> Result<(), Fail<AccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<InitialAccountSetNotFound, lanes!(Transient, Fatal)>> {
         if pairs.is_empty() {
             return Ok(());
         }
@@ -272,11 +319,7 @@ impl Accounts {
         self.account_set_members
             .attach_new_accounts_in_op(db, &pairs)
             .await
-            .map_rejected(|AccountSetMemberRejection::AccountSetsNotFound(missing)| {
-                AccountRejection::InitialAccountSetNotFound(
-                    *missing.first().expect("missing ids are never empty"),
-                )
-            })
+            .map_rejected(InitialAccountSetNotFound::from_missing)
     }
 
     #[es_entity::errlanes::instrument(
@@ -325,5 +368,29 @@ impl From<&AccountEvent> for OutboxEventPayload {
                 fields: fields.clone(),
             },
         }
+    }
+}
+
+/// The only inputs accepted by the account-set backing insert. No external ID
+/// or initial membership can enter this path.
+pub(crate) struct BackingAccount {
+    pub id: AccountSetId,
+    pub normal_balance_type: crate::primitives::DebitOrCredit,
+    pub eventually_consistent: bool,
+    pub context: VelocityContextAccountValues,
+}
+
+impl BackingAccount {
+    fn into_new(self) -> NewAccount {
+        NewAccount::builder()
+            .id(self.id)
+            .name(String::new())
+            .code(self.id.to_string())
+            .normal_balance_type(self.normal_balance_type)
+            .is_account_set(true)
+            .eventually_consistent(self.eventually_consistent)
+            .velocity_context_values(self.context)
+            .build()
+            .expect("backing account fields are complete")
     }
 }

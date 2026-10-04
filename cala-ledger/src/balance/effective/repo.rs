@@ -8,7 +8,7 @@ use crate::balance::{
     cursor::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    error::BalanceRejection,
+    error::BalanceNotFound,
 };
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
@@ -39,7 +39,7 @@ impl EffectiveBalanceRepo {
         account_id: AccountId,
         currency: Currency,
         date: NaiveDate,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.find_in_op(&self.pool, journal_id, account_id, currency, date)
             .await
     }
@@ -56,7 +56,7 @@ impl EffectiveBalanceRepo {
         account_id: AccountId,
         currency: Currency,
         date: NaiveDate,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         let row = op
             .into_executor()
             .fetch_optional(sqlx::query!(
@@ -84,7 +84,7 @@ impl EffectiveBalanceRepo {
                 .classify::<crate::error::CouldNotDecodeStored>()?;
             Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
-            Err(BalanceRejection::NotFound(journal_id, account_id, currency).into())
+            Err(BalanceNotFound(journal_id, account_id, currency).into())
         }
     }
 

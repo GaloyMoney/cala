@@ -25,11 +25,11 @@ use rust_decimal_macros::dec;
 
 use cala_ledger::{
     account::{Account, NewAccount},
-    account_set::{error::AccountSetRejection, AccountSet, AccountSetId, NewAccountSet},
-    balance::error::BalanceRejection,
+    account_set::{error::*, AccountSet, AccountSetId, NewAccountSet},
+    balance::error::BalanceNotFound,
     job::Jobs,
     journal::NewJournal,
-    posting::{PostingRejection, RejectionReason},
+    posting::PostingRejection,
     primitives::BalanceRollup,
     tx_template::Params,
     AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
@@ -183,7 +183,7 @@ async fn assert_member_sum(
             .await
         {
             Ok(b) => sum += b.settled(),
-            Err(cala_ledger::errlanes::Fail::Rejected(BalanceRejection::NotFound(..))) => {}
+            Err(cala_ledger::errlanes::Fail::Rejected(BalanceNotFound(..))) => {}
             Err(e) => return Err(e.into()),
         }
     }
@@ -453,9 +453,7 @@ async fn streaming_rollup_maintains_ec_plain_account_leaf() -> anyhow::Result<()
                 .balances()
                 .find(fixture.journal_id, leaf.id(), usd)
                 .await,
-            Err(cala_ledger::errlanes::Fail::Rejected(
-                BalanceRejection::NotFound(..)
-            ))
+            Err(cala_ledger::errlanes::Fail::Rejected(BalanceNotFound(..)))
         ),
         "EC plain account must have no inline balance before the rollup runs",
     );
@@ -571,8 +569,9 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
         assert!(
             matches!(
                 &result,
-                Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Rejected { reason, .. }))
-                    if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_))
+                Err(cala_ledger::errlanes::Fail::Rejected(
+                    PostingRejection::ValidationEntryTargetsAccountSet { .. }
+                ))
             ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
             result.err(),
@@ -619,7 +618,7 @@ async fn ec_leaf_with_posted_entries_cannot_join_a_set() -> anyhow::Result<()> {
         matches!(
             add,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                AccountSetRejection::MemberHasBalanceHistory { .. }
+                AddMemberRejection::MemberHasBalanceHistory(MemberHasBalanceHistory { .. })
             ))
         ),
         "EC leaf with posted entries must not be attachable to a set",
@@ -649,9 +648,9 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Rejected {
-            reason, ..
-        })) if matches!(reason.as_ref(), RejectionReason::EntryTargetsAccountSet(_)) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(
+            PostingRejection::ValidationEntryTargetsAccountSet { .. },
+        )) => {
             panic!("a missing account was misreported as targeting an account set")
         }
         Err(_) => {} // a referential-integrity / not-found error — correct

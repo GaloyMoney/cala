@@ -74,10 +74,11 @@ pub struct CelExpression {
 }
 
 impl CelExpression {
-    pub fn try_evaluate<'a, T: TryFrom<CelResult<'a>, Error = ResultCoercionError>>(
+    pub fn try_evaluate<'a, T: CelTarget<'a>>(
         &'a self,
         ctx: &CelContext,
-    ) -> Result<T, CelError> {
+    ) -> Result<T, T::EvaluationRejection> {
+        // Both edges are total and target-specific.
         let res = self.evaluate(ctx)?;
         Ok(T::try_from(CelResult {
             expr: &self.source,
@@ -86,7 +87,7 @@ impl CelExpression {
     }
 
     #[instrument(name = "cel.evaluate", skip_all, fields(expression = %self.source, context = tracing::field::Empty, result = tracing::field::Empty), err(level = tracing::Level::WARN))]
-    pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelError> {
+    pub fn evaluate(&self, ctx: &CelContext) -> Result<CelValue, CelEvaluationRejection> {
         let context_debug = ctx.debug_context();
         if !context_debug.is_empty() {
             tracing::Span::current().record("context", &context_debug);
@@ -95,8 +96,9 @@ impl CelExpression {
         let value = self
             .program
             .execute(ctx.inner())
-            .map_err(|e| CelError::EvaluationError(self.source.clone(), Box::new(e.into())))?;
-        let result = CelValue::from_cel_value(value)?;
+            .map_err(|e| CelEvaluationRejection::from_execution(e.into(), &self.source))?;
+        let result = CelValue::from_cel_value(value)
+            .map_err(|e| CelEvaluationRejection::from_value(e, &self.source))?;
 
         tracing::Span::current().record("result", format!("{:?}", result));
 
@@ -117,22 +119,22 @@ impl From<CelExpression> for String {
 }
 
 impl TryFrom<String> for CelExpression {
-    type Error = CelError;
+    type Error = CelParseRejection;
 
     fn try_from(source: String) -> Result<Self, Self::Error> {
         // Checked before compiling: oversized sources can panic cel's error
         // formatter (see `MAX_EXPRESSION_BYTES`) and would otherwise occupy
         // the byte-unbounded compile cache.
         if source.len() > MAX_EXPRESSION_BYTES {
-            return Err(CelError::ExpressionTooLarge(source.len()));
+            return Err(CelParseRejection::ExpressionTooLarge(source.len()));
         }
-        let program = compile_program(source.clone()).map_err(CelError::CelParseError)?;
+        let program = compile_program(source.clone()).map_err(CelParseRejection::ParseError)?;
         Ok(Self { source, program })
     }
 }
 
 impl TryFrom<&str> for CelExpression {
-    type Error = CelError;
+    type Error = CelParseRejection;
 
     fn try_from(source: &str) -> Result<Self, Self::Error> {
         Self::try_from(source.to_string())
@@ -140,7 +142,7 @@ impl TryFrom<&str> for CelExpression {
 }
 
 impl std::str::FromStr for CelExpression {
-    type Err = CelError;
+    type Err = CelParseRejection;
 
     fn from_str(source: &str) -> Result<Self, Self::Err> {
         Self::try_from(source.to_string())
@@ -164,7 +166,7 @@ mod tests {
         source.push_str("l\u{0}?(-");
 
         let err = source.parse::<CelExpression>().unwrap_err();
-        assert!(matches!(err, CelError::CelParseError(_)));
+        assert!(matches!(err, CelParseRejection::ParseError(_)));
     }
 
     #[test]
@@ -175,7 +177,7 @@ mod tests {
         assert!(source.len() > MAX_EXPRESSION_BYTES);
 
         let err = source.parse::<CelExpression>().unwrap_err();
-        assert!(matches!(err, CelError::ExpressionTooLarge(n) if n == source.len()));
+        assert!(matches!(err, CelParseRejection::ExpressionTooLarge(n) if n == source.len()));
     }
 
     #[test]
@@ -346,7 +348,7 @@ mod tests {
                 .and_utc(),
         );
         let err = expression.evaluate(&context).unwrap_err();
-        assert!(matches!(err, CelError::EvaluationError(_, _)));
+        assert!(matches!(err, CelEvaluationRejection::Unexpected { .. }));
     }
 
     #[test]
@@ -374,5 +376,75 @@ mod tests {
         );
         assert_eq!(expression.evaluate(&context)?, CelValue::from("21/12/1940"));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    use crate::CelType;
+    use es_entity::errlanes::{Level, Rejection};
+    use std::error::Error;
+
+    fn scalar_contract(error: ScalarEvaluationRejection) {
+        match error {
+            ScalarEvaluationRejection::CoreTypeCoercion(_)
+            | ScalarEvaluationRejection::UnknownIdent { .. }
+            | ScalarEvaluationRejection::MissingArgument { .. }
+            | ScalarEvaluationRejection::NoMatchingOverload { .. }
+            | ScalarEvaluationRejection::Unexpected { .. }
+            | ScalarEvaluationRejection::UnsupportedOpaque { .. }
+            | ScalarEvaluationRejection::OpaqueDowncast { .. }
+            | ScalarEvaluationRejection::FunctionValue { .. } => {}
+        }
+    }
+
+    #[test]
+    fn scalar_evaluation_is_bare_and_keeps_expression_and_foreign_source() {
+        let expr: CelExpression = "missing_variable".parse().unwrap();
+        let result: Result<bool, ScalarEvaluationRejection> = expr.try_evaluate(&CelContext::new());
+        let error = result.unwrap_err();
+        assert_eq!(<&str>::from(error.code()), "EVALUATION_ERROR");
+        assert_eq!(error.level(), Level::Info);
+        assert!(error.source().unwrap().is::<CelExecutionError>());
+        assert!(
+            matches!(&error, ScalarEvaluationRejection::UnknownIdent { expression, .. } if expression == "missing_variable")
+        );
+        scalar_contract(error);
+
+        let expr: CelExpression = "42".parse().unwrap();
+        let error = expr.try_evaluate::<bool>(&CelContext::new()).unwrap_err();
+        assert_eq!(<&str>::from(error.code()), "RESULT_COERCION_ERROR");
+        assert!(matches!(
+            &error,
+            ScalarEvaluationRejection::CoreTypeCoercion(CoreTypeCoercion(
+                _,
+                CelType::Int,
+                CelType::Bool
+            ))
+        ));
+        scalar_contract(error);
+    }
+
+    #[test]
+    fn json_rejections_cover_recursive_bytes_and_non_string_keys() {
+        for source in ["[{'nested': b'x'}]", "{'nested': [{1: 'value'}]}"] {
+            let expr: CelExpression = source.parse().unwrap();
+            let result: Result<serde_json::Value, JsonEvaluationRejection> =
+                expr.try_evaluate(&CelContext::new());
+            let error = result.unwrap_err();
+            assert_eq!(<&str>::from(error.code()), "RESULT_COERCION_ERROR");
+            match error {
+                JsonEvaluationRejection::UnsupportedBytes { expression } => {
+                    assert_eq!(expression, source)
+                }
+                JsonEvaluationRejection::NonStringKey(CoreTypeCoercion(
+                    _,
+                    CelType::Int,
+                    CelType::String,
+                )) => {}
+                error => panic!("unexpected JSON outcome: {error:?}"),
+            }
+        }
     }
 }

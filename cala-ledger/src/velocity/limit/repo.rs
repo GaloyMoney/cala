@@ -2,7 +2,7 @@ use es_entity::errlanes::{lanes, Fail, ResultExt};
 use es_entity::*;
 use sqlx::PgPool;
 
-use crate::{primitives::VelocityLimitId, velocity::error::VelocityRejection};
+use crate::{primitives::VelocityLimitId, velocity::error::LimitAlreadyAddedToControl};
 
 use super::entity::*;
 
@@ -32,7 +32,7 @@ impl VelocityLimitRepo {
         op: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>> {
         sqlx::query!(
             r#"INSERT INTO cala_velocity_control_limits (velocity_control_id, velocity_limit_id)
             VALUES ($1, $2)"#,

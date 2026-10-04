@@ -13,7 +13,7 @@ use cala_types::{
 use super::{
     account_balance::AccountBalance,
     cursor::{AccountBalanceByCurrencyCursor, AccountBalanceCursor},
-    error::BalanceRejection,
+    error::{BalanceAccountLocked, BalanceNotFound},
 };
 
 const EC_SET_LOCK_CLASS: i32 = 1;
@@ -40,7 +40,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.find_in_op(&self.pool, journal_id, account_id, currency)
             .await
     }
@@ -52,7 +52,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_id: AccountId,
         currency: Currency,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         let row = op
             .into_executor()
             .fetch_optional(sqlx::query!(
@@ -76,7 +76,7 @@ impl BalanceRepo {
                 .classify::<crate::error::CouldNotDecodeStored>()?;
             Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
-            Err(BalanceRejection::NotFound(journal_id, account_id, currency).into())
+            Err(BalanceNotFound(journal_id, account_id, currency).into())
         }
     }
 
@@ -650,7 +650,7 @@ impl BalanceRepo {
         (account_ids, currencies): &(Vec<AccountId>, Vec<&str>),
     ) -> Result<
         HashMap<(AccountId, Currency), Option<BalanceSnapshot>>,
-        Fail<BalanceRejection, lanes!(Transient, Fatal)>,
+        Fail<BalanceAccountLocked, lanes!(Transient, Fatal)>,
     > {
         // Acquire the shared advisory locks in canonical `AccountId` order
         // so overlapping callers serialize without deadlock. The `ORDER BY`
@@ -693,7 +693,7 @@ impl BalanceRepo {
         let mut ret = HashMap::new();
         for row in rows {
             if row.status == Status::Locked {
-                return Err(BalanceRejection::AccountLocked(row.account_id).into());
+                return Err(BalanceAccountLocked(row.account_id).into());
             }
             let snapshot = row
                 .latest_values

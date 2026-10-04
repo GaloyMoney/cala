@@ -33,7 +33,7 @@ impl Journals {
     pub async fn create(
         &self,
         new_journal: NewJournal,
-    ) -> Result<Journal, Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let journal = self.create_in_op(&mut op, new_journal).await?;
         op.commit().await?;
@@ -44,7 +44,7 @@ impl Journals {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_journal: NewJournal,
-    ) -> Result<Journal, Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
         let journal = self.repo.create_in_op(db, new_journal).await.widen()?;
         Ok(journal)
     }
@@ -65,12 +65,12 @@ impl Journals {
     pub async fn find(
         &self,
         journal_id: JournalId,
-    ) -> Result<Journal, Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Journal, Fail<JournalNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id(journal_id)
             .await?
-            .ok_or(JournalRejection::CouldNotFindById(journal_id))?)
+            .ok_or(JournalNotFound(journal_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -82,19 +82,19 @@ impl Journals {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
-    ) -> Result<Journal, Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Journal, Fail<JournalNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id_in_op(op, journal_id)
             .await?
-            .ok_or(JournalRejection::CouldNotFindById(journal_id))?)
+            .ok_or(JournalNotFound(journal_id))?)
     }
 
     #[es_entity::errlanes::instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
     pub async fn persist(
         &self,
         journal: &mut Journal,
-    ) -> Result<(), Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistJournalRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, journal).await?;
         op.commit().await?;
@@ -106,7 +106,7 @@ impl Journals {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         journal: &mut Journal,
-    ) -> Result<(), Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistJournalRejection, lanes!(Transient, Fatal)>> {
         self.repo.update_in_op(db, journal).await.widen()?;
         Ok(())
     }
@@ -119,12 +119,12 @@ impl Journals {
     pub async fn find_by_code(
         &self,
         code: String,
-    ) -> Result<Journal, Fail<JournalRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Journal, Fail<JournalCodeNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_code(Some(code.clone()))
             .await?
-            .ok_or(JournalRejection::CouldNotFindByCode(code))?)
+            .ok_or(JournalCodeNotFound(code))?)
     }
 }
 

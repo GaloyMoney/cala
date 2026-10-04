@@ -161,7 +161,7 @@ impl AccountSetRepo {
     /// the same account reaches twice — via an existing path, via the new
     /// edge, or across two pairs of the same batch — surfaces as a group
     /// with more than one row. Reported as
-    /// [`AccountSetRejection::MemberAlreadyAdded`], the same error the old
+    /// [`MemberAlreadyAdded`], the same error the old
     /// closure's unique-constraint collision produced.
     ///
     /// The single-walk form is also what keeps the plan sane once the
@@ -188,7 +188,7 @@ impl AccountSetRepo {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         members: &[AccountMembership],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>> {
         // The parallel arrays the UNNEST needs are built here, at the SQL
         // boundary, so the ordered-pair shape never escapes into the caller.
         let account_set_ids: Vec<AccountSetId> = members.iter().map(|m| m.account_set_id).collect();
@@ -225,7 +225,7 @@ impl AccountSetRepo {
         .fetch_one(db.as_executor())
         .await?;
         if row.conflict {
-            return Err(AccountSetRejection::MemberAlreadyAdded.into());
+            return Err(MemberAlreadyAdded.into());
         }
         Ok(())
     }

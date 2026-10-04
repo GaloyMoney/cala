@@ -36,12 +36,12 @@ impl Transactions {
     pub async fn find_by_external_id(
         &self,
         external_id: String,
-    ) -> Result<Transaction, Fail<TransactionRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Transaction, Fail<TransactionExternalIdNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_external_id(Some(external_id.clone()))
             .await?
-            .ok_or(TransactionRejection::CouldNotFindByExternalId(external_id))?)
+            .ok_or(TransactionExternalIdNotFound(external_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -52,12 +52,12 @@ impl Transactions {
     pub async fn find_by_id(
         &self,
         transaction_id: TransactionId,
-    ) -> Result<Transaction, Fail<TransactionRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Transaction, Fail<TransactionNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id(transaction_id)
             .await?
-            .ok_or(TransactionRejection::CouldNotFindById(transaction_id))?)
+            .ok_or(TransactionNotFound(transaction_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -69,12 +69,12 @@ impl Transactions {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_id: TransactionId,
-    ) -> Result<Transaction, Fail<TransactionRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Transaction, Fail<TransactionNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id_in_op(op, transaction_id)
             .await?
-            .ok_or(TransactionRejection::CouldNotFindById(transaction_id))?)
+            .ok_or(TransactionNotFound(transaction_id))?)
     }
 
     #[es_entity::errlanes::instrument(

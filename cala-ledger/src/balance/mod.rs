@@ -59,7 +59,7 @@ pub use cursor::*;
 #[cfg(feature = "fuzz")]
 pub use effective::fuzz_recalculate;
 use effective::*;
-use error::BalanceRejection;
+use error::BalanceNotFound;
 use repo::*;
 pub(crate) use snapshot::*;
 
@@ -107,7 +107,7 @@ impl Balances {
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.repo
             .find(journal_id, account_id.into(), currency)
             .await
@@ -124,7 +124,7 @@ impl Balances {
         journal_id: JournalId,
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
-    ) -> Result<AccountBalance, Fail<BalanceRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.repo
             .find_in_op(op, journal_id, account_id.into(), currency)
             .await

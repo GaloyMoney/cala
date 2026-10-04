@@ -22,8 +22,11 @@ use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal_macros::dec;
 
 use cala_ledger::{
-    account::{error::AccountRejection, NewAccount},
-    account_set::{error::AccountSetRejection, NewAccountSet},
+    account::{
+        error::{AccountNotFound, CreateAccountRejection, InitialAccountSetNotFound},
+        NewAccount,
+    },
+    account_set::{error::*, NewAccountSet},
     tx_template::Params,
     *,
 };
@@ -342,13 +345,11 @@ async fn missing_set_rejected() -> anyhow::Result<()> {
     let res = cala.accounts().create(new_account).await;
     assert!(matches!(
         res,
-        Err(cala_ledger::errlanes::Fail::Rejected(AccountRejection::InitialAccountSetNotFound(id))) if id == missing
+        Err(cala_ledger::errlanes::Fail::Rejected(CreateAccountRejection::InitialAccountSetNotFound(InitialAccountSetNotFound(id)))) if id == missing
     ));
     assert!(matches!(
         cala.accounts().find(account_id).await,
-        Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountRejection::CouldNotFindById(_)
-        ))
+        Err(cala_ledger::errlanes::Fail::Rejected(AccountNotFound(_)))
     ));
     Ok(())
 }
@@ -399,7 +400,7 @@ async fn same_account_classic_race_blocks_on_member_lock() -> anyhow::Result<()>
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 

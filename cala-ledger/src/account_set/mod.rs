@@ -67,7 +67,7 @@ impl AccountSets {
     pub async fn create(
         &self,
         new_account_set: NewAccountSet,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self.create_in_op(&mut op, new_account_set).await?;
         op.commit().await?;
@@ -83,20 +83,14 @@ impl AccountSets {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account_set: NewAccountSet,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
-        let new_account = NewAccount::builder()
-            .id(new_account_set.id)
-            .name(String::new())
-            .code(new_account_set.id.to_string())
-            .normal_balance_type(new_account_set.normal_balance_type)
-            .is_account_set(true)
-            .eventually_consistent(new_account_set.is_eventually_consistent())
-            .velocity_context_values(new_account_set.context_values())
-            .build()
-            .expect("Failed to build account");
-        self.accounts.create_in_op(db, new_account).await.widen()?;
-
-        let account_set = self.repo.create_in_op(db, new_account_set).await.widen()?;
+    ) -> Result<AccountSet, Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> {
+        self.accounts
+            .create_backing_in_op(db, backing_account(&new_account_set))
+            .await
+            .widen()?;
+        let inserted: Result<_, Fail<InsertAfterBackingRejection, lanes!(Transient, Fatal)>> =
+            self.repo.create_in_op(db, new_account_set).await.widen();
+        let account_set = inserted.widen()?;
 
         Ok(account_set)
     }
@@ -105,7 +99,7 @@ impl AccountSets {
     pub async fn create_all(
         &self,
         new_account_sets: Vec<NewAccountSet>,
-    ) -> Result<Vec<AccountSet>, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<AccountSet>, Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_sets = self.create_all_in_op(&mut op, new_account_sets).await?;
         op.commit().await?;
@@ -117,31 +111,18 @@ impl AccountSets {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account_sets: Vec<NewAccountSet>,
-    ) -> Result<Vec<AccountSet>, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
-        let mut new_accounts = Vec::new();
-        for new_account_set in new_account_sets.iter() {
-            let new_account = NewAccount::builder()
-                .id(new_account_set.id)
-                .name(String::new())
-                .code(new_account_set.id.to_string())
-                .normal_balance_type(new_account_set.normal_balance_type)
-                .is_account_set(true)
-                .eventually_consistent(new_account_set.is_eventually_consistent())
-                .velocity_context_values(new_account_set.context_values())
-                .build()
-                .expect("Failed to build account");
-            new_accounts.push(new_account);
-        }
+    ) -> Result<Vec<AccountSet>, Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> {
+        let backing = new_account_sets.iter().map(backing_account).collect();
         self.accounts
-            .create_all_in_op(db, new_accounts)
+            .create_all_backing_in_op(db, backing)
             .await
             .widen()?;
-
-        let account_sets = self
+        let inserted: Result<_, Fail<InsertAfterBackingRejection, lanes!(Transient, Fatal)>> = self
             .repo
             .create_all_in_op(db, new_account_sets)
             .await
-            .widen()?;
+            .widen();
+        let account_sets = inserted.widen()?;
 
         Ok(account_sets)
     }
@@ -154,7 +135,7 @@ impl AccountSets {
     pub async fn persist(
         &self,
         account_set: &mut AccountSet,
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistAccountSetRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, account_set).await?;
         op.commit().await?;
@@ -170,7 +151,7 @@ impl AccountSets {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account_set: &mut AccountSet,
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<PersistAccountSetRejection, lanes!(Transient, Fatal)>> {
         self.repo.update_in_op(db, account_set).await.widen()?;
 
         self.accounts
@@ -185,7 +166,7 @@ impl AccountSets {
         &self,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<AddMemberRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self
             .add_member_in_op(&mut op, account_set_id, member)
@@ -210,7 +191,7 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<AddMemberRejection, lanes!(Transient, Fatal)>> {
         let member = member.into();
 
         // Resolve the target set (and, for set-member, verify the journal
@@ -225,7 +206,7 @@ impl AccountSets {
                     .repo
                     .maybe_find_by_id_in_op(&mut *op, account_set_id)
                     .await?
-                    .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?;
+                    .ok_or(AccountSetNotFound(account_set_id))?;
                 (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -238,13 +219,11 @@ impl AccountSets {
                     .await?;
                 let target = sets
                     .remove(&account_set_id)
-                    .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?;
-                let member_set = sets
-                    .remove(&id)
-                    .ok_or(AccountSetRejection::CouldNotFindById(id))?;
+                    .ok_or(AccountSetNotFound(account_set_id))?;
+                let member_set = sets.remove(&id).ok_or(AccountSetNotFound(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(AccountSetRejection::JournalIdMismatch.into());
+                    return Err(AddMemberRejection::JournalIdMismatch.into());
                 }
 
                 (target, AccountId::from(id))
@@ -257,7 +236,8 @@ impl AccountSets {
             account_set.values().journal_id,
             member_id,
         )
-        .await?;
+        .await
+        .widen()?;
 
         match member {
             AccountSetMemberId::Account(id) => {
@@ -273,7 +253,8 @@ impl AccountSets {
                             account_id: id,
                         }],
                     )
-                    .await?;
+                    .await
+                    .widen()?;
                 self.account_set_members
                     .add_in_op(&mut *op, &[(account_set_id, id)])
                     .await
@@ -287,7 +268,8 @@ impl AccountSets {
                 self.repo.lock_for_set_membership_op(op).await?;
                 self.set_graph_cache
                     .assert_valid_set_memberships_in_op(op, &[edge])
-                    .await?;
+                    .await
+                    .widen()?;
                 self.repo.insert_member_sets(op, &[edge]).await?;
             }
         }
@@ -299,7 +281,7 @@ impl AccountSets {
     pub async fn add_members(
         &self,
         members: &[(AccountSetId, AccountId)],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AddAccountMembersRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.add_members_in_op(&mut op, members).await?;
         op.commit().await?;
@@ -322,7 +304,7 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[(AccountSetId, AccountId)],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AddAccountMembersRejection, lanes!(Transient, Fatal)>> {
         if members.is_empty() {
             return Ok(());
         }
@@ -343,9 +325,9 @@ impl AccountSets {
 
         let mut check_pairs = Vec::with_capacity(members.len());
         for membership in &members {
-            let set = sets.get(&membership.account_set_id).ok_or(
-                AccountSetRejection::CouldNotFindById(membership.account_set_id),
-            )?;
+            let set = sets
+                .get(&membership.account_set_id)
+                .ok_or(AccountSetNotFound(membership.account_set_id))?;
             check_pairs.push((set.values().journal_id, membership.account_id));
         }
         let with_history = self
@@ -357,7 +339,7 @@ impl AccountSets {
                 .iter()
                 .find(|m| m.account_id == member_id)
                 .expect("member with history must be in input");
-            return Err(AccountSetRejection::MemberHasBalanceHistory {
+            return Err(MemberHasBalanceHistory {
                 account_set_id: membership.account_set_id,
                 member_id,
             }
@@ -371,7 +353,8 @@ impl AccountSets {
             .await?;
         self.set_graph_cache
             .assert_no_double_membership_in_op(op, &members)
-            .await?;
+            .await
+            .widen()?;
         let pairs: Vec<(AccountSetId, AccountId)> = members
             .iter()
             .map(|m| (m.account_set_id, m.account_id))
@@ -393,7 +376,7 @@ impl AccountSets {
     pub async fn add_member_sets(
         &self,
         members: &[(AccountSetId, AccountSetId)],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AddSetMembersRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.add_member_sets_in_op(&mut op, members).await?;
         op.commit().await?;
@@ -429,7 +412,7 @@ impl AccountSets {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[(AccountSetId, AccountSetId)],
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AddSetMembersRejection, lanes!(Transient, Fatal)>> {
         if members.is_empty() {
             return Ok(());
         }
@@ -457,13 +440,13 @@ impl AccountSets {
         for edge in &members {
             let account_set = sets
                 .get(&edge.account_set_id)
-                .ok_or(AccountSetRejection::CouldNotFindById(edge.account_set_id))?;
-            let member_account_set = sets.get(&edge.member_account_set_id).ok_or(
-                AccountSetRejection::CouldNotFindById(edge.member_account_set_id),
-            )?;
+                .ok_or(AccountSetNotFound(edge.account_set_id))?;
+            let member_account_set = sets
+                .get(&edge.member_account_set_id)
+                .ok_or(AccountSetNotFound(edge.member_account_set_id))?;
 
             if account_set.values().journal_id != member_account_set.values().journal_id {
-                return Err(AccountSetRejection::JournalIdMismatch.into());
+                return Err(AddSetMembersRejection::JournalIdMismatch.into());
             }
 
             check_pairs.push((
@@ -481,7 +464,7 @@ impl AccountSets {
                 .iter()
                 .find(|edge| AccountId::from(edge.member_account_set_id) == member_id)
                 .expect("member with history must be in input");
-            return Err(AccountSetRejection::MemberHasBalanceHistory {
+            return Err(MemberHasBalanceHistory {
                 account_set_id: edge.account_set_id,
                 member_id,
             }
@@ -491,7 +474,8 @@ impl AccountSets {
         self.repo.lock_for_set_membership_op(op).await?;
         self.set_graph_cache
             .assert_valid_set_memberships_in_op(op, &members)
-            .await?;
+            .await
+            .widen()?;
         self.repo.insert_member_sets(op, &members).await?;
 
         Ok(())
@@ -515,13 +499,13 @@ impl AccountSets {
         account_set_id: AccountSetId,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<(), Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<MemberHasBalanceHistory, lanes!(Transient, Fatal)>> {
         if self
             .balances
             .member_has_balance_history_in_op(op, journal_id, member_id)
             .await?
         {
-            return Err(AccountSetRejection::MemberHasBalanceHistory {
+            return Err(MemberHasBalanceHistory {
                 account_set_id,
                 member_id,
             }
@@ -535,7 +519,7 @@ impl AccountSets {
         &self,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<RemoveMemberRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let account_set = self
             .remove_member_in_op(&mut op, account_set_id, member)
@@ -555,7 +539,7 @@ impl AccountSets {
         op: &mut impl es_entity::AtomicOperation,
         account_set_id: AccountSetId,
         member: impl Into<AccountSetMemberId>,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<RemoveMemberRejection, lanes!(Transient, Fatal)>> {
         let member = member.into();
 
         let (account_set, member_id) = match member {
@@ -564,7 +548,7 @@ impl AccountSets {
                     .repo
                     .maybe_find_by_id_in_op(&mut *op, account_set_id)
                     .await?
-                    .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?;
+                    .ok_or(AccountSetNotFound(account_set_id))?;
                 (set, id)
             }
             AccountSetMemberId::AccountSet(id) => {
@@ -574,13 +558,11 @@ impl AccountSets {
                     .await?;
                 let target = sets
                     .remove(&account_set_id)
-                    .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?;
-                let member_set = sets
-                    .remove(&id)
-                    .ok_or(AccountSetRejection::CouldNotFindById(id))?;
+                    .ok_or(AccountSetNotFound(account_set_id))?;
+                let member_set = sets.remove(&id).ok_or(AccountSetNotFound(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(AccountSetRejection::JournalIdMismatch.into());
+                    return Err(RemoveMemberRejection::JournalIdMismatch.into());
                 }
 
                 (target, AccountId::from(id))
@@ -593,7 +575,8 @@ impl AccountSets {
             account_set.values().journal_id,
             member_id,
         )
-        .await?;
+        .await
+        .widen()?;
 
         match member {
             AccountSetMemberId::Account(id) => {
@@ -638,12 +621,12 @@ impl AccountSets {
     pub async fn find(
         &self,
         account_set_id: AccountSetId,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<AccountSetNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id(account_set_id)
             .await?
-            .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?)
+            .ok_or(AccountSetNotFound(account_set_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -655,12 +638,12 @@ impl AccountSets {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_id: AccountSetId,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<AccountSetNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_id_in_op(op, account_set_id)
             .await?
-            .ok_or(AccountSetRejection::CouldNotFindById(account_set_id))?)
+            .ok_or(AccountSetNotFound(account_set_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -671,12 +654,12 @@ impl AccountSets {
     pub async fn find_by_external_id(
         &self,
         external_id: String,
-    ) -> Result<AccountSet, Fail<AccountSetRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountSet, Fail<AccountSetExternalIdNotFound, lanes!(Transient, Fatal)>> {
         Ok(self
             .repo
             .maybe_find_by_external_id(Some(external_id.clone()))
             .await?
-            .ok_or(AccountSetRejection::CouldNotFindByExternalId(external_id))?)
+            .ok_or(AccountSetExternalIdNotFound(external_id))?)
     }
 
     #[es_entity::errlanes::instrument(
@@ -866,5 +849,14 @@ impl From<&AccountSetEvent> for OutboxEventPayload {
                 fields: fields.clone(),
             },
         }
+    }
+}
+
+fn backing_account(set: &NewAccountSet) -> BackingAccount {
+    BackingAccount {
+        id: set.id,
+        normal_balance_type: set.normal_balance_type,
+        eventually_consistent: set.is_eventually_consistent(),
+        context: set.context_values(),
     }
 }

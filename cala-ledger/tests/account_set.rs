@@ -4,9 +4,7 @@ use std::time::Duration;
 
 use rand::distr::{Alphanumeric, SampleString};
 
-use cala_ledger::{
-    account::*, account_set::error::AccountSetRejection, account_set::*, tx_template::*, *,
-};
+use cala_ledger::{account::*, account_set::error::*, account_set::*, tx_template::*, *};
 
 #[tokio::test]
 async fn errors_on_collision() -> anyhow::Result<()> {
@@ -130,7 +128,7 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MembershipCycleDetected { .. }
+            AddMemberRejection::MembershipCycleDetected { .. }
         ))
     ));
 
@@ -139,7 +137,7 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MembershipCycleDetected { .. }
+            AddMemberRejection::MembershipCycleDetected { .. }
         ))
     ));
 
@@ -156,7 +154,7 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -216,7 +214,7 @@ async fn errors_on_membership_depth_exceeded() -> anyhow::Result<()> {
         matches!(
             res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                AccountSetRejection::MembershipDepthExceeded { .. }
+                AddMemberRejection::MembershipDepthExceeded { .. }
             ))
         ),
         "an edge past MAX_MEMBERSHIP_DEPTH must be rejected"
@@ -294,7 +292,7 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -307,7 +305,7 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddAccountMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -330,7 +328,7 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -378,7 +376,7 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -406,7 +404,7 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -646,7 +644,7 @@ async fn add_member_sets_batch_rejects_interacting_edges_atomically() -> anyhow:
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MembershipCycleDetected { .. }
+            AddSetMembersRejection::MembershipCycleDetected { .. }
         ))
     ));
 
@@ -711,7 +709,7 @@ async fn add_member_sets_batch_rejects_duplicate_paths_atomically() -> anyhow::R
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddSetMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -793,7 +791,7 @@ async fn add_member_sets_batch_rejects_account_conflict_from_interacting_edges(
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddSetMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -857,7 +855,7 @@ async fn add_member_sets_batch_rejects_a_duplicate_of_a_committed_edge() -> anyh
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddSetMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -920,7 +918,7 @@ async fn add_member_sets_batch_rejects_a_path_through_committed_edges() -> anyho
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddSetMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -982,7 +980,7 @@ async fn add_member_sets_batch_attributes_depth_overflow_through_existing_edges(
     let result = cala.account_sets().add_member_sets(&proposed).await;
     assert!(matches!(
         result,
-        Err(cala_ledger::errlanes::Fail::Rejected(AccountSetRejection::MembershipDepthExceeded {
+        Err(cala_ledger::errlanes::Fail::Rejected(AddSetMembersRejection::MembershipDepthExceeded {
             account_set_id,
             member_account_set_id,
             depth: 17,
@@ -1118,7 +1116,7 @@ async fn add_member_sets_batch_rejects_dense_duplicate_paths_without_path_explos
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddSetMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -1154,7 +1152,7 @@ async fn add_member_sets_batch_rejects_depth_overflow_atomically() -> anyhow::Re
     let result = cala.account_sets().add_member_sets(&edges).await;
     assert!(matches!(
         result,
-        Err(cala_ledger::errlanes::Fail::Rejected(AccountSetRejection::MembershipDepthExceeded {
+        Err(cala_ledger::errlanes::Fail::Rejected(AddSetMembersRejection::MembershipDepthExceeded {
             account_set_id,
             member_account_set_id,
             depth: 17,
@@ -1223,7 +1221,7 @@ async fn add_member_sets_batch_rejects_journal_mismatch_atomically() -> anyhow::
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::JournalIdMismatch
+            AddSetMembersRejection::JournalIdMismatch
         ))
     ));
 
@@ -1303,7 +1301,7 @@ async fn add_member_sets_batch_rejects_member_history_atomically() -> anyhow::Re
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberHasBalanceHistory { .. }
+            AddSetMembersRejection::MemberHasBalanceHistory(MemberHasBalanceHistory { .. })
         ))
     ));
 
@@ -1780,10 +1778,10 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
         .expect("add_member should fail when the member has balance history");
 
     match err.rejected().expect("membership rejection") {
-        AccountSetRejection::MemberHasBalanceHistory {
+        AddMemberRejection::MemberHasBalanceHistory(MemberHasBalanceHistory {
             account_set_id,
             member_id,
-        } => {
+        }) => {
             assert_eq!(account_set_id, target.id());
             assert_eq!(member_id, recipient.id());
         }
@@ -1877,10 +1875,10 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
         .expect("remove_member should fail when the member has balance history");
 
     match err.rejected().expect("membership rejection") {
-        AccountSetRejection::MemberHasBalanceHistory {
+        RemoveMemberRejection::MemberHasBalanceHistory(MemberHasBalanceHistory {
             account_set_id,
             member_id,
-        } => {
+        }) => {
             assert_eq!(account_set_id, target.id());
             assert_eq!(member_id, recipient.id());
         }
@@ -1966,7 +1964,7 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -1982,7 +1980,7 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddAccountMembersRejection::MemberAlreadyAdded(_)
         ))
     ));
     cala.account_sets()
@@ -2007,7 +2005,7 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
     drop(op);
@@ -2026,7 +2024,7 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
     drop(op);
@@ -2120,7 +2118,7 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
 
@@ -2151,7 +2149,7 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AccountSetRejection::MemberAlreadyAdded
+            AddMemberRejection::MemberAlreadyAdded(_)
         ))
     ));
     drop(op);

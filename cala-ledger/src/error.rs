@@ -21,18 +21,25 @@ pub(crate) struct CouldNotDecodeStored(#[source] serde_json::Error);
 #[error("could not decode stored ledger currency")]
 pub(crate) struct CouldNotDecodeCurrency(#[source] crate::primitives::ParseCurrencyError);
 
+#[derive(Debug, errlanes::Classify)]
+#[classify(fatal(Invariant), from)]
+#[error("could not serialize a ledger value")]
+pub(crate) struct CouldNotSerialize(#[source] serde_json::Error);
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use es_entity::errlanes::{Fail, FatalKind, ResultExt, TransientKind};
+    use es_entity::errlanes::{lanes, Fail, FatalKind, ResultExt, TransientKind};
     use std::error::Error as _;
 
     #[test]
     fn database_faults_keep_their_lane_and_source_across_rejection_mapping() {
-        let error: Fail<crate::account::error::AccountRejection, lanes!(Transient, Fatal)> =
-            sqlx::Error::PoolTimedOut.into();
+        let error: Fail<
+            crate::account::error::CreateBackingAccountRejection,
+            lanes!(Transient, Fatal),
+        > = sqlx::Error::PoolTimedOut.into();
         let result = Err::<(), _>(error)
-            .map_rejected(crate::account_set::error::AccountSetRejection::AccountRejection);
+            .map_rejected(crate::account_set::error::CreateAccountSetRejection::from);
         let Fail::Transient(transient) = result.unwrap_err() else {
             panic!("transient")
         };
@@ -78,7 +85,105 @@ mod tests {
     }
 }
 
-#[derive(Debug, errlanes::Classify)]
-#[classify(fatal(Invariant), from)]
-#[error("could not serialize a ledger value")]
-pub(crate) struct CouldNotSerialize(#[source] serde_json::Error);
+#[cfg(test)]
+mod sql_contract_tests {
+    use es_entity::errlanes::{lanes, Fail, FatalKind, ResultExt, TransientKind};
+    use std::error::Error;
+
+    // Real PostgreSQL diagnostics exercise SQLSTATE and constraint extraction,
+    // including the unknown-constraint native-classification path.
+    async fn violation(name: &str, code: &str) -> sqlx::Error {
+        let pool = sqlx::PgPool::connect(&std::env::var("PG_CON").unwrap())
+            .await
+            .unwrap();
+        let statement = format!("DO $$ BEGIN RAISE EXCEPTION 'contract fixture' USING ERRCODE = '{code}', CONSTRAINT = '{name}'; END $$");
+        let error = sqlx::query(&statement).execute(&pool).await.unwrap_err();
+        pool.close().await;
+        error
+    }
+
+    #[tokio::test]
+    async fn posting_constraints_reject_and_unknown_sql_keeps_its_lane_and_source() {
+        use crate::posting::error::{PostWrite, PostWriteRejection};
+        for (constraint, code, expected) in [
+            ("cala_transactions_pkey", "23505", "id"),
+            ("cala_transactions_external_id_key", "23505", "external"),
+            (
+                "cala_entries_account_not_account_set_fkey",
+                "23503",
+                "entry",
+            ),
+        ] {
+            let result = Err::<(), _>(violation(constraint, code).await)
+                .classify::<PostWrite>()
+                .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>();
+            let actual = match result.unwrap_err().rejected().unwrap() {
+                PostWriteRejection::DuplicateTransactionId => "id",
+                PostWriteRejection::DuplicateExternalId => "external",
+                PostWriteRejection::EntryTargetsAccountSet => "entry",
+            };
+            assert_eq!(actual, expected);
+        }
+        let error = Err::<(), _>(violation("unrecognized_constraint", "23505").await)
+            .classify::<PostWrite>()
+            .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>()
+            .unwrap_err();
+        let Fail::Fatal(fault) = error else {
+            panic!("unknown constraint must retain native fault classification")
+        };
+        assert_eq!(fault.kind, FatalKind::Invariant);
+        assert!(fault.source().unwrap().is::<sqlx::Error>());
+        let error = Err::<(), _>(sqlx::Error::PoolTimedOut)
+            .classify::<PostWrite>()
+            .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>()
+            .unwrap_err();
+        let Fail::Transient(fault) = error else {
+            panic!("pool timeout")
+        };
+        assert_eq!(fault.kind, TransientKind::PoolTimeout);
+        assert!(fault.source().unwrap().is::<sqlx::Error>());
+    }
+
+    #[tokio::test]
+    async fn membership_and_limit_attachment_recognize_only_their_constraints() {
+        use crate::{
+            account_set::error::{MemberAlreadyAdded, MembershipWrite},
+            velocity::error::{AttachLimit, LimitAlreadyAddedToControl},
+        };
+        for name in [
+            "cala_account_set_member_accou_account_set_id_member_account_key",
+            "cala_account_set_member_accou_account_set_id_member_accoun_key1",
+        ] {
+            assert!(matches!(
+                Err::<(), _>(violation(name, "23505").await)
+                    .classify::<MembershipWrite>()
+                    .widen::<Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>>(),
+                Err(Fail::Rejected(MemberAlreadyAdded))
+            ));
+        }
+        assert!(matches!(
+            Err::<(), _>(
+                violation(
+                    "cala_velocity_control_limits_velocity_control_id_velocity_l_key",
+                    "23505"
+                )
+                .await
+            )
+            .classify::<AttachLimit>()
+            .widen::<Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>>(),
+            Err(Fail::Rejected(LimitAlreadyAddedToControl))
+        ));
+        assert!(matches!(
+            Err::<(), _>(violation("unknown", "23505").await)
+                .classify::<MembershipWrite>()
+                .widen::<Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>>(),
+            Err(Fail::Fatal(_))
+        ));
+        assert!(matches!(
+            Err::<(), _>(violation("unknown", "23505").await)
+                .classify::<AttachLimit>()
+                .widen::<Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>>(),
+            Err(Fail::Fatal(_))
+        ));
+    }
+}

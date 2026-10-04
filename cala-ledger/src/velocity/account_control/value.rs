@@ -1,6 +1,6 @@
+use cel_interpreter::ScalarEvaluationRejection;
 use cel_interpreter::{CelContext, CelExpression};
 use chrono::{DateTime, Utc};
-use es_entity::errlanes::{lanes, Fail};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use tracing::{field, Span};
@@ -26,10 +26,7 @@ pub struct AccountVelocityControl {
 }
 
 impl AccountVelocityControl {
-    pub fn needs_enforcement(
-        &self,
-        ctx: &CelContext,
-    ) -> Result<bool, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, ScalarEvaluationRejection> {
         if let Some(condition) = &self.condition {
             let result: bool = condition.try_evaluate(ctx)?;
             Ok(result)
@@ -49,12 +46,12 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
-    #[es_entity::errlanes::instrument(level = "debug", name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id))]
+    #[tracing::instrument(level = "debug", name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id))]
     pub fn window_for_enforcement(
         &self,
         ctx: &CelContext,
         entry: &EntryValues,
-    ) -> Result<Option<Window>, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Option<Window>, VelocityWindowRejection> {
         if let Some(currency) = &self.currency {
             if currency != &entry.currency {
                 return Ok(None);
@@ -77,13 +74,13 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
-    #[es_entity::errlanes::instrument(level = "debug", name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction))]
+    #[tracing::instrument(level = "debug", name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction))]
     pub fn enforce(
         &self,
         ctx: &CelContext,
         time: DateTime<Utc>,
         snapshot: &BalanceSnapshot,
-    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), EnforceVelocityRejection> {
         if let Some(currency) = &self.currency {
             if currency != &snapshot.currency {
                 return Ok(());

@@ -219,13 +219,11 @@ impl CalaLedger {
     ) -> Result<Transaction, Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)>> {
         let transaction = self
             .postings
-            .post_all_in_op(
+            .post_in_op(
                 db,
-                vec![PostingInput::new(tx_id, tx_template_code, params.into())],
+                PostingInput::new(tx_id, tx_template_code, params.into()),
             )
-            .await?
-            .pop()
-            .expect("one posting in, one transaction out");
+            .await?;
 
         let span = tracing::Span::current();
         span.record("transaction_id", transaction.id().to_string());
@@ -259,8 +257,10 @@ impl CalaLedger {
     pub async fn post_transactions(
         &self,
         batch: Vec<PostingInput>,
-    ) -> Result<Vec<Transaction>, Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)>>
-    {
+    ) -> Result<
+        Vec<Transaction>,
+        Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>,
+    > {
         let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
         let transactions = self.post_transactions_in_op(&mut db, batch).await?;
         db.commit().await?;
@@ -282,8 +282,10 @@ impl CalaLedger {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         batch: Vec<PostingInput>,
-    ) -> Result<Vec<Transaction>, Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)>>
-    {
+    ) -> Result<
+        Vec<Transaction>,
+        Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>,
+    > {
         self.postings.post_all_in_op(db, batch).await
     }
 

@@ -139,13 +139,13 @@ impl CelValue {
         }
     }
 
-    pub(crate) fn from_cel_value(value: Value) -> Result<Self, CelError> {
+    pub(crate) fn from_cel_value(value: Value) -> Result<Self, CelValueConversionRejection> {
         Ok(match value {
             Value::Map(map) => {
                 let mut res = CelMap::new();
                 for (k, v) in map.map.iter() {
                     res.inner
-                        .insert(CelKey::try_from(k)?, CelValue::from_cel_value(v.clone())?);
+                        .insert(CelKey::from(k), CelValue::from_cel_value(v.clone())?);
                 }
                 CelValue::Map(Arc::new(res))
             }
@@ -165,29 +165,24 @@ impl CelValue {
             Value::Duration(d) => CelValue::String(Arc::new(format!("{d:?}"))),
             Value::Timestamp(ts) => CelValue::Timestamp(ts.with_timezone(&Utc)),
             Value::Opaque(o) if o.runtime_type_name() == "cala.Decimal" => {
-                let decimal = o.downcast_ref::<CelDecimal>().ok_or_else(|| {
-                    CelError::Unexpected("Could not downcast decimal".to_string())
-                })?;
+                let decimal = o
+                    .downcast_ref::<CelDecimal>()
+                    .ok_or(CelValueConversionRejection::OpaqueDowncast("decimal"))?;
                 CelValue::Decimal(decimal.0)
             }
             Value::Opaque(o) if o.runtime_type_name() == "cala.Uuid" => {
                 let id = o
                     .downcast_ref::<CelUuid>()
-                    .ok_or_else(|| CelError::Unexpected("Could not downcast uuid".to_string()))?;
+                    .ok_or(CelValueConversionRejection::OpaqueDowncast("uuid"))?;
                 CelValue::Uuid(id.0)
             }
             Value::Opaque(o) => {
-                return Err(CelError::Unexpected(format!(
-                    "Unsupported opaque value {}",
-                    o.runtime_type_name()
-                )))
-            }
-            Value::Null => CelValue::Null,
-            Value::Function(_, _) => {
-                return Err(CelError::Unexpected(
-                    "Cannot convert function value".to_string(),
+                return Err(CelValueConversionRejection::UnsupportedOpaque(
+                    o.runtime_type_name().to_owned(),
                 ))
             }
+            Value::Null => CelValue::Null,
+            Value::Function(_, _) => return Err(CelValueConversionRejection::FunctionValue),
         })
     }
 }
@@ -310,16 +305,14 @@ impl CelKey {
     }
 }
 
-impl TryFrom<&Key> for CelKey {
-    type Error = CelError;
-
-    fn try_from(key: &Key) -> Result<Self, Self::Error> {
-        Ok(match key {
+impl From<&Key> for CelKey {
+    fn from(key: &Key) -> Self {
+        match key {
             Key::Int(i) => CelKey::Int(*i),
             Key::Uint(u) => CelKey::UInt(*u),
             Key::Bool(b) => CelKey::Bool(*b),
             Key::String(s) => CelKey::String(s.clone()),
-        })
+        }
     }
 }
 
@@ -369,37 +362,37 @@ impl From<DateTime<Utc>> for CelValue {
 }
 
 impl TryFrom<&CelValue> for Arc<String> {
-    type Error = CelError;
+    type Error = CelTypeMismatch;
 
     fn try_from(v: &CelValue) -> Result<Self, Self::Error> {
         if let CelValue::String(s) = v {
             Ok(s.clone())
         } else {
-            Err(CelError::BadType(CelType::String, CelType::from(v)))
+            Err(CelTypeMismatch(CelType::String, CelType::from(v)))
         }
     }
 }
 
 impl<'a> TryFrom<&'a CelValue> for &'a Decimal {
-    type Error = CelError;
+    type Error = CelTypeMismatch;
 
     fn try_from(v: &'a CelValue) -> Result<Self, Self::Error> {
         if let CelValue::Decimal(d) = v {
             Ok(d)
         } else {
-            Err(CelError::BadType(CelType::Decimal, CelType::from(v)))
+            Err(CelTypeMismatch(CelType::Decimal, CelType::from(v)))
         }
     }
 }
 
 impl TryFrom<CelResult<'_>> for bool {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::Bool(b) = val {
             Ok(b)
         } else {
-            Err(ResultCoercionError::BadCoreTypeCoercion(
+            Err(CoreTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&val),
                 CelType::Bool,
@@ -409,13 +402,13 @@ impl TryFrom<CelResult<'_>> for bool {
 }
 
 impl TryFrom<CelResult<'_>> for NaiveDate {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::Date(d) => Ok(d),
             CelValue::Timestamp(ts) => Ok(ts.date_naive()),
-            _ => Err(ResultCoercionError::BadCoreTypeCoercion(
+            _ => Err(CoreTypeCoercion(
                 expr.to_string(),
                 CelType::from(&val),
                 CelType::Date,
@@ -425,13 +418,13 @@ impl TryFrom<CelResult<'_>> for NaiveDate {
 }
 
 impl TryFrom<CelResult<'_>> for DateTime<Utc> {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::Timestamp(d) = val {
             Ok(d)
         } else {
-            Err(ResultCoercionError::BadCoreTypeCoercion(
+            Err(CoreTypeCoercion(
                 expr.to_string(),
                 CelType::from(&val),
                 CelType::Timestamp,
@@ -441,13 +434,13 @@ impl TryFrom<CelResult<'_>> for DateTime<Utc> {
 }
 
 impl TryFrom<CelResult<'_>> for Uuid {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::Uuid(id) = val {
             Ok(id)
         } else {
-            Err(ResultCoercionError::BadCoreTypeCoercion(
+            Err(CoreTypeCoercion(
                 expr.to_string(),
                 CelType::from(&val),
                 CelType::Uuid,
@@ -457,13 +450,13 @@ impl TryFrom<CelResult<'_>> for Uuid {
 }
 
 impl TryFrom<CelResult<'_>> for String {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         if let CelValue::String(s) = val {
             Ok(s.to_string())
         } else {
-            Err(ResultCoercionError::BadCoreTypeCoercion(
+            Err(CoreTypeCoercion(
                 expr.to_string(),
                 CelType::from(&val),
                 CelType::String,
@@ -473,12 +466,12 @@ impl TryFrom<CelResult<'_>> for String {
 }
 
 impl TryFrom<CelResult<'_>> for Decimal {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::Decimal(n) => Ok(n),
-            _ => Err(ResultCoercionError::BadCoreTypeCoercion(
+            _ => Err(CoreTypeCoercion(
                 expr.to_string(),
                 CelType::from(&val),
                 CelType::Decimal,
@@ -499,13 +492,13 @@ impl From<&CelKey> for CelType {
 }
 
 impl TryFrom<&CelKey> for String {
-    type Error = ResultCoercionError;
+    type Error = CoreTypeCoercion;
 
     fn try_from(v: &CelKey) -> Result<Self, Self::Error> {
         if let CelKey::String(s) = v {
             Ok(s.to_string())
         } else {
-            Err(ResultCoercionError::BadCoreTypeCoercion(
+            Err(CoreTypeCoercion(
                 format!("{v:?}"),
                 CelType::from(v),
                 CelType::String,
@@ -515,7 +508,7 @@ impl TryFrom<&CelKey> for String {
 }
 
 impl TryFrom<CelResult<'_>> for serde_json::Value {
-    type Error = ResultCoercionError;
+    type Error = JsonCoercionRejection;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         use serde_json::*;
@@ -553,12 +546,36 @@ impl TryFrom<CelResult<'_>> for serde_json::Value {
             }
             CelValue::Decimal(d) => Value::from(d.to_string()),
             CelValue::Bytes(_) => {
-                return Err(ResultCoercionError::BadExternalTypeCoercion(
-                    expr.to_string(),
-                    CelType::Bytes,
-                    "serde_json::Value",
-                ));
+                return Err(JsonCoercionRejection::UnsupportedBytes {
+                    expression: expr.to_string(),
+                });
             }
         })
     }
+}
+
+/// A CEL result target with a concrete, flat evaluation error contract.
+pub trait CelTarget<'a>: TryFrom<CelResult<'a>> {
+    type EvaluationRejection: From<CelEvaluationRejection> + From<Self::Error>;
+}
+impl CelTarget<'_> for bool {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for NaiveDate {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for DateTime<Utc> {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for Uuid {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for String {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for Decimal {
+    type EvaluationRejection = ScalarEvaluationRejection;
+}
+impl CelTarget<'_> for serde_json::Value {
+    type EvaluationRejection = JsonEvaluationRejection;
 }

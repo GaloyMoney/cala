@@ -13,7 +13,7 @@ use crate::{
     primitives::{AccountId, DebitOrCredit, Layer},
 };
 
-use super::error::VelocityRejection;
+use super::error::EvaluateVelocityLimitsRejection;
 
 use repo::*;
 pub(crate) use value::*;
@@ -41,7 +41,7 @@ impl AccountControls {
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<EvaluateVelocityLimitsRejection, lanes!(Transient, Fatal)>> {
         let velocity_limits = Self::evaluate_velocity_limits(&self.clock, limits, params.into())?;
 
         let control = AccountVelocityControl {
@@ -84,7 +84,7 @@ impl AccountControls {
         account_ids: &[AccountId],
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<EvaluateVelocityLimitsRejection, lanes!(Transient, Fatal)>> {
         if account_ids.is_empty() {
             return Ok(());
         }
@@ -111,7 +111,7 @@ impl AccountControls {
         clock: &ClockHandle,
         limits: Vec<VelocityLimitValues>,
         params: Params,
-    ) -> Result<Vec<AccountVelocityLimit>, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<AccountVelocityLimit>, EvaluateVelocityLimitsRejection> {
         let mut velocity_limits = Vec::new();
         for velocity in limits {
             let defs = velocity.params;

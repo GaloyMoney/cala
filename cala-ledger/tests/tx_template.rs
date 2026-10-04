@@ -1,6 +1,6 @@
 mod helpers;
 
-use cala_ledger::{tx_template::error::TxTemplateRejection, *};
+use cala_ledger::{tx_template::error::CreateTxTemplateRejection, *};
 
 #[tokio::test]
 async fn duplicate_code() -> anyhow::Result<()> {
@@ -20,7 +20,7 @@ async fn duplicate_code() -> anyhow::Result<()> {
     assert!(matches!(
         res,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            TxTemplateRejection::DuplicateCode(_)
+            CreateTxTemplateRejection::DuplicateCode(_)
         ))
     ));
 

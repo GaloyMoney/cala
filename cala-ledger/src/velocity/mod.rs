@@ -46,7 +46,7 @@ impl Velocities {
     pub async fn create_limit(
         &self,
         new_limit: NewVelocityLimit,
-    ) -> Result<VelocityLimit, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityLimit, Fail<CreateVelocityLimitRejection, lanes!(Transient, Fatal)>> {
         let mut db = self.limits.begin_op_with_clock(&self.clock).await?;
         let limit = self.create_limit_in_op(&mut db, new_limit).await?;
         db.commit().await?;
@@ -58,7 +58,7 @@ impl Velocities {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
-    ) -> Result<VelocityLimit, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityLimit, Fail<CreateVelocityLimitRejection, lanes!(Transient, Fatal)>> {
         let res = self.limits.create_in_op(db, new_limit).await.widen()?;
         Ok(res)
     }
@@ -67,7 +67,8 @@ impl Velocities {
     pub async fn create_control(
         &self,
         new_control: NewVelocityControl,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<CreateVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let mut db = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self.create_control_in_op(&mut db, new_control).await?;
         db.commit().await?;
@@ -79,7 +80,8 @@ impl Velocities {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_control: NewVelocityControl,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<CreateVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let res = self.controls.create_in_op(db, new_control).await.widen()?;
         Ok(res)
     }
@@ -89,7 +91,7 @@ impl Velocities {
         &self,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>> {
         let mut db = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .add_limit_to_control_in_op(&mut db, control, limit)
@@ -104,13 +106,11 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>> {
         self.limits.add_limit_to_control(db, control, limit).await?;
-        Ok(self
-            .controls
-            .maybe_find_by_id_in_op(db, control)
-            .await?
-            .ok_or(VelocityRejection::CouldNotFindControlById(control))?)
+        // The relation's FK proves the control exists after a successful insert.
+        // A missing required row here is an invariant, not requested-ID absence.
+        Ok(self.controls.find_by_id_in_op(db, control).await?)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "velocity.attach_control_to_account", skip(self), fields(control_id = %control, account_id = %account_id))]
@@ -119,7 +119,8 @@ impl Velocities {
         control: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let mut op = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(&mut op, control, account_id, params)
@@ -134,7 +135,8 @@ impl Velocities {
         control: VelocityControlId,
         account_set_id: AccountSetId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let mut op = self.controls.begin_op_with_clock(&self.clock).await?;
         let control = self
             .attach_control_to_account_or_account_set_in_op(
@@ -155,7 +157,8 @@ impl Velocities {
         control_id: VelocityControlId,
         account_id: AccountId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         self.attach_control_to_accounts_in_op(
             db,
             control_id,
@@ -184,12 +187,13 @@ impl Velocities {
         control_id: VelocityControlId,
         account_ids: &[AccountId],
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let control = self
             .controls
             .maybe_find_by_id_in_op(&mut *db, control_id)
             .await?
-            .ok_or(VelocityRejection::CouldNotFindControlById(control_id))?;
+            .ok_or(AttachVelocityControlRejection::ControlNotFound(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)
@@ -200,7 +204,8 @@ impl Velocities {
 
         self.account_controls
             .attach_control_to_accounts_in_op(db, control.values(), account_ids, limits, params)
-            .await?;
+            .await
+            .widen()?;
         Ok(control)
     }
 
@@ -211,7 +216,8 @@ impl Velocities {
         control_id: VelocityControlId,
         account_set_id: AccountSetId,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         self.attach_control_to_account_or_account_set_in_op(db, control_id, account_set_id, params)
             .await
     }
@@ -223,7 +229,8 @@ impl Velocities {
         control_id: VelocityControlId,
         account_id: impl Into<AccountId>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<VelocityControl, Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<VelocityControl, Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>>
+    {
         let account_id = account_id.into();
         tracing::Span::current().record("account_id", account_id.to_string());
 
@@ -231,7 +238,7 @@ impl Velocities {
             .controls
             .maybe_find_by_id_in_op(&mut *db, control_id)
             .await?
-            .ok_or(VelocityRejection::CouldNotFindControlById(control_id))?;
+            .ok_or(AttachVelocityControlRejection::ControlNotFound(control_id))?;
         let limits = self
             .limits
             .list_for_control(&mut *db, control_id)
@@ -242,7 +249,8 @@ impl Velocities {
 
         self.account_controls
             .attach_control_in_op(db, control.values(), account_id, limits, params)
-            .await?;
+            .await
+            .widen()?;
         Ok(control)
     }
 
@@ -269,7 +277,7 @@ impl Velocities {
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &crate::posting::AncestorMappings,
-    ) -> Result<(), Fail<VelocityRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<EnforceVelocityBatchRejection, lanes!(Transient, Fatal)>> {
         self.balances
             .enforce_batch_in_op(db, created_at, postings, controls, account_set_mappings)
             .await
