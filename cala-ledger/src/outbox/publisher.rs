@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use cala_types::outbox::OutboxEventPayload;
 use es_entity::clock::ClockHandle;
 
@@ -9,7 +10,7 @@ pub struct OutboxPublisher {
 }
 
 impl OutboxPublisher {
-    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, sqlx::Error> {
+    pub async fn init(pool: &sqlx::PgPool, clock: &ClockHandle) -> Result<Self, CalaFault> {
         let config = obix::MailboxConfig::builder()
             .clock(clock.clone())
             .event_buffer_size(50_000)

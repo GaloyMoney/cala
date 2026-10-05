@@ -1,10 +1,9 @@
+use crate::error::CalaFault;
 mod entity;
-pub mod error;
 mod repo;
 
 use sqlx::PgPool;
 use std::collections::HashMap;
-use tracing::instrument;
 
 use crate::{
     outbox::*,
@@ -12,7 +11,6 @@ use crate::{
 };
 
 pub use entity::*;
-use error::*;
 pub use repo::entry_cursor::EntryByCreatedAtCursor;
 use repo::*;
 
@@ -28,24 +26,32 @@ impl Entries {
         }
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.entries.find_all", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.entries.find_all",
+        skip_all
+    )]
     pub async fn find_all(
         &self,
         entry_ids: &[EntryId],
-    ) -> Result<HashMap<EntryId, Entry>, EntryError> {
-        Ok(self.repo.find_all(entry_ids).await?)
+    ) -> Result<HashMap<EntryId, Entry>, CalaFault> {
+        self.repo.find_all(entry_ids).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.entries.find_all_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.entries.find_all_in_op",
+        skip_all
+    )]
     pub(crate) async fn find_all_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         entry_ids: &[EntryId],
-    ) -> Result<HashMap<EntryId, Entry>, EntryError> {
-        Ok(self.repo.find_all_in_op(op, entry_ids).await?)
+    ) -> Result<HashMap<EntryId, Entry>, CalaFault> {
+        self.repo.find_all_in_op(op, entry_ids).await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_account_id",
         skip_all
@@ -55,14 +61,13 @@ impl Entries {
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
-        Ok(self
-            .repo
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
+        self.repo
             .list_for_account_id_by_created_at(account_id, query, direction)
-            .await?)
+            .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_account_set_id",
         skip_all
@@ -72,13 +77,13 @@ impl Entries {
         account_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_account_set_id_by_created_at(account_id, query, direction)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_journal_id",
         skip_all
@@ -88,11 +93,10 @@ impl Entries {
         journal_id: JournalId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
-        Ok(self
-            .repo
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
+        self.repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
-            .await?)
+            .await
     }
 
     /// List a journal's entries with optional inclusive filters on the entry
@@ -100,7 +104,7 @@ impl Entries {
     /// on `(created_at, id)`. Unlike [`Self::list_for_journal_id`] this supports
     /// date ranges and the cross-entity effective-date filter, which the generated
     /// `list_for_*` methods cannot express.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_journal_id_filtered",
         skip_all
@@ -111,13 +115,13 @@ impl Entries {
         filter: EntriesFilter,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, EntryError> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_journal_id_filtered_by_created_at(journal_id, filter, query, direction)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_transaction_id",
         skip_all
@@ -125,7 +129,7 @@ impl Entries {
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
-    ) -> Result<Vec<Entry>, EntryError> {
+    ) -> Result<Vec<Entry>, CalaFault> {
         let page = self
             .repo
             .list_for_transaction_id_by_created_at(

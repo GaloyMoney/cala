@@ -105,7 +105,7 @@ cargo fuzz run -s none cel_compile -- \
    `invalid_format_on_timestamp_is_error_not_panic`).
 4. **Panic coercing bytes to JSON** (fixed). `TryFrom<CelResult> for
    serde_json::Value` ended in `unimplemented!()` for `CelValue::Bytes`
-   (e.g. `{'a': b'x'}`). Now a `ResultCoercionError` (regression test:
+   (e.g. `{'a': b'x'}`). Now a typed `UnsupportedBytes` rejection (regression test:
    `bytes_to_json_is_error_not_panic`).
 5. **`BalanceSnapshot` arithmetic overflow panic** (found, not fixed here —
    scope of [#804](https://github.com/GaloyMoney/cala/pull/804)).

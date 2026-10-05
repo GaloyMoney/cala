@@ -1,75 +1,79 @@
-use thiserror::Error;
+pub(crate) use super::repo::AccountConstraintViolation;
+use crate::primitives::*;
+use es_entity::errlanes;
 
-use super::repo::{
-    AccountColumn, AccountCreateError, AccountFindError, AccountModifyError, AccountQueryError,
-};
-use crate::primitives::{AccountId, AccountSetId};
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
+#[error("CodeAlreadyExists: {0:?}")]
+#[lift(es_entity::ConstraintConflict<String>, field = attempted)]
+pub struct AccountCodeAlreadyExists(pub Option<String>);
 
-#[derive(Error, Debug)]
-pub enum AccountError {
-    #[error("AccountError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("AccountError - Create: {0}")]
-    Create(AccountCreateError),
-    #[error("AccountError - Modify: {0}")]
-    Modify(#[from] AccountModifyError),
-    #[error("AccountError - Find: {0}")]
-    Find(AccountFindError),
-    #[error("AccountError - Query: {0}")]
-    Query(#[from] AccountQueryError),
-    #[error("AccountError - NotFound: id '{0}' not found")]
-    CouldNotFindById(AccountId),
-    #[error("AccountError - NotFound: external id '{0}' not found")]
-    CouldNotFindByExternalId(String),
-    #[error("AccountError - NotFound: code '{0}' not found")]
-    CouldNotFindByCode(String),
-    #[error("AccountError - external_id '{0}' already exists")]
-    ExternalIdAlreadyExists(String),
-    #[error("AccountError - code '{0}' already exists")]
-    CodeAlreadyExists(String),
-    #[error("AccountError - cannot update accounts backing an AccountSet")]
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
+#[error("ExternalIdAlreadyExists: {0:?}")]
+#[lift(es_entity::ConstraintConflict<Option<String>>, field = attempted)]
+pub struct AccountExternalIdAlreadyExists(pub Option<Option<String>>);
+
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountConstraintViolation, unhandled = fatal)]
+pub enum PersistAccountRejection {
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(AccountConstraintViolation::CodeKey, into)]
+    CodeAlreadyExists(AccountCodeAlreadyExists),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(AccountConstraintViolation::ExternalIdKey, into)]
+    ExternalIdAlreadyExists(AccountExternalIdAlreadyExists),
+    #[rejection(code = "CALA_ACCOUNT_CANNOT_UPDATE_ACCOUNT_SET_ACCOUNTS")]
+    #[error("Cannot update accounts backing an account set")]
     CannotUpdateAccountSetAccounts,
-    #[error("AccountError - initial account set '{0}' not found")]
-    InitialAccountSetNotFound(AccountSetId),
 }
 
-impl From<AccountFindError> for AccountError {
-    fn from(error: AccountFindError) -> Self {
-        match error {
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::Id),
-                value,
-                ..
-            } => Self::CouldNotFindById(value.parse().expect("invalid uuid")),
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::ExternalId),
-                value,
-                ..
-            } => Self::CouldNotFindByExternalId(value),
-            AccountFindError::NotFound {
-                column: Some(AccountColumn::Code),
-                value,
-                ..
-            } => Self::CouldNotFindByCode(value),
-            other => Self::Find(other),
-        }
-    }
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_ID")]
+#[error("Account not found: {0}")]
+pub struct AccountNotFound(pub AccountId);
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_CODE")]
+#[error("Account code not found: {0}")]
+pub struct AccountCodeNotFound(pub String);
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_EXTERNAL_ID")]
+#[error("Account external id not found: {0}")]
+pub struct AccountExternalIdNotFound(pub String);
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_INITIAL_ACCOUNT_SET_NOT_FOUND")]
+#[error("Initial account set not found: {0}")]
+pub struct InitialAccountSetNotFound(pub AccountSetId);
+
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountConstraintViolation, unhandled = fatal)]
+pub enum CreateAccountRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    InitialAccountSetNotFound(InitialAccountSetNotFound),
+    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
+    #[error("DuplicateId: {0:?}")]
+    #[lift(AccountConstraintViolation::Pkey, field = attempted)]
+    DuplicateId(AccountId),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(AccountConstraintViolation::CodeKey, into)]
+    CodeAlreadyExists(AccountCodeAlreadyExists),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(AccountConstraintViolation::ExternalIdKey, into)]
+    ExternalIdAlreadyExists(AccountExternalIdAlreadyExists),
 }
 
-impl From<AccountCreateError> for AccountError {
-    fn from(error: AccountCreateError) -> Self {
-        match error {
-            AccountCreateError::ConstraintViolation {
-                column: Some(AccountColumn::ExternalId),
-                value,
-                ..
-            } => Self::ExternalIdAlreadyExists(value.unwrap_or_default()),
-            AccountCreateError::ConstraintViolation {
-                column: Some(AccountColumn::Code),
-                value,
-                ..
-            } => Self::CodeAlreadyExists(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
+#[errlanes::compose(PersistAccountRejection)]
+#[derive(Debug)]
+pub enum SetAccountStatusRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    AccountNotFound(AccountNotFound),
 }

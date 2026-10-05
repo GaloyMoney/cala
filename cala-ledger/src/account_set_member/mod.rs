@@ -24,12 +24,11 @@
 //!   per-member EXCLUSIVE alone (the invariant argument lives on
 //!   `NewAccount::initial_account_set`'s field docs).
 //!
-//! Crate-internal leaf w.r.t. the entity modules: this module imports only
-//! `cala_types`, `es_entity`, `sqlx`, and the outbox — never
-//! `crate::account` or `crate::account_set` — keeping the module graph a
-//! DAG. It is not itself an `EsRepo`/entity: the edge is a plain relation
-//! plus an outbox event, not event-sourced.
-mod error;
+//! This module uses the account's `InitialAccountSetNotFound` diagnostic but
+//! does not call the account or account-set services. It is not itself an
+//! `EsRepo`/entity: the edge is a plain relation plus an outbox event, not
+//! event-sourced.
+use es_entity::errlanes::{lanes, Fail};
 mod repo;
 
 use sqlx::PgPool;
@@ -39,7 +38,7 @@ use crate::{
     primitives::{AccountId, AccountSetId},
 };
 
-pub(crate) use error::AccountSetMemberError;
+use crate::account::error::InitialAccountSetNotFound;
 pub use repo::members_cursor;
 use repo::AccountSetMemberRepo;
 
@@ -75,7 +74,7 @@ impl AccountSetMembers {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: &[(AccountSetId, AccountId)],
-    ) -> Result<(), AccountSetMemberError> {
+    ) -> Result<(), Fail<InitialAccountSetNotFound, lanes!(Transient, Fatal)>> {
         self.repo.attach_new_accounts_in_op(db, pairs).await
     }
 

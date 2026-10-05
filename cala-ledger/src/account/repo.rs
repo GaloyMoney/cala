@@ -1,13 +1,13 @@
+use crate::error::CalaFault;
 use es_entity::*;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, DebitOrCredit, Status},
 };
 
-use super::{entity::*, error::AccountError};
+use super::entity::*;
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
@@ -56,17 +56,16 @@ impl AccountRepo {
         }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account.update_velocity_context_values_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub async fn update_velocity_context_values_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         latest_values: VelocityContextAccountValues,
-    ) -> Result<(), AccountError> {
+    ) -> Result<(), CalaFault> {
         let account_id = latest_values.id;
 
         sqlx::query!(
@@ -86,7 +85,7 @@ impl AccountRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Account,
         new_events: es_entity::LastPersisted<'_, AccountEvent>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), CalaFault> {
         if entity.is_account_set() {
             return Ok(());
         }

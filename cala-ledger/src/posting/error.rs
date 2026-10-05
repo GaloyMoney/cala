@@ -1,119 +1,226 @@
-use sqlx::error::DatabaseError;
-use thiserror::Error;
+use crate::param::ParamDefaultRejection;
+use cala_types::{param::*, primitives::*};
+use cel_interpreter::*;
+use es_entity::errlanes;
+use rust_decimal::Decimal;
 
-use crate::{
-    account_set::error::AccountSetError,
-    balance::error::BalanceError,
-    primitives::{AccountId, JournalId, TransactionId},
-    tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
-};
-
-/// The posting module's error — nested under
-/// [`crate::ledger::error::LedgerError`], never the other way around, exactly
-/// like every other domain error.
-///
-/// Domain errors the flow passes through keep their own granularity via
-/// `#[from]`; failures specific to the posting path get their own variants
-/// here. [`Self::Rejected`] additionally attributes a failure to one posting
-/// of the submitted batch.
-#[derive(Error, Debug)]
-pub enum PostingError {
-    #[error("PostingError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("PostingError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
-    #[error("PostingError - TxTemplateError: {0}")]
-    TxTemplateError(#[from] TxTemplateError),
-    #[error("PostingError - VelocityError: {0}")]
-    VelocityError(#[from] VelocityError),
-    #[error("PostingError - AccountSetError: {0}")]
-    AccountSetError(#[from] AccountSetError),
-    #[error("PostingError - BalanceError: {0}")]
-    BalanceError(#[from] BalanceError),
-    /// A failure attributed to a specific posting within a batch.
-    ///
-    /// The batch API is all-or-nothing: the whole operation aborts on the
-    /// first failure. `index` and `tx_id` identify which posting of the
-    /// submitted batch caused it, so a caller can eject the offender and
-    /// retry the remainder without correlating an opaque error against its
-    /// input. Every reason is detected **client-side, before the apply
-    /// statement runs**, which is what keeps the failure attributable:
-    /// nothing has been written when it surfaces. Infrastructure failures
-    /// (constraint races, deadlocks, connection loss) are not attributable
-    /// and surface through the other variants.
-    #[error("PostingError - Rejected: posting {index} ({tx_id}): {reason}")]
-    Rejected {
-        index: usize,
-        tx_id: TransactionId,
-        reason: Box<RejectionReason>,
-    },
-    /// The batch would hold more advisory locks than the shared lock table can
-    /// be relied on to provide. Refused up front, because the alternative is a
-    /// bare `out of shared memory` from Postgres that names neither the cause
-    /// nor the fix — and that can strike unrelated concurrent transactions too.
-    #[error(
-        "PostingError - BatchTooManyAccounts: this batch touches {distinct} distinct \
-         (journal, account, currency) balances; at most {max} may be locked in one batch. \
-         Split it — batch *size* is not the limit, the number of distinct accounts is."
-    )]
-    BatchTooManyAccounts { distinct: usize, max: usize },
+/// The input responsible for a preparation or direct validation rejection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PostingRef {
+    pub index: usize,
+    pub tx_id: TransactionId,
 }
 
-impl PostingError {
-    pub(super) fn rejected(
-        index: usize,
-        tx_id: TransactionId,
-        reason: impl Into<RejectionReason>,
-    ) -> Self {
-        // Keep the attribution observable on the flow's span even when the
-        // caller only logs the error.
+impl PostingRef {
+    // Called after instrumented preparation returns, so attribution is recorded
+    // on the posting span rather than on a nested CEL/template span.
+    pub(super) fn record_failure<T>(
+        self,
+        result: Result<T, PreparePostingRejection>,
+    ) -> Result<T, PreparePostingRejection> {
+        result.inspect_err(|_| {
+            self.record();
+        })
+    }
+
+    pub(super) fn record(self) -> Self {
         let span = tracing::Span::current();
-        span.record("failed_posting_index", index);
-        span.record("failed_posting_id", tracing::field::display(tx_id));
-        Self::Rejected {
-            index,
-            tx_id,
-            reason: Box::new(reason.into()),
-        }
+        span.record("failed_posting_index", self.index);
+        span.record("failed_posting_id", tracing::field::display(self.tx_id));
+        self
     }
 }
 
-impl From<sqlx::Error> for PostingError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
-            }
-            e => Self::Sqlx(e),
-        }
-    }
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "BATCH_TOO_MANY_ACCOUNTS")]
+#[error(
+    "Posting touches {} distinct balances; at most {} may be locked",
+    distinct,
+    max
+)]
+pub struct TooManyPostingBalances {
+    pub distinct: usize,
+    pub max: usize,
 }
 
-/// The business-level reason a posting was rejected.
-#[derive(Error, Debug)]
-pub enum RejectionReason {
+/// Rejections for posting one transaction, grouped by the phase that owns them.
+#[derive(Debug, errlanes::Rejection)]
+pub enum PostingRejection {
     #[error("{0}")]
-    TxTemplate(#[from] TxTemplateError),
-    #[error("account {0} does not exist")]
-    AccountNotFound(AccountId),
-    #[error(
-        "an entry may not be posted directly to an account-set backing account \
-         ({0}); an account set's balance is derived from its members"
-    )]
-    EntryTargetsAccountSet(AccountId),
-    #[error("account {0} is locked")]
-    AccountLocked(AccountId),
-    #[error("journal {0} is locked")]
-    JournalLocked(JournalId),
-    #[error("journal {0} does not exist")]
-    JournalNotFound(JournalId),
-    #[error("duplicate transaction id {0} within the submitted batch")]
-    DuplicateTransactionIdInBatch(TransactionId),
-    #[error("duplicate external id `{0}` within the submitted batch")]
-    DuplicateExternalIdInBatch(String),
+    #[rejection(delegate, from)]
+    Prepare(PreparePostingRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Validate(ValidatePostingRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Apply(ApplyPostingRejection),
 }
 
+/// Resolving and evaluating templates, then checking the preparation budget.
+#[derive(Debug, errlanes::Rejection)]
+pub enum PreparePostingRejection {
+    #[rejection(code = "CALA_POSTING_UNBALANCED_TRANSACTION")]
+    #[error(
+        "Unbalanced transaction: currency {}, layer {:?}, amount {}",
+        currency,
+        layer,
+        amount
+    )]
+    UnbalancedTransaction {
+        posting: PostingRef,
+        currency: Currency,
+        layer: Layer,
+        amount: Decimal,
+    },
+    /// Evaluating a transaction or entry field, including result conversion.
+    #[rejection(code = "CALA_POSTING_EXPRESSION_FAILED")]
+    #[error("{}", source)]
+    Cel {
+        posting: PostingRef,
+        #[source]
+        source: Box<CelConversionRejection>,
+    },
+    /// Evaluating and coercing the default for an omitted parameter.
+    #[rejection(code = "CALA_POSTING_PARAMETER_DEFAULT_FAILED")]
+    #[error("{}", source)]
+    Default {
+        posting: PostingRef,
+        parameter: String,
+        #[source]
+        source: Box<ParamDefaultRejection>,
+    },
+    /// Coercing a supplied parameter to its declared type.
+    #[rejection(code = "CALA_POSTING_PARAMETER_INVALID")]
+    #[error("{}", source)]
+    Param {
+        posting: PostingRef,
+        parameter: String,
+        #[source]
+        source: Box<ParamValueRejection>,
+    },
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    TemplateNotFound(crate::tx_template::error::TxTemplateNotFound),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    TooManyBalances(TooManyPostingBalances),
+}
+
+/// Validating prepared postings against the accounts and journals read under lock.
+#[derive(Debug, errlanes::Rejection)]
+pub enum ValidatePostingRejection {
+    #[rejection(code = "CALA_POSTING_ACCOUNT_NOT_FOUND")]
+    #[error("AccountNotFound: {}", account_id)]
+    AccountNotFound {
+        posting: PostingRef,
+        account_id: AccountId,
+    },
+    #[rejection(code = "CALA_POSTING_ENTRY_TARGETS_ACCOUNT_SET")]
+    #[error("EntryTargetsAccountSet: {}", account_id)]
+    EntryTargetsAccountSet {
+        posting: PostingRef,
+        account_id: AccountId,
+    },
+    #[rejection(code = "CALA_POSTING_ACCOUNT_LOCKED")]
+    #[error("AccountLocked: {}", account_id)]
+    AccountLocked {
+        posting: PostingRef,
+        account_id: AccountId,
+    },
+    #[rejection(code = "CALA_POSTING_JOURNAL_NOT_FOUND")]
+    #[error("JournalNotFound: {}", journal_id)]
+    JournalNotFound {
+        posting: PostingRef,
+        journal_id: JournalId,
+    },
+    #[rejection(code = "CALA_POSTING_JOURNAL_LOCKED")]
+    #[error("JournalLocked: {}", journal_id)]
+    JournalLocked {
+        posting: PostingRef,
+        journal_id: JournalId,
+    },
+}
+
+/// Applying prepared postings, including ancestor locks and velocity enforcement.
+#[derive(Debug, errlanes::Rejection)]
+pub enum ApplyPostingRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Velocity(crate::velocity::error::EnforceVelocityRejection),
+    #[rejection(code = "CALA_POSTING_DUPLICATETRANSACTIONID")]
+    #[error("Transaction id already posted")]
+    DuplicateTransactionId,
+    #[rejection(code = "CALA_POSTING_DUPLICATEEXTERNALID")]
+    #[error("Transaction external id already posted")]
+    DuplicateExternalId,
+    #[rejection(code = "CALA_POSTING_ENTRYTARGETSACCOUNTSET")]
+    #[error("Entry targets an account-set backing account")]
+    EntryTargetsAccountSet,
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    AncestorAccountLocked(crate::balance::error::BalanceAccountLocked),
+}
+
+/// Batch preparation reuses single-posting preparation and adds cross-input checks.
+#[errlanes::compose(PreparePostingRejection)]
+#[derive(Debug)]
+pub enum BatchPreparePostingRejection {
+    #[rejection(code = "CALA_POSTING_DUPLICATE_TRANSACTION_ID_IN_BATCH")]
+    #[error("Duplicate transaction id within the batch: {}", tx_id)]
+    DuplicateTransactionIdInBatch {
+        posting: PostingRef,
+        tx_id: TransactionId,
+    },
+    #[rejection(code = "CALA_POSTING_DUPLICATE_EXTERNAL_ID_IN_BATCH")]
+    #[error("Duplicate external id within the batch: {}", external_id)]
+    DuplicateExternalIdInBatch {
+        posting: PostingRef,
+        external_id: String,
+    },
+}
+
+/// Batch posting has the same phases; only preparation adds batch-specific outcomes.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(PostingRejection)]
+pub enum BatchPostingRejection {
+    #[lift(PostingRejection::Prepare, into)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Prepare(BatchPreparePostingRejection),
+    #[lift(PostingRejection::Validate)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Validate(ValidatePostingRejection),
+    #[lift(PostingRejection::Apply)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Apply(ApplyPostingRejection),
+}
+
+// The shared template/locking helpers return the preparation contract. Batch
+// posting adds no semantics to those errors beyond including that contract.
+impl From<PreparePostingRejection> for BatchPostingRejection {
+    fn from(error: PreparePostingRejection) -> Self {
+        Self::Prepare(error.into())
+    }
+}
+
+impl PreparePostingRejection {
+    pub(crate) fn unbalanced(
+        currency: Currency,
+        layer: Layer,
+        amount: Decimal,
+        posting: PostingRef,
+    ) -> Self {
+        Self::UnbalancedTransaction {
+            posting,
+            currency,
+            layer,
+            amount,
+        }
+    }
+}
 /// The number of distinct `(journal, account, currency)` triples one batch may
 /// lock.
 ///
@@ -131,3 +238,291 @@ pub enum RejectionReason {
 /// with every other backend; a batch that fits alone can still fail beside
 /// concurrent traffic.
 pub(super) const MAX_DISTINCT_BALANCES_PER_BATCH: usize = 1_000;
+
+/// Classifies this write's known constraints; every other SQL failure keeps its native lane.
+#[derive(Debug, errlanes::Classify)]
+pub(crate) enum PostWrite {
+    #[classify(delegate)]
+    Domain(ApplyPostingRejection),
+    #[classify(delegate)]
+    Sqlx(sqlx::Error),
+}
+impl From<sqlx::Error> for PostWrite {
+    fn from(error: sqlx::Error) -> Self {
+        match error.as_database_error().and_then(|e| e.constraint()) {
+            Some("cala_transactions_pkey") => {
+                Self::Domain(ApplyPostingRejection::DuplicateTransactionId)
+            }
+            Some("cala_transactions_external_id_key") => {
+                Self::Domain(ApplyPostingRejection::DuplicateExternalId)
+            }
+            Some("cala_entries_account_not_account_set_fkey") => {
+                Self::Domain(ApplyPostingRejection::EntryTargetsAccountSet)
+            }
+            _ => Self::Sqlx(error),
+        }
+    }
+}
+
+#[cfg(test)]
+mod contract_tests {
+    use super::*;
+    use es_entity::errlanes::{lanes, Fail, Level, Rejection, ResultExt};
+    use std::error::Error;
+
+    fn preparation_context(error: PreparePostingRejection) -> Option<PostingRef> {
+        match error {
+            PreparePostingRejection::UnbalancedTransaction { posting, .. }
+            | PreparePostingRejection::Cel { posting, .. }
+            | PreparePostingRejection::Default { posting, .. }
+            | PreparePostingRejection::Param { posting, .. } => Some(posting),
+            PreparePostingRejection::TemplateNotFound(_)
+            | PreparePostingRejection::TooManyBalances(_) => None,
+        }
+    }
+
+    fn validation_context(error: ValidatePostingRejection) -> PostingRef {
+        match error {
+            ValidatePostingRejection::AccountNotFound { posting, .. }
+            | ValidatePostingRejection::EntryTargetsAccountSet { posting, .. }
+            | ValidatePostingRejection::AccountLocked { posting, .. }
+            | ValidatePostingRejection::JournalNotFound { posting, .. }
+            | ValidatePostingRejection::JournalLocked { posting, .. } => posting,
+        }
+    }
+
+    fn single_context(error: PostingRejection) -> Option<PostingRef> {
+        match error {
+            PostingRejection::Prepare(error) => preparation_context(error),
+            PostingRejection::Validate(error) => Some(validation_context(error)),
+            PostingRejection::Apply(_) => None,
+        }
+    }
+
+    fn batch_context(error: BatchPostingRejection) -> Option<PostingRef> {
+        match error {
+            BatchPostingRejection::Prepare(error) => match error {
+                BatchPreparePostingRejection::DuplicateTransactionIdInBatch { posting, .. }
+                | BatchPreparePostingRejection::DuplicateExternalIdInBatch { posting, .. }
+                | BatchPreparePostingRejection::UnbalancedTransaction { posting, .. }
+                | BatchPreparePostingRejection::Cel { posting, .. }
+                | BatchPreparePostingRejection::Default { posting, .. }
+                | BatchPreparePostingRejection::Param { posting, .. } => Some(posting),
+                BatchPreparePostingRejection::TemplateNotFound(_)
+                | BatchPreparePostingRejection::TooManyBalances(_) => None,
+            },
+            BatchPostingRejection::Validate(error) => Some(validation_context(error)),
+            BatchPostingRejection::Apply(_) => None,
+        }
+    }
+
+    #[test]
+    fn single_and_batch_phases_preserve_attribution_and_codes() {
+        let posting = PostingRef {
+            index: 3,
+            tx_id: TransactionId::new(),
+        };
+        let attributed = || {
+            PostingRejection::from(PreparePostingRejection::unbalanced(
+                Currency::USD,
+                Layer::Settled,
+                Decimal::ONE,
+                posting,
+            ))
+        };
+        let single = attributed();
+        assert_eq!(
+            <&str>::from(single.code()),
+            "CALA_POSTING_UNBALANCED_TRANSACTION"
+        );
+        assert_eq!(single.level(), Level::Info);
+        assert!(matches!(&single, PostingRejection::Prepare(
+            PreparePostingRejection::UnbalancedTransaction { currency: Currency::Iso(_), layer: Layer::Settled, amount, .. }
+        ) if *amount == Decimal::ONE));
+        assert_eq!(single_context(single), Some(posting));
+        let batch = BatchPostingRejection::from(attributed());
+        assert_eq!(
+            <&str>::from(batch.code()),
+            "CALA_POSTING_UNBALANCED_TRANSACTION"
+        );
+        assert_eq!(batch_context(batch), Some(posting));
+
+        let validation = || {
+            PostingRejection::from(ValidatePostingRejection::AccountLocked {
+                posting,
+                account_id: AccountId::new(),
+            })
+        };
+        assert_eq!(single_context(validation()), Some(posting));
+        assert_eq!(batch_context(validation().into()), Some(posting));
+
+        let duplicate = BatchPreparePostingRejection::DuplicateExternalIdInBatch {
+            posting,
+            external_id: "duplicate".into(),
+        };
+        let batch = BatchPostingRejection::from(duplicate);
+        assert_eq!(
+            <&str>::from(batch.code()),
+            "CALA_POSTING_DUPLICATE_EXTERNAL_ID_IN_BATCH"
+        );
+        assert_eq!(batch_context(batch), Some(posting));
+        let shared = PostingRejection::from(ApplyPostingRejection::DuplicateTransactionId);
+        assert_eq!(single_context(shared), None);
+        let missing = BatchPostingRejection::from(PreparePostingRejection::from(
+            crate::tx_template::error::TxTemplateNotFound("absent".into()),
+        ));
+        assert!(matches!(
+            &missing,
+            BatchPostingRejection::Prepare(BatchPreparePostingRejection::TemplateNotFound(_))
+        ));
+        assert_eq!(batch_context(missing), None);
+    }
+
+    #[test]
+    fn external_parse_failure_keeps_source_and_attribution_through_posting() {
+        let posting = PostingRef {
+            index: 2,
+            tx_id: TransactionId::new(),
+        };
+        let attributed = || {
+            let expression: CelExpression = "'INVALID'".parse().unwrap();
+            let error = expression
+                .try_evaluate::<Currency>(&CelContext::new())
+                .unwrap_err();
+            PostingRejection::from(PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(error),
+            })
+        };
+        let single = attributed();
+        let batch = BatchPostingRejection::from(attributed());
+        assert!(single.source().unwrap().is::<PreparePostingRejection>());
+        assert!(batch.source().unwrap().is::<BatchPreparePostingRejection>());
+        for error in [&single as &dyn Error, &batch as &dyn Error] {
+            let source = error.source().unwrap().source().unwrap();
+            assert!(source.is::<Box<CelConversionRejection>>());
+            let detail = source
+                .source()
+                .unwrap()
+                .downcast_ref::<ExternalParseError>()
+                .unwrap();
+            assert_eq!(detail.type_name, "currency");
+            assert!(matches!(
+                detail.source().unwrap().downcast_ref::<ParseCurrencyError>(),
+                Some(ParseCurrencyError::UnknownCurrency(value)) if value == "INVALID"
+            ));
+        }
+        assert_eq!(
+            <&str>::from(single.code()),
+            "CALA_POSTING_EXPRESSION_FAILED"
+        );
+        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_EXPRESSION_FAILED");
+        assert_eq!(single_context(single), Some(posting));
+        assert_eq!(batch_context(batch), Some(posting));
+    }
+
+    #[test]
+    fn velocity_cel_failure_widens_through_apply_without_changing_diagnostics() {
+        use crate::velocity::error::EnforceVelocityRejection;
+        let expression: CelExpression = "missing_variable".parse().unwrap();
+        let source = expression.evaluate(&CelContext::new()).unwrap_err();
+        let result: Result<(), EnforceVelocityRejection> = Err(source.into());
+        let apply = result.widen::<Fail<ApplyPostingRejection, lanes!(Transient, Fatal)>>();
+        let posting = apply.widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>();
+        let batch = posting
+            .widen::<Fail<BatchPostingRejection, lanes!(Transient, Fatal)>>()
+            .unwrap_err()
+            .rejected()
+            .unwrap();
+        assert_eq!(<&str>::from(batch.code()), "CEL_UNKNOWN_IDENTIFIER");
+        assert_eq!(batch.level(), Level::Info);
+        assert!(matches!(&batch, BatchPostingRejection::Apply(
+            ApplyPostingRejection::Velocity(EnforceVelocityRejection::Cel(
+                CelConversionRejection::UnknownIdent { expression, .. }
+            ))
+        ) if expression == "missing_variable"));
+        let velocity = batch.source().unwrap().source().unwrap();
+        assert!(velocity.is::<EnforceVelocityRejection>());
+        let cel = velocity.source().unwrap();
+        assert!(cel.is::<CelConversionRejection>());
+        assert!(cel.source().unwrap().is::<CelExecutionError>());
+        assert_eq!(batch_context(batch), None);
+    }
+}
+
+#[cfg(test)]
+mod attribution_telemetry_tests {
+    use super::*;
+    use std::sync::{Arc, Mutex};
+    use tracing::{
+        field::{Field, Visit},
+        span::{Id, Record},
+        Subscriber,
+    };
+    use tracing_subscriber::{layer::Context, prelude::*, Layer as SubscriberLayer};
+
+    #[derive(Clone)]
+    struct Capture(Arc<Mutex<Vec<(String, String)>>>);
+    struct Visitor<'a>(&'a mut Vec<(String, String)>);
+    impl Visit for Visitor<'_> {
+        fn record_debug(&mut self, field: &Field, value: &dyn std::fmt::Debug) {
+            self.0.push((field.name().into(), format!("{value:?}")));
+        }
+    }
+    impl<S: Subscriber> SubscriberLayer<S> for Capture {
+        fn on_record(&self, _: &Id, values: &Record<'_>, _: Context<'_, S>) {
+            values.record(&mut Visitor(&mut self.0.lock().unwrap()));
+        }
+    }
+
+    #[test]
+    fn preparation_records_attribution_after_leaving_nested_spans() {
+        let records = Arc::new(Mutex::new(Vec::new()));
+        let subscriber = tracing_subscriber::registry().with(Capture(records.clone()));
+        tracing::subscriber::with_default(subscriber, || {
+            let span = tracing::info_span!(
+                "posting_contract",
+                failed_posting_index = tracing::field::Empty,
+                failed_posting_id = tracing::field::Empty
+            );
+            let _guard = span.enter();
+            let posting = PostingRef {
+                index: 7,
+                tx_id: TransactionId::new(),
+            };
+            let preparation: Result<(), PreparePostingRejection> = {
+                let child = tracing::info_span!("template_preparation");
+                let _child = child.enter();
+                Err(PreparePostingRejection::unbalanced(
+                    Currency::USD,
+                    Layer::Settled,
+                    Decimal::ONE,
+                    posting,
+                ))
+            };
+            assert!(records.lock().unwrap().is_empty());
+            let error = posting.record_failure(preparation).unwrap_err();
+            let _: BatchPostingRejection = error.into();
+            let captured = std::mem::take(&mut *records.lock().unwrap());
+            assert_eq!(
+                captured,
+                vec![
+                    ("failed_posting_index".into(), "7".into()),
+                    ("failed_posting_id".into(), posting.tx_id.to_string())
+                ]
+            );
+            let validation = ValidatePostingRejection::AccountLocked {
+                account_id: AccountId::new(),
+                posting: posting.record(),
+            };
+            let _: PostingRejection = validation.into();
+            let captured = records.lock().unwrap();
+            assert_eq!(captured.len(), 2);
+            assert_eq!(captured[0], ("failed_posting_index".into(), "7".into()));
+            assert_eq!(
+                captured[1],
+                ("failed_posting_id".into(), posting.tx_id.to_string())
+            );
+        });
+    }
+}

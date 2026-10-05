@@ -1,10 +1,11 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail};
 pub mod error;
 
 mod entity;
 mod repo;
 
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::HashMap;
 
@@ -28,7 +29,7 @@ impl Transactions {
         }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.transactions.find_by_external_id",
         skip(self)
@@ -36,11 +37,15 @@ impl Transactions {
     pub async fn find_by_external_id(
         &self,
         external_id: String,
-    ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_external_id(Some(external_id)).await?)
+    ) -> Result<Transaction, Fail<TransactionExternalIdNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_external_id(Some(external_id.clone()))
+            .await?
+            .ok_or(TransactionExternalIdNotFound(external_id))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.transactions.find_by_id",
         skip(self)
@@ -48,11 +53,15 @@ impl Transactions {
     pub async fn find_by_id(
         &self,
         transaction_id: TransactionId,
-    ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id(transaction_id).await?)
+    ) -> Result<Transaction, Fail<TransactionNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_id(transaction_id)
+            .await?
+            .ok_or(TransactionNotFound(transaction_id))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.transactions.find_by_id_in_op",
         skip(self, op)
@@ -61,11 +70,15 @@ impl Transactions {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_id: TransactionId,
-    ) -> Result<Transaction, TransactionError> {
-        Ok(self.repo.find_by_id_in_op(op, transaction_id).await?)
+    ) -> Result<Transaction, Fail<TransactionNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_id_in_op(op, transaction_id)
+            .await?
+            .ok_or(TransactionNotFound(transaction_id))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.transactions.list_for_template_id",
         skip(self)
@@ -75,31 +88,28 @@ impl Transactions {
         template_id: TxTemplateId,
         query: es_entity::PaginatedQueryArgs<TransactionByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>,
-        TransactionError,
-    > {
-        Ok(self
-            .repo
+    ) -> Result<es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>, CalaFault>
+    {
+        self.repo
             .list_for_tx_template_id_by_created_at(template_id, query, direction)
-            .await?)
+            .await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.transactions.find_all", skip(self, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        Ok(self.repo.find_all(transaction_ids).await?)
+    ) -> Result<HashMap<TransactionId, T>, CalaFault> {
+        self.repo.find_all(transaction_ids).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.transactions.find_all_in_op", skip(self, op, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.transactions.find_all_in_op", skip(self, op, transaction_ids), fields(transaction_ids_count = transaction_ids.len()))]
     pub async fn find_all_in_op<T: From<Transaction>>(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, TransactionError> {
-        Ok(self.repo.find_all_in_op(op, transaction_ids).await?)
+    ) -> Result<HashMap<TransactionId, T>, CalaFault> {
+        self.repo.find_all_in_op(op, transaction_ids).await
     }
 }
 

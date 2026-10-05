@@ -6,7 +6,7 @@
 //! a plain parse error within a bounded time, with cost scaling linearly
 //! (not exponentially) in input size.
 
-use cala_cel_interpreter::CelExpression;
+use cala_cel_interpreter::{CelExpression, CelParseRejection};
 
 /// Repeating the ambiguous `!!(` motif — errors quickly at any size.
 #[test]
@@ -14,7 +14,7 @@ fn repeated_negation_parens_motif_errors_quickly() {
     let source = "!!(".repeat(42); // 126 bytes
     let started = std::time::Instant::now();
     let err = CelExpression::try_from(source).expect_err("must be a parse error");
-    assert!(err.to_string().contains("CelParseError"));
+    assert!(matches!(err, CelParseRejection::ParseError(_)));
     // Generous bound (debug builds, loaded CI); release is ~1ms.
     assert!(
         started.elapsed() < std::time::Duration::from_secs(60),

@@ -1,10 +1,11 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail};
 mod data;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
-use tracing::instrument;
 
 use cala_types::{balance::EffectiveBalanceSnapshot, entry::EntryValues, primitives::*};
 
@@ -15,7 +16,7 @@ use super::{
     cursor::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    error::BalanceError,
+    error::BalanceNotFound,
     EcRollupTxn,
 };
 
@@ -34,7 +35,7 @@ impl EffectiveBalances {
         }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.find_cumulative",
         skip(self)
@@ -45,13 +46,13 @@ impl EffectiveBalances {
         account_id: impl Into<AccountId> + std::fmt::Debug,
         currency: Currency,
         date: NaiveDate,
-    ) -> Result<AccountBalance, BalanceError> {
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         self.repo
             .find(journal_id, account_id.into(), currency, date)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.find_in_range",
         skip(self)
@@ -63,27 +64,27 @@ impl EffectiveBalances {
         currency: Currency,
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRange, BalanceError> {
+    ) -> Result<BalanceRange, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
         match self
             .repo
             .find_range(journal_id, account_id, currency, from, until)
             .await?
         {
             (start, Some(end), version_diff) => Ok(BalanceRange::new(start, end, version_diff)),
-            _ => Err(BalanceError::NotFound(journal_id, account_id, currency)),
+            _ => Err(BalanceNotFound(journal_id, account_id, currency).into()),
         }
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_cumulative(
         &self,
         ids: &[BalanceId],
         date: NaiveDate,
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         self.repo.find_all(ids, date).await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.list_cumulative_for_account",
         skip(self)
@@ -96,14 +97,14 @@ impl EffectiveBalances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        CalaFault,
     > {
         self.repo
             .list_for_account(journal_id, account_id.into(), date, args)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.list_cumulative_for_accounts",
         skip(self, account_ids),
@@ -115,20 +116,19 @@ impl EffectiveBalances {
         account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         self.repo
             .list_for_accounts(journal_id, account_ids, date, args)
             .await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range(
         &self,
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<HashMap<BalanceId, BalanceRange>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, BalanceRange>, CalaFault> {
         let ranges = self.repo.find_range_all(ids, from, until).await?;
         Ok(ranges
             .into_iter()
@@ -139,7 +139,7 @@ impl EffectiveBalances {
             .collect())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.list_in_range_for_account",
         skip(self)
@@ -151,16 +151,14 @@ impl EffectiveBalances {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
-        BalanceError,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>, CalaFault>
+    {
         self.repo
             .list_range_for_account(journal_id, account_id.into(), from, until, args)
             .await
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.list_in_range_for_accounts",
         skip(self, account_ids),
@@ -173,8 +171,7 @@ impl EffectiveBalances {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, CalaFault> {
         self.repo
             .list_range_for_accounts(journal_id, account_ids, from, until, args)
             .await
@@ -221,7 +218,7 @@ impl EffectiveBalances {
     /// 4. Requires `enable_effective_balance = true` on the journal —
     ///    otherwise no snapshot rows exist and this returns empty pages,
     ///    not an error.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.list_modified_since",
         skip(self)
@@ -233,7 +230,7 @@ impl EffectiveBalances {
         args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
-        BalanceError,
+        CalaFault,
     > {
         self.repo.list_modified_since(journal_id, since, args).await
     }
@@ -248,7 +245,7 @@ impl EffectiveBalances {
         created_at: DateTime<Utc>,
         mappings: HashMap<AccountId, Vec<AccountSetId>>,
         balance_ids: (Vec<AccountId>, Vec<&str>),
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), CalaFault> {
         let mut all_data = self
             .repo
             .find_for_update(&mut *op, journal_id, balance_ids, effective)
@@ -298,12 +295,11 @@ impl EffectiveBalances {
     /// `SnapshotOrEntry`'s ordering (pre-existing rows before the batch's
     /// own entries, then landing order) makes the fold equivalent to
     /// applying the batch's transactions one at a time.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.apply_ec_rollup_batch_in_op",
         skip_all,
-        fields(txns_count = txns.len()),
-        err(level = "warn")
+        fields(txns_count = txns.len())
     )]
     pub(crate) async fn apply_ec_rollup_batch_in_op(
         &self,
@@ -312,7 +308,7 @@ impl EffectiveBalances {
         txns: &[EcRollupTxn<'_>],
         ec_mappings: &HashMap<AccountId, Vec<AccountSetId>>,
         ec_leaves: &HashSet<AccountId>,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), CalaFault> {
         let targets = |account_id: &AccountId| {
             ec_mappings
                 .get(account_id)

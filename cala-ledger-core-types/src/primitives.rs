@@ -1,7 +1,9 @@
 use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 
-use cel_interpreter::{CelResult, CelType, CelValue, ResultCoercionError};
+use cel_interpreter::{
+    CelConversionRejection, CelResult, CelType, CelValue, ExternalParseError, ExternalTypeCoercion,
+};
 
 es_entity::entity_id! { AccountId }
 impl From<AccountId> for cel_interpreter::CelValue {
@@ -77,13 +79,13 @@ pub enum DebitOrCredit {
 }
 
 impl TryFrom<CelResult<'_>> for DebitOrCredit {
-    type Error = ResultCoercionError;
+    type Error = ExternalTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "DEBIT" => Ok(DebitOrCredit::Debit),
             CelValue::String(v) if v.as_ref() == "CREDIT" => Ok(DebitOrCredit::Credit),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+            v => Err(ExternalTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&v),
                 "DebitOrCredit",
@@ -131,21 +133,22 @@ pub enum Layer {
     Encumbrance,
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseLayerError {
+    #[rejection(code = "CALA_UNKNOWN_LAYER")]
     #[error("CalaCoreTypeError - UnknownLayer: {0:?}")]
     UnknownLayer(String),
 }
 
 impl TryFrom<CelResult<'_>> for Layer {
-    type Error = ResultCoercionError;
+    type Error = ExternalTypeCoercion;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) if v.as_ref() == "SETTLED" => Ok(Layer::Settled),
             CelValue::String(v) if v.as_ref() == "PENDING" => Ok(Layer::Pending),
             CelValue::String(v) if v.as_ref() == "ENCUMBRANCE" => Ok(Layer::Encumbrance),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
+            v => Err(ExternalTypeCoercion(
                 format!("{expr:?}"),
                 CelType::from(&v),
                 "Layer",
@@ -221,8 +224,9 @@ impl PartialOrd for Currency {
     }
 }
 
-#[derive(thiserror::Error, Debug)]
+#[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseCurrencyError {
+    #[rejection(code = "CALA_UNKNOWN_CURRENCY")]
     #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
     UnknownCurrency(String),
 }
@@ -256,34 +260,99 @@ impl From<Currency> for &'static str {
 }
 
 impl TryFrom<CelResult<'_>> for Currency {
-    type Error = ResultCoercionError;
+    type Error = CelConversionRejection;
 
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
-            CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|e| {
-                ResultCoercionError::ExternalTypeCoercionError(
-                    format!("{expr:?}"),
-                    format!("{v:?}"),
-                    "Currency",
-                    format!("{e:?}"),
-                )
+            CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|source| {
+                ExternalParseError {
+                    expression: format!("{expr:?}"),
+                    type_name: "currency",
+                    source: Box::new(source),
+                }
+                .into()
             }),
-            v => Err(ResultCoercionError::BadExternalTypeCoercion(
-                format!("{expr:?}"),
-                CelType::from(&v),
-                "Currency",
-            )),
+            v => {
+                Err(ExternalTypeCoercion(format!("{expr:?}"), CelType::from(&v), "Currency").into())
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::primitives::Currency;
+    use super::{Currency, DebitOrCredit, Layer, ParseCurrencyError};
+    use cel_interpreter::{
+        CelContext, CelConversionRejection, CelExecutionError, CelExpression, ExternalParseError,
+    };
+    use es_entity::errlanes::{Level, Rejection};
+    use std::error::Error;
 
     #[test]
     fn currency_constants() {
         assert_eq!(Currency::USD, "USD".parse().unwrap());
         assert_eq!(Currency::BTC, "BTC".parse().unwrap());
+    }
+
+    #[test]
+    fn every_target_returns_the_same_evaluation_failure() {
+        let context = CelContext::new();
+        let expression: CelExpression = "missing_variable".parse().unwrap();
+        let results: [Result<(), CelConversionRejection>; 5] = [
+            expression.try_evaluate::<bool>(&context).map(|_| ()),
+            expression.try_evaluate::<Layer>(&context).map(|_| ()),
+            expression
+                .try_evaluate::<DebitOrCredit>(&context)
+                .map(|_| ()),
+            expression.try_evaluate::<Currency>(&context).map(|_| ()),
+            expression
+                .try_evaluate::<serde_json::Value>(&context)
+                .map(|_| ()),
+        ];
+        for result in results {
+            let error = result.unwrap_err();
+            assert_eq!(<&str>::from(error.code()), "CEL_UNKNOWN_IDENTIFIER");
+            assert_eq!(error.level(), Level::Info);
+            assert!(error.source().unwrap().is::<CelExecutionError>());
+            assert!(matches!(
+                error,
+                CelConversionRejection::UnknownIdent { expression, .. }
+                    if expression == "missing_variable"
+            ));
+        }
+    }
+
+    #[test]
+    fn external_targets_share_conversion_contract_and_preserve_sources() {
+        let context = CelContext::new();
+        let expression: CelExpression = "'INVALID'".parse().unwrap();
+        let currency: Result<Currency, CelConversionRejection> = expression.try_evaluate(&context);
+        let error = currency.unwrap_err();
+        assert_eq!(<&str>::from(error.code()), "CEL_EXTERNAL_PARSE_ERROR");
+        assert_eq!(error.level(), Level::Info);
+        assert!(error
+            .source()
+            .unwrap()
+            .source()
+            .unwrap()
+            .is::<ParseCurrencyError>());
+        assert!(matches!(
+            &error,
+            CelConversionRejection::ExternalParse(ExternalParseError {
+                type_name: "currency",
+                ..
+            })
+        ));
+        let direct = Currency::try_from(cel_interpreter::CelResult {
+            expr: "'INVALID'",
+            val: cel_interpreter::CelValue::from("INVALID"),
+        })
+        .unwrap_err();
+        assert_eq!(error.to_string(), direct.to_string());
+        let layer: Result<Layer, CelConversionRejection> = expression.try_evaluate(&context);
+        assert!(matches!(
+            layer,
+            Err(CelConversionRejection::ExternalTypeCoercion(_))
+        ));
     }
 }

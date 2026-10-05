@@ -9,8 +9,10 @@ use rust_decimal::Decimal;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetId, NewAccountSet},
-    error::LedgerError,
-    posting::{PostingError, PostingInput, RejectionReason},
+    posting::{
+        BatchPostingRejection, BatchPreparePostingRejection, PostingInput, PreparePostingRejection,
+        ValidatePostingRejection,
+    },
     tx_template::*,
     velocity::*,
     *,
@@ -263,8 +265,10 @@ async fn a_rejected_posting_rolls_back_the_whole_batch() -> anyhow::Result<()> {
         .await;
 
     match result {
-        Err(LedgerError::PostingError(PostingError::Rejected { index, .. })) => {
-            assert_eq!(index, 1, "the second posting is the offender");
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Validate(
+            ValidatePostingRejection::AccountNotFound { posting, .. },
+        ))) => {
+            assert_eq!(posting.index, 1, "the second posting is the offender");
         }
         Err(other) => panic!("expected an attributed posting rejection, got {other:?}"),
         Ok(_) => panic!("expected the batch to be rejected"),
@@ -309,8 +313,7 @@ async fn a_locked_account_rejects_its_batch() -> anyhow::Result<()> {
     assert!(
         matches!(
             &result,
-            Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
-                if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender.id())
+            Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Validate(ValidatePostingRejection::AccountLocked { account_id: id, .. }))) if *id == sender.id()
         ),
         "expected AccountLocked, got {:?}",
         result.err()
@@ -342,8 +345,12 @@ async fn duplicate_transaction_ids_within_a_batch_are_rejected() -> anyhow::Resu
 
     let result = cala.post_transactions(vec![first, second]).await;
     match result {
-        Err(LedgerError::PostingError(PostingError::Rejected { index, .. })) => {
-            assert_eq!(index, 1)
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Prepare(
+            BatchPreparePostingRejection::DuplicateTransactionIdInBatch { posting, tx_id },
+        ))) => {
+            assert_eq!(posting.index, 1);
+            assert_eq!(posting.tx_id, shared);
+            assert_eq!(tx_id, shared)
         }
         Err(other) => panic!("expected a duplicate-id rejection, got {other:?}"),
         Ok(_) => panic!("expected the batch to be rejected"),
@@ -410,7 +417,13 @@ async fn concurrent_overlapping_batches_do_not_deadlock() -> anyhow::Result<()> 
                     .collect();
                 cala.post_transactions(batch).await?;
             }
-            Ok::<(), LedgerError>(())
+            Ok::<
+                (),
+                cala_ledger::errlanes::Fail<
+                    BatchPostingRejection,
+                    cala_ledger::errlanes::lanes!(Transient, Fatal),
+                >,
+            >(())
         }));
     }
     for handle in handles {
@@ -641,8 +654,10 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
         .collect();
 
     match cala.post_transactions(batch).await {
-        Err(LedgerError::PostingError(PostingError::BatchTooManyAccounts { distinct, max })) => {
-            assert!(distinct > max, "{distinct} should exceed {max}");
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Prepare(
+            BatchPreparePostingRejection::TooManyBalances(budget),
+        ))) => {
+            assert!(budget.distinct > budget.max);
         }
         Err(other) => panic!("expected BatchTooManyAccounts, got {other:?}"),
         Ok(_) => panic!("expected the batch to be refused"),
@@ -811,7 +826,7 @@ async fn a_multi_journal_batch_does_not_cross_ancestor_sets_between_journals() -
     let sender = cala.accounts().create(a).await?;
     let recipient = cala.accounts().create(b).await?;
 
-    let mut set_in = |journal_id, name: &str| {
+    let set_in = |journal_id, name: &str| {
         let s = NewAccountSet::builder()
             .id(AccountSetId::new())
             .name(name.to_string())
@@ -874,6 +889,82 @@ async fn a_multi_journal_batch_does_not_cross_ancestor_sets_between_journals() -
             "{label} must have no balance row, got {:?}",
             stray.ok().map(|b| b.details.settled.dr_balance)
         );
+    }
+    Ok(())
+}
+
+#[tokio::test]
+async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() -> anyhow::Result<()>
+{
+    use cala_ledger::{errlanes::Rejection, posting::PostingRejection};
+    let cala = init().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let (sender, recipient) = helpers::test_accounts();
+    let sender = cala.accounts().create(sender).await?;
+    let recipient = cala.accounts().create(recipient).await?;
+    for batch in [false, true] {
+        let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+        cala.tx_templates()
+            .create(helpers::currency_conversion_template(&code))
+            .await?;
+        cala.post_transactions(vec![transfer(
+            &code,
+            journal.id(),
+            sender.id(),
+            recipient.id(),
+        )])
+        .await?;
+        let template = cala.tx_templates().find_by_code(&code).await?;
+        sqlx::query("INSERT INTO cala_tx_template_events (id, sequence, event_type, event) SELECT id, 2, event_type, jsonb_set(event, '{values,transaction,description}', to_jsonb($2::text)) FROM cala_tx_template_events WHERE id = $1 AND sequence = 1")
+            .bind(template.id()).bind("missing_after_refresh").execute(cala.pool()).await?;
+        let input = transfer(&code, journal.id(), sender.id(), recipient.id());
+        let tx_id = input.tx_id;
+        if batch {
+            let error = cala
+                .post_transactions(vec![input])
+                .await
+                .err()
+                .expect("posting should fail")
+                .rejected()
+                .unwrap();
+            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_EXPRESSION_FAILED");
+            match error {
+                BatchPostingRejection::Prepare(BatchPreparePostingRejection::Cel {
+                    posting,
+                    source,
+                    ..
+                }) => {
+                    assert_eq!(posting.index, 0);
+                    assert_eq!(posting.tx_id, tx_id);
+                    assert!(
+                        matches!(*source, cel_interpreter::CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_after_refresh")
+                    );
+                }
+                other => panic!("unexpected refresh outcome: {other:?}"),
+            }
+        } else {
+            let error = cala
+                .post_transaction(input.tx_id, &input.tx_template_code, input.params)
+                .await
+                .err()
+                .expect("posting should fail")
+                .rejected()
+                .unwrap();
+            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_EXPRESSION_FAILED");
+            match error {
+                PostingRejection::Prepare(PreparePostingRejection::Cel {
+                    posting, source, ..
+                }) => {
+                    assert_eq!(posting.index, 0);
+                    assert_eq!(posting.tx_id, tx_id);
+                    assert!(
+                        matches!(*source, cel_interpreter::CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_after_refresh")
+                    );
+                }
+                other => panic!("unexpected refresh outcome: {other:?}"),
+            }
+        }
+        assert!(cala.transactions().find_by_id(tx_id).await.is_err());
     }
     Ok(())
 }

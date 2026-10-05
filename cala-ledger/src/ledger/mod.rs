@@ -1,9 +1,10 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 pub mod config;
 pub mod error;
 
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
-pub use tracing::instrument;
 use tracing::Instrument;
 
 pub use config::*;
@@ -52,8 +53,8 @@ impl CalaLedger {
     /// caller-owned `jobs` here; the caller drives its lifecycle (call
     /// `start_poll` to run it, and shut it down). The rollup only runs once
     /// `jobs` is polled.
-    #[instrument(name = "cala_ledger.init", skip_all)]
-    pub async fn init(config: CalaLedgerConfig, jobs: &mut job::Jobs) -> Result<Self, LedgerError> {
+    #[es_entity::errlanes::instrument(name = "cala_ledger.init", skip_all)]
+    pub async fn init(config: CalaLedgerConfig, jobs: &mut job::Jobs) -> Result<Self, CalaFault> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
             (None, Some(pg_con)) => {
@@ -64,16 +65,19 @@ impl CalaLedger {
                 pool_opts.connect(&pg_con).await?
             }
             _ => {
-                return Err(LedgerError::ConfigError(
-                    "One of pg_con or pool must be set".to_string(),
-                ))
+                return Err(
+                    es_entity::errlanes::Fatal::new(es_entity::errlanes::FatalKind::Config)
+                        .with_context("One of pg_con or pool must be set")
+                        .into(),
+                )
             }
         };
         if config.exec_migrations {
             sqlx::migrate!()
                 .run(&pool)
                 .instrument(tracing::info_span!("cala_ledger.migrations"))
-                .await?;
+                .await
+                .classify::<crate::error::Migrate>()?;
         }
 
         let clock = config.clock;
@@ -135,7 +139,7 @@ impl CalaLedger {
         &self.clock
     }
 
-    pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, LedgerError> {
+    pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, CalaFault> {
         let db_op = es_entity::DbOp::init_with_clock(&self.pool, &self.clock)
             .await?
             .with_clock_time();
@@ -174,7 +178,7 @@ impl CalaLedger {
         &self.transactions
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         name = "cala_ledger.post_transaction",
         skip(self, params),
         fields(tx_template_code)
@@ -184,7 +188,7 @@ impl CalaLedger {
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<Transaction, LedgerError> {
+    ) -> Result<Transaction, Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)>> {
         let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
         let transaction = self
             .post_transaction_in_op(&mut db, tx_id, tx_template_code, params)
@@ -197,7 +201,7 @@ impl CalaLedger {
     ///
     /// The N=1 case of [`Self::post_transactions_in_op`] — same flow, same
     /// statements, arrays of length one.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         name = "cala_ledger.post_transaction_in_op",
         skip(self, db)
         fields(transaction_id, external_id)
@@ -208,16 +212,14 @@ impl CalaLedger {
         tx_id: TransactionId,
         tx_template_code: &str,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<Transaction, LedgerError> {
+    ) -> Result<Transaction, Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)>> {
         let transaction = self
             .postings
-            .post_all_in_op(
+            .post_in_op(
                 db,
-                vec![PostingInput::new(tx_id, tx_template_code, params.into())],
+                PostingInput::new(tx_id, tx_template_code, params.into()),
             )
-            .await?
-            .pop()
-            .expect("one posting in, one transaction out");
+            .await?;
 
         let span = tracing::Span::current();
         span.record("transaction_id", transaction.id().to_string());
@@ -243,7 +245,7 @@ impl CalaLedger {
     /// Concurrent batches are deadlock-free by construction: a batch takes one
     /// canonically sorted union lock batch over every posting's entry pairs,
     /// then one sorted ancestor batch — see [`crate::posting`].
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         name = "cala_ledger.post_transactions",
         skip_all,
         fields(batch_size = batch.len())
@@ -251,7 +253,10 @@ impl CalaLedger {
     pub async fn post_transactions(
         &self,
         batch: Vec<PostingInput>,
-    ) -> Result<Vec<Transaction>, LedgerError> {
+    ) -> Result<
+        Vec<Transaction>,
+        Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>,
+    > {
         let mut db = es_entity::DbOp::init_with_clock(&self.pool, &self.clock).await?;
         let transactions = self.post_transactions_in_op(&mut db, batch).await?;
         db.commit().await?;
@@ -264,7 +269,7 @@ impl CalaLedger {
     /// acquisition across batch boundaries with no global ordering, which is
     /// exactly what a single batch avoids; prefer one call with all the
     /// postings.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         name = "cala_ledger.post_transactions_in_op",
         skip_all,
         fields(batch_size = batch.len())
@@ -273,8 +278,11 @@ impl CalaLedger {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         batch: Vec<PostingInput>,
-    ) -> Result<Vec<Transaction>, LedgerError> {
-        Ok(self.postings.post_all_in_op(db, batch).await?)
+    ) -> Result<
+        Vec<Transaction>,
+        Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>,
+    > {
+        self.postings.post_all_in_op(db, batch).await
     }
 
     /// Snapshot the rollup's position, pinning the outbox frontier as a
@@ -282,14 +290,14 @@ impl CalaLedger {
     /// as a stream-lag SLO metric, or block on the fence with
     /// [`await_completion`](crate::EcRollupStatus::await_completion). Works
     /// from any node (both sides are read from the database).
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.ec_rollup_status",
         skip_all,
         fields(applied, frontier, lag)
     )]
-    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, LedgerError> {
-        let snapshot = self.ec_rollup.load().await?;
+    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, CalaFault> {
+        let snapshot = self.ec_rollup.load().await.narrow_rejected()?;
         let status = crate::EcRollupStatus::new(
             snapshot.checkpoint(),
             snapshot.frontier(),
@@ -319,14 +327,14 @@ impl CalaLedger {
     /// sequence survived.
     ///
     /// `timeout` is mandatory: a wedged rollup surfaces as
-    /// [`LedgerError::EcCaughtUpTimeout`], never a silent hang.
-    #[instrument(level = "debug", name = "cala_ledger.await_frontier", skip(self), fields(timeout = ?timeout))]
+    /// [`EcCaughtUpTimeout`], never a silent hang.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.await_frontier", skip(self), fields(timeout = ?timeout))]
     pub async fn await_frontier(
         &self,
         frontier: obix::EventSequence,
         timeout: std::time::Duration,
-    ) -> Result<(), LedgerError> {
-        self.ec_rollup.await_position(frontier, timeout).await?;
+    ) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
+        await_rollup(&self.ec_rollup, frontier, timeout).await?;
         Ok(())
     }
 
@@ -340,4 +348,17 @@ impl CalaLedger {
     ) -> obix::out::PersistentOutboxListener<crate::outbox::OutboxEventPayload> {
         self.publisher.inner().listen_persisted(start_after)
     }
+}
+
+/// Only the deadline is caller-correctable for Cala's registered singleton.
+pub(crate) async fn await_rollup(
+    handle: &obix::out::Subscription<
+        crate::outbox::OutboxEventPayload,
+        obix::out::InsertOrder,
+        crate::outbox::CalaMailboxTables,
+    >,
+    frontier: obix::EventSequence,
+    timeout: std::time::Duration,
+) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
+    handle.await_position(frontier, timeout).await.widen()
 }

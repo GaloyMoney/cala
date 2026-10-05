@@ -34,7 +34,7 @@ use rust_decimal_macros::dec;
 
 use cala_ledger::{
     account::*,
-    account_set::{error::AccountSetError, NewAccountSet},
+    account_set::{error::*, NewAccountSet},
     primitives::BalanceRollup,
     tx_template::Params,
     *,
@@ -158,7 +158,9 @@ async fn attach_blocks_on_in_flight_first_ec_posting_then_rejects() -> anyhow::R
     // entries -> the attach is correctly rejected.
     op.commit().await?;
     match blocked.await? {
-        Err(AccountSetError::MemberHasBalanceHistory { .. }) => {}
+        Err(cala_ledger::errlanes::Fail::Rejected(
+            AddMemberRejection::MemberHasBalanceHistory(MemberHasBalanceHistory { .. }),
+        )) => {}
         Err(other) => panic!("expected MemberHasBalanceHistory, got {other:?}"),
         Ok(_) => panic!("attach must be rejected once the first posting has committed"),
     }

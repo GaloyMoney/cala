@@ -1,8 +1,9 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 use es_entity::*;
 use sqlx::PgPool;
-use tracing::instrument;
 
-use crate::{primitives::VelocityLimitId, velocity::error::VelocityError};
+use crate::{primitives::VelocityLimitId, velocity::error::LimitAlreadyAddedToControl};
 
 use super::entity::*;
 
@@ -22,7 +23,7 @@ impl VelocityLimitRepo {
         Self { pool: pool.clone() }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "velocity_limit.add_limit_to_control",
         skip_all
@@ -32,7 +33,7 @@ impl VelocityLimitRepo {
         op: &mut impl es_entity::AtomicOperation,
         control: VelocityControlId,
         limit: VelocityLimitId,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>> {
         sqlx::query!(
             r#"INSERT INTO cala_velocity_control_limits (velocity_control_id, velocity_limit_id)
             VALUES ($1, $2)"#,
@@ -40,21 +41,21 @@ impl VelocityLimitRepo {
             limit as VelocityLimitId,
         )
         .execute(op.as_executor())
-        .await?;
+        .await
+        .classify::<crate::velocity::error::AttachLimit>()?;
         Ok(())
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "velocity_limit.list_for_control",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub async fn list_for_control(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
-    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+    ) -> Result<Vec<VelocityLimit>, CalaFault> {
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query_as!(

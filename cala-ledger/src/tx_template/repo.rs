@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::*;
 use sqlx::PgPool;
 
@@ -35,7 +36,7 @@ impl TxTemplateRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &TxTemplate,
         new_events: es_entity::LastPersisted<'_, TxTemplateEvent>,
-    ) -> Result<(), sqlx::Error> {
+    ) -> Result<(), CalaFault> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;

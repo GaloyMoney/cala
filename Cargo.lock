@@ -307,7 +307,6 @@ dependencies = [
  "schemars 1.2.2",
  "serde",
  "serde_json",
- "thiserror",
  "tracing",
  "uuid",
 ]
@@ -334,7 +333,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
- "thiserror",
  "tokio",
  "tokio-stream",
  "tokio-test",
@@ -358,7 +356,6 @@ dependencies = [
  "serde_json",
  "sqlx",
  "strum",
- "thiserror",
  "uuid",
 ]
 
@@ -510,15 +507,6 @@ name = "clap_lex"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3a822ea5bc7590f9d40f1ba12c0dc3c2760f3482c6984db1573ad11031420831"
-
-[[package]]
-name = "concurrent-queue"
-version = "2.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ca0197aee26d1ae37445ee532fefce43251d24cc7c166799f4d46817f1d3973"
-dependencies = [
- "crossbeam-utils",
-]
 
 [[package]]
 name = "const-oid"
@@ -866,14 +854,41 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
-name = "es-entity"
-version = "0.14.1"
+name = "errlanes"
+version = "0.16.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d763a47378d464e4d2b01d6c922a58171dfce77ff1bd88d178ebbb860c0dbc17"
+checksum = "30d29ebb5a4f8f78d89aa428074c09a413c73e5c2f4cfee0bc637d2d07681e36"
+dependencies = [
+ "errlanes-derive",
+ "serde_json",
+ "sqlx",
+ "tracing",
+]
+
+[[package]]
+name = "errlanes-derive"
+version = "0.16.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bebd1cea9b492dcb5cfed81a1cdebb06bc0f67d78938c6a4bec06746dfccd9e"
+dependencies = [
+ "convert_case",
+ "darling 0.24.0",
+ "proc-macro-crate",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.3",
+]
+
+[[package]]
+name = "es-entity"
+version = "0.16.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aa898754512bbe4a0c166086333b3c7ae21de1a3863e716a267147062703929"
 dependencies = [
  "async-stream",
  "chrono",
  "derive_builder",
+ "errlanes",
  "es-entity-macros",
  "futures-core",
  "futures-util",
@@ -886,7 +901,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
- "thiserror",
  "tokio",
  "tracing",
  "tracing-opentelemetry",
@@ -895,9 +909,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.14.1"
+version = "0.16.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd0cc572bebd395f88464e76ffcacb750fd8d48866f6455a0f85b33add2f4859"
+checksum = "554821e1f5a586b9655efe79fb41e455a98f9e20f0333162f195ce8796347bf0"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -922,11 +936,10 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "5.4.1"
+version = "5.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13b66accf52311f30a0db42147dadea9850cb48cd070028831ae5f5d4b856ab"
+checksum = "5a23add41df1562121a9393cb065eab5146a1242410f23a644851e90cfd669d2"
 dependencies = [
- "concurrent-queue",
  "parking",
  "pin-project-lite",
 ]
@@ -1417,9 +1430,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.16.1"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c9d963b2769f32598a991afdc49c02e87da88cea4e9753ac6a954232c81002a"
+checksum = "39196cc12710e3707c00e133cc09f4854a76dde472f682a4f026e00f2366d8a5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1432,7 +1445,6 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sqlx",
- "thiserror",
  "tokio",
  "tracing",
  "uuid",
@@ -1623,9 +1635,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d84094d6184a52b61c1dfada49942f5c9951565df2c39c7107ebdc95a74d7df8"
+checksum = "631fc21eefe13f0c52c8c5abf528cb2d336136ced38b1e3f0cd369cdeb7ac1be"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1638,7 +1650,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
- "thiserror",
  "tokio",
  "tokio-stream",
  "tracing",
@@ -1646,9 +1657,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.13.1"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3e8d16379a89b1c943d1e5fe450f294e7b176f69cbefac45ddfd0e73333e1b"
+checksum = "b20b642bd225cb27266e0dcdc1915c37072f7434b00d0385c081b0468dc44686"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -1670,9 +1681,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "opentelemetry"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0142c63252a9e054e68a4c61a5778f7b14f576274d593f8ce883d191a099682"
+checksum = "6cdb0b1b267eb9db3331b434ed9ddab10d50e280a9adf9d13e5233e2002b61b5"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -1684,9 +1695,9 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry_sdk"
-version = "0.32.1"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b59f80e1ac4d5ff7a2db8fb6c80badb7f0f3f858211fba08dd9aaec750894f9"
+checksum = "cb39533d9d1c912123efd7d41d7e0c29d16917b60ce15b4c8d87cb1af7f67520"
 dependencies = [
  "futures-channel",
  "futures-executor",
@@ -1694,7 +1705,7 @@ dependencies = [
  "opentelemetry",
  "percent-encoding",
  "portable-atomic",
- "rand 0.9.2",
+ "rand 0.9.3",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -1937,9 +1948,9 @@ dependencies = [
 
 [[package]]
 name = "rand"
-version = "0.9.2"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6db2770f06117d490610c7488547d543617b21bfa07796d7a12f6f1bd53850d1"
+checksum = "7ec095654a25171c2124e9e3393a930bddbffdc939556c914957a4c3e0a87166"
 dependencies = [
  "rand_chacha 0.9.0",
  "rand_core 0.9.5",
@@ -2141,7 +2152,7 @@ dependencies = [
  "bytes",
  "num-traits",
  "rand 0.8.8",
- "rand 0.9.2",
+ "rand 0.9.3",
  "serde",
  "serde_json",
  "wasm-bindgen",
@@ -2159,9 +2170,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.36"
+version = "0.23.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c665f33d38cea657d9614f766881e4d510e0eda4239891eea56b4cadcf01801b"
+checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
 dependencies = [
  "once_cell",
  "ring",
@@ -2182,9 +2193,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "f3c3cf1d8b1e7d4927e2d154c3fcb02979afb9939629c62cd9048d4f07b60ac2"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -2987,9 +2998,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-opentelemetry"
-version = "0.33.0"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adbc64cba7137545b8044cb1fe9814f7aacf3c6b5f9b45be8bb5db538befdb26"
+checksum = "0a904802a1b902f43638b677ff2a650847e3b4404101b6c586d648e8c1e3e8fe"
 dependencies = [
  "js-sys",
  "opentelemetry",

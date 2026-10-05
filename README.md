@@ -79,3 +79,7 @@ Run unit tests with:
 ```bash
 make reset-deps next-watch
 ```
+
+## Errors
+
+Cala uses [errlanes](https://github.com/GaloyMoney/es-entity/blob/main/errlanes/README.md) for error handling.

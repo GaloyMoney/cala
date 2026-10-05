@@ -4,8 +4,7 @@ use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
 use cala_ledger::{
-    error::LedgerError,
-    posting::{PostingError, RejectionReason},
+    posting::{PostingRejection, ValidatePostingRejection},
     tx_template::*,
     *,
 };
@@ -56,8 +55,7 @@ async fn blocks_transactions() -> anyhow::Result<()> {
         .await;
     assert!(matches!(
         &res,
-        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
-            if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender_account.id())
+        Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Validate(ValidatePostingRejection::AccountLocked { account_id: id, .. }))) if *id == sender_account.id()
     ));
 
     Ok(())

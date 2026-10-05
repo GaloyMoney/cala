@@ -1,10 +1,11 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 pub mod error;
 mod repo;
 
 use es_entity::clock::ClockHandle;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use std::collections::HashMap;
 
@@ -29,8 +30,11 @@ impl Journals {
         }
     }
 
-    #[instrument(name = "cala_ledger.journals.create", skip(self))]
-    pub async fn create(&self, new_journal: NewJournal) -> Result<Journal, JournalError> {
+    #[es_entity::errlanes::instrument(name = "cala_ledger.journals.create", skip(self))]
+    pub async fn create(
+        &self,
+        new_journal: NewJournal,
+    ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         let journal = self.create_in_op(&mut op, new_journal).await?;
         op.commit().await?;
@@ -41,25 +45,36 @@ impl Journals {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_journal: NewJournal,
-    ) -> Result<Journal, JournalError> {
-        let journal = self.repo.create_in_op(db, new_journal).await?;
+    ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
+        let journal = self.repo.create_in_op(db, new_journal).await.widen()?;
         Ok(journal)
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.journals.find_all", skip(self, journal_ids), fields(journal_ids_count = journal_ids.len()))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.journals.find_all", skip(self, journal_ids), fields(journal_ids_count = journal_ids.len()))]
     pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, T>, JournalError> {
-        Ok(self.repo.find_all(journal_ids).await?)
+    ) -> Result<HashMap<JournalId, T>, CalaFault> {
+        self.repo.find_all(journal_ids).await
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.journals.find_by_id", skip(self))]
-    pub async fn find(&self, journal_id: JournalId) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id(journal_id).await?)
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.journals.find_by_id",
+        skip(self)
+    )]
+    pub async fn find(
+        &self,
+        journal_id: JournalId,
+    ) -> Result<Journal, Fail<JournalNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_id(journal_id)
+            .await?
+            .ok_or(JournalNotFound(journal_id))?)
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.journals.find_in_op",
         skip(self, op)
@@ -68,31 +83,49 @@ impl Journals {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         journal_id: JournalId,
-    ) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_id_in_op(op, journal_id).await?)
+    ) -> Result<Journal, Fail<JournalNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_id_in_op(op, journal_id)
+            .await?
+            .ok_or(JournalNotFound(journal_id))?)
     }
 
-    #[instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
-    pub async fn persist(&self, journal: &mut Journal) -> Result<(), JournalError> {
+    #[es_entity::errlanes::instrument(name = "cala_ledger.journals.persist", skip(self, journal))]
+    pub async fn persist(
+        &self,
+        journal: &mut Journal,
+    ) -> Result<(), Fail<PersistJournalRejection, lanes!(Transient, Fatal)>> {
         let mut op = self.repo.begin_op_with_clock(&self.clock).await?;
         self.persist_in_op(&mut op, journal).await?;
         op.commit().await?;
         Ok(())
     }
 
-    #[instrument(name = "cala_ledger.journals.persist_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(name = "cala_ledger.journals.persist_in_op", skip_all)]
     pub async fn persist_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         journal: &mut Journal,
-    ) -> Result<(), JournalError> {
-        self.repo.update_in_op(db, journal).await?;
+    ) -> Result<(), Fail<PersistJournalRejection, lanes!(Transient, Fatal)>> {
+        self.repo.update_in_op(db, journal).await.widen()?;
         Ok(())
     }
 
-    #[instrument(level = "debug", name = "cala_ledger.journal.find_by_code", skip(self))]
-    pub async fn find_by_code(&self, code: String) -> Result<Journal, JournalError> {
-        Ok(self.repo.find_by_code(Some(code)).await?)
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.journal.find_by_code",
+        skip(self)
+    )]
+    pub async fn find_by_code(
+        &self,
+        code: String,
+    ) -> Result<Journal, Fail<JournalCodeNotFound, lanes!(Transient, Fatal)>> {
+        Ok(self
+            .repo
+            .maybe_find_by_code(Some(code.clone()))
+            .await?
+            .ok_or(JournalCodeNotFound(code))?)
     }
 }
 

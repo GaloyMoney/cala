@@ -1,6 +1,6 @@
 mod helpers;
 
-use cala_ledger::{tx_template::error::TxTemplateError, *};
+use cala_ledger::{tx_template::error::CreateTxTemplateRejection, *};
 
 #[tokio::test]
 async fn duplicate_code() -> anyhow::Result<()> {
@@ -17,7 +17,12 @@ async fn duplicate_code() -> anyhow::Result<()> {
 
     let new_template = helpers::currency_conversion_template("tx_template_code");
     let res = cala.tx_templates().create(new_template).await;
-    assert!(matches!(res, Err(TxTemplateError::DuplicateCode(_))));
+    assert!(matches!(
+        res,
+        Err(cala_ledger::errlanes::Fail::Rejected(
+            CreateTxTemplateRejection::DuplicateCode(_)
+        ))
+    ));
 
     Ok(())
 }

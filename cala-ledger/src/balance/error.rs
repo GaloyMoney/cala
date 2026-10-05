@@ -1,17 +1,11 @@
-use thiserror::Error;
+use crate::primitives::*;
+use es_entity::errlanes;
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_BALANCE_NOT_FOUND")]
+#[error("No balance for journal {0}, account {1}, currency {2}")]
+pub struct BalanceNotFound(pub JournalId, pub AccountId, pub Currency);
 
-use cala_types::primitives::*;
-
-#[derive(Error, Debug)]
-pub enum BalanceError {
-    #[error("BalanceError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("BalanceError - NotFound: there is no balance recorded for journal {0}, account {1}, currency {2}")]
-    NotFound(JournalId, AccountId, Currency),
-    #[error("BalanceError - JournalError: {0}")]
-    JournalError(#[from] crate::journal::error::JournalError),
-    #[error("BalanceError - JournalLocked: Cannot update balances. The journal {0} is locked")]
-    JournalLocked(JournalId),
-    #[error("BalanceError - AccountLocked: Cannot update balances. The account {0} is locked")]
-    AccountLocked(AccountId),
-}
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_BALANCE_ACCOUNT_LOCKED")]
+#[error("Cannot update balances: account {0} is locked")]
+pub struct BalanceAccountLocked(pub AccountId);

@@ -1,9 +1,10 @@
+use crate::error::CalaFault;
+use es_entity::errlanes::ResultExt;
 use sqlx::PgPool;
-use tracing::instrument;
 
 use crate::primitives::{AccountId, VelocityControlId};
 
-use super::{super::error::*, value::*};
+use super::value::*;
 
 #[derive(Debug, Clone)]
 pub struct AccountControlRepo {
@@ -17,23 +18,22 @@ impl AccountControlRepo {
         }
     }
 
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_control.create_in_op",
-        skip_all,
-        err(level = "warn")
+        skip_all
     )]
     pub async fn create_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         control: AccountVelocityControl,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), CalaFault> {
         sqlx::query!(
             r#"INSERT INTO cala_velocity_account_controls (account_id, velocity_control_id, values)
             VALUES ($1, $2, $3)"#,
             control.account_id as AccountId,
             control.control_id as VelocityControlId,
-            serde_json::to_value(control).expect("Failed to serialize control values"),
+            serde_json::to_value(control).classify::<crate::error::CouldNotSerialize>()?,
         )
         .execute(op.as_executor())
         .await?;
@@ -53,18 +53,17 @@ impl AccountControlRepo {
     /// The sort is done in Rust rather than with a SQL `ORDER BY` because
     /// the `UNNEST` is join-free: nothing can reorder a bare `UNNEST`
     /// scan, so rows are inserted in the array order they are supplied in.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "account_control.create_all_in_op",
         skip_all,
-        fields(count = controls.len()),
-        err(level = "warn")
+        fields(count = controls.len())
     )]
     pub async fn create_all_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         mut controls: Vec<AccountVelocityControl>,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), CalaFault> {
         if controls.is_empty() {
             return Ok(());
         }
@@ -77,7 +76,8 @@ impl AccountControlRepo {
         for control in controls {
             account_ids.push(control.account_id);
             control_ids.push(control.control_id);
-            values.push(serde_json::to_value(control).expect("Failed to serialize control values"));
+            values
+                .push(serde_json::to_value(control).classify::<crate::error::CouldNotSerialize>()?);
         }
 
         sqlx::query!(

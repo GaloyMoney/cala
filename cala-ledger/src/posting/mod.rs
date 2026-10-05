@@ -73,7 +73,9 @@
 //! evaluation itself is the template domain's logic and stays in
 //! [`TxTemplates::prepare_transaction`].
 
-mod error;
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail, ResultExt};
+pub(crate) mod error;
 mod repo;
 mod template_cache;
 
@@ -81,13 +83,12 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use es_entity::AtomicOperation;
-use tracing::instrument;
 
 use cala_types::{balance::BalanceSnapshot, entry::EntryValues};
 
 use crate::{
     account_set::AccountSets,
-    balance::Balances,
+    balance::{error::BalanceAccountLocked, Balances},
     outbox::OutboxPublisher,
     primitives::*,
     transaction::Transaction,
@@ -95,7 +96,10 @@ use crate::{
     velocity::Velocities,
 };
 
-pub use error::{PostingError, RejectionReason};
+pub use error::{
+    ApplyPostingRejection, BatchPostingRejection, BatchPreparePostingRejection, PostingRef,
+    PostingRejection, PreparePostingRejection, TooManyPostingBalances, ValidatePostingRejection,
+};
 
 /// Ancestor account sets per journal: `journal -> (leaf -> its sets in that
 /// journal)`. Keyed by journal because a leaf account has no journal of its
@@ -172,7 +176,7 @@ impl Postings {
     // `debug`, not the default INFO: this sits under every
     // `post_transaction` / `post_transactions` unit-of-work span, so at INFO
     // each posting would pay for a second exported span on the hot path.
-    #[instrument(
+    #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.posting.post_all_in_op",
         skip_all,
@@ -180,79 +184,155 @@ impl Postings {
             batch_size = batch.len(),
             failed_posting_index = tracing::field::Empty,
             failed_posting_id = tracing::field::Empty,
-        ),
-        err(level = "warn")
+        )
     )]
     pub(crate) async fn post_all_in_op(
         &self,
         db: &mut impl AtomicOperation,
         batch: Vec<PostingInput>,
-    ) -> Result<Vec<Transaction>, PostingError> {
+    ) -> Result<Vec<Transaction>, Fail<BatchPostingRejection, lanes!(Transient, Fatal)>> {
         if batch.is_empty() {
             return Ok(Vec::new());
         }
-
-        // ---- prepare (client-side) ------------------------------------
-        let codes: Vec<String> = Self::dedup(batch.iter().map(|p| p.tx_template_code.clone()));
-        let used = self.templates.resolve_in_op(db, &codes).await?;
+        let codes = Self::dedup(batch.iter().map(|p| p.tx_template_code.clone()));
+        let mut used = self.templates.resolve_in_op(db, &codes).await.widen()?;
         let mut prepared = self.prepare_all(&batch, &used)?;
+        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.widen()?;
+        // A stale template must be refreshed, then prepared again before reading.
+        // Supplemental locks retain the original order and SQL footprint.
+        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
+            used.extend(self.templates.refresh_in_op(db, &stale).await.widen()?);
+            prepared = self.prepare_all(&batch, &used)?;
+            keys = Self::entry_balance_keys(&prepared);
+            self.repo
+                .lock_balances_and_probe_templates_in_op(db, &keys, &[], db.maybe_now())
+                .await?;
+        }
+        let read = self.read_prepared(db, &prepared, &keys).await?;
+        self.validate_batch(&batch, &prepared, &read)?;
+        let transactions = self
+            .apply_prepared(db, prepared, read, locked.now)
+            .await
+            .widen()?;
+        Ok(transactions)
+    }
 
-        // ---- phase 1: lock (the fence) --------------------------------
-        let mut keys = Self::entry_balance_keys(&prepared);
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.posting.post_in_op", skip_all,
+        fields(failed_posting_index = tracing::field::Empty, failed_posting_id = tracing::field::Empty))]
+    pub(crate) async fn post_in_op(
+        &self,
+        db: &mut impl AtomicOperation,
+        input: PostingInput,
+    ) -> Result<Transaction, Fail<PostingRejection, lanes!(Transient, Fatal)>> {
+        let codes = vec![input.tx_template_code.clone()];
+        let mut used = self.templates.resolve_in_op(db, &codes).await.widen()?;
+        let mut prepared = vec![self.prepare_one(
+            &input,
+            &used,
+            PostingRef {
+                index: 0,
+                tx_id: input.tx_id,
+            },
+        )?];
+        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.widen()?;
+        // A stale template must be refreshed, then prepared again before reading.
+        // Supplemental locks retain the original order and SQL footprint.
+        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
+            used.extend(self.templates.refresh_in_op(db, &stale).await.widen()?);
+            prepared = vec![self.prepare_one(
+                &input,
+                &used,
+                PostingRef {
+                    index: 0,
+                    tx_id: input.tx_id,
+                },
+            )?];
+            keys = Self::entry_balance_keys(&prepared);
+            self.repo
+                .lock_balances_and_probe_templates_in_op(db, &keys, &[], db.maybe_now())
+                .await?;
+        }
+        let read = self.read_prepared(db, &prepared, &keys).await?;
+        Self::validate_one(
+            &prepared[0],
+            &read,
+            PostingRef {
+                index: 0,
+                tx_id: input.tx_id,
+            },
+        )?;
+        let transactions = self
+            .apply_prepared(db, prepared, read, locked.now)
+            .await
+            .widen()?;
+        Ok(transactions
+            .into_iter()
+            .next()
+            .expect("one posting in, one transaction out"))
+    }
+
+    // Supplemental locks after re-preparation use the same key class as the
+    // locks already held. A concurrent template update can therefore create
+    // the same rare deadlock window as before; PostgreSQL aborts one side in
+    // the native retryable lane. Neither path changes the canonical SQL lock
+    // ordering or adds a per-item database loop.
+    async fn lock_prepared(
+        &self,
+        db: &mut impl AtomicOperation,
+        prepared: &[PreparedTransaction],
+        codes: &[String],
+    ) -> Result<
+        (BalanceKeys, repo::LockOutcome),
+        Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
+    > {
+        let keys = Self::entry_balance_keys(prepared);
+        Self::check_balance_budget(&keys).widen()?;
+        let locked = self
+            .repo
+            .lock_balances_and_probe_templates_in_op(db, &keys, codes, db.maybe_now())
+            .await?;
+        Ok((keys, locked))
+    }
+
+    fn check_balance_budget(keys: &BalanceKeys) -> Result<(), TooManyPostingBalances> {
         if keys.account_ids.len() > error::MAX_DISTINCT_BALANCES_PER_BATCH {
-            return Err(PostingError::BatchTooManyAccounts {
+            return Err(TooManyPostingBalances {
                 distinct: keys.account_ids.len(),
                 max: error::MAX_DISTINCT_BALANCES_PER_BATCH,
             });
         }
-        let locked = self
-            .repo
-            .lock_balances_and_probe_templates_in_op(db, &keys, &codes, db.maybe_now())
-            .await?;
+        Ok(())
+    }
 
-        // A template version moved between preparation and the lock statement.
-        // Nothing has been written, so refreshing the cache and re-preparing is
-        // safe; any entry pair the new bodies introduced needs its lock, which
-        // is taken in a supplemental sorted batch. (This must be a *refresh* —
-        // what the cache holds for these codes is exactly what was reported
-        // stale.)
-        //
-        // Deadlock note: those supplemental locks are in the same key class as
-        // the ones already held, so acquiring them out of the flow's canonical
-        // order opens a window against a concurrent poster. It requires a
-        // template update landing between two statements of a live posting, and
-        // Postgres resolves it by aborting one side with a retryable deadlock
-        // error rather than hanging.
-        if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
-            let refreshed = self.templates.refresh_in_op(db, &stale).await?;
-            let mut merged = used;
-            merged.extend(refreshed);
-            prepared = self.prepare_all(&batch, &merged)?;
-            let new_keys = Self::entry_balance_keys(&prepared);
-            self.repo
-                .lock_balances_and_probe_templates_in_op(db, &new_keys, &[], db.maybe_now())
-                .await?;
-            keys = new_keys;
-        }
-
-        let now = locked.now;
-
-        // ---- phase 2: read --------------------------------------------
+    async fn read_prepared(
+        &self,
+        db: &mut impl AtomicOperation,
+        prepared: &[PreparedTransaction],
+        keys: &BalanceKeys,
+    ) -> Result<PostingState, CalaFault> {
         let account_ids = Self::dedup(
             prepared
                 .iter()
                 .flat_map(|p| p.entries.iter().map(|e| e.account_id())),
         );
         let journal_ids = Self::dedup(prepared.iter().map(|p| p.journal_id));
-        let mut read = self
-            .repo
-            .read_posting_state_in_op(db, &account_ids, &journal_ids, &keys)
-            .await?;
+        self.repo
+            .read_posting_state_in_op(db, &account_ids, &journal_ids, keys)
+            .await
+    }
 
-        self.validate(&batch, &prepared, &read)?;
-
+    async fn apply_prepared(
+        &self,
+        db: &mut impl AtomicOperation,
+        prepared: Vec<PreparedTransaction>,
+        mut read: PostingState,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<Transaction>, Fail<ApplyPostingRejection, lanes!(Transient, Fatal)>> {
         // ---- ancestor phase (only when memberships exist) --------------
-        let mappings = self.resolve_ancestors(db, &prepared, &mut read).await?;
+        let mappings = self
+            .resolve_ancestors(db, &prepared, &mut read)
+            .await
+            .widen()?;
 
         // ---- fold + enforce (client-side) ------------------------------
         let (transactions, entries_per_posting) = prepared
@@ -288,12 +368,14 @@ impl Postings {
                 .collect();
         self.velocities
             .enforce_batch_in_op(db, now, &for_enforcement, &read.controls, &mappings)
-            .await?;
+            .await
+            .widen()?;
 
         // ---- phase 3: apply --------------------------------------------
         self.repo
             .insert_postings_and_balances_in_op(db, now, &rows, &snapshots)
-            .await?;
+            .await
+            .classify::<error::PostWrite>()?;
 
         self.update_effective_balances(db, &hydrated, &entry_values, &read, &mappings, now)
             .await?;
@@ -321,101 +403,116 @@ impl Postings {
     // preparation — template evaluation plus batch-level checks
     // ------------------------------------------------------------------
 
+    fn prepare_one(
+        &self,
+        input: &PostingInput,
+        templates: &HashMap<String, ResolvedTemplate>,
+        posting: PostingRef,
+    ) -> Result<PreparedTransaction, PreparePostingRejection> {
+        let template = templates
+            .get(&input.tx_template_code)
+            .expect("template resolved above");
+        posting.record_failure(self.tx_templates.prepare_transaction(
+            posting,
+            &template.values,
+            input.params.clone(),
+        ))
+    }
+
     fn prepare_all(
         &self,
         batch: &[PostingInput],
         templates: &HashMap<String, ResolvedTemplate>,
-    ) -> Result<Vec<PreparedTransaction>, PostingError> {
+    ) -> Result<Vec<PreparedTransaction>, BatchPreparePostingRejection> {
         let mut prepared = Vec::with_capacity(batch.len());
         let mut seen_ids = HashSet::new();
         let mut seen_external = HashSet::new();
         for (index, input) in batch.iter().enumerate() {
-            let template = templates
-                .get(&input.tx_template_code)
-                .expect("template resolved above");
-            let posting = self
-                .tx_templates
-                .prepare_transaction(input.tx_id, &template.values, input.params.clone())
-                .map_err(|e| PostingError::rejected(index, input.tx_id, e))?;
-
-            if !seen_ids.insert(posting.tx_id) {
-                return Err(PostingError::rejected(
-                    index,
-                    input.tx_id,
-                    RejectionReason::DuplicateTransactionIdInBatch(posting.tx_id),
-                ));
+            let posting = PostingRef {
+                index,
+                tx_id: input.tx_id,
+            };
+            let transaction = self.prepare_one(input, templates, posting)?;
+            if !seen_ids.insert(transaction.tx_id) {
+                return Err(
+                    BatchPreparePostingRejection::DuplicateTransactionIdInBatch {
+                        posting: posting.record(),
+                        tx_id: transaction.tx_id,
+                    },
+                );
             }
-            if let Some(external_id) = posting.external_id.as_ref() {
+            if let Some(external_id) = transaction.external_id.as_ref() {
                 if !seen_external.insert(external_id.clone()) {
-                    return Err(PostingError::rejected(
-                        index,
-                        input.tx_id,
-                        RejectionReason::DuplicateExternalIdInBatch(external_id.clone()),
-                    ));
+                    return Err(BatchPreparePostingRejection::DuplicateExternalIdInBatch {
+                        posting: posting.record(),
+                        external_id: external_id.clone(),
+                    });
                 }
             }
-            prepared.push(posting);
+            prepared.push(transaction);
         }
         Ok(prepared)
     }
 
-    // ------------------------------------------------------------------
-    // validation — everything that can reject a posting, before any write
-    // ------------------------------------------------------------------
+    fn validate_one(
+        posting: &PreparedTransaction,
+        read: &PostingState,
+        attribution: PostingRef,
+    ) -> Result<(), ValidatePostingRejection> {
+        match read.journals.get(&posting.journal_id) {
+            None => {
+                return Err(ValidatePostingRejection::JournalNotFound {
+                    posting: attribution.record(),
+                    journal_id: posting.journal_id,
+                })
+            }
+            Some(journal) if journal.status == Status::Locked => {
+                return Err(ValidatePostingRejection::JournalLocked {
+                    posting: attribution.record(),
+                    journal_id: posting.journal_id,
+                })
+            }
+            Some(_) => {}
+        }
+        for entry in &posting.entries {
+            let account_id = entry.account_id();
+            let Some(meta) = read.accounts.get(&account_id) else {
+                return Err(ValidatePostingRejection::AccountNotFound {
+                    posting: attribution.record(),
+                    account_id,
+                });
+            };
+            if meta.is_account_set {
+                return Err(ValidatePostingRejection::EntryTargetsAccountSet {
+                    posting: attribution.record(),
+                    account_id,
+                });
+            }
+            if meta.locked {
+                return Err(ValidatePostingRejection::AccountLocked {
+                    posting: attribution.record(),
+                    account_id,
+                });
+            }
+        }
+        Ok(())
+    }
 
-    fn validate(
+    fn validate_batch(
         &self,
         batch: &[PostingInput],
         prepared: &[PreparedTransaction],
         read: &PostingState,
-    ) -> Result<(), PostingError> {
-        for (index, posting) in prepared.iter().enumerate() {
-            let tx_id = batch[index].tx_id;
-
-            match read.journals.get(&posting.journal_id) {
-                None => {
-                    return Err(PostingError::rejected(
-                        index,
-                        tx_id,
-                        RejectionReason::JournalNotFound(posting.journal_id),
-                    ))
-                }
-                Some(journal) if journal.status == Status::Locked => {
-                    return Err(PostingError::rejected(
-                        index,
-                        tx_id,
-                        RejectionReason::JournalLocked(posting.journal_id),
-                    ))
-                }
-                Some(_) => {}
-            }
-
-            for entry in posting.entries.iter() {
-                let account_id = entry.account_id();
-                let Some(meta) = read.accounts.get(&account_id) else {
-                    return Err(PostingError::rejected(
-                        index,
-                        tx_id,
-                        RejectionReason::AccountNotFound(account_id),
-                    ));
-                };
-                if meta.is_account_set {
-                    return Err(PostingError::rejected(
-                        index,
-                        tx_id,
-                        RejectionReason::EntryTargetsAccountSet(account_id),
-                    ));
-                }
-                // Locked is locked, regardless of whether the account's
-                // balances are maintained inline or by the streaming rollup.
-                if meta.locked {
-                    return Err(PostingError::rejected(
-                        index,
-                        tx_id,
-                        RejectionReason::AccountLocked(account_id),
-                    ));
-                }
-            }
+    ) -> Result<(), ValidatePostingRejection> {
+        for (index, prepared) in prepared.iter().enumerate() {
+            Self::validate_one(
+                prepared,
+                read,
+                PostingRef {
+                    index,
+                    tx_id: batch[index].tx_id,
+                },
+            )?;
         }
         Ok(())
     }
@@ -446,7 +543,7 @@ impl Postings {
         db: &mut impl AtomicOperation,
         prepared: &[PreparedTransaction],
         read: &mut PostingState,
-    ) -> Result<AncestorMappings, PostingError> {
+    ) -> Result<AncestorMappings, Fail<BalanceAccountLocked, lanes!(Transient, Fatal)>> {
         let mut mappings: AncestorMappings = HashMap::new();
         if read.seeds.is_empty() {
             return Ok(mappings);
@@ -518,9 +615,7 @@ impl Postings {
         for account_id in ancestor_ids {
             if let Some(meta) = read.accounts.get(&account_id) {
                 if meta.locked {
-                    return Err(PostingError::BalanceError(
-                        crate::balance::error::BalanceError::AccountLocked(account_id),
-                    ));
+                    return Err(BalanceAccountLocked(account_id).into());
                 }
             }
         }
@@ -641,7 +736,7 @@ impl Postings {
         read: &PostingState,
         mappings: &AncestorMappings,
         now: DateTime<Utc>,
-    ) -> Result<(), PostingError> {
+    ) -> Result<(), CalaFault> {
         let mut groups: Vec<((JournalId, chrono::NaiveDate), Vec<EntryValues>)> = Vec::new();
         for (transaction, entries) in transactions.iter().zip(entry_values) {
             let journal_id = transaction.values().journal_id;

@@ -22,7 +22,6 @@ strum = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
-thiserror = { workspace = true }
 derive_builder = { workspace = true }
 rust_decimal = { workspace = true }
 rusty-money = { workspace = true }

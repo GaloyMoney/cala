@@ -1,4 +1,5 @@
 use cel_interpreter::{CelExpression, CelType, CelValue};
+use es_entity::errlanes;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,7 +25,7 @@ pub enum ParamDataType {
 }
 
 impl ParamDataType {
-    pub fn coerce_value(&self, value: CelValue) -> Result<CelValue, String> {
+    pub fn coerce_value(&self, value: CelValue) -> Result<CelValue, ParamValueRejection> {
         use cel_interpreter::CelType::*;
         match CelType::from(&value) {
             UInt if *self == ParamDataType::Integer => Ok(value),
@@ -32,6 +33,7 @@ impl ParamDataType {
             String if *self == ParamDataType::String => Ok(value),
             Map if *self == ParamDataType::Json => Ok(value),
             Date if *self == ParamDataType::Date => Ok(value),
+            Timestamp if *self == ParamDataType::Timestamp => Ok(value),
             Timestamp if *self == ParamDataType::Date => {
                 if let CelValue::Timestamp(ts) = value {
                     Ok(CelValue::Date(ts.date_naive()))
@@ -46,9 +48,10 @@ impl ParamDataType {
             // Coercions
             String if *self == ParamDataType::Uuid => {
                 if let CelValue::String(s) = value {
-                    let uuid = s
-                        .parse()
-                        .map_err(|e| format!("Could not parse '{s}' as Uuid - {e}"))?;
+                    let uuid = s.parse().map_err(|e| ParamValueRejection::InvalidUuid {
+                        input: s.to_string(),
+                        source: e,
+                    })?;
                     Ok(CelValue::Uuid(uuid))
                 } else {
                     unreachable!()
@@ -56,9 +59,10 @@ impl ParamDataType {
             }
             String if *self == ParamDataType::Decimal => {
                 if let CelValue::String(s) = value {
-                    let decimal = s
-                        .parse()
-                        .map_err(|e| format!("Could not parse '{s}' as Decimal - {e}"))?;
+                    let decimal = s.parse().map_err(|e| ParamValueRejection::InvalidDecimal {
+                        input: s.to_string(),
+                        source: e,
+                    })?;
                     Ok(CelValue::Decimal(decimal))
                 } else {
                     unreachable!()
@@ -66,21 +70,25 @@ impl ParamDataType {
             }
             String if *self == ParamDataType::Date => {
                 if let CelValue::String(s) = value {
-                    let date = s
-                        .parse()
-                        .map_err(|e| format!("Could not parse '{s}' as Date - {e}"))?;
+                    let date = s.parse().map_err(|e| ParamValueRejection::InvalidDate {
+                        input: s.to_string(),
+                        source: e,
+                    })?;
                     Ok(CelValue::Date(date))
                 } else {
                     unreachable!()
                 }
             }
-            _ => Err(format!("Type mismatch: expected {self:?}, got {value:?}")),
+            _ => Err(ParamValueRejection::TypeMismatch {
+                expected: self.clone(),
+                actual: CelType::from(&value),
+            }),
         }
     }
 }
 
 impl TryFrom<&CelValue> for ParamDataType {
-    type Error = String;
+    type Error = UnsupportedParamType;
 
     fn try_from(value: &CelValue) -> Result<Self, Self::Error> {
         use cel_interpreter::CelType::*;
@@ -92,7 +100,43 @@ impl TryFrom<&CelValue> for ParamDataType {
             Uuid => Ok(ParamDataType::Uuid),
             Decimal => Ok(ParamDataType::Decimal),
             Bool => Ok(ParamDataType::Boolean),
-            _ => Err(format!("Unsupported type: {value:?}")),
+            _ => Err(UnsupportedParamType(CelType::from(value))),
         }
     }
 }
+
+#[derive(Debug, errlanes::Rejection)]
+pub enum ParamValueRejection {
+    #[rejection(code = "PARAM_TYPE_MISMATCH")]
+    #[error("Type mismatch: expected {:?}, got {:?}", expected, actual)]
+    TypeMismatch {
+        expected: ParamDataType,
+        actual: CelType,
+    },
+    #[rejection(code = "PARAM_INVALID_UUID")]
+    #[error("Could not parse {} as Uuid: {}", input, source)]
+    InvalidUuid {
+        input: String,
+        #[source]
+        source: uuid::Error,
+    },
+    #[rejection(code = "PARAM_INVALID_DECIMAL")]
+    #[error("Could not parse {} as Decimal: {}", input, source)]
+    InvalidDecimal {
+        input: String,
+        #[source]
+        source: rust_decimal::Error,
+    },
+    #[rejection(code = "PARAM_INVALID_DATE")]
+    #[error("Could not parse {} as Date: {}", input, source)]
+    InvalidDate {
+        input: String,
+        #[source]
+        source: chrono::ParseError,
+    },
+}
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "UNSUPPORTED_PARAM_TYPE")]
+#[error("Unsupported parameter type: {0:?}")]
+pub struct UnsupportedParamType(pub CelType);

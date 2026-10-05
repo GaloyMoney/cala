@@ -1,8 +1,8 @@
-use cel_interpreter::{CelContext, CelExpression};
+use cel_interpreter::{CelContext, CelConversionRejection, CelExpression};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use tracing::{field, instrument, Span};
+use tracing::{field, Span};
 
 use cala_types::{
     balance::BalanceSnapshot,
@@ -25,7 +25,7 @@ pub struct AccountVelocityControl {
 }
 
 impl AccountVelocityControl {
-    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, VelocityError> {
+    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, CelConversionRejection> {
         if let Some(condition) = &self.condition {
             let result: bool = condition.try_evaluate(ctx)?;
             Ok(result)
@@ -45,12 +45,12 @@ pub struct AccountVelocityLimit {
 }
 
 impl AccountVelocityLimit {
-    #[instrument(level = "debug", name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id), err(level = tracing::Level::WARN))]
+    #[tracing::instrument(level = "debug", name = "velocity_limit.window_for_enforcement", skip(self, ctx, entry), fields(limit_id = %self.limit_id, entry_id = %entry.id))]
     pub fn window_for_enforcement(
         &self,
         ctx: &CelContext,
         entry: &EntryValues,
-    ) -> Result<Option<Window>, VelocityError> {
+    ) -> Result<Option<Window>, CelConversionRejection> {
         if let Some(currency) = &self.currency {
             if currency != &entry.currency {
                 return Ok(None);
@@ -73,13 +73,13 @@ impl AccountVelocityLimit {
         Ok(Some(map.into()))
     }
 
-    #[instrument(level = "debug", name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction), err(level = tracing::Level::WARN))]
+    #[tracing::instrument(level = "debug", name = "velocity_limit.enforce", skip(self, ctx, snapshot), fields(limit_id = %self.limit_id, account_id = %snapshot.account_id, currency = %snapshot.currency, velocity.limit, velocity.requested, velocity.layer, velocity.direction))]
     pub fn enforce(
         &self,
         ctx: &CelContext,
         time: DateTime<Utc>,
         snapshot: &BalanceSnapshot,
-    ) -> Result<(), VelocityError> {
+    ) -> Result<(), EnforceVelocityRejection> {
         if let Some(currency) = &self.currency {
             if currency != &snapshot.currency {
                 return Ok(());
