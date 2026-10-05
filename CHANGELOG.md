@@ -1,3 +1,11 @@
+# [cala release v0.32.0](https://github.com/GaloyMoney/cala/releases/tag/0.32.0)
+
+
+
+### Refactor
+
+- [**breaking**] Expose precise flat errlanes contracts across Cala (#900)
+
 # [cala release v0.31.1](https://github.com/GaloyMoney/cala/releases/tag/0.31.1)
 
 
