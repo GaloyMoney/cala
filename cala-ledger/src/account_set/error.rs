@@ -60,36 +60,30 @@ pub struct MemberHasBalanceHistory {
 
 #[derive(Debug, errlanes::Rejection)]
 pub enum AddAccountMembersRejection {
-    #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     AccountSetNotFound(AccountSetNotFound),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_HAS_BALANCE_HISTORY")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ALREADY_ADDED")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     MemberAlreadyAdded(MemberAlreadyAdded),
 }
 
 #[derive(Debug, errlanes::Rejection)]
 pub enum AddSetMembersRejection {
-    #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     AccountSetNotFound(AccountSetNotFound),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_HAS_BALANCE_HISTORY")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
     #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
     #[error("Account sets must belong to the same journal")]
     JournalIdMismatch,
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ALREADY_ADDED")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     MemberAlreadyAdded(MemberAlreadyAdded),
     #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_CYCLE_DETECTED")]
     #[error(
@@ -121,21 +115,18 @@ pub enum AddSetMembersRejection {
 #[lift(AddAccountMembersRejection)]
 #[lift(AddSetMembersRejection)]
 pub enum AddMemberRejection {
-    #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     #[lift(AddAccountMembersRejection::AccountSetNotFound)]
     #[lift(AddSetMembersRejection::AccountSetNotFound)]
     AccountSetNotFound(AccountSetNotFound),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_HAS_BALANCE_HISTORY")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     #[lift(AddAccountMembersRejection::MemberHasBalanceHistory)]
     #[lift(AddSetMembersRejection::MemberHasBalanceHistory)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ALREADY_ADDED")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     #[lift(AddAccountMembersRejection::MemberAlreadyAdded)]
     #[lift(AddSetMembersRejection::MemberAlreadyAdded)]
     MemberAlreadyAdded(MemberAlreadyAdded),
@@ -173,13 +164,11 @@ pub enum AddMemberRejection {
 
 #[derive(Debug, errlanes::Rejection)]
 pub enum RemoveMemberRejection {
-    #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     AccountSetNotFound(AccountSetNotFound),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_HAS_BALANCE_HISTORY")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
     #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
     #[error("Account sets must belong to the same journal")]

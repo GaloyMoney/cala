@@ -429,7 +429,7 @@ mod contract_tests {
 
         let expr: CelExpression = "42".parse().unwrap();
         let error = expr.try_evaluate::<bool>(&CelContext::new()).unwrap_err();
-        assert_eq!(<&str>::from(error.code()), "CEL_RESULT_COERCION_ERROR");
+        assert_eq!(<&str>::from(error.code()), "CEL_BAD_CORE_TYPE_COERCION");
         assert!(matches!(
             &error,
             CelConversionRejection::CoreTypeCoercion(CoreTypeCoercion(
@@ -448,7 +448,16 @@ mod contract_tests {
             let result: Result<serde_json::Value, CelConversionRejection> =
                 expr.try_evaluate(&CelContext::new());
             let error = result.unwrap_err();
-            assert_eq!(<&str>::from(error.code()), "CEL_RESULT_COERCION_ERROR");
+            assert_eq!(
+                <&str>::from(error.code()),
+                match error {
+                    CelConversionRejection::UnsupportedBytes { .. } => {
+                        "CEL_BAD_EXTERNAL_TYPE_COERCION"
+                    }
+                    CelConversionRejection::NonStringKey(_) => "CEL_BAD_CORE_TYPE_COERCION",
+                    _ => unreachable!(),
+                }
+            );
             match error {
                 CelConversionRejection::UnsupportedBytes { expression } => {
                     assert_eq!(expression, source)

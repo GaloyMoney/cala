@@ -263,11 +263,12 @@ impl TryFrom<CelResult<'_>> for Currency {
     fn try_from(CelResult { expr, val }: CelResult) -> Result<Self, Self::Error> {
         match val {
             CelValue::String(v) => v.as_ref().parse::<Currency>().map_err(|source| {
-                CelConversionRejection::ExternalParse(ExternalParseError {
+                ExternalParseError {
                     expression: format!("{expr:?}"),
                     type_name: "currency",
                     source: Box::new(source),
-                })
+                }
+                .into()
             }),
             v => {
                 Err(ExternalTypeCoercion(format!("{expr:?}"), CelType::from(&v), "Currency").into())
@@ -325,7 +326,7 @@ mod tests {
         let expression: CelExpression = "'INVALID'".parse().unwrap();
         let currency: Result<Currency, CelConversionRejection> = expression.try_evaluate(&context);
         let error = currency.unwrap_err();
-        assert_eq!(<&str>::from(error.code()), "CEL_RESULT_COERCION_ERROR");
+        assert_eq!(<&str>::from(error.code()), "CEL_EXTERNAL_PARSE_ERROR");
         assert_eq!(error.level(), Level::Info);
         assert!(error
             .source()

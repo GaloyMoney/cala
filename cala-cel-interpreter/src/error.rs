@@ -62,9 +62,8 @@ pub struct ExternalTypeCoercion(pub String, pub CelType, pub &'static str);
 
 #[derive(Debug, errlanes::Rejection)]
 pub enum JsonCoercionRejection {
-    #[rejection(code = "CEL_BAD_CORE_TYPE_COERCION")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     NonStringKey(#[source] CoreTypeCoercion),
     #[rejection(code = "CEL_BAD_EXTERNAL_TYPE_COERCION")]
     #[error("Cannot convert bytes to JSON in '{}'", expression)]
@@ -78,9 +77,8 @@ pub enum JsonCoercionRejection {
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(JsonCoercionRejection)]
 pub enum CelConversionRejection {
-    #[rejection(code = "CEL_RESULT_COERCION_ERROR")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     CoreTypeCoercion(CoreTypeCoercion),
     #[rejection(code = "CEL_EVALUATION_ERROR")]
     #[error("Error evaluating expression '{}': {}", expression, source)]
@@ -125,25 +123,25 @@ pub enum CelConversionRejection {
     #[rejection(code = "CEL_UNEXPECTED")]
     #[error("Cannot convert function value in '{}'", expression)]
     FunctionValue { expression: String },
-    #[rejection(code = "CEL_RESULT_COERCION_ERROR")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     ExternalTypeCoercion(ExternalTypeCoercion),
-    #[rejection(code = "CEL_RESULT_COERCION_ERROR")]
     #[error("{0}")]
+    #[rejection(delegate)]
     #[lift(JsonCoercionRejection::NonStringKey)]
     NonStringKey(#[source] CoreTypeCoercion),
-    #[rejection(code = "CEL_RESULT_COERCION_ERROR")]
+    #[rejection(code = "CEL_BAD_EXTERNAL_TYPE_COERCION")]
     #[error("Cannot convert bytes to JSON in '{}'", expression)]
     #[lift(JsonCoercionRejection::UnsupportedBytes)]
     UnsupportedBytes { expression: String },
-    #[rejection(code = "CEL_RESULT_COERCION_ERROR")]
     #[error("{0}")]
-    ExternalParse(#[source] ExternalParseError),
+    #[rejection(delegate, from)]
+    ExternalParse(ExternalParseError),
 }
 
 /// Diagnostic from a parser for a target defined outside the interpreter crate.
-#[derive(Debug)]
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CEL_EXTERNAL_PARSE_ERROR", error = manual)]
 pub struct ExternalParseError {
     pub expression: String,
     pub type_name: &'static str,

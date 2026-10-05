@@ -41,9 +41,8 @@ pub struct InitialAccountSetNotFound(pub AccountSetId);
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AccountConstraintViolation, unhandled = fatal)]
 pub enum CreateAccountRejection {
-    #[rejection(code = "CALA_ACCOUNT_INITIAL_ACCOUNT_SET_NOT_FOUND")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     InitialAccountSetNotFound(InitialAccountSetNotFound),
     #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
     #[error("DuplicateId: {0:?}")]
@@ -62,9 +61,8 @@ pub enum CreateAccountRejection {
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(PersistAccountRejection)]
 pub enum SetAccountStatusRejection {
-    #[rejection(code = "CALA_ACCOUNT_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
-    #[rejection(from)]
+    #[rejection(delegate, from)]
     AccountNotFound(AccountNotFound),
     #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
     #[error("CodeAlreadyExists: {0:?}")]
