@@ -5,7 +5,7 @@ use rust_decimal::Decimal;
 
 use cala_ledger::{
     error::LedgerError,
-    posting::{PostingError, RejectionReason},
+    posting::{PostingRejection, RejectionReason},
     tx_template::*,
     *,
 };
@@ -56,7 +56,10 @@ async fn blocks_transactions() -> anyhow::Result<()> {
         .await;
     assert!(matches!(
         &res,
-        Err(LedgerError::PostingError(PostingError::Rejected { reason, .. }))
+        Err(LedgerError::Rejected(PostingRejection::Rejected {
+            reason,
+            ..
+        }))
             if matches!(reason.as_ref(), RejectionReason::AccountLocked(id) if *id == sender_account.id())
     ));
 

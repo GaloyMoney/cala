@@ -52,6 +52,22 @@
       commonArgs = {
         src = rustSource;
         SQLX_OFFLINE = "true";
+        cargoVendorDir = craneLib.vendorCargoDeps {
+          src = rustSource;
+          # Git snapshots lack .git metadata, so Cargo's package file list
+          # omits these hidden caches. Preserve them until the upstream PRs
+          # are released and the temporary Git patches can be removed.
+          overrideVendorGitCheckout = packages: drv:
+            drv.overrideAttrs (old: {
+              postInstall =
+                (old.postInstall or "")
+                + pkgs.lib.concatMapStrings (package:
+                  pkgs.lib.optionalString (builtins.elem package.name ["job" "obix"]) ''
+                    cp -R .sqlx "$out/${package.name}-${package.version}/.sqlx"
+                  '')
+                packages;
+            });
+        };
       };
       cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 

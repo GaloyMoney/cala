@@ -1,0 +1,173 @@
+mod helpers;
+
+use std::error::Error;
+
+use cala_ledger::{
+    account::{error::AccountRejection, NewAccount},
+    errlanes::{self, Fail, FatalKind, Lane, Rejection, Transient, TransientKind, WidenResult},
+    posting::{PostingError, PostingRejection},
+    velocity::error::{LimitExceededError, VelocityEnforcementError, VelocityEnforcementRejection},
+    *,
+};
+use rust_decimal::Decimal;
+
+// Exercise the same public reexport a separate consuming crate composes.
+#[errlanes::compose]
+#[derive(Debug, thiserror::Error)]
+#[allow(clippy::enum_variant_names)] // All imported cases intentionally share the Ledger prefix.
+enum ConsumerRejection {
+    #[compose(flatten)]
+    Ledger(cala_ledger::error::LedgerRejection),
+}
+
+#[test]
+fn widening_enforcement_preserves_details_and_metadata() {
+    let detail = LimitExceededError {
+        account_id: AccountId::new(),
+        currency: "BTC".parse().unwrap(),
+        limit_id: VelocityLimitId::new(),
+        layer: Layer::Settled,
+        direction: DebitOrCredit::Debit,
+        limit: Decimal::ONE,
+        requested: Decimal::TEN,
+    };
+    let rejection = VelocityEnforcementRejection::LimitExceeded(detail.clone());
+    let code: &'static str = rejection.code().into();
+    let level = rejection.level();
+    let source: Result<(), VelocityEnforcementError> = Err(rejection.into());
+    let target: Result<(), PostingError> = source.widen();
+    let Fail::Rejected(rejection) = target.unwrap_err() else {
+        panic!("enforcement must remain a rejection");
+    };
+    assert_eq!(Into::<&'static str>::into(rejection.code()), code);
+    assert_eq!(rejection.level(), level);
+    assert!(matches!(
+        &rejection,
+        PostingRejection::VelocityLimitExceeded(_)
+    ));
+    let consumer: ConsumerRejection = rejection.into();
+    assert_eq!(Into::<&'static str>::into(consumer.code()), code);
+    assert_eq!(consumer.level(), level);
+    let ConsumerRejection::LedgerVelocityLimitExceeded(actual) = consumer else {
+        panic!("the enforcement leaf must be directly matchable");
+    };
+    assert_eq!(actual.account_id, detail.account_id);
+    assert_eq!(actual.currency, detail.currency);
+    assert_eq!(actual.limit_id, detail.limit_id);
+    assert_eq!(actual.layer, detail.layer);
+    assert_eq!(actual.direction, detail.direction);
+    assert_eq!(actual.limit, detail.limit);
+    assert_eq!(actual.requested, detail.requested);
+}
+
+#[test]
+fn explicit_lifts_preserve_unprefixed_public_cases_and_metadata() {
+    use cala_ledger::{
+        journal::error::{JournalLookupRejection, JournalRejection},
+        tx_template::error::{TxTemplateLookupRejection, TxTemplateRejection},
+    };
+
+    fn forward<S: Rejection + Error, D: Rejection + Error + From<S>>(source: S) -> D {
+        let code: &'static str = source.code().into();
+        let level = source.level();
+        let message = source.to_string();
+        let destination = D::from(source);
+        assert_eq!(Into::<&'static str>::into(destination.code()), code);
+        assert_eq!(destination.level(), level);
+        assert_eq!(destination.to_string(), message);
+        destination
+    }
+
+    let id = JournalId::new();
+    assert!(matches!(
+        forward(JournalLookupRejection::NotFoundById(id)),
+        JournalRejection::NotFoundById(actual) if actual == id
+    ));
+    assert!(matches!(
+        forward(JournalLookupRejection::NotFoundByCode("journal".into())),
+        JournalRejection::NotFoundByCode(code) if code == "journal"
+    ));
+    assert!(matches!(
+        forward(TxTemplateLookupRejection::NotFoundByCode("template".into())),
+        TxTemplateRejection::NotFoundByCode(code) if code == "template"
+    ));
+}
+
+#[test]
+fn widened_and_boxed_failures_preserve_the_lane_marker() {
+    let source: Result<(), VelocityEnforcementError> = Err(Transient::new(TransientKind::Deadlock)
+        .with_source(std::io::Error::other("database aborted transaction"))
+        .into());
+    let target: Result<(), PostingError> = source.widen();
+    let boxed: Box<dyn Error + Send + Sync> = Box::new(target.unwrap_err());
+    assert_eq!(errlanes::lane_of(boxed.as_ref()), Some(Lane::Transient));
+    let marker = boxed.source().unwrap().downcast_ref::<Transient>().unwrap();
+    assert_eq!(marker.kind, TransientKind::Deadlock);
+    assert!(marker.source().unwrap().is::<std::io::Error>());
+
+    let fault: CalaFault = errlanes::Fatal::from_error(
+        FatalKind::CorruptState,
+        std::io::Error::other("invalid stored snapshot"),
+    )
+    .into();
+    let fail: PostingError = fault.into();
+    let boxed: Box<dyn Error> = Box::new(fail);
+    assert_eq!(errlanes::lane_of(boxed.as_ref()), Some(Lane::Fatal));
+}
+
+fn sql_source<'a>(mut error: &'a (dyn Error + 'static)) -> &'a sqlx::Error {
+    loop {
+        if let Some(sql) = error.downcast_ref::<sqlx::Error>() {
+            return sql;
+        }
+        error = error
+            .source()
+            .expect("database source must survive conversion");
+    }
+}
+
+#[tokio::test]
+async fn partial_repo_lift_preserves_typed_conflicts_and_unaccepted_sources() -> anyhow::Result<()>
+{
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala = CalaLedger::init(CalaLedgerConfig::builder().pool(pool).build()?, &mut jobs).await?;
+    let id = AccountId::new();
+    let code = format!("conflict-{id}");
+    let build = |id, code: String| {
+        NewAccount::builder()
+            .id(id)
+            .code(code)
+            .name("conflict test")
+            .build()
+    };
+    cala.accounts().create(build(id, code.clone())?).await?;
+
+    let error = cala
+        .accounts()
+        .create(build(AccountId::new(), code.clone())?)
+        .await
+        .err()
+        .expect("duplicate code must fail");
+    assert!(matches!(sql_source(&error), sqlx::Error::Database(_)));
+    let Fail::Rejected(AccountRejection::CodeAlreadyExists(conflict)) = error else {
+        panic!("code conflict must lift into the domain rejection");
+    };
+    assert_eq!(conflict.attempted.as_deref(), Some(code.as_str()));
+    assert_eq!(conflict.diagnostics.constraint, "cala_accounts_code_key");
+    assert!(!conflict.to_string().contains(&code));
+
+    // Account IDs are generated by the caller; this domain only accepts code/external-ID conflicts.
+    let error = cala
+        .accounts()
+        .create(build(id, format!("other-{id}"))?)
+        .await
+        .err()
+        .expect("duplicate ID must fail");
+    assert!(matches!(sql_source(&error), sqlx::Error::Database(_)));
+    let Fail::Fatal(fatal) = error else {
+        panic!("an unaccepted primary-key violation must become an invariant failure");
+    };
+    assert_eq!(fatal.kind, FatalKind::Invariant);
+    Ok(())
+}

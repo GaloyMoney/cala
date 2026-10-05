@@ -8,7 +8,7 @@ use crate::balance::{
     cursor::{
         AccountBalanceByCurrencyCursor, AccountBalanceCursor, EffectiveBalancesModifiedCursor,
     },
-    error::BalanceError,
+    error::{corrupt_snapshot, BalanceError, BalanceRejection},
 };
 use cala_types::{
     balance::{BalanceSnapshot, EffectiveBalanceSnapshot},
@@ -81,11 +81,15 @@ impl EffectiveBalanceRepo {
             .await?;
 
         if let Some(row) = row {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values).map_err(|e| {
+                corrupt_snapshot(
+                    format!("journal {journal_id} account {account_id} currency {currency}"),
+                    e,
+                )
+            })?;
             Ok(AccountBalance::new(row.normal_balance_type, details))
         } else {
-            Err(BalanceError::NotFound(journal_id, account_id, currency))
+            Err(BalanceRejection::NotFound(journal_id, account_id, currency).into())
         }
     }
 
@@ -154,8 +158,12 @@ impl EffectiveBalanceRepo {
         let mut last_version = 0;
         for row in rows {
             let details: BalanceSnapshot =
-                serde_json::from_value(row.values.expect("values is not null"))
-                    .expect("Failed to deserialize balance snapshot");
+                serde_json::from_value(row.values.expect("values is not null")).map_err(|e| {
+                    corrupt_snapshot(
+                        format!("journal {journal_id} account {account_id} currency {currency} (find_range)"),
+                        e,
+                    )
+                })?;
             let balance = Some(AccountBalance::new(row.normal_balance_type, details));
             if row.first.expect("first is not null") {
                 first = balance;
@@ -177,7 +185,7 @@ impl EffectiveBalanceRepo {
         &self,
         ids: &[BalanceId],
         date: NaiveDate,
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -226,8 +234,8 @@ impl EffectiveBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let details: BalanceSnapshot =
-                serde_json::from_value(row.values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(row.values)
+                .map_err(|e| corrupt_snapshot("balance snapshot (find_all)", e))?;
             let balance_id = (details.journal_id, details.account_id, details.currency);
             let balance = AccountBalance::new(row.normal_balance_type, details);
             ret.insert(balance_id, balance);
@@ -248,7 +256,7 @@ impl EffectiveBalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -292,10 +300,10 @@ impl EffectiveBalanceRepo {
             .take(first)
             .map(|row| {
                 let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                    .map_err(|e| corrupt_snapshot("balance snapshot (list_for_account)", e))?;
+                Ok::<_, crate::CalaFault>(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -317,7 +325,7 @@ impl EffectiveBalanceRepo {
         account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
@@ -389,10 +397,10 @@ impl EffectiveBalanceRepo {
             .take(first)
             .map(|row| {
                 let details: BalanceSnapshot = serde_json::from_value(row.values)
-                    .expect("Failed to deserialize balance snapshot");
-                AccountBalance::new(row.normal_balance_type, details)
+                    .map_err(|e| corrupt_snapshot("balance snapshot (list_for_accounts)", e))?;
+                Ok::<_, crate::CalaFault>(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -435,7 +443,7 @@ impl EffectiveBalanceRepo {
         args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency, after_effective) = if let Some(after) = after {
@@ -477,10 +485,11 @@ impl EffectiveBalanceRepo {
             .into_iter()
             .take(first)
             .map(|row| {
-                serde_json::from_value::<EffectiveBalanceSnapshot>(row.values)
-                    .expect("Failed to deserialize effective balance snapshot")
+                serde_json::from_value::<EffectiveBalanceSnapshot>(row.values).map_err(|e| {
+                    corrupt_snapshot("effective balance snapshot (list_modified_since)", e)
+                })
             })
-            .collect::<Vec<_>>();
+            .collect::<Result<Vec<_>, _>>()?;
         let end_cursor = entities.last().map(EffectiveBalancesModifiedCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -501,7 +510,7 @@ impl EffectiveBalanceRepo {
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRangeResult, BalanceError> {
+    ) -> Result<BalanceRangeResult, crate::CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -587,8 +596,8 @@ impl EffectiveBalanceRepo {
         let mut ret = HashMap::new();
         for row in rows {
             let values: serde_json::Value = row.values.expect("values is not null");
-            let details: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(values)
+                .map_err(|e| corrupt_snapshot("balance snapshot (find_range_all)", e))?;
             let balance_id = (details.journal_id, details.account_id, details.currency);
             let balance = AccountBalance::new(row.normal_balance_type, details);
             let entry = ret.entry(balance_id).or_insert((None, 0, None, 0));
@@ -617,7 +626,7 @@ impl EffectiveBalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -711,8 +720,8 @@ impl EffectiveBalanceRepo {
         let mut ranges = HashMap::new();
         for row in rows {
             let values: serde_json::Value = row.values.expect("values is not null");
-            let details: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(values)
+                .map_err(|e| corrupt_snapshot("balance snapshot (list_range_for_account)", e))?;
             let balance_id = (details.journal_id, details.account_id, details.currency);
             let balance = AccountBalance::new(row.normal_balance_type, details);
             let entry = ranges.entry(balance_id).or_insert((None, 0, None, 0));
@@ -750,7 +759,7 @@ impl EffectiveBalanceRepo {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, crate::CalaFault>
     {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
@@ -860,8 +869,8 @@ impl EffectiveBalanceRepo {
         let mut ret = HashMap::new();
         for row in rows {
             let values: serde_json::Value = row.values.expect("values is not null");
-            let details: BalanceSnapshot =
-                serde_json::from_value(values).expect("Failed to deserialize balance snapshot");
+            let details: BalanceSnapshot = serde_json::from_value(values)
+                .map_err(|e| corrupt_snapshot("balance snapshot (list_range_for_accounts)", e))?;
             let balance_id = (details.journal_id, details.account_id, details.currency);
             let balance = AccountBalance::new(row.normal_balance_type, details);
             let entry = ret.entry(balance_id).or_insert((None, 0, None, 0));
@@ -916,7 +925,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
@@ -1023,7 +1032,7 @@ impl EffectiveBalanceRepo {
             let last_snapshot = match (row.values, row.effective_date) {
                 (Some(values), Some(effective_date)) => {
                     let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
-                        .expect("Failed to deserialize balance snapshot");
+                        .map_err(|e| corrupt_snapshot("balance snapshot (find_for_update)", e))?;
                     Some((effective_date, snapshot))
                 }
                 _ => None,
@@ -1068,7 +1077,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, BalanceError> {
+    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, crate::CalaFault> {
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
@@ -1175,7 +1184,7 @@ impl EffectiveBalanceRepo {
             let last_snapshot = match (row.values, row.effective_date) {
                 (Some(values), Some(effective_date)) => {
                     let snapshot = serde_json::from_value::<BalanceSnapshot>(values)
-                        .expect("Failed to deserialize balance snapshot");
+                        .map_err(|e| corrupt_snapshot("balance snapshot (find_for_update)", e))?;
                     Some((effective_date, snapshot))
                 }
                 _ => None,
@@ -1215,7 +1224,7 @@ impl EffectiveBalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: Vec<EffectiveBalanceSnapshot>,
-    ) -> Result<(), BalanceError> {
+    ) -> Result<(), crate::CalaFault> {
         let mut journal_ids = Vec::with_capacity(new_balances.len());
         let mut account_ids = Vec::with_capacity(new_balances.len());
         let mut currencies = Vec::with_capacity(new_balances.len());

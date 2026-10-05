@@ -40,7 +40,8 @@ impl VelocityLimitRepo {
             limit as VelocityLimitId,
         )
         .execute(op.as_executor())
-        .await?;
+        .await
+        .map_err(crate::velocity::error::attach_limit_error)?;
         Ok(())
     }
 
@@ -54,7 +55,7 @@ impl VelocityLimitRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
-    ) -> Result<Vec<VelocityLimit>, VelocityError> {
+    ) -> Result<Vec<VelocityLimit>, crate::CalaFault> {
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query_as!(
@@ -73,7 +74,9 @@ impl VelocityLimitRepo {
             ))
             .await?;
         let n = rows.len();
-        let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;
+        let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)
+            .map_err(|e| errlanes::Fatal::from_error(errlanes::FatalKind::CorruptState, e))?
+            .0;
         Ok(ret)
     }
 }

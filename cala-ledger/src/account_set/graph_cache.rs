@@ -92,7 +92,7 @@ use tracing::instrument;
 use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
-    error::AccountSetError,
+    error::{AccountSetError, AccountSetRejection},
     graph_validation::{
         has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
         SetMembership,
@@ -277,7 +277,7 @@ impl SetGraphCache {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, AccountSetError> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
         let span = tracing::Span::current();
         let probe = DirectMembershipProbe {
             epoch: probe_epoch,
@@ -519,7 +519,7 @@ impl SetGraphCache {
                 );
                 Ok(())
             }
-            Some(true) => Err(AccountSetError::MemberAlreadyAdded),
+            Some(true) => Err(AccountSetRejection::MemberAlreadyAdded.into()),
             // A set unknown to snapshot + overlay surfaced mid-walk. With
             // a matching epoch this should be unreachable — but the SQL
             // walk is always correct, so fall back rather than reason
@@ -722,7 +722,7 @@ impl SetGraphCache {
         fields(epoch = tracing::field::Empty, sets = tracing::field::Empty),
         err(level = "warn")
     )]
-    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), AccountSetError> {
+    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), crate::CalaFault> {
         let Ok(_guard) = inner.refresh_lock.try_lock() else {
             return Ok(());
         };

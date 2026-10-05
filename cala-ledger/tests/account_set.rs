@@ -5,7 +5,11 @@ use std::time::Duration;
 use rand::distr::{Alphanumeric, SampleString};
 
 use cala_ledger::{
-    account::*, account_set::error::AccountSetError, account_set::*, tx_template::*, *,
+    account::*,
+    account_set::error::{AccountSetError, AccountSetRejection},
+    account_set::*,
+    tx_template::*,
+    *,
 };
 
 #[tokio::test]
@@ -129,14 +133,18 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
     let res = cala.account_sets().add_member(set_b.id(), set_a.id()).await;
     assert!(matches!(
         res,
-        Err(AccountSetError::MembershipCycleDetected { .. })
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MembershipCycleDetected { .. }
+        ))
     ));
 
     // A is a (transitive) ancestor of C: adding A to C would close a cycle
     let res = cala.account_sets().add_member(set_c.id(), set_a.id()).await;
     assert!(matches!(
         res,
-        Err(AccountSetError::MembershipCycleDetected { .. })
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MembershipCycleDetected { .. }
+        ))
     ));
 
     // A set can never be its own member
@@ -149,7 +157,12 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
     // only collided once accounts were involved, and the edge then made
     // any later account-add under C fail. Walk-only rejects it up front.)
     let res = cala.account_sets().add_member(set_a.id(), set_c.id()).await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Genuinely independent additions still work
     let set_d = cala.account_sets().create(new_set("SET D")).await.unwrap();
@@ -204,7 +217,12 @@ async fn errors_on_membership_depth_exceeded() -> anyhow::Result<()> {
         .add_member(sets[16].id(), sets[17].id())
         .await;
     assert!(
-        matches!(res, Err(AccountSetError::MembershipDepthExceeded { .. })),
+        matches!(
+            res,
+            Err(AccountSetError::Rejected(
+                AccountSetRejection::MembershipDepthExceeded { .. }
+            ))
+        ),
         "an edge past MAX_MEMBERSHIP_DEPTH must be rejected"
     );
 
@@ -277,7 +295,12 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .account_sets()
         .add_member(branch_b.id(), acct.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Same rule inside one batch: two pairs giving one account two paths
     // to the grandparent must be rejected atomically.
@@ -285,7 +308,12 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .account_sets()
         .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), other.id())])
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Set-level diamond: a set under branch_a cannot also be attached
     // under branch_b (it — and every account below it — would reach the
@@ -303,7 +331,12 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .account_sets()
         .add_member(branch_b.id(), nested.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Descendant-path overlap, all sets empty: a *descendant* of the
     // member already reaches the target chain through an edge that
@@ -346,7 +379,12 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .account_sets()
         .add_member(set_a2.id(), set_x2.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Subtree-account overlap: attaching a set whose accounts already live
     // under the target chain is rejected.
@@ -369,7 +407,12 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
         .account_sets()
         .add_member(branch_b.id(), outside.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     Ok(())
 }
@@ -606,7 +649,9 @@ async fn add_member_sets_batch_rejects_interacting_edges_atomically() -> anyhow:
         .await;
     assert!(matches!(
         result,
-        Err(AccountSetError::MembershipCycleDetected { .. })
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MembershipCycleDetected { .. }
+        ))
     ));
 
     let ids = [set_a.id(), set_b.id()];
@@ -667,7 +712,12 @@ async fn add_member_sets_batch_rejects_duplicate_paths_atomically() -> anyhow::R
             (root.id(), leaf.id()),
         ])
         .await;
-    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     let ids = [root.id(), branch.id(), leaf.id()];
     let edge_count: i64 = sqlx::query_scalar(
@@ -744,7 +794,12 @@ async fn add_member_sets_batch_rejects_account_conflict_from_interacting_edges(
         .account_sets()
         .add_member_sets(&[(root.id(), branch.id()), (branch.id(), leaf.id())])
         .await;
-    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     let parent_ids = [root.id(), branch.id()];
     let member_ids = [branch.id(), leaf.id()];
@@ -803,7 +858,12 @@ async fn add_member_sets_batch_rejects_a_duplicate_of_a_committed_edge() -> anyh
         .account_sets()
         .add_member_sets(&[(parent.id(), child.id())])
         .await;
-    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     let edge_count: i64 = sqlx::query_scalar(
         r#"
@@ -861,7 +921,12 @@ async fn add_member_sets_batch_rejects_a_path_through_committed_edges() -> anyho
         .account_sets()
         .add_member_sets(&[(root.id(), branch.id()), (branch.id(), leaf.id())])
         .await;
-    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // The batch must not insert its proposed edges; the committed edge remains.
     let proposed_count: i64 = sqlx::query_scalar(
@@ -921,12 +986,12 @@ async fn add_member_sets_batch_attributes_depth_overflow_through_existing_edges(
     let result = cala.account_sets().add_member_sets(&proposed).await;
     assert!(matches!(
         result,
-        Err(AccountSetError::MembershipDepthExceeded {
+        Err(AccountSetError::Rejected(AccountSetRejection::MembershipDepthExceeded {
             account_set_id,
             member_account_set_id,
             depth: 17,
             max: 16,
-        }) if account_set_id == sets[16].id()
+        })) if account_set_id == sets[16].id()
             && member_account_set_id == sets[17].id()
     ));
 
@@ -1054,7 +1119,12 @@ async fn add_member_sets_batch_rejects_dense_duplicate_paths_without_path_explos
     )
     .await
     .expect("dense invalid input must be rejected with bounded work");
-    assert!(matches!(result, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     Ok(())
 }
@@ -1088,12 +1158,12 @@ async fn add_member_sets_batch_rejects_depth_overflow_atomically() -> anyhow::Re
     let result = cala.account_sets().add_member_sets(&edges).await;
     assert!(matches!(
         result,
-        Err(AccountSetError::MembershipDepthExceeded {
+        Err(AccountSetError::Rejected(AccountSetRejection::MembershipDepthExceeded {
             account_set_id,
             member_account_set_id,
             depth: 17,
             max: 16,
-        }) if account_set_id == sets[16].id()
+        })) if account_set_id == sets[16].id()
             && member_account_set_id == sets[17].id()
     ));
 
@@ -1154,7 +1224,12 @@ async fn add_member_sets_batch_rejects_journal_mismatch_atomically() -> anyhow::
             (parent.id(), invalid_child.id()),
         ])
         .await;
-    assert!(matches!(result, Err(AccountSetError::JournalIdMismatch)));
+    assert!(matches!(
+        result,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::JournalIdMismatch
+        ))
+    ));
 
     let edge_count: i64 = sqlx::query_scalar(
         r#"
@@ -1231,7 +1306,9 @@ async fn add_member_sets_batch_rejects_member_history_atomically() -> anyhow::Re
         .await;
     assert!(matches!(
         result,
-        Err(AccountSetError::MemberHasBalanceHistory { .. })
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberHasBalanceHistory { .. }
+        ))
     ));
 
     let edge_count: i64 = sqlx::query_scalar(
@@ -1707,10 +1784,10 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
         .expect("add_member should fail when the member has balance history");
 
     match err {
-        AccountSetError::MemberHasBalanceHistory {
+        AccountSetError::Rejected(AccountSetRejection::MemberHasBalanceHistory {
             account_set_id,
             member_id,
-        } => {
+        }) => {
             assert_eq!(account_set_id, target.id());
             assert_eq!(member_id, recipient.id());
         }
@@ -1804,10 +1881,10 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
         .expect("remove_member should fail when the member has balance history");
 
     match err {
-        AccountSetError::MemberHasBalanceHistory {
+        AccountSetError::Rejected(AccountSetRejection::MemberHasBalanceHistory {
             account_set_id,
             member_id,
-        } => {
+        }) => {
             assert_eq!(account_set_id, target.id());
             assert_eq!(member_id, recipient.id());
         }
@@ -1890,7 +1967,12 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
         .account_sets()
         .add_member(branch_b.id(), acct.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Warm batch path: cross-pair conflict rejected, distinct accounts
     // pass.
@@ -1901,7 +1983,12 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
         .account_sets()
         .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), other.id())])
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
     cala.account_sets()
         .add_members(&[(branch_a.id(), other.id()), (branch_b.id(), third.id())])
         .await
@@ -1921,7 +2008,12 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
         .account_sets()
         .add_member_in_op(&mut op, branch_b.id(), fourth.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
     drop(op);
 
     // Duplicate direct edge in one op: the second identical attach is
@@ -1935,7 +2027,12 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
         .account_sets()
         .add_member_in_op(&mut op, branch_a.id(), fifth.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
     drop(op);
 
     Ok(())
@@ -2024,7 +2121,12 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
         .account_sets()
         .add_member(fresh_set.id(), acct_a.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
 
     // Epoch-bump fallback: attach a new set under `left` (bumps the
     // epoch in-op), give an account a path through it, then try a second
@@ -2050,7 +2152,12 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
         .account_sets()
         .add_member_in_op(&mut op, right.id(), acct_b.id())
         .await;
-    assert!(matches!(res, Err(AccountSetError::MemberAlreadyAdded)));
+    assert!(matches!(
+        res,
+        Err(AccountSetError::Rejected(
+            AccountSetRejection::MemberAlreadyAdded
+        ))
+    ));
     drop(op);
 
     Ok(())

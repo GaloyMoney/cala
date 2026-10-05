@@ -1,36 +1,18 @@
-use sqlx::error::DatabaseError;
+use crate::primitives::{AccountId, JournalId, TransactionId};
 use thiserror::Error;
 
-use crate::{
-    account_set::error::AccountSetError,
-    balance::error::BalanceError,
-    primitives::{AccountId, JournalId, TransactionId},
-    tx_template::error::TxTemplateError,
-    velocity::error::VelocityError,
-};
-
-/// The posting module's error — nested under
-/// [`crate::ledger::error::LedgerError`], never the other way around, exactly
-/// like every other domain error.
-///
-/// Domain errors the flow passes through keep their own granularity via
-/// `#[from]`; failures specific to the posting path get their own variants
-/// here. [`Self::Rejected`] additionally attributes a failure to one posting
-/// of the submitted batch.
-#[derive(Error, Debug)]
-pub enum PostingError {
-    #[error("PostingError - Sqlx: {0}")]
-    Sqlx(sqlx::Error),
-    #[error("PostingError - DuplicateKey: {0}")]
-    DuplicateKey(Box<dyn DatabaseError>),
-    #[error("PostingError - TxTemplateError: {0}")]
-    TxTemplateError(#[from] TxTemplateError),
-    #[error("PostingError - VelocityError: {0}")]
-    VelocityError(#[from] VelocityError),
-    #[error("PostingError - AccountSetError: {0}")]
-    AccountSetError(#[from] AccountSetError),
-    #[error("PostingError - BalanceError: {0}")]
-    BalanceError(#[from] BalanceError),
+/// Rejections from posting. Batch attribution is retained; module-only paths are flattened.
+#[errlanes::compose]
+#[derive(Debug, Error)]
+pub enum PostingRejection {
+    #[error("cannot update balances: the account {0} is locked")]
+    AccountLocked(AccountId),
+    /// The `cala_transactions` primary key rejected a write already
+    /// present in the table — an idempotent replay is the caller's to
+    /// interpret, so it is not attributed to a specific posting in the
+    /// batch the way [`Self::Rejected`] is.
+    #[error("duplicate transaction id in this batch")]
+    DuplicateTransactionId,
     /// A failure attributed to a specific posting within a batch.
     ///
     /// The batch API is all-or-nothing: the whole operation aborts on the
@@ -42,7 +24,7 @@ pub enum PostingError {
     /// nothing has been written when it surfaces. Infrastructure failures
     /// (constraint races, deadlocks, connection loss) are not attributable
     /// and surface through the other variants.
-    #[error("PostingError - Rejected: posting {index} ({tx_id}): {reason}")]
+    #[error("posting {index} ({tx_id}): {reason}")]
     Rejected {
         index: usize,
         tx_id: TransactionId,
@@ -53,48 +35,50 @@ pub enum PostingError {
     /// bare `out of shared memory` from Postgres that names neither the cause
     /// nor the fix — and that can strike unrelated concurrent transactions too.
     #[error(
-        "PostingError - BatchTooManyAccounts: this batch touches {distinct} distinct \
-         (journal, account, currency) balances; at most {max} may be locked in one batch. \
-         Split it — batch *size* is not the limit, the number of distinct accounts is."
+        "this batch touches {distinct} distinct (journal, account, currency) balances; \
+         at most {max} may be locked in one batch. Split it — batch *size* is not the \
+         limit, the number of distinct accounts is."
     )]
     BatchTooManyAccounts { distinct: usize, max: usize },
+    #[compose(flatten)]
+    TxTemplate(crate::tx_template::error::TxTemplateLookupRejection),
+    #[compose(flatten)]
+    Velocity(crate::velocity::error::VelocityEnforcementRejection),
 }
 
-impl PostingError {
-    pub(super) fn rejected(
-        index: usize,
-        tx_id: TransactionId,
-        reason: impl Into<RejectionReason>,
-    ) -> Self {
-        // Keep the attribution observable on the flow's span even when the
-        // caller only logs the error.
-        let span = tracing::Span::current();
-        span.record("failed_posting_index", index);
-        span.record("failed_posting_id", tracing::field::display(tx_id));
-        Self::Rejected {
-            index,
-            tx_id,
-            reason: Box::new(reason.into()),
+pub type PostingError = errlanes::Fail<PostingRejection, crate::CalaLanes>;
+
+pub(super) fn rejected(
+    index: usize,
+    tx_id: TransactionId,
+    reason: impl Into<RejectionReason>,
+) -> PostingError {
+    let span = tracing::Span::current();
+    span.record("failed_posting_index", index);
+    span.record("failed_posting_id", tracing::field::display(tx_id));
+    PostingRejection::Rejected {
+        index,
+        tx_id,
+        reason: Box::new(reason.into()),
+    }
+    .into()
+}
+
+/// The transaction insert owns the duplicate-ID interpretation of this constraint.
+pub(super) fn transaction_write_error(error: sqlx::Error) -> PostingError {
+    if let sqlx::Error::Database(db) = &error {
+        if db.is_unique_violation() && db.constraint() == Some("cala_transactions_pkey") {
+            return PostingRejection::DuplicateTransactionId.into();
         }
     }
+    error.into()
 }
 
-impl From<sqlx::Error> for PostingError {
-    fn from(e: sqlx::Error) -> Self {
-        match e {
-            sqlx::Error::Database(err) if err.message().contains("duplicate key") => {
-                Self::DuplicateKey(err)
-            }
-            e => Self::Sqlx(e),
-        }
-    }
-}
-
-/// The business-level reason a posting was rejected.
-#[derive(Error, Debug)]
+#[errlanes::compose]
+#[derive(Debug, Error)]
 pub enum RejectionReason {
-    #[error("{0}")]
-    TxTemplate(#[from] TxTemplateError),
+    #[compose(flatten)]
+    TxTemplate(crate::tx_template::error::TxTemplateEvaluationRejection),
     #[error("account {0} does not exist")]
     AccountNotFound(AccountId),
     #[error(

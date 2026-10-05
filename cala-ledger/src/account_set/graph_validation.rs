@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::primitives::{AccountId, AccountSetId};
 
-use super::error::AccountSetError;
+use super::error::{AccountSetError, AccountSetRejection};
 
 /// Maximum depth (in set->set edges) of any root-to-leaf membership
 /// chain. Rejecting edges past this bound keeps the read-time ancestor
@@ -230,10 +230,11 @@ pub(super) fn validate_set_memberships(
             .copied()
             .or_else(|| existing_edges.first().copied())
             .expect("cycle detected in a graph with no edges");
-        return Err(AccountSetError::MembershipCycleDetected {
+        return Err(AccountSetRejection::MembershipCycleDetected {
             account_set_id: edge.account_set_id,
             member_account_set_id: edge.member_account_set_id,
-        });
+        }
+        .into());
     }
 
     // In topological order, every parent's ancestor set is complete before
@@ -248,7 +249,7 @@ pub(super) fn validate_set_memberships(
         for child in dag.children(account_set_id) {
             let child_ancestors = ancestors.entry(*child).or_default();
             if !child_ancestors.is_disjoint(&contribution) {
-                return Err(AccountSetError::MemberAlreadyAdded);
+                return Err(AccountSetRejection::MemberAlreadyAdded.into());
             }
             child_ancestors.extend(contribution.iter().copied());
         }
@@ -260,7 +261,7 @@ pub(super) fn validate_set_memberships(
     let mut account_paths = HashSet::new();
     for membership in account_members {
         if !account_paths.insert(*membership) {
-            return Err(AccountSetError::MemberAlreadyAdded);
+            return Err(AccountSetRejection::MemberAlreadyAdded.into());
         }
         if let Some(containers) = ancestors.get(&membership.account_set_id) {
             for container in containers {
@@ -268,7 +269,7 @@ pub(super) fn validate_set_memberships(
                     account_set_id: *container,
                     account_id: membership.account_id,
                 }) {
-                    return Err(AccountSetError::MemberAlreadyAdded);
+                    return Err(AccountSetRejection::MemberAlreadyAdded.into());
                 }
             }
         }
@@ -277,12 +278,13 @@ pub(super) fn validate_set_memberships(
     if traversal.max_depth() > MAX_MEMBERSHIP_DEPTH {
         let (index, depth) = first_depth_overflow(existing_edges, proposed_edges);
         let edge = proposed_edges[index];
-        return Err(AccountSetError::MembershipDepthExceeded {
+        return Err(AccountSetRejection::MembershipDepthExceeded {
             account_set_id: edge.account_set_id,
             member_account_set_id: edge.member_account_set_id,
             depth,
             max: MAX_MEMBERSHIP_DEPTH,
-        });
+        }
+        .into());
     }
 
     Ok(())
@@ -482,7 +484,9 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
-            Err(AccountSetError::MembershipCycleDetected { .. })
+            Err(AccountSetError::Rejected(
+                AccountSetRejection::MembershipCycleDetected { .. }
+            ))
         ));
     }
 
@@ -494,7 +498,9 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&existing, &proposed, &[]),
-            Err(AccountSetError::MemberAlreadyAdded)
+            Err(AccountSetError::Rejected(
+                AccountSetRejection::MemberAlreadyAdded
+            ))
         ));
     }
 
@@ -507,7 +513,9 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&existing, &[], &account_members),
-            Err(AccountSetError::MemberAlreadyAdded)
+            Err(AccountSetError::Rejected(
+                AccountSetRejection::MemberAlreadyAdded
+            ))
         ));
     }
 
@@ -518,12 +526,12 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
-            Err(AccountSetError::MembershipDepthExceeded {
+            Err(AccountSetError::Rejected(AccountSetRejection::MembershipDepthExceeded {
                 account_set_id,
                 member_account_set_id,
                 depth: 17,
                 max: 16,
-            }) if account_set_id == sets[16] && member_account_set_id == sets[17]
+            })) if account_set_id == sets[16] && member_account_set_id == sets[17]
         ));
     }
 }

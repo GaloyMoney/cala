@@ -1,34 +1,32 @@
 use thiserror::Error;
 
-use super::repo::{
-    JournalColumn, JournalCreateError, JournalFindError, JournalModifyError, JournalQueryError,
-};
+use super::repo::JournalConstraintViolation;
+use crate::primitives::JournalId;
 
-#[derive(Error, Debug)]
-pub enum JournalError {
-    #[error("JournalError - Sqlx: {0}")]
-    Sqlx(#[from] sqlx::Error),
-    #[error("JournalError - Create: {0}")]
-    Create(JournalCreateError),
-    #[error("JournalError - Modify: {0}")]
-    Modify(#[from] JournalModifyError),
-    #[error("JournalError - Find: {0}")]
-    Find(#[from] JournalFindError),
-    #[error("JournalError - Query: {0}")]
-    Query(#[from] JournalQueryError),
-    #[error("JournalError - code '{0}' already exists")]
-    CodeAlreadyExists(String),
+#[errlanes::compose]
+#[derive(Debug, Clone, Error)]
+#[lift(JournalLookupRejection, strict)]
+#[lift(JournalConstraintViolation, unhandled = fatal)]
+pub enum JournalRejection {
+    #[lift(JournalLookupRejection::NotFoundById)]
+    #[error("journal '{0}' not found")]
+    NotFoundById(JournalId),
+    #[lift(JournalLookupRejection::NotFoundByCode)]
+    #[error("journal with code '{0}' not found")]
+    NotFoundByCode(String),
+    #[error("code '{0}' already exists")]
+    #[lift(JournalConstraintViolation::CodeKey)]
+    #[rejection(code = "CODE_ALREADY_EXISTS")]
+    CodeAlreadyExists(#[source] es_entity::ConstraintConflict<Option<String>>),
 }
 
-impl From<JournalCreateError> for JournalError {
-    fn from(error: JournalCreateError) -> Self {
-        match error {
-            JournalCreateError::ConstraintViolation {
-                column: Some(JournalColumn::Code),
-                value,
-                ..
-            } => Self::CodeAlreadyExists(value.unwrap_or_default()),
-            other => Self::Create(other),
-        }
-    }
+pub type JournalError = errlanes::Fail<JournalRejection, crate::CalaLanes>;
+
+#[derive(Debug, Clone, Error, errlanes::Rejection)]
+pub enum JournalLookupRejection {
+    #[error("journal '{0}' not found")]
+    NotFoundById(JournalId),
+    #[error("journal with code '{0}' not found")]
+    NotFoundByCode(String),
 }
+pub type JournalLookupError = errlanes::Fail<JournalLookupRejection, crate::CalaLanes>;

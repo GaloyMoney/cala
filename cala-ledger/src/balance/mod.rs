@@ -42,6 +42,7 @@ mod repo;
 mod snapshot;
 
 use chrono::{DateTime, NaiveDate, Utc};
+use errlanes::WidenResult;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use tracing::instrument;
@@ -130,7 +131,7 @@ impl Balances {
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         self.repo.find_all(ids).await
     }
 
@@ -146,7 +147,7 @@ impl Balances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.repo
             .list_for_account(journal_id, account_id.into(), args)
@@ -159,7 +160,7 @@ impl Balances {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         self.repo
             .list_for_accounts(journal_id, account_ids, args)
@@ -171,7 +172,7 @@ impl Balances {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, BalanceError> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
         self.repo.find_all_in_op(op, ids).await
     }
 
@@ -188,7 +189,7 @@ impl Balances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        BalanceError,
+        crate::CalaFault,
     > {
         self.repo
             .list_for_account_in_op(op, journal_id, account_id.into(), args)
@@ -202,7 +203,7 @@ impl Balances {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, BalanceError>
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
     {
         self.repo
             .list_for_accounts_in_op(op, journal_id, account_ids, args)
@@ -227,7 +228,7 @@ impl Balances {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<bool, BalanceError> {
+    ) -> Result<bool, crate::CalaFault> {
         self.repo
             .member_has_balance_history_in_op(op, journal_id, member_id)
             .await
@@ -247,7 +248,7 @@ impl Balances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         pairs: &[(JournalId, AccountId)],
-    ) -> Result<Vec<AccountId>, BalanceError> {
+    ) -> Result<Vec<AccountId>, crate::CalaFault> {
         self.repo
             .members_with_balance_history_in_op(op, pairs)
             .await
@@ -371,7 +372,11 @@ impl Balances {
                 .await?;
         }
 
-        let journal = self.journals.find_in_op(&mut *op, journal_id).await?;
+        let journal = self
+            .journals
+            .find_in_op(&mut *op, journal_id)
+            .await
+            .widen()?;
         if journal.insert_effective_balances() {
             self.effective
                 .apply_ec_rollup_batch_in_op(op, journal_id, &group, &ec_mappings, &ec_leaves)
