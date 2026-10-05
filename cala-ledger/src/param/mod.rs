@@ -2,10 +2,22 @@ pub mod definition;
 
 use cel_interpreter::{CelContext, CelConversionRejection, CelMap, CelValue};
 use es_entity::clock::ClockHandle;
+use es_entity::errlanes;
 use std::collections::HashMap;
 use tracing::instrument;
 
 pub use cala_types::param::*;
+
+/// Evaluating an omitted parameter's default and coercing it to its declared type.
+#[derive(Debug, errlanes::Rejection)]
+pub enum ParamDefaultRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Evaluation(CelConversionRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Value(ParamValueRejection),
+}
 
 #[derive(Clone, Debug)]
 pub struct Params {
@@ -29,7 +41,7 @@ impl Params {
         clock: &ClockHandle,
         defs: Option<&Vec<ParamDefinition>>,
         reject_value: impl Fn(&str, ParamValueRejection) -> R,
-        reject_default: impl Fn(&str, CelConversionRejection) -> R,
+        reject_default: impl Fn(&str, ParamDefaultRejection) -> R,
     ) -> Result<CelContext, R> {
         let mut ctx = crate::cel_context::initialize(clock.clone());
         if let Some(defs) = defs {
@@ -43,10 +55,14 @@ impl Params {
                             .map_err(|source| reject_value(&d.name, source))?,
                     );
                 } else if let Some(expr) = d.default.as_ref() {
+                    let value = expr
+                        .evaluate(&ctx)
+                        .map_err(|source| reject_default(&d.name, source.into()))?;
                     cel_map.insert(
                         d.name.clone(),
-                        expr.evaluate(&ctx)
-                            .map_err(|source| reject_default(&d.name, source))?,
+                        d.r#type
+                            .coerce_value(value)
+                            .map_err(|source| reject_default(&d.name, source.into()))?,
                     );
                 }
             }
@@ -74,31 +90,189 @@ mod tests {
         primitives::TransactionId,
         velocity::error::AttachVelocityControlRejection,
     };
+    use cel_interpreter::{CelExpression, CelType};
+    use chrono::{TimeZone, Utc};
     use es_entity::{
         clock::Clock,
         errlanes::{Level, Rejection},
     };
     use std::error::Error;
 
+    fn definition(r#type: ParamDataType, default: &str) -> Vec<ParamDefinition> {
+        vec![ParamDefinition {
+            name: "value".into(),
+            r#type,
+            default: Some(default.parse().unwrap()),
+            description: None,
+        }]
+    }
+
+    fn bind(
+        params: Params,
+        defs: &Vec<ParamDefinition>,
+        clock: &ClockHandle,
+    ) -> Result<CelContext, AttachVelocityControlRejection> {
+        params.into_context(
+            clock,
+            Some(defs),
+            |_, source| source.into(),
+            |_, source| AttachVelocityControlRejection::Default(source),
+        )
+    }
+
+    fn has_source<T: Error + 'static>(error: &dyn Error) -> bool {
+        let mut source = error.source();
+        while let Some(error) = source {
+            if error.is::<T>() {
+                return true;
+            }
+            source = error.source();
+        }
+        false
+    }
+
     #[test]
-    fn binding_reports_errors_in_the_callers_contract_with_context_and_sources() {
+    fn defaults_and_supplied_values_have_the_same_declared_representation() {
+        let now = Utc.with_ymd_and_hms(2025, 6, 15, 10, 30, 0).unwrap();
+        let (clock, _control) = ClockHandle::manual_at(now);
+        let id = uuid::Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
+        let decimal = rust_decimal::Decimal::new(125, 2);
+        let cases = [
+            (
+                ParamDataType::Uuid,
+                "'00000000-0000-0000-0000-000000000001'",
+                CelValue::from(id.to_string()),
+                CelValue::Uuid(id),
+            ),
+            (
+                ParamDataType::Decimal,
+                "'1.25'",
+                CelValue::from("1.25"),
+                CelValue::Decimal(decimal),
+            ),
+            (
+                ParamDataType::Date,
+                "'2025-06-15'",
+                CelValue::from("2025-06-15"),
+                CelValue::Date(now.date_naive()),
+            ),
+            (
+                ParamDataType::Date,
+                "date()",
+                CelValue::Timestamp(now),
+                CelValue::Date(now.date_naive()),
+            ),
+            (
+                ParamDataType::Timestamp,
+                "timestamp('2025-06-15T10:30:00Z')",
+                CelValue::Timestamp(now),
+                CelValue::Timestamp(now),
+            ),
+            (
+                ParamDataType::Boolean,
+                "true",
+                CelValue::Bool(true),
+                CelValue::Bool(true),
+            ),
+            (
+                ParamDataType::Integer,
+                "42",
+                CelValue::Int(42),
+                CelValue::Int(42),
+            ),
+        ];
+        for (ty, default, supplied, canonical) in cases {
+            let defs = definition(ty, default);
+            let defaulted = bind(Params::new(), &defs, &clock).unwrap();
+            let mut params = Params::new();
+            params.insert("value", supplied);
+            let supplied = bind(params, &defs, &clock).unwrap();
+            let mut expected = crate::cel_context::initialize(clock.clone());
+            let mut values = CelMap::new();
+            values.insert("value", canonical);
+            expected.add_variable("params", values);
+            // Date values become CEL timestamps on evaluation. Compare the
+            // stored diagnostic context as well to catch an uncoerced date().
+            assert_eq!(
+                defaulted.debug_context(),
+                expected.debug_context(),
+                "{default}"
+            );
+            assert_eq!(
+                supplied.debug_context(),
+                expected.debug_context(),
+                "{default}"
+            );
+            let expression: CelExpression = "params.value".parse().unwrap();
+            assert_eq!(
+                expression.evaluate(&defaulted).unwrap(),
+                expression.evaluate(&supplied).unwrap(),
+                "{default}"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_defaults_keep_default_context_and_typed_causes_through_batch_posting() {
         let posting = PostingRef {
             index: 4,
             tx_id: TransactionId::new(),
         };
-        let defs = vec![ParamDefinition {
-            name: "account".into(),
-            r#type: ParamDataType::Uuid,
-            default: Some("missing_variable".parse().unwrap()),
-            description: None,
-        }];
-        for supplied in [false, true] {
-            let mut params = Params::new();
-            if supplied {
-                params.insert("account", "invalid-uuid");
+        for (ty, default, cause_code) in [
+            (ParamDataType::Uuid, "'invalid-uuid'", "PARAM_INVALID_UUID"),
+            (
+                ParamDataType::Decimal,
+                "'invalid-decimal'",
+                "PARAM_INVALID_DECIMAL",
+            ),
+            (ParamDataType::Date, "'invalid-date'", "PARAM_INVALID_DATE"),
+            (ParamDataType::Boolean, "42", "PARAM_TYPE_MISMATCH"),
+            (
+                ParamDataType::Uuid,
+                "missing_variable",
+                "CEL_UNKNOWN_IDENTIFIER",
+            ),
+        ] {
+            let defs = definition(ty, default);
+            let attachment = bind(Params::new(), &defs, Clock::handle()).unwrap_err();
+            assert_eq!(
+                <&str>::from(attachment.code()),
+                "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED"
+            );
+            let source = attachment
+                .source()
+                .unwrap()
+                .downcast_ref::<ParamDefaultRejection>()
+                .unwrap();
+            assert_eq!(<&str>::from(source.code()), cause_code);
+            match source {
+                ParamDefaultRejection::Value(ParamValueRejection::InvalidUuid {
+                    input, ..
+                }) => {
+                    assert_eq!(input, "invalid-uuid");
+                    assert!(has_source::<uuid::Error>(&attachment));
+                }
+                ParamDefaultRejection::Value(ParamValueRejection::InvalidDecimal { .. }) => {
+                    assert!(has_source::<rust_decimal::Error>(&attachment))
+                }
+                ParamDefaultRejection::Value(ParamValueRejection::InvalidDate { .. }) => {
+                    assert!(has_source::<chrono::ParseError>(&attachment))
+                }
+                ParamDefaultRejection::Value(ParamValueRejection::TypeMismatch {
+                    expected,
+                    actual,
+                }) => {
+                    assert_eq!(*expected, ParamDataType::Boolean);
+                    assert_eq!(*actual, CelType::Int);
+                }
+                ParamDefaultRejection::Evaluation(CelConversionRejection::UnknownIdent {
+                    ..
+                }) => assert!(has_source::<cel_interpreter::CelExecutionError>(
+                    &attachment
+                )),
+                other => panic!("unexpected cause: {other:?}"),
             }
-            let for_posting: PostingRejection = params
-                .clone()
+            let single: PostingRejection = Params::new()
                 .into_context(
                     Clock::handle(),
                     Some(&defs),
@@ -115,130 +289,76 @@ mod tests {
                 )
                 .unwrap_err()
                 .into();
-            let for_attachment = params
-                .into_context(
-                    Clock::handle(),
-                    Some(&defs),
-                    |_, source| AttachVelocityControlRejection::from(source),
-                    |_, source| AttachVelocityControlRejection::Default(source),
-                )
-                .unwrap_err();
             assert_eq!(
-                <&str>::from(for_posting.code()),
-                if supplied {
-                    "CALA_POSTING_PARAMETER_INVALID"
-                } else {
-                    "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
-                }
+                <&str>::from(single.code()),
+                "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
             );
-            assert_eq!(for_posting.level(), Level::Info);
-            assert_eq!(for_posting.to_string(), for_attachment.to_string());
-            assert_eq!(
-                <&str>::from(for_attachment.code()),
-                if supplied {
-                    "CALA_VELOCITY_PARAMETER_INVALID"
-                } else {
-                    "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED"
-                }
-            );
-            if supplied {
-                assert!(for_posting
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .is::<uuid::Error>());
-                assert!(for_attachment.source().unwrap().is::<ParamValueRejection>());
-                assert!(for_attachment
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .is::<uuid::Error>());
-                assert!(
-                    matches!(&for_posting, PostingRejection::Prepare(PreparePostingRejection::Param { posting: actual, parameter, source }) if *actual == posting && parameter == "account" && matches!(source.as_ref(), ParamValueRejection::InvalidUuid { input, .. } if input == "invalid-uuid"))
-                );
-                assert!(matches!(
-                    for_attachment,
-                    AttachVelocityControlRejection::Param(ParamValueRejection::InvalidUuid { .. })
-                ));
-            } else {
-                assert!(for_posting
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .is::<cel_interpreter::CelExecutionError>());
-                assert!(for_attachment
-                    .source()
-                    .unwrap()
-                    .is::<CelConversionRejection>());
-                assert!(for_attachment
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .is::<cel_interpreter::CelExecutionError>());
-                assert!(
-                    matches!(&for_posting, PostingRejection::Prepare(PreparePostingRejection::Default { posting: actual, parameter, source }) if *actual == posting && parameter == "account" && matches!(source.as_ref(), CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_variable"))
-                );
-                assert!(matches!(
-                    for_attachment,
-                    AttachVelocityControlRejection::Default(
-                        CelConversionRejection::UnknownIdent { .. }
-                    )
-                ));
-            }
-            let message = for_posting.to_string();
-            let batch = BatchPostingRejection::from(for_posting);
+            assert_eq!(single.level(), Level::Info);
+            assert_eq!(single.to_string(), attachment.to_string());
+            let batch = BatchPostingRejection::from(single);
             assert_eq!(
                 <&str>::from(batch.code()),
-                if supplied {
-                    "CALA_POSTING_PARAMETER_INVALID"
-                } else {
-                    "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
-                }
+                "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
             );
-            assert_eq!(batch.level(), Level::Info);
-            assert_eq!(batch.to_string(), message);
-            if supplied {
-                let source = batch
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .downcast_ref::<Box<ParamValueRejection>>()
-                    .unwrap();
-                assert_eq!(<&str>::from(source.code()), "PARAM_INVALID_UUID");
-                assert!(source.source().unwrap().is::<uuid::Error>());
-                assert!(
-                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Param {
-                    posting: actual, parameter, source
-                }) if actual == posting && parameter == "account" && matches!(source.as_ref(), ParamValueRejection::InvalidUuid { input, .. } if input == "invalid-uuid"))
-                );
-            } else {
-                let source = batch
-                    .source()
-                    .unwrap()
-                    .source()
-                    .unwrap()
-                    .downcast_ref::<Box<CelConversionRejection>>()
-                    .unwrap();
-                assert_eq!(<&str>::from(source.code()), "CEL_UNKNOWN_IDENTIFIER");
-                assert!(source
-                    .source()
-                    .unwrap()
-                    .is::<cel_interpreter::CelExecutionError>());
-                assert!(
-                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Default {
-                    posting: actual, parameter, source
-                }) if actual == posting && parameter == "account" && matches!(source.as_ref(), CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_variable"))
-                );
-            }
+            let BatchPostingRejection::Prepare(BatchPreparePostingRejection::Default {
+                posting: actual,
+                parameter,
+                source,
+            }) = batch
+            else {
+                panic!("default rejection")
+            };
+            assert_eq!(actual, posting);
+            assert_eq!(parameter, "value");
+            assert_eq!(<&str>::from(source.code()), cause_code);
+            assert_eq!(source.to_string(), attachment.to_string());
         }
+    }
+
+    #[test]
+    fn supplied_values_override_defaults_and_keep_the_supplied_value_error_contract() {
+        let defs = definition(ParamDataType::Uuid, "missing_variable");
+        let id = uuid::Uuid::now_v7();
+        let mut valid = Params::new();
+        valid.insert("value", id);
+        assert!(bind(valid, &defs, Clock::handle()).is_ok());
+        let mut invalid = Params::new();
+        invalid.insert("value", "invalid-uuid");
+        let attachment = bind(invalid.clone(), &defs, Clock::handle()).unwrap_err();
+        assert_eq!(
+            <&str>::from(attachment.code()),
+            "CALA_VELOCITY_PARAMETER_INVALID"
+        );
+        assert!(matches!(
+            attachment,
+            AttachVelocityControlRejection::Param(ParamValueRejection::InvalidUuid { .. })
+        ));
+        assert!(has_source::<uuid::Error>(&attachment));
+        let posting = PostingRef {
+            index: 1,
+            tx_id: TransactionId::new(),
+        };
+        let rejection = invalid
+            .into_context(
+                Clock::handle(),
+                Some(&defs),
+                |parameter, source| PreparePostingRejection::Param {
+                    posting,
+                    parameter: parameter.to_owned(),
+                    source: Box::new(source),
+                },
+                |parameter, source| PreparePostingRejection::Default {
+                    posting,
+                    parameter: parameter.to_owned(),
+                    source: Box::new(source),
+                },
+            )
+            .unwrap_err();
+        let batch = BatchPostingRejection::from(rejection);
+        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_PARAMETER_INVALID");
+        assert!(has_source::<uuid::Error>(&batch));
+        assert!(
+            matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Param { posting: actual, parameter, source }) if actual == posting && parameter == "value" && matches!(source.as_ref(), ParamValueRejection::InvalidUuid { .. }))
+        );
     }
 }

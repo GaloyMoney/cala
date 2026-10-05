@@ -189,6 +189,7 @@ mod sql_contract_tests {
 
 #[cfg(test)]
 mod rejection_code_contracts {
+    use crate::param::ParamDefaultRejectionCode;
     use crate::{
         account::error::*, account_set::error::*, balance::error::*, journal::error::*,
         ledger::error::*, posting::error::*, transaction::error::*, tx_template::error::*,
@@ -265,6 +266,7 @@ mod rejection_code_contracts {
             CelConversionRejectionCode,
             ExternalParseErrorCode,
             ParamValueRejectionCode,
+            ParamDefaultRejectionCode,
             UnsupportedParamTypeCode,
             ParseLayerErrorCode,
             ParseCurrencyErrorCode,

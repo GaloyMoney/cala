@@ -1,3 +1,4 @@
+use crate::param::ParamDefaultRejection;
 use cala_types::{param::*, primitives::*};
 use cel_interpreter::*;
 use es_entity::errlanes;
@@ -80,14 +81,14 @@ pub enum PreparePostingRejection {
         #[source]
         source: Box<CelConversionRejection>,
     },
-    /// Evaluating the default for an omitted parameter.
+    /// Evaluating and coercing the default for an omitted parameter.
     #[rejection(code = "CALA_POSTING_PARAMETER_DEFAULT_FAILED")]
     #[error("{}", source)]
     Default {
         posting: PostingRef,
         parameter: String,
         #[source]
-        source: Box<CelConversionRejection>,
+        source: Box<ParamDefaultRejection>,
     },
     /// Coercing a supplied parameter to its declared type.
     #[rejection(code = "CALA_POSTING_PARAMETER_INVALID")]

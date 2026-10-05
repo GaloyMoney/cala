@@ -49,6 +49,13 @@ fn velocity_attachment(e: AttachVelocityControlRejection) {
         | AttachVelocityControlRejection::Cel(_) => {}
     }
 }
+
+fn parameter_defaults(e: tx_template::ParamDefaultRejection) {
+    match e {
+        tx_template::ParamDefaultRejection::Evaluation(_)
+        | tx_template::ParamDefaultRejection::Value(_) => {}
+    }
+}
 fn template_create(e: CreateTxTemplateRejection) {
     match e {
         CreateTxTemplateRejection::DuplicateId(_) | CreateTxTemplateRejection::DuplicateCode(_) => {

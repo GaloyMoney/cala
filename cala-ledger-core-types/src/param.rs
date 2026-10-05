@@ -33,6 +33,7 @@ impl ParamDataType {
             String if *self == ParamDataType::String => Ok(value),
             Map if *self == ParamDataType::Json => Ok(value),
             Date if *self == ParamDataType::Date => Ok(value),
+            Timestamp if *self == ParamDataType::Timestamp => Ok(value),
             Timestamp if *self == ParamDataType::Date => {
                 if let CelValue::Timestamp(ts) = value {
                     Ok(CelValue::Date(ts.date_naive()))

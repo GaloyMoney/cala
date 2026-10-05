@@ -1,4 +1,5 @@
 use super::{control::VelocityControlConstraintViolation, limit::VelocityLimitConstraintViolation};
+use crate::param::ParamDefaultRejection;
 use crate::primitives::*;
 use cel_interpreter::*;
 use es_entity::errlanes;
@@ -61,10 +62,10 @@ pub enum AttachVelocityControlRejection {
     #[error("{0}")]
     #[rejection(code = "CALA_VELOCITY_PARAMETER_INVALID", from)]
     Param(cala_types::param::ParamValueRejection),
-    /// Evaluating the default for an omitted parameter.
+    /// Evaluating and coercing the default for an omitted parameter.
     #[error("{0}")]
     #[rejection(code = "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED")]
-    Default(#[source] CelConversionRejection),
+    Default(#[source] ParamDefaultRejection),
     /// Evaluating a balance-limit field, including result conversion.
     #[error("{0}")]
     #[rejection(code = "CALA_VELOCITY_LIMIT_EVALUATION_FAILED", from)]

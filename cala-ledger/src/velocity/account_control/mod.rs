@@ -159,6 +159,7 @@ impl AccountControls {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::param::ParamDefaultRejection;
     use cala_types::velocity::{BalanceLimit, Limit, ParamDataType, ParamDefinition};
     use cel_interpreter::{CelConversionRejection, CelExecutionError, CoreTypeCoercion};
     use es_entity::{
@@ -205,15 +206,31 @@ mod tests {
         );
         assert_eq!(default.level(), Level::Info);
         assert!(matches!(&default, AttachVelocityControlRejection::Default(
-            CelConversionRejection::UnknownIdent { expression, .. }
+            ParamDefaultRejection::Evaluation(CelConversionRejection::UnknownIdent { expression, .. })
         ) if expression == "missing_default"));
-        assert!(default.source().unwrap().is::<CelConversionRejection>());
+        assert!(default.source().unwrap().is::<ParamDefaultRejection>());
         assert!(default
             .source()
             .unwrap()
             .source()
             .unwrap()
+            .source()
+            .unwrap()
             .is::<CelExecutionError>());
+
+        let mut with_default = limit.clone();
+        with_default.params.as_mut().unwrap()[0].default = Some("'1.25'".parse().unwrap());
+        let evaluated = evaluate(with_default.clone(), Params::new()).unwrap();
+        assert_eq!(evaluated[0].limit.balance[0].amount, Decimal::new(125, 2));
+        with_default.params.as_mut().unwrap()[0].default = Some("'invalid'".parse().unwrap());
+        assert!(matches!(
+            evaluate(with_default, Params::new()),
+            Err(AttachVelocityControlRejection::Default(
+                ParamDefaultRejection::Value(
+                    cala_types::param::ParamValueRejection::InvalidDecimal { .. }
+                )
+            ))
+        ));
 
         let mut params = Params::new();
         params.insert("amount", "not a decimal");
