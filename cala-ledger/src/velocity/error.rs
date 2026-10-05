@@ -51,7 +51,10 @@ pub enum CreateVelocityLimitRejection {
 #[error("Limit already added to control")]
 pub struct LimitAlreadyAddedToControl;
 
-#[errlanes::compose]
+#[errlanes::compose(
+    cala_types::param::ParamValueRejection as Param,
+    cel_interpreter::CelConversionRejection as Cel
+)]
 #[derive(Debug)]
 pub enum AttachVelocityControlRejection {
     #[rejection(code = "CALA_VELOCITY_COULD_NOT_FIND_CONTROL_BY_ID")]
@@ -100,10 +103,6 @@ pub enum AttachVelocityControlRejection {
     #[rejection(code = "CEL_ERROR")]
     #[error("Cannot convert function value in '{}'", expression)]
     DefaultFunctionValue { expression: String },
-    #[compose(flatten)]
-    Param(cala_types::param::ParamValueRejection),
-    #[compose(flatten)]
-    Cel(cel_interpreter::CelConversionRejection),
 }
 
 #[derive(Debug, errlanes::Classify)]

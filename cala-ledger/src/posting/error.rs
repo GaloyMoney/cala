@@ -162,7 +162,7 @@ pub enum ApplyPostingRejection {
 }
 
 /// Batch preparation reuses single-posting preparation and adds cross-input checks.
-#[errlanes::compose(union(PreparePostingRejection))]
+#[errlanes::compose(PreparePostingRejection)]
 #[derive(Debug)]
 pub enum BatchPreparePostingRejection {
     #[rejection(code = "CALA_POSTING_REJECTED")]

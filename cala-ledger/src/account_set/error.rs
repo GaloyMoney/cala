@@ -111,7 +111,7 @@ pub enum AddSetMembersRejection {
     },
 }
 
-#[errlanes::compose(union(AddAccountMembersRejection, AddSetMembersRejection))]
+#[errlanes::compose(AddAccountMembersRejection, AddSetMembersRejection)]
 #[derive(Debug)]
 pub enum AddMemberRejection {
     #[compose(merge)]

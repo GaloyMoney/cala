@@ -58,7 +58,7 @@ pub enum CreateAccountRejection {
     ExternalIdAlreadyExists(Option<Option<String>>),
 }
 
-#[errlanes::compose(union(PersistAccountRejection))]
+#[errlanes::compose(PersistAccountRejection)]
 #[derive(Debug)]
 pub enum SetAccountStatusRejection {
     #[error("{0}")]
