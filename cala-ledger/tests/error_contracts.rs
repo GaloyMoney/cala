@@ -7,6 +7,7 @@ use cala_ledger::{
     errlanes::{lanes, Fail, Rejection},
     journal::{error::*, Journal},
     tx_template::error::*,
+    velocity::error::AttachVelocityControlRejection,
     *,
 };
 use std::future::Future;
@@ -33,6 +34,20 @@ fn public_signatures(cala: &CalaLedger, account: &mut Account, journal: &mut Jou
         tx_template::Params::new(),
     ));
     io::<_, posting::BatchPostingRejection>(cala.post_transactions(vec![]));
+    io::<_, AttachVelocityControlRejection>(cala.velocities().attach_control_to_account(
+        VelocityControlId::new(),
+        AccountId::new(),
+        tx_template::Params::new(),
+    ));
+}
+
+fn velocity_attachment(e: AttachVelocityControlRejection) {
+    match e {
+        AttachVelocityControlRejection::ControlNotFound(_)
+        | AttachVelocityControlRejection::Param(_)
+        | AttachVelocityControlRejection::Default(_)
+        | AttachVelocityControlRejection::Cel(_) => {}
+    }
 }
 fn template_create(e: CreateTxTemplateRejection) {
     match e {

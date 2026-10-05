@@ -120,7 +120,7 @@ mod tests {
                     Clock::handle(),
                     Some(&defs),
                     |_, source| AttachVelocityControlRejection::from(source),
-                    |_, source| AttachVelocityControlRejection::from_default(source),
+                    |_, source| AttachVelocityControlRejection::Default(source),
                 )
                 .unwrap_err();
             assert_eq!(<&str>::from(for_posting.code()), "CALA_POSTING_REJECTED");
@@ -131,7 +131,7 @@ mod tests {
                 if supplied {
                     "PARAM_TYPE_MISMATCH"
                 } else {
-                    "CEL_ERROR"
+                    "CEL_EVALUATION_ERROR"
                 }
             );
             if supplied {
@@ -143,13 +143,19 @@ mod tests {
                     .source()
                     .unwrap()
                     .is::<uuid::Error>());
-                assert!(for_attachment.source().unwrap().is::<uuid::Error>());
+                assert!(for_attachment.source().unwrap().is::<ParamValueRejection>());
+                assert!(for_attachment
+                    .source()
+                    .unwrap()
+                    .source()
+                    .unwrap()
+                    .is::<uuid::Error>());
                 assert!(
                     matches!(&for_posting, PostingRejection::Prepare(PreparePostingRejection::Param { posting: actual, parameter, source }) if *actual == posting && parameter == "account" && matches!(source.as_ref(), ParamValueRejection::InvalidUuid { input, .. } if input == "invalid-uuid"))
                 );
                 assert!(matches!(
                     for_attachment,
-                    AttachVelocityControlRejection::ParamInvalidUuid { .. }
+                    AttachVelocityControlRejection::Param(ParamValueRejection::InvalidUuid { .. })
                 ));
             } else {
                 assert!(for_posting
@@ -163,13 +169,21 @@ mod tests {
                 assert!(for_attachment
                     .source()
                     .unwrap()
+                    .is::<CelConversionRejection>());
+                assert!(for_attachment
+                    .source()
+                    .unwrap()
+                    .source()
+                    .unwrap()
                     .is::<cel_interpreter::CelExecutionError>());
                 assert!(
                     matches!(&for_posting, PostingRejection::Prepare(PreparePostingRejection::Default { posting: actual, parameter, source }) if *actual == posting && parameter == "account" && matches!(source.as_ref(), CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_variable"))
                 );
                 assert!(matches!(
                     for_attachment,
-                    AttachVelocityControlRejection::DefaultUnknownIdent { .. }
+                    AttachVelocityControlRejection::Default(
+                        CelConversionRejection::UnknownIdent { .. }
+                    )
                 ));
             }
             let message = for_posting.to_string();

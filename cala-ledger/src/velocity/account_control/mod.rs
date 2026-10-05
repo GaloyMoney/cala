@@ -119,7 +119,7 @@ impl AccountControls {
                 clock,
                 defs.as_ref(),
                 |_, source| AttachVelocityControlRejection::from(source),
-                |_, source| AttachVelocityControlRejection::from_default(source),
+                |_, source| AttachVelocityControlRejection::Default(source),
             )?;
             let mut limits = Vec::new();
             for limit in velocity.limit.balance {
@@ -153,5 +153,104 @@ impl AccountControls {
             });
         }
         Ok(velocity_limits)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cala_types::velocity::{BalanceLimit, Limit, ParamDataType, ParamDefinition};
+    use cel_interpreter::{CelConversionRejection, CelExecutionError, CoreTypeCoercion};
+    use es_entity::{
+        clock::Clock,
+        errlanes::{Level, Rejection},
+    };
+    use std::error::Error;
+
+    #[test]
+    fn limit_evaluation_preserves_binding_and_evaluation_causes() {
+        let limit = VelocityLimitValues {
+            id: crate::primitives::VelocityLimitId::new(),
+            name: "test".into(),
+            description: "test".into(),
+            window: vec![],
+            condition: None,
+            currency: None,
+            params: Some(vec![ParamDefinition {
+                name: "amount".into(),
+                r#type: ParamDataType::Decimal,
+                default: Some("missing_default".parse().unwrap()),
+                description: None,
+            }]),
+            limit: Limit {
+                timestamp_source: None,
+                balance: vec![BalanceLimit {
+                    limit_type: Default::default(),
+                    layer: "SETTLED".parse().unwrap(),
+                    amount: "params.amount".parse().unwrap(),
+                    enforcement_direction: "DEBIT".parse().unwrap(),
+                    start: "timestamp('1970-01-01T00:00:00Z')".parse().unwrap(),
+                    end: None,
+                }],
+            },
+        };
+        let evaluate = |limit, params| {
+            AccountControls::evaluate_velocity_limits(Clock::handle(), vec![limit], params)
+        };
+
+        let default = evaluate(limit.clone(), Params::new()).unwrap_err();
+        assert_eq!(<&str>::from(default.code()), "CEL_EVALUATION_ERROR");
+        assert_eq!(default.level(), Level::Info);
+        assert!(matches!(&default, AttachVelocityControlRejection::Default(
+            CelConversionRejection::UnknownIdent { expression, .. }
+        ) if expression == "missing_default"));
+        assert!(default.source().unwrap().is::<CelConversionRejection>());
+        assert!(default
+            .source()
+            .unwrap()
+            .source()
+            .unwrap()
+            .is::<CelExecutionError>());
+
+        let mut params = Params::new();
+        params.insert("amount", "not a decimal");
+        let supplied = evaluate(limit.clone(), params).unwrap_err();
+        assert_eq!(<&str>::from(supplied.code()), "PARAM_TYPE_MISMATCH");
+        assert!(matches!(&supplied, AttachVelocityControlRejection::Param(
+            cala_types::param::ParamValueRejection::InvalidDecimal { input, .. }
+        ) if input == "not a decimal"));
+        assert!(supplied
+            .source()
+            .unwrap()
+            .source()
+            .unwrap()
+            .is::<rust_decimal::Error>());
+
+        let mut params = Params::new();
+        params.insert("amount", Decimal::ONE);
+        let evaluated = evaluate(limit.clone(), params.clone()).unwrap();
+        assert_eq!(evaluated[0].limit.balance[0].amount, Decimal::ONE);
+
+        for (expression, code) in [
+            ("missing_amount", "CEL_EVALUATION_ERROR"),
+            ("true", "CEL_BAD_CORE_TYPE_COERCION"),
+        ] {
+            let mut limit = limit.clone();
+            limit.limit.balance[0].amount = expression.parse().unwrap();
+            let field = evaluate(limit, params.clone()).unwrap_err();
+            assert_eq!(<&str>::from(field.code()), code);
+            assert_eq!(field.level(), Level::Info);
+            assert!(field.source().unwrap().is::<CelConversionRejection>());
+            match field {
+                AttachVelocityControlRejection::Cel(CelConversionRejection::UnknownIdent {
+                    expression: actual,
+                    ..
+                }) => assert_eq!(actual, expression),
+                AttachVelocityControlRejection::Cel(CelConversionRejection::CoreTypeCoercion(
+                    CoreTypeCoercion(actual, ..),
+                )) => assert_eq!(actual, expression),
+                other => panic!("unexpected field rejection: {other:?}"),
+            }
+        }
     }
 }

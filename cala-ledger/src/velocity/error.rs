@@ -51,58 +51,24 @@ pub enum CreateVelocityLimitRejection {
 #[error("Limit already added to control")]
 pub struct LimitAlreadyAddedToControl;
 
-#[errlanes::compose(
-    cala_types::param::ParamValueRejection as Param,
-    cel_interpreter::CelConversionRejection as Cel
-)]
-#[derive(Debug)]
+/// Failures from binding parameters and evaluating limits while attaching a control.
+#[derive(Debug, errlanes::Rejection)]
 pub enum AttachVelocityControlRejection {
     #[rejection(code = "CALA_VELOCITY_COULD_NOT_FIND_CONTROL_BY_ID")]
     #[error("Velocity control not found: {0}")]
     ControlNotFound(VelocityControlId),
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultUnknownIdent {
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultMissingArgument {
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultNoMatchingOverload {
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultUnexpected {
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
-    DefaultUnsupportedOpaque {
-        expression: String,
-        type_name: String,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Could not downcast {} in '{}'", type_name, expression)]
-    DefaultOpaqueDowncast {
-        expression: String,
-        type_name: &'static str,
-    },
-    #[rejection(code = "CEL_ERROR")]
-    #[error("Cannot convert function value in '{}'", expression)]
-    DefaultFunctionValue { expression: String },
+    /// Coercing a supplied parameter to its declared type.
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Param(cala_types::param::ParamValueRejection),
+    /// Evaluating the default for an omitted parameter.
+    #[error("{0}")]
+    #[rejection(delegate)]
+    Default(CelConversionRejection),
+    /// Evaluating a balance-limit field, including result conversion.
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Cel(CelConversionRejection),
 }
 
 #[derive(Debug, errlanes::Classify)]
@@ -119,46 +85,6 @@ impl From<sqlx::Error> for AttachLimit {
                 Self::Domain(LimitAlreadyAddedToControl)
             }
             _ => Self::Sqlx(error),
-        }
-    }
-}
-
-impl AttachVelocityControlRejection {
-    pub(crate) fn from_default(rejection: CelConversionRejection) -> Self {
-        match rejection {
-            CelConversionRejection::UnknownIdent { expression, source } => {
-                Self::DefaultUnknownIdent { expression, source }
-            }
-            CelConversionRejection::MissingArgument { expression, source } => {
-                Self::DefaultMissingArgument { expression, source }
-            }
-            CelConversionRejection::NoMatchingOverload { expression, source } => {
-                Self::DefaultNoMatchingOverload { expression, source }
-            }
-            CelConversionRejection::Unexpected { expression, source } => {
-                Self::DefaultUnexpected { expression, source }
-            }
-            CelConversionRejection::UnsupportedOpaque {
-                expression,
-                type_name,
-            } => Self::DefaultUnsupportedOpaque {
-                expression,
-                type_name,
-            },
-            CelConversionRejection::OpaqueDowncast {
-                expression,
-                type_name,
-            } => Self::DefaultOpaqueDowncast {
-                expression,
-                type_name,
-            },
-            CelConversionRejection::FunctionValue { expression } => {
-                Self::DefaultFunctionValue { expression }
-            }
-            error @ (CelConversionRejection::CoreTypeCoercion(_)
-            | CelConversionRejection::ExternalTypeCoercion(_)
-            | CelConversionRejection::ExternalParse(_)
-            | CelConversionRejection::Json(_)) => Self::from(error),
         }
     }
 }

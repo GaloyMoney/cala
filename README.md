@@ -118,6 +118,12 @@ locks, velocity enforcement, and write conflicts. Velocity owns
 `EnforceVelocityRejection::{Cel, LimitExceeded}`; posting exposes it through
 `ApplyPostingRejection::Velocity`.
 
+Velocity control attachment exposes `AttachVelocityControlRejection` with
+`ControlNotFound`, `Param`, `Default`, and `Cel` variants. Parameter coercion,
+parameter-default evaluation, and balance-limit evaluation retain their nested
+causes and delegate diagnostic codes and levels to them. A CEL source converts
+to `Cel` by default; parameter binding explicitly selects `Default`.
+
 Preparation evaluation and direct validation retain `PostingRef { index, tx_id }`
 and the `CALA_POSTING_REJECTED` code. Template absence, budget failures, ancestor
 locks, velocity enforcement, and apply-time conflicts remain unattributed.
@@ -144,7 +150,7 @@ context with direct constructors in `map_err`.
 Nest errors along meaningful phase and component boundaries, without a fixed
 depth cap. Avoid enums that merely mirror incidental helper calls, and avoid
 flattening independent component failures into their caller. Use
-`errlanes::compose` for unchanged union inclusion, such as extending single
+`#[errlanes::compose(Source)]` for unchanged union inclusion, such as extending single
 preparation with batch-only checks. Do not enumerate CEL variants just to copy
 them into a posting contract.
 
@@ -155,7 +161,7 @@ preparation phase and forwards validation/application unchanged. Keep
 `#[rejection(delegate)]` on these wrappers so diagnostics come from their payloads.
 
 CEL parsing returns `CelParseRejection`. Both `evaluate` and `try_evaluate<T>`
-return the same flat `CelConversionRejection`, covering
+return the same `CelConversionRejection`, covering
 evaluation and all supported result conversions. Individual targets produce
 only a subset of those cases. `evaluate` performs no target conversion but shares
 the same rejection type. Compiled expressions cannot report parse errors during
