@@ -2,7 +2,7 @@ mod helpers;
 
 use cala_ledger::{
     account::{
-        error::{AccountNotFound, CreateAccountRejection},
+        error::{AccountCodeAlreadyExists, AccountNotFound, CreateAccountRejection},
         NewAccount,
     },
     errlanes::{Fail, FatalKind, Fault},
@@ -42,7 +42,7 @@ async fn duplicates_reject_but_missing_rows_and_corrupt_events_keep_distinct_con
         .code("lanes-code")
         .build()?;
     assert!(matches!(cala.accounts().create(duplicate_code).await,
-        Err(Fail::Rejected(CreateAccountRejection::CodeAlreadyExists(Some(code)))) if code == "lanes-code"));
+        Err(Fail::Rejected(CreateAccountRejection::CodeAlreadyExists(AccountCodeAlreadyExists(Some(code))))) if code == "lanes-code"));
 
     let absent = AccountId::new();
     assert!(matches!(cala.accounts().find(absent).await,

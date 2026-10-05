@@ -1221,7 +1221,7 @@ async fn add_member_sets_batch_rejects_journal_mismatch_atomically() -> anyhow::
     assert!(matches!(
         result,
         Err(cala_ledger::errlanes::Fail::Rejected(
-            AddSetMembersRejection::JournalIdMismatch
+            AddSetMembersRejection::JournalIdMismatch(_)
         ))
     ));
 

@@ -216,7 +216,9 @@ impl AccountSets {
                 let member_set = sets.remove(&id).ok_or(AccountSetNotFound(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(AddMemberRejection::JournalIdMismatch.into());
+                    return Err(
+                        AddMemberRejection::JournalIdMismatch(AccountSetJournalIdMismatch).into(),
+                    );
                 }
 
                 (target, AccountId::from(id))
@@ -439,7 +441,7 @@ impl AccountSets {
                 .ok_or(AccountSetNotFound(edge.member_account_set_id))?;
 
             if account_set.values().journal_id != member_account_set.values().journal_id {
-                return Err(AddSetMembersRejection::JournalIdMismatch.into());
+                return Err(AccountSetJournalIdMismatch.into());
             }
 
             check_pairs.push((
@@ -555,7 +557,7 @@ impl AccountSets {
                 let member_set = sets.remove(&id).ok_or(AccountSetNotFound(id))?;
 
                 if target.values().journal_id != member_set.values().journal_id {
-                    return Err(RemoveMemberRejection::JournalIdMismatch.into());
+                    return Err(AccountSetJournalIdMismatch.into());
                 }
 
                 (target, AccountId::from(id))

@@ -1,6 +1,22 @@
-use super::repo::AccountSetConstraintViolation;
+pub(crate) use super::repo::AccountSetConstraintViolation;
 use crate::primitives::*;
 use es_entity::errlanes;
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
+#[error("Account set external id already exists: {0:?}")]
+pub struct AccountSetExternalIdAlreadyExists(pub Option<Option<String>>);
+
+impl From<es_entity::ConstraintConflict<Option<String>>> for AccountSetExternalIdAlreadyExists {
+    fn from(conflict: es_entity::ConstraintConflict<Option<String>>) -> Self {
+        Self(conflict.attempted)
+    }
+}
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
+#[error("Account sets must belong to the same journal")]
+pub struct AccountSetJournalIdMismatch;
 
 #[derive(Debug, errlanes::Rejection)]
 #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
@@ -15,10 +31,10 @@ pub struct AccountSetExternalIdNotFound(pub String);
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AccountSetConstraintViolation, unhandled = fatal)]
 pub enum PersistAccountSetRejection {
-    #[error("Account set external id already exists: {0:?}")]
-    #[rejection(forward = CreateAccountSetRejection::SetExternalIdAlreadyExists)]
-    #[lift(AccountSetConstraintViolation::ExternalIdKey, field = attempted)]
-    ExternalIdAlreadyExists(Option<Option<String>>),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    #[lift(AccountSetConstraintViolation::ExternalIdKey, into)]
+    ExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
 }
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
@@ -35,10 +51,10 @@ pub enum CreateAccountSetRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_CODE_ALREADY_EXISTS")]
     #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
     BackingCodeAlreadyExists(Option<String>),
-    #[error("Account set external id already exists: {0:?}")]
-    #[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
-    #[lift(AccountSetConstraintViolation::ExternalIdKey, field = attempted)]
-    SetExternalIdAlreadyExists(Option<Option<String>>),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    #[lift(AccountSetConstraintViolation::ExternalIdKey, into)]
+    SetExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
 }
 
 #[derive(Debug, errlanes::Rejection)]
@@ -79,9 +95,9 @@ pub enum AddSetMembersRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
-    #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
-    #[error("Account sets must belong to the same journal")]
-    JournalIdMismatch,
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    JournalIdMismatch(AccountSetJournalIdMismatch),
     #[error("{0}")]
     #[rejection(delegate, from)]
     MemberAlreadyAdded(MemberAlreadyAdded),
@@ -136,9 +152,9 @@ pub enum RemoveMemberRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
-    #[rejection(forward = AddSetMembersRejection::JournalIdMismatch)]
-    #[error("Account sets must belong to the same journal")]
-    JournalIdMismatch,
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    JournalIdMismatch(AccountSetJournalIdMismatch),
 }
 
 /// Classifies this write's known constraints; every other SQL failure keeps its native lane.

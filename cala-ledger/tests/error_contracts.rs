@@ -78,7 +78,7 @@ fn remove_members(e: RemoveMemberRejection) {
     match e {
         RemoveMemberRejection::AccountSetNotFound(_)
         | RemoveMemberRejection::MemberHasBalanceHistory(_)
-        | RemoveMemberRejection::JournalIdMismatch => {}
+        | RemoveMemberRejection::JournalIdMismatch(_) => {}
     }
 }
 
@@ -87,7 +87,7 @@ fn mixed_members(e: AddMemberRejection) {
         AddMemberRejection::AccountSetNotFound(_)
         | AddMemberRejection::MemberHasBalanceHistory(_)
         | AddMemberRejection::MemberAlreadyAdded(_)
-        | AddMemberRejection::JournalIdMismatch
+        | AddMemberRejection::JournalIdMismatch(_)
         | AddMemberRejection::MembershipCycleDetected { .. }
         | AddMemberRejection::MembershipDepthExceeded { .. } => {}
     }
@@ -162,7 +162,7 @@ fn membership_union_inherits_the_public_graph_diagnostics() {
     let member_account_set_id = AccountSetId::new();
     for (source, code) in [
         (
-            AddSetMembersRejection::JournalIdMismatch,
+            AddSetMembersRejection::JournalIdMismatch(AccountSetJournalIdMismatch),
             "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH",
         ),
         (
@@ -196,8 +196,12 @@ fn membership_union_inherits_the_public_graph_diagnostics() {
 #[test]
 fn account_status_inherits_persistence_diagnostics() {
     for source in [
-        PersistAccountRejection::CodeAlreadyExists(Some("existing".into())),
-        PersistAccountRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+        PersistAccountRejection::CodeAlreadyExists(AccountCodeAlreadyExists(Some(
+            "existing".into(),
+        ))),
+        PersistAccountRejection::ExternalIdAlreadyExists(AccountExternalIdAlreadyExists(Some(
+            Some("external".into()),
+        ))),
         PersistAccountRejection::CannotUpdateAccountSetAccounts,
     ] {
         let code = <&str>::from(source.code());
@@ -212,34 +216,55 @@ fn account_status_inherits_persistence_diagnostics() {
 }
 
 #[test]
-fn identical_operation_outcomes_forward_their_canonical_identity() {
-    fn same<A: Rejection, B: Rejection>(a: A, b: B) {
-        assert_eq!(
-            Into::<&'static str>::into(a.code()),
-            Into::<&'static str>::into(b.code())
-        );
-        assert_eq!(a.level(), b.level());
-        assert_eq!(a.to_string(), b.to_string());
+fn identical_operation_outcomes_delegate_to_shared_leaves() {
+    fn same<L: Rejection + 'static, A: Rejection, B: Rejection>(
+        leaf: impl Fn() -> L,
+        a: impl Fn(L) -> A,
+        b: impl Fn(L) -> B,
+        code: &str,
+    ) {
+        let expected = leaf();
+        let a = a(leaf());
+        let b = b(leaf());
+        assert_eq!(Into::<&'static str>::into(expected.code()), code);
+        assert_eq!(Into::<&'static str>::into(a.code()), code);
+        assert_eq!(Into::<&'static str>::into(b.code()), code);
+        assert_eq!(a.level(), expected.level());
+        assert_eq!(b.level(), expected.level());
+        assert_eq!(a.to_string(), expected.to_string());
+        assert_eq!(b.to_string(), expected.to_string());
+        assert!(a.source().unwrap().is::<L>());
+        assert!(b.source().unwrap().is::<L>());
     }
     same(
-        CreateAccountRejection::CodeAlreadyExists(Some("code".into())),
-        PersistAccountRejection::CodeAlreadyExists(Some("code".into())),
+        || AccountCodeAlreadyExists(Some("code".into())),
+        CreateAccountRejection::from,
+        PersistAccountRejection::from,
+        "CALA_ACCOUNT_CODE_ALREADY_EXISTS",
     );
     same(
-        CreateAccountRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
-        PersistAccountRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+        || AccountExternalIdAlreadyExists(Some(Some("external".into()))),
+        CreateAccountRejection::from,
+        PersistAccountRejection::from,
+        "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS",
     );
     same(
-        CreateAccountSetRejection::SetExternalIdAlreadyExists(Some(Some("external".into()))),
-        PersistAccountSetRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+        || AccountSetExternalIdAlreadyExists(Some(Some("external".into()))),
+        CreateAccountSetRejection::from,
+        PersistAccountSetRejection::from,
+        "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS",
     );
     same(
-        CreateJournalRejection::CodeAlreadyExists(Some(Some("code".into()))),
-        PersistJournalRejection::CodeAlreadyExists(Some(Some("code".into()))),
+        || JournalCodeAlreadyExists(Some(Some("code".into()))),
+        CreateJournalRejection::from,
+        PersistJournalRejection::from,
+        "CALA_JOURNAL_CODE_ALREADY_EXISTS",
     );
     same(
-        AddSetMembersRejection::JournalIdMismatch,
-        RemoveMemberRejection::JournalIdMismatch,
+        || AccountSetJournalIdMismatch,
+        AddSetMembersRejection::from,
+        RemoveMemberRejection::from,
+        "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH",
     );
 
     let id = AccountId::new();
@@ -248,7 +273,9 @@ fn identical_operation_outcomes_forward_their_canonical_identity() {
         <&str>::from(CreateAccountSetRejection::BackingDuplicateId(id).code()),
     );
     assert_ne!(
-        <&str>::from(CreateAccountRejection::CodeAlreadyExists(Some("code".into())).code()),
+        <&str>::from(
+            CreateAccountRejection::from(AccountCodeAlreadyExists(Some("code".into()))).code()
+        ),
         <&str>::from(
             CreateAccountSetRejection::BackingCodeAlreadyExists(Some("code".into())).code()
         ),

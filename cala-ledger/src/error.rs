@@ -198,10 +198,61 @@ mod rejection_code_contracts {
     use cel_interpreter::*;
 
     #[test]
+    fn shared_conflict_lifts_preserve_attempted_values() {
+        use es_entity::errlanes::{lanes, Fail, ResultExt};
+        use std::error::Error;
+
+        macro_rules! check {
+            ($source:path, $leaf:ty, [$($owner:ty),+], [$($attempted:expr),+]) => {
+                for attempted in [$($attempted),+] {
+                    $(
+                        let conflict = es_entity::ConstraintConflict::new(
+                            attempted.clone(),
+                            "fixture", "fixture_key", es_entity::ConstraintKind::Unique,
+                            sqlx::Error::Protocol("constraint fixture".into()),
+                        );
+                        let result: Result<(), Fail<$owner, lanes!(Fatal)>> =
+                            Err::<(), _>($source(conflict)).widen();
+                        let Fail::Rejected(rejection) = result.unwrap_err() else {
+                            panic!("known constraint must reject");
+                        };
+                        let leaf = rejection.source().unwrap().downcast_ref::<$leaf>().unwrap();
+                        assert_eq!(leaf.0, attempted);
+                    )+
+                }
+            };
+        }
+        check!(
+            AccountConstraintViolation::CodeKey,
+            AccountCodeAlreadyExists,
+            [CreateAccountRejection, PersistAccountRejection],
+            [None, Some("code".to_owned())]
+        );
+        check!(
+            AccountConstraintViolation::ExternalIdKey,
+            AccountExternalIdAlreadyExists,
+            [CreateAccountRejection, PersistAccountRejection],
+            [None, Some(None), Some(Some("external".to_owned()))]
+        );
+        check!(
+            JournalConstraintViolation::CodeKey,
+            JournalCodeAlreadyExists,
+            [CreateJournalRejection, PersistJournalRejection],
+            [None, Some(None), Some(Some("code".to_owned()))]
+        );
+        check!(
+            AccountSetConstraintViolation::ExternalIdKey,
+            AccountSetExternalIdAlreadyExists,
+            [CreateAccountSetRejection, PersistAccountSetRejection],
+            [None, Some(None), Some(Some("external".to_owned()))]
+        );
+    }
+
+    #[test]
     fn rendering_codes_have_one_canonical_declaration() {
         // ALL lists locally owned codes, excluding delegated/forwarded codes.
         // Register every source family as well as composed contracts so that
-        // reuse is allowed only through composition, forwarding or delegation.
+        // reuse through composition and shared leaves retains one code owner.
         macro_rules! catalogs {
             ($($code:ident),+ $(,)?) => { [$( (stringify!($code), $code::ALL) ),+] };
         }
@@ -217,6 +268,11 @@ mod rejection_code_contracts {
             UnsupportedParamTypeCode,
             ParseLayerErrorCode,
             ParseCurrencyErrorCode,
+            AccountCodeAlreadyExistsCode,
+            AccountExternalIdAlreadyExistsCode,
+            JournalCodeAlreadyExistsCode,
+            AccountSetExternalIdAlreadyExistsCode,
+            AccountSetJournalIdMismatchCode,
             PersistAccountRejectionCode,
             AccountNotFoundCode,
             AccountCodeNotFoundCode,

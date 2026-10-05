@@ -1,6 +1,17 @@
-use super::repo::JournalConstraintViolation;
+pub(crate) use super::repo::JournalConstraintViolation;
 use crate::primitives::*;
 use es_entity::errlanes;
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_JOURNAL_CODE_ALREADY_EXISTS")]
+#[error("CodeAlreadyExists: {0:?}")]
+pub struct JournalCodeAlreadyExists(pub Option<Option<String>>);
+
+impl From<es_entity::ConstraintConflict<Option<String>>> for JournalCodeAlreadyExists {
+    fn from(conflict: es_entity::ConstraintConflict<Option<String>>) -> Self {
+        Self(conflict.attempted)
+    }
+}
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(JournalConstraintViolation, unhandled = fatal)]
@@ -9,19 +20,19 @@ pub enum CreateJournalRejection {
     #[error("DuplicateId: {0:?}")]
     #[lift(JournalConstraintViolation::Pkey, field = attempted)]
     DuplicateId(JournalId),
-    #[rejection(code = "CALA_JOURNAL_CODE_ALREADY_EXISTS")]
-    #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(JournalConstraintViolation::CodeKey, field = attempted)]
-    CodeAlreadyExists(Option<Option<String>>),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(JournalConstraintViolation::CodeKey, into)]
+    CodeAlreadyExists(JournalCodeAlreadyExists),
 }
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(JournalConstraintViolation, unhandled = fatal)]
 pub enum PersistJournalRejection {
-    #[rejection(forward = CreateJournalRejection::CodeAlreadyExists)]
-    #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(JournalConstraintViolation::CodeKey, field = attempted)]
-    CodeAlreadyExists(Option<Option<String>>),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    #[lift(JournalConstraintViolation::CodeKey, into)]
+    CodeAlreadyExists(JournalCodeAlreadyExists),
 }
 
 #[derive(Debug, errlanes::Rejection)]
