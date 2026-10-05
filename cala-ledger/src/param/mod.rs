@@ -123,15 +123,22 @@ mod tests {
                     |_, source| AttachVelocityControlRejection::Default(source),
                 )
                 .unwrap_err();
-            assert_eq!(<&str>::from(for_posting.code()), "CALA_POSTING_REJECTED");
+            assert_eq!(
+                <&str>::from(for_posting.code()),
+                if supplied {
+                    "CALA_POSTING_PARAMETER_INVALID"
+                } else {
+                    "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
+                }
+            );
             assert_eq!(for_posting.level(), Level::Info);
             assert_eq!(for_posting.to_string(), for_attachment.to_string());
             assert_eq!(
                 <&str>::from(for_attachment.code()),
                 if supplied {
-                    "PARAM_TYPE_MISMATCH"
+                    "CALA_VELOCITY_PARAMETER_INVALID"
                 } else {
-                    "CEL_EVALUATION_ERROR"
+                    "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED"
                 }
             );
             if supplied {
@@ -188,7 +195,14 @@ mod tests {
             }
             let message = for_posting.to_string();
             let batch = BatchPostingRejection::from(for_posting);
-            assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+            assert_eq!(
+                <&str>::from(batch.code()),
+                if supplied {
+                    "CALA_POSTING_PARAMETER_INVALID"
+                } else {
+                    "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
+                }
+            );
             assert_eq!(batch.level(), Level::Info);
             assert_eq!(batch.to_string(), message);
             if supplied {
@@ -199,7 +213,7 @@ mod tests {
                     .unwrap()
                     .downcast_ref::<Box<ParamValueRejection>>()
                     .unwrap();
-                assert_eq!(<&str>::from(source.code()), "PARAM_TYPE_MISMATCH");
+                assert_eq!(<&str>::from(source.code()), "PARAM_INVALID_UUID");
                 assert!(source.source().unwrap().is::<uuid::Error>());
                 assert!(
                     matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Param {
@@ -214,7 +228,7 @@ mod tests {
                     .unwrap()
                     .downcast_ref::<Box<CelConversionRejection>>()
                     .unwrap();
-                assert_eq!(<&str>::from(source.code()), "CEL_EVALUATION_ERROR");
+                assert_eq!(<&str>::from(source.code()), "CEL_UNKNOWN_IDENTIFIER");
                 assert!(source
                     .source()
                     .unwrap()

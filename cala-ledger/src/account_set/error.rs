@@ -16,7 +16,7 @@ pub struct AccountSetExternalIdNotFound(pub String);
 #[lift(AccountSetConstraintViolation, unhandled = fatal)]
 pub enum PersistAccountSetRejection {
     #[error("Account set external id already exists: {0:?}")]
-    #[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
+    #[rejection(forward = CreateAccountSetRejection::SetExternalIdAlreadyExists)]
     #[lift(AccountSetConstraintViolation::ExternalIdKey, field = attempted)]
     ExternalIdAlreadyExists(Option<Option<String>>),
 }
@@ -28,11 +28,11 @@ pub enum PersistAccountSetRejection {
 #[lift(AccountSetConstraintViolation, unhandled = fatal)]
 pub enum CreateAccountSetRejection {
     #[error("Backing account id already exists: {0}")]
-    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_ID_ALREADY_EXISTS")]
     #[lift(crate::account::error::AccountConstraintViolation::Pkey, field = attempted)]
     BackingDuplicateId(AccountId),
     #[error("Backing account code already exists: {0:?}")]
-    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_CODE_ALREADY_EXISTS")]
     #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
     BackingCodeAlreadyExists(Option<String>),
     #[error("Account set external id already exists: {0:?}")]
@@ -136,7 +136,7 @@ pub enum RemoveMemberRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
-    #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
+    #[rejection(forward = AddSetMembersRejection::JournalIdMismatch)]
     #[error("Account sets must belong to the same journal")]
     JournalIdMismatch,
 }

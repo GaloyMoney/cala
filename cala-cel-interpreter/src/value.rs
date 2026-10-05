@@ -579,7 +579,7 @@ mod tests {
     fn nested_runtime_value_failure_keeps_the_expression_in_the_public_contract() {
         let value = Value::List(Arc::new(vec![Value::Function(Arc::new("f".into()), None)]));
         let error = CelValue::from_cel_value(value, "[f]").unwrap_err();
-        assert_eq!(<&str>::from(error.code()), "CEL_UNEXPECTED");
+        assert_eq!(<&str>::from(error.code()), "CEL_FUNCTION_VALUE");
         assert_eq!(error.to_string(), "Cannot convert function value in '[f]'");
         assert!(
             matches!(error, CelConversionRejection::FunctionValue { expression } if expression == "[f]")

@@ -59,7 +59,7 @@ pub enum PostingRejection {
 /// Resolving and evaluating templates, then checking the preparation budget.
 #[derive(Debug, errlanes::Rejection)]
 pub enum PreparePostingRejection {
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_UNBALANCED_TRANSACTION")]
     #[error(
         "Unbalanced transaction: currency {}, layer {:?}, amount {}",
         currency,
@@ -73,7 +73,7 @@ pub enum PreparePostingRejection {
         amount: Decimal,
     },
     /// Evaluating a transaction or entry field, including result conversion.
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_EXPRESSION_FAILED")]
     #[error("{}", source)]
     Cel {
         posting: PostingRef,
@@ -81,7 +81,7 @@ pub enum PreparePostingRejection {
         source: Box<CelConversionRejection>,
     },
     /// Evaluating the default for an omitted parameter.
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_PARAMETER_DEFAULT_FAILED")]
     #[error("{}", source)]
     Default {
         posting: PostingRef,
@@ -90,7 +90,7 @@ pub enum PreparePostingRejection {
         source: Box<CelConversionRejection>,
     },
     /// Coercing a supplied parameter to its declared type.
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_PARAMETER_INVALID")]
     #[error("{}", source)]
     Param {
         posting: PostingRef,
@@ -109,31 +109,31 @@ pub enum PreparePostingRejection {
 /// Validating prepared postings against the accounts and journals read under lock.
 #[derive(Debug, errlanes::Rejection)]
 pub enum ValidatePostingRejection {
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_ACCOUNT_NOT_FOUND")]
     #[error("AccountNotFound: {}", account_id)]
     AccountNotFound {
         posting: PostingRef,
         account_id: AccountId,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_ENTRY_TARGETS_ACCOUNT_SET")]
     #[error("EntryTargetsAccountSet: {}", account_id)]
     EntryTargetsAccountSet {
         posting: PostingRef,
         account_id: AccountId,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_ACCOUNT_LOCKED")]
     #[error("AccountLocked: {}", account_id)]
     AccountLocked {
         posting: PostingRef,
         account_id: AccountId,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_JOURNAL_NOT_FOUND")]
     #[error("JournalNotFound: {}", journal_id)]
     JournalNotFound {
         posting: PostingRef,
         journal_id: JournalId,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_JOURNAL_LOCKED")]
     #[error("JournalLocked: {}", journal_id)]
     JournalLocked {
         posting: PostingRef,
@@ -165,13 +165,13 @@ pub enum ApplyPostingRejection {
 #[errlanes::compose(PreparePostingRejection)]
 #[derive(Debug)]
 pub enum BatchPreparePostingRejection {
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_DUPLICATE_TRANSACTION_ID_IN_BATCH")]
     #[error("Duplicate transaction id within the batch: {}", tx_id)]
     DuplicateTransactionIdInBatch {
         posting: PostingRef,
         tx_id: TransactionId,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
+    #[rejection(code = "CALA_POSTING_DUPLICATE_EXTERNAL_ID_IN_BATCH")]
     #[error("Duplicate external id within the batch: {}", external_id)]
     DuplicateExternalIdInBatch {
         posting: PostingRef,
@@ -330,14 +330,20 @@ mod contract_tests {
             ))
         };
         let single = attributed();
-        assert_eq!(<&str>::from(single.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(
+            <&str>::from(single.code()),
+            "CALA_POSTING_UNBALANCED_TRANSACTION"
+        );
         assert_eq!(single.level(), Level::Info);
         assert!(matches!(&single, PostingRejection::Prepare(
             PreparePostingRejection::UnbalancedTransaction { currency: Currency::Iso(_), layer: Layer::Settled, amount, .. }
         ) if *amount == Decimal::ONE));
         assert_eq!(single_context(single), Some(posting));
         let batch = BatchPostingRejection::from(attributed());
-        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(
+            <&str>::from(batch.code()),
+            "CALA_POSTING_UNBALANCED_TRANSACTION"
+        );
         assert_eq!(batch_context(batch), Some(posting));
 
         let validation = || {
@@ -354,7 +360,10 @@ mod contract_tests {
             external_id: "duplicate".into(),
         };
         let batch = BatchPostingRejection::from(duplicate);
-        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(
+            <&str>::from(batch.code()),
+            "CALA_POSTING_DUPLICATE_EXTERNAL_ID_IN_BATCH"
+        );
         assert_eq!(batch_context(batch), Some(posting));
         let shared = PostingRejection::from(ApplyPostingRejection::DuplicateTransactionId);
         assert_eq!(single_context(shared), None);
@@ -402,8 +411,11 @@ mod contract_tests {
                 Some(ParseCurrencyError::UnknownCurrency(value)) if value == "INVALID"
             ));
         }
-        assert_eq!(<&str>::from(single.code()), "CALA_POSTING_REJECTED");
-        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(
+            <&str>::from(single.code()),
+            "CALA_POSTING_EXPRESSION_FAILED"
+        );
+        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_EXPRESSION_FAILED");
         assert_eq!(single_context(single), Some(posting));
         assert_eq!(batch_context(batch), Some(posting));
     }
@@ -421,7 +433,7 @@ mod contract_tests {
             .unwrap_err()
             .rejected()
             .unwrap();
-        assert_eq!(<&str>::from(batch.code()), "CEL_EVALUATION_ERROR");
+        assert_eq!(<&str>::from(batch.code()), "CEL_UNKNOWN_IDENTIFIER");
         assert_eq!(batch.level(), Level::Info);
         assert!(matches!(&batch, BatchPostingRejection::Apply(
             ApplyPostingRejection::Velocity(EnforceVelocityRejection::Cel(

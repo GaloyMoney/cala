@@ -63,9 +63,9 @@ pub struct ExternalTypeCoercion(pub String, pub CelType, pub &'static str);
 #[derive(Debug, errlanes::Rejection)]
 pub enum JsonCoercionRejection {
     #[error("{0}")]
-    #[rejection(delegate, from)]
+    #[rejection(code = "CEL_JSON_NON_STRING_KEY", from)]
     NonStringKey(#[source] CoreTypeCoercion),
-    #[rejection(code = "CEL_BAD_EXTERNAL_TYPE_COERCION")]
+    #[rejection(code = "CEL_JSON_UNSUPPORTED_BYTES")]
     #[error("Cannot convert bytes to JSON in '{}'", expression)]
     UnsupportedBytes { expression: String },
 }
@@ -79,47 +79,47 @@ pub enum CelConversionRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     CoreTypeCoercion(CoreTypeCoercion),
-    #[rejection(code = "CEL_EVALUATION_ERROR")]
+    #[rejection(code = "CEL_UNKNOWN_IDENTIFIER")]
     #[error("Error evaluating expression '{}': {}", expression, source)]
     UnknownIdent {
         expression: String,
         #[source]
         source: CelExecutionError,
     },
-    #[rejection(code = "CEL_EVALUATION_ERROR")]
+    #[rejection(code = "CEL_INVALID_ARGUMENT_COUNT")]
     #[error("Error evaluating expression '{}': {}", expression, source)]
     MissingArgument {
         expression: String,
         #[source]
         source: CelExecutionError,
     },
-    #[rejection(code = "CEL_EVALUATION_ERROR")]
+    #[rejection(code = "CEL_NO_MATCHING_OVERLOAD")]
     #[error("Error evaluating expression '{}': {}", expression, source)]
     NoMatchingOverload {
         expression: String,
         #[source]
         source: CelExecutionError,
     },
-    #[rejection(code = "CEL_EVALUATION_ERROR")]
+    #[rejection(code = "CEL_UNEXPECTED_EXECUTION_ERROR")]
     #[error("Error evaluating expression '{}': {}", expression, source)]
     Unexpected {
         expression: String,
         #[source]
         source: CelExecutionError,
     },
-    #[rejection(code = "CEL_UNEXPECTED")]
+    #[rejection(code = "CEL_UNSUPPORTED_OPAQUE_VALUE")]
     #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
     UnsupportedOpaque {
         expression: String,
         type_name: String,
     },
-    #[rejection(code = "CEL_UNEXPECTED")]
+    #[rejection(code = "CEL_OPAQUE_DOWNCAST_FAILED")]
     #[error("Could not downcast {} in '{}'", type_name, expression)]
     OpaqueDowncast {
         expression: String,
         type_name: &'static str,
     },
-    #[rejection(code = "CEL_UNEXPECTED")]
+    #[rejection(code = "CEL_FUNCTION_VALUE")]
     #[error("Cannot convert function value in '{}'", expression)]
     FunctionValue { expression: String },
     #[error("{0}")]

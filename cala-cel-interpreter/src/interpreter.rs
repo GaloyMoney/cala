@@ -417,7 +417,7 @@ mod contract_tests {
         ];
         for result in results {
             let error = result.unwrap_err();
-            assert_eq!(<&str>::from(error.code()), "CEL_EVALUATION_ERROR");
+            assert_eq!(<&str>::from(error.code()), "CEL_UNKNOWN_IDENTIFIER");
             assert_eq!(error.level(), Level::Info);
             assert!(error.source().unwrap().is::<CelExecutionError>());
             assert!(
@@ -453,10 +453,10 @@ mod contract_tests {
                     CelConversionRejection::Json(JsonCoercionRejection::UnsupportedBytes {
                         ..
                     }) => {
-                        "CEL_BAD_EXTERNAL_TYPE_COERCION"
+                        "CEL_JSON_UNSUPPORTED_BYTES"
                     }
                     CelConversionRejection::Json(JsonCoercionRejection::NonStringKey(_)) => {
-                        "CEL_BAD_CORE_TYPE_COERCION"
+                        "CEL_JSON_NON_STRING_KEY"
                     }
                     _ => unreachable!(),
                 }

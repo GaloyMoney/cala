@@ -135,6 +135,7 @@ pub enum Layer {
 
 #[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseLayerError {
+    #[rejection(code = "CALA_UNKNOWN_LAYER")]
     #[error("CalaCoreTypeError - UnknownLayer: {0:?}")]
     UnknownLayer(String),
 }
@@ -225,6 +226,7 @@ impl PartialOrd for Currency {
 
 #[derive(es_entity::errlanes::Rejection, Debug)]
 pub enum ParseCurrencyError {
+    #[rejection(code = "CALA_UNKNOWN_CURRENCY")]
     #[error("CalaCoreTypeError - UnknownCurrency: {0}")]
     UnknownCurrency(String),
 }
@@ -309,7 +311,7 @@ mod tests {
         ];
         for result in results {
             let error = result.unwrap_err();
-            assert_eq!(<&str>::from(error.code()), "CEL_EVALUATION_ERROR");
+            assert_eq!(<&str>::from(error.code()), "CEL_UNKNOWN_IDENTIFIER");
             assert_eq!(error.level(), Level::Info);
             assert!(error.source().unwrap().is::<CelExecutionError>());
             assert!(matches!(

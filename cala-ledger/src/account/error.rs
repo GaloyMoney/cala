@@ -5,11 +5,11 @@ use es_entity::errlanes;
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AccountConstraintViolation, unhandled = fatal)]
 pub enum PersistAccountRejection {
-    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
+    #[rejection(forward = CreateAccountRejection::CodeAlreadyExists)]
     #[error("CodeAlreadyExists: {0:?}")]
     #[lift(AccountConstraintViolation::CodeKey, field = attempted)]
     CodeAlreadyExists(Option<String>),
-    #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
+    #[rejection(forward = CreateAccountRejection::ExternalIdAlreadyExists)]
     #[error("ExternalIdAlreadyExists: {0:?}")]
     #[lift(AccountConstraintViolation::ExternalIdKey, field = attempted)]
     ExternalIdAlreadyExists(Option<Option<String>>),

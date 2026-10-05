@@ -112,21 +112,21 @@ pub enum ParamValueRejection {
         expected: ParamDataType,
         actual: CelType,
     },
-    #[rejection(code = "PARAM_TYPE_MISMATCH")]
+    #[rejection(code = "PARAM_INVALID_UUID")]
     #[error("Could not parse {} as Uuid: {}", input, source)]
     InvalidUuid {
         input: String,
         #[source]
         source: uuid::Error,
     },
-    #[rejection(code = "PARAM_TYPE_MISMATCH")]
+    #[rejection(code = "PARAM_INVALID_DECIMAL")]
     #[error("Could not parse {} as Decimal: {}", input, source)]
     InvalidDecimal {
         input: String,
         #[source]
         source: rust_decimal::Error,
     },
-    #[rejection(code = "PARAM_TYPE_MISMATCH")]
+    #[rejection(code = "PARAM_INVALID_DATE")]
     #[error("Could not parse {} as Date: {}", input, source)]
     InvalidDate {
         input: String,

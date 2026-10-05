@@ -199,7 +199,10 @@ mod tests {
         };
 
         let default = evaluate(limit.clone(), Params::new()).unwrap_err();
-        assert_eq!(<&str>::from(default.code()), "CEL_EVALUATION_ERROR");
+        assert_eq!(
+            <&str>::from(default.code()),
+            "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED"
+        );
         assert_eq!(default.level(), Level::Info);
         assert!(matches!(&default, AttachVelocityControlRejection::Default(
             CelConversionRejection::UnknownIdent { expression, .. }
@@ -215,7 +218,10 @@ mod tests {
         let mut params = Params::new();
         params.insert("amount", "not a decimal");
         let supplied = evaluate(limit.clone(), params).unwrap_err();
-        assert_eq!(<&str>::from(supplied.code()), "PARAM_TYPE_MISMATCH");
+        assert_eq!(
+            <&str>::from(supplied.code()),
+            "CALA_VELOCITY_PARAMETER_INVALID"
+        );
         assert!(matches!(&supplied, AttachVelocityControlRejection::Param(
             cala_types::param::ParamValueRejection::InvalidDecimal { input, .. }
         ) if input == "not a decimal"));
@@ -232,13 +238,22 @@ mod tests {
         assert_eq!(evaluated[0].limit.balance[0].amount, Decimal::ONE);
 
         for (expression, code) in [
-            ("missing_amount", "CEL_EVALUATION_ERROR"),
+            ("missing_amount", "CEL_UNKNOWN_IDENTIFIER"),
             ("true", "CEL_BAD_CORE_TYPE_COERCION"),
         ] {
             let mut limit = limit.clone();
             limit.limit.balance[0].amount = expression.parse().unwrap();
             let field = evaluate(limit, params.clone()).unwrap_err();
-            assert_eq!(<&str>::from(field.code()), code);
+            assert_eq!(
+                <&str>::from(field.code()),
+                "CALA_VELOCITY_LIMIT_EVALUATION_FAILED"
+            );
+            let source = field
+                .source()
+                .unwrap()
+                .downcast_ref::<CelConversionRejection>()
+                .unwrap();
+            assert_eq!(<&str>::from(source.code()), code);
             assert_eq!(field.level(), Level::Info);
             assert!(field.source().unwrap().is::<CelConversionRejection>());
             match field {

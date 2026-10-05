@@ -59,15 +59,15 @@ pub enum AttachVelocityControlRejection {
     ControlNotFound(VelocityControlId),
     /// Coercing a supplied parameter to its declared type.
     #[error("{0}")]
-    #[rejection(delegate, from)]
+    #[rejection(code = "CALA_VELOCITY_PARAMETER_INVALID", from)]
     Param(cala_types::param::ParamValueRejection),
     /// Evaluating the default for an omitted parameter.
     #[error("{0}")]
-    #[rejection(delegate)]
-    Default(CelConversionRejection),
+    #[rejection(code = "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED")]
+    Default(#[source] CelConversionRejection),
     /// Evaluating a balance-limit field, including result conversion.
     #[error("{0}")]
-    #[rejection(delegate, from)]
+    #[rejection(code = "CALA_VELOCITY_LIMIT_EVALUATION_FAILED", from)]
     Cel(CelConversionRejection),
 }
 

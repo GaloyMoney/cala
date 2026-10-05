@@ -18,7 +18,7 @@ pub enum CreateJournalRejection {
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(JournalConstraintViolation, unhandled = fatal)]
 pub enum PersistJournalRejection {
-    #[rejection(code = "CALA_JOURNAL_CODE_ALREADY_EXISTS")]
+    #[rejection(forward = CreateJournalRejection::CodeAlreadyExists)]
     #[error("CodeAlreadyExists: {0:?}")]
     #[lift(JournalConstraintViolation::CodeKey, field = attempted)]
     CodeAlreadyExists(Option<Option<String>>),

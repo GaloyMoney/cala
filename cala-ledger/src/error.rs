@@ -186,3 +186,91 @@ mod sql_contract_tests {
         ));
     }
 }
+
+#[cfg(test)]
+mod rejection_code_contracts {
+    use crate::{
+        account::error::*, account_set::error::*, balance::error::*, journal::error::*,
+        ledger::error::*, posting::error::*, transaction::error::*, tx_template::error::*,
+        velocity::error::*,
+    };
+    use cala_types::{param::*, primitives::*};
+    use cel_interpreter::*;
+
+    #[test]
+    fn rendering_codes_have_one_canonical_declaration() {
+        // ALL lists locally owned codes, excluding delegated/forwarded codes.
+        // Register every source family as well as composed contracts so that
+        // reuse is allowed only through composition, forwarding or delegation.
+        macro_rules! catalogs {
+            ($($code:ident),+ $(,)?) => { [$( (stringify!($code), $code::ALL) ),+] };
+        }
+        let catalogs = catalogs![
+            CelParseRejectionCode,
+            CelTypeMismatchCode,
+            CoreTypeCoercionCode,
+            ExternalTypeCoercionCode,
+            JsonCoercionRejectionCode,
+            CelConversionRejectionCode,
+            ExternalParseErrorCode,
+            ParamValueRejectionCode,
+            UnsupportedParamTypeCode,
+            ParseLayerErrorCode,
+            ParseCurrencyErrorCode,
+            PersistAccountRejectionCode,
+            AccountNotFoundCode,
+            AccountCodeNotFoundCode,
+            AccountExternalIdNotFoundCode,
+            InitialAccountSetNotFoundCode,
+            CreateAccountRejectionCode,
+            SetAccountStatusRejectionCode,
+            AccountSetNotFoundCode,
+            AccountSetExternalIdNotFoundCode,
+            PersistAccountSetRejectionCode,
+            CreateAccountSetRejectionCode,
+            MemberAlreadyAddedCode,
+            MemberHasBalanceHistoryCode,
+            AddAccountMembersRejectionCode,
+            AddSetMembersRejectionCode,
+            AddMemberRejectionCode,
+            RemoveMemberRejectionCode,
+            BalanceNotFoundCode,
+            BalanceAccountLockedCode,
+            CreateJournalRejectionCode,
+            PersistJournalRejectionCode,
+            JournalNotFoundCode,
+            JournalCodeNotFoundCode,
+            TransactionNotFoundCode,
+            TransactionExternalIdNotFoundCode,
+            CreateTxTemplateRejectionCode,
+            TxTemplateNotFoundCode,
+            EcCaughtUpTimeoutCode,
+            TooManyPostingBalancesCode,
+            PostingRejectionCode,
+            PreparePostingRejectionCode,
+            ValidatePostingRejectionCode,
+            ApplyPostingRejectionCode,
+            BatchPreparePostingRejectionCode,
+            BatchPostingRejectionCode,
+            LimitExceededErrorCode,
+            EnforceVelocityRejectionCode,
+            CreateVelocityControlRejectionCode,
+            CreateVelocityLimitRejectionCode,
+            LimitAlreadyAddedToControlCode,
+            AttachVelocityControlRejectionCode,
+        ];
+        let mut owners = std::collections::HashMap::new();
+        for (owner, codes) in catalogs {
+            for code in codes {
+                assert!(!code.is_empty());
+                assert!(code
+                    .bytes()
+                    .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_'));
+                assert!(
+                    owners.insert(code, owner).is_none(),
+                    "duplicate rendering code {code} in {owner}"
+                );
+            }
+        }
+    }
+}

@@ -927,7 +927,7 @@ async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() 
                 .expect("posting should fail")
                 .rejected()
                 .unwrap();
-            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_REJECTED");
+            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_EXPRESSION_FAILED");
             match error {
                 BatchPostingRejection::Prepare(BatchPreparePostingRejection::Cel {
                     posting,
@@ -950,7 +950,7 @@ async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() 
                 .expect("posting should fail")
                 .rejected()
                 .unwrap();
-            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_REJECTED");
+            assert_eq!(<&str>::from(error.code()), "CALA_POSTING_EXPRESSION_FAILED");
             match error {
                 PostingRejection::Prepare(PreparePostingRejection::Cel {
                     posting, source, ..

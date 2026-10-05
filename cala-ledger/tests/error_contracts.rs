@@ -210,3 +210,47 @@ fn account_status_inherits_persistence_diagnostics() {
         account_status(destination);
     }
 }
+
+#[test]
+fn identical_operation_outcomes_forward_their_canonical_identity() {
+    fn same<A: Rejection, B: Rejection>(a: A, b: B) {
+        assert_eq!(
+            Into::<&'static str>::into(a.code()),
+            Into::<&'static str>::into(b.code())
+        );
+        assert_eq!(a.level(), b.level());
+        assert_eq!(a.to_string(), b.to_string());
+    }
+    same(
+        CreateAccountRejection::CodeAlreadyExists(Some("code".into())),
+        PersistAccountRejection::CodeAlreadyExists(Some("code".into())),
+    );
+    same(
+        CreateAccountRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+        PersistAccountRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+    );
+    same(
+        CreateAccountSetRejection::SetExternalIdAlreadyExists(Some(Some("external".into()))),
+        PersistAccountSetRejection::ExternalIdAlreadyExists(Some(Some("external".into()))),
+    );
+    same(
+        CreateJournalRejection::CodeAlreadyExists(Some(Some("code".into()))),
+        PersistJournalRejection::CodeAlreadyExists(Some(Some("code".into()))),
+    );
+    same(
+        AddSetMembersRejection::JournalIdMismatch,
+        RemoveMemberRejection::JournalIdMismatch,
+    );
+
+    let id = AccountId::new();
+    assert_ne!(
+        <&str>::from(CreateAccountRejection::DuplicateId(id).code()),
+        <&str>::from(CreateAccountSetRejection::BackingDuplicateId(id).code()),
+    );
+    assert_ne!(
+        <&str>::from(CreateAccountRejection::CodeAlreadyExists(Some("code".into())).code()),
+        <&str>::from(
+            CreateAccountSetRejection::BackingCodeAlreadyExists(Some("code".into())).code()
+        ),
+    );
+}
