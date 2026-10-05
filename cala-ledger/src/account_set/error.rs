@@ -2,16 +2,11 @@ pub(crate) use super::repo::AccountSetConstraintViolation;
 use crate::primitives::*;
 use es_entity::errlanes;
 
-#[derive(Debug, errlanes::Rejection)]
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
 #[error("Account set external id already exists: {0:?}")]
+#[lift(es_entity::ConstraintConflict<Option<String>>, field = attempted)]
 pub struct AccountSetExternalIdAlreadyExists(pub Option<Option<String>>);
-
-impl From<es_entity::ConstraintConflict<Option<String>>> for AccountSetExternalIdAlreadyExists {
-    fn from(conflict: es_entity::ConstraintConflict<Option<String>>) -> Self {
-        Self(conflict.attempted)
-    }
-}
 
 #[derive(Debug, errlanes::Rejection)]
 #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]

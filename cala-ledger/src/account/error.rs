@@ -2,27 +2,17 @@ pub(crate) use super::repo::AccountConstraintViolation;
 use crate::primitives::*;
 use es_entity::errlanes;
 
-#[derive(Debug, errlanes::Rejection)]
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
 #[error("CodeAlreadyExists: {0:?}")]
+#[lift(es_entity::ConstraintConflict<String>, field = attempted)]
 pub struct AccountCodeAlreadyExists(pub Option<String>);
 
-impl From<es_entity::ConstraintConflict<String>> for AccountCodeAlreadyExists {
-    fn from(conflict: es_entity::ConstraintConflict<String>) -> Self {
-        Self(conflict.attempted)
-    }
-}
-
-#[derive(Debug, errlanes::Rejection)]
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
 #[error("ExternalIdAlreadyExists: {0:?}")]
+#[lift(es_entity::ConstraintConflict<Option<String>>, field = attempted)]
 pub struct AccountExternalIdAlreadyExists(pub Option<Option<String>>);
-
-impl From<es_entity::ConstraintConflict<Option<String>>> for AccountExternalIdAlreadyExists {
-    fn from(conflict: es_entity::ConstraintConflict<Option<String>>) -> Self {
-        Self(conflict.attempted)
-    }
-}
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AccountConstraintViolation, unhandled = fatal)]
