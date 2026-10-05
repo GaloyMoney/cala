@@ -396,8 +396,7 @@ mod contract_tests {
             CelConversionRejection::CoreTypeCoercion(_)
             | CelConversionRejection::ExternalTypeCoercion(_)
             | CelConversionRejection::ExternalParse(_)
-            | CelConversionRejection::NonStringKey(_)
-            | CelConversionRejection::UnsupportedBytes { .. }
+            | CelConversionRejection::Json(_)
             | CelConversionRejection::UnknownIdent { .. }
             | CelConversionRejection::MissingArgument { .. }
             | CelConversionRejection::NoMatchingOverload { .. }
@@ -450,22 +449,26 @@ mod contract_tests {
             let error = result.unwrap_err();
             assert_eq!(
                 <&str>::from(error.code()),
-                match error {
-                    CelConversionRejection::UnsupportedBytes { .. } => {
+                match &error {
+                    CelConversionRejection::Json(JsonCoercionRejection::UnsupportedBytes {
+                        ..
+                    }) => {
                         "CEL_BAD_EXTERNAL_TYPE_COERCION"
                     }
-                    CelConversionRejection::NonStringKey(_) => "CEL_BAD_CORE_TYPE_COERCION",
+                    CelConversionRejection::Json(JsonCoercionRejection::NonStringKey(_)) => {
+                        "CEL_BAD_CORE_TYPE_COERCION"
+                    }
                     _ => unreachable!(),
                 }
             );
             match error {
-                CelConversionRejection::UnsupportedBytes { expression } => {
+                CelConversionRejection::Json(JsonCoercionRejection::UnsupportedBytes {
+                    expression,
+                }) => {
                     assert_eq!(expression, source)
                 }
-                CelConversionRejection::NonStringKey(CoreTypeCoercion(
-                    _,
-                    CelType::Int,
-                    CelType::String,
+                CelConversionRejection::Json(JsonCoercionRejection::NonStringKey(
+                    CoreTypeCoercion(_, CelType::Int, CelType::String),
                 )) => {}
                 error => panic!("unexpected JSON outcome: {error:?}"),
             }

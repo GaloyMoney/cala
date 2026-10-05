@@ -162,11 +162,9 @@ pub enum ApplyPostingRejection {
 }
 
 /// Batch preparation reuses single-posting preparation and adds cross-input checks.
-#[errlanes::compose]
+#[errlanes::compose(union(PreparePostingRejection))]
 #[derive(Debug)]
 pub enum BatchPreparePostingRejection {
-    #[compose(flatten)]
-    Posting(PreparePostingRejection),
     #[rejection(code = "CALA_POSTING_REJECTED")]
     #[error("Duplicate transaction id within the batch: {}", tx_id)]
     DuplicateTransactionIdInBatch {
@@ -305,12 +303,12 @@ mod contract_tests {
             BatchPostingRejection::Prepare(error) => match error {
                 BatchPreparePostingRejection::DuplicateTransactionIdInBatch { posting, .. }
                 | BatchPreparePostingRejection::DuplicateExternalIdInBatch { posting, .. }
-                | BatchPreparePostingRejection::PostingUnbalancedTransaction { posting, .. }
-                | BatchPreparePostingRejection::PostingCel { posting, .. }
-                | BatchPreparePostingRejection::PostingDefault { posting, .. }
-                | BatchPreparePostingRejection::PostingParam { posting, .. } => Some(posting),
-                BatchPreparePostingRejection::PostingTemplateNotFound(_)
-                | BatchPreparePostingRejection::PostingTooManyBalances(_) => None,
+                | BatchPreparePostingRejection::UnbalancedTransaction { posting, .. }
+                | BatchPreparePostingRejection::Cel { posting, .. }
+                | BatchPreparePostingRejection::Default { posting, .. }
+                | BatchPreparePostingRejection::Param { posting, .. } => Some(posting),
+                BatchPreparePostingRejection::TemplateNotFound(_)
+                | BatchPreparePostingRejection::TooManyBalances(_) => None,
             },
             BatchPostingRejection::Validate(error) => Some(validation_context(error)),
             BatchPostingRejection::Apply(_) => None,
@@ -365,9 +363,7 @@ mod contract_tests {
         ));
         assert!(matches!(
             &missing,
-            BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingTemplateNotFound(
-                _
-            ))
+            BatchPostingRejection::Prepare(BatchPreparePostingRejection::TemplateNotFound(_))
         ));
         assert_eq!(batch_context(missing), None);
     }

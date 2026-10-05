@@ -74,8 +74,7 @@ pub enum JsonCoercionRejection {
 ///
 /// All targets share this contract; individual targets may produce only a subset.
 /// External parsers retain their original diagnostic in [`ExternalParseError`].
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(JsonCoercionRejection)]
+#[derive(Debug, errlanes::Rejection)]
 pub enum CelConversionRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
@@ -127,13 +126,8 @@ pub enum CelConversionRejection {
     #[rejection(delegate, from)]
     ExternalTypeCoercion(ExternalTypeCoercion),
     #[error("{0}")]
-    #[rejection(delegate)]
-    #[lift(JsonCoercionRejection::NonStringKey)]
-    NonStringKey(#[source] CoreTypeCoercion),
-    #[rejection(code = "CEL_BAD_EXTERNAL_TYPE_COERCION")]
-    #[error("Cannot convert bytes to JSON in '{}'", expression)]
-    #[lift(JsonCoercionRejection::UnsupportedBytes)]
-    UnsupportedBytes { expression: String },
+    #[rejection(delegate, from)]
+    Json(JsonCoercionRejection),
     #[error("{0}")]
     #[rejection(delegate, from)]
     ExternalParse(ExternalParseError),

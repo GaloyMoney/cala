@@ -188,7 +188,7 @@ mod tests {
                 assert_eq!(<&str>::from(source.code()), "PARAM_TYPE_MISMATCH");
                 assert!(source.source().unwrap().is::<uuid::Error>());
                 assert!(
-                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingParam {
+                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Param {
                     posting: actual, parameter, source
                 }) if actual == posting && parameter == "account" && matches!(source.as_ref(), ParamValueRejection::InvalidUuid { input, .. } if input == "invalid-uuid"))
                 );
@@ -206,7 +206,7 @@ mod tests {
                     .unwrap()
                     .is::<cel_interpreter::CelExecutionError>());
                 assert!(
-                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingDefault {
+                    matches!(batch, BatchPostingRejection::Prepare(BatchPreparePostingRejection::Default {
                     posting: actual, parameter, source
                 }) if actual == posting && parameter == "account" && matches!(source.as_ref(), CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_variable"))
                 );

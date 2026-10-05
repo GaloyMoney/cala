@@ -655,7 +655,7 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
 
     match cala.post_transactions(batch).await {
         Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Prepare(
-            BatchPreparePostingRejection::PostingTooManyBalances(budget),
+            BatchPreparePostingRejection::TooManyBalances(budget),
         ))) => {
             assert!(budget.distinct > budget.max);
         }
@@ -929,7 +929,7 @@ async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() 
                 .unwrap();
             assert_eq!(<&str>::from(error.code()), "CALA_POSTING_REJECTED");
             match error {
-                BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingCel {
+                BatchPostingRejection::Prepare(BatchPreparePostingRejection::Cel {
                     posting,
                     source,
                     ..

@@ -111,55 +111,21 @@ pub enum AddSetMembersRejection {
     },
 }
 
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AddAccountMembersRejection)]
-#[lift(AddSetMembersRejection)]
+#[errlanes::compose(union(AddAccountMembersRejection, AddSetMembersRejection))]
+#[derive(Debug)]
 pub enum AddMemberRejection {
+    #[compose(merge)]
     #[error("{0}")]
     #[rejection(delegate, from)]
-    #[lift(AddAccountMembersRejection::AccountSetNotFound)]
-    #[lift(AddSetMembersRejection::AccountSetNotFound)]
     AccountSetNotFound(AccountSetNotFound),
+    #[compose(merge)]
     #[error("{0}")]
     #[rejection(delegate, from)]
-    #[lift(AddAccountMembersRejection::MemberHasBalanceHistory)]
-    #[lift(AddSetMembersRejection::MemberHasBalanceHistory)]
     MemberHasBalanceHistory(MemberHasBalanceHistory),
+    #[compose(merge)]
     #[error("{0}")]
     #[rejection(delegate, from)]
-    #[lift(AddAccountMembersRejection::MemberAlreadyAdded)]
-    #[lift(AddSetMembersRejection::MemberAlreadyAdded)]
     MemberAlreadyAdded(MemberAlreadyAdded),
-    #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
-    #[error("Account sets must belong to the same journal")]
-    #[lift(AddSetMembersRejection::JournalIdMismatch)]
-    JournalIdMismatch,
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_CYCLE_DETECTED")]
-    #[error(
-        "Membership {} -> {} would create a cycle",
-        account_set_id,
-        member_account_set_id
-    )]
-    #[lift(AddSetMembersRejection::MembershipCycleDetected)]
-    MembershipCycleDetected {
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-    },
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_DEPTH_EXCEEDED")]
-    #[error(
-        "Membership {} -> {} exceeds maximum depth {}: {}",
-        account_set_id,
-        member_account_set_id,
-        max,
-        depth
-    )]
-    #[lift(AddSetMembersRejection::MembershipDepthExceeded)]
-    MembershipDepthExceeded {
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-        depth: i32,
-        max: i32,
-    },
 }
 
 #[derive(Debug, errlanes::Rejection)]

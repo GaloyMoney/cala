@@ -58,22 +58,10 @@ pub enum CreateAccountRejection {
     ExternalIdAlreadyExists(Option<Option<String>>),
 }
 
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(PersistAccountRejection)]
+#[errlanes::compose(union(PersistAccountRejection))]
+#[derive(Debug)]
 pub enum SetAccountStatusRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     AccountNotFound(AccountNotFound),
-    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
-    #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(PersistAccountRejection::CodeAlreadyExists)]
-    CodeAlreadyExists(Option<String>),
-    #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
-    #[error("ExternalIdAlreadyExists: {0:?}")]
-    #[lift(PersistAccountRejection::ExternalIdAlreadyExists)]
-    ExternalIdAlreadyExists(Option<Option<String>>),
-    #[rejection(code = "CALA_ACCOUNT_CANNOT_UPDATE_ACCOUNT_SET_ACCOUNTS")]
-    #[error("Cannot update accounts backing an account set")]
-    #[lift(PersistAccountRejection::CannotUpdateAccountSetAccounts)]
-    CannotUpdateAccountSetAccounts,
 }

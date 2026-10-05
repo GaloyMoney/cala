@@ -159,8 +159,7 @@ impl AttachVelocityControlRejection {
             error @ (CelConversionRejection::CoreTypeCoercion(_)
             | CelConversionRejection::ExternalTypeCoercion(_)
             | CelConversionRejection::ExternalParse(_)
-            | CelConversionRejection::NonStringKey(_)
-            | CelConversionRejection::UnsupportedBytes { .. }) => Self::from(error),
+            | CelConversionRejection::Json(_)) => Self::from(error),
         }
     }
 }
