@@ -6,7 +6,7 @@ use crate::{
     primitives::{AccountId, AccountSetId},
 };
 
-use super::error::InitialAccountSetsNotFound;
+use crate::account::error::InitialAccountSetNotFound;
 
 pub mod members_cursor {
     use cala_types::account_set::{
@@ -180,7 +180,7 @@ impl AccountSetMemberRepo {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         pairs: &[(AccountSetId, AccountId)],
-    ) -> Result<(), Fail<InitialAccountSetsNotFound, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<InitialAccountSetNotFound, lanes!(Transient, Fatal)>> {
         if pairs.is_empty() {
             return Ok(());
         }
@@ -213,7 +213,10 @@ impl AccountSetMemberRepo {
             Ok(_) => {}
             Err(sqlx::Error::Database(e)) if is_account_set_fk_violation(e.as_ref()) => {
                 let missing = self.missing_account_sets(&account_set_ids).await?;
-                return Err(InitialAccountSetsNotFound(missing).into());
+                return Err(InitialAccountSetNotFound(
+                    *missing.first().expect("missing ids are never empty"),
+                )
+                .into());
             }
             Err(e) => return Err(e.into()),
         }

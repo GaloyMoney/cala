@@ -1,5 +1,6 @@
+use crate::error::CalaFault;
 use chrono::{DateTime, NaiveDate, Utc};
-use es_entity::errlanes::{lanes, Fail, ResultExt};
+use es_entity::errlanes::{lanes, Fail, Fault, ResultExt};
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -100,7 +101,7 @@ impl EffectiveBalanceRepo {
         currency: Currency,
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<(Option<AccountBalance>, Option<AccountBalance>, u32), crate::CalaFault> {
+    ) -> Result<(Option<AccountBalance>, Option<AccountBalance>, u32), CalaFault> {
         let rows = sqlx::query!(
             r#"
         WITH first AS (
@@ -175,7 +176,7 @@ impl EffectiveBalanceRepo {
         &self,
         ids: &[BalanceId],
         date: NaiveDate,
-    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -246,7 +247,7 @@ impl EffectiveBalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -293,7 +294,8 @@ impl EffectiveBalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
+            .widen()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -315,8 +317,7 @@ impl EffectiveBalanceRepo {
         account_ids: &[AccountId],
         date: NaiveDate,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
             (
@@ -390,7 +391,8 @@ impl EffectiveBalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
+            .widen()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -433,7 +435,7 @@ impl EffectiveBalanceRepo {
         args: es_entity::PaginatedQueryArgs<EffectiveBalancesModifiedCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<EffectiveBalanceSnapshot, EffectiveBalancesModifiedCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency, after_effective) = if let Some(after) = after {
@@ -499,7 +501,7 @@ impl EffectiveBalanceRepo {
         ids: &[BalanceId],
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRangeResult, crate::CalaFault> {
+    ) -> Result<BalanceRangeResult, CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -613,10 +615,8 @@ impl EffectiveBalanceRepo {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceByCurrencyCursor>, CalaFault>
+    {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
 
@@ -748,8 +748,7 @@ impl EffectiveBalanceRepo {
         from: NaiveDate,
         until: Option<NaiveDate>,
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<BalanceRange, AccountBalanceCursor>, CalaFault> {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
             (
@@ -914,7 +913,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, crate::CalaFault> {
+    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, CalaFault> {
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
@@ -1068,7 +1067,7 @@ impl EffectiveBalanceRepo {
         journal_id: JournalId,
         (account_ids, currencies): (Vec<AccountId>, Vec<&str>),
         effective: NaiveDate,
-    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, crate::CalaFault> {
+    ) -> Result<HashMap<(AccountId, Currency), EffectiveBalanceData<'_>>, CalaFault> {
         let rows = sqlx::query!(
             r#"
           WITH eligible_accounts AS MATERIALIZED (
@@ -1217,7 +1216,7 @@ impl EffectiveBalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: Vec<EffectiveBalanceSnapshot>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let mut journal_ids = Vec::with_capacity(new_balances.len());
         let mut account_ids = Vec::with_capacity(new_balances.len());
         let mut currencies = Vec::with_capacity(new_balances.len());

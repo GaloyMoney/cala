@@ -1,3 +1,5 @@
+use crate::error::CalaFault;
+use crate::posting::{PostingRef, PreparePostingRejection};
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 mod repo;
@@ -118,7 +120,7 @@ impl TxTemplates {
     pub async fn find_all<T: From<TxTemplate>>(
         &self,
         tx_template_ids: &[TxTemplateId],
-    ) -> Result<HashMap<TxTemplateId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<TxTemplateId, T>, CalaFault> {
         self.repo.find_all(tx_template_ids).await
     }
 
@@ -131,8 +133,7 @@ impl TxTemplates {
         &self,
         cursor: es_entity::PaginatedQueryArgs<TxTemplateByCodeCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<TxTemplate, TxTemplateByCodeCursor>, CalaFault> {
         self.repo.list_by_code(cursor, direction).await
     }
 
@@ -161,41 +162,85 @@ impl TxTemplates {
     )]
     pub(crate) fn prepare_transaction(
         &self,
-        tx_id: TransactionId,
+        posting: PostingRef,
         tmpl: &TxTemplateValues,
         params: Params,
-    ) -> Result<PreparedTransaction, PrepareTransactionRejection> {
-        let ctx = params.into_context(&self.clock, tmpl.params.as_ref())?;
+    ) -> Result<PreparedTransaction, PreparePostingRejection> {
+        let tx_id = posting.tx_id;
+        let ctx = params.into_context(
+            &self.clock,
+            tmpl.params.as_ref(),
+            |parameter, source| PreparePostingRejection::Param {
+                posting,
+                parameter: parameter.to_owned(),
+                source: Box::new(source),
+            },
+            |parameter, source| PreparePostingRejection::Default {
+                posting,
+                parameter: parameter.to_owned(),
+                source: Box::new(source),
+            },
+        )?;
 
-        let journal_id: Uuid = tmpl.transaction.journal_id.try_evaluate(&ctx)?;
+        let journal_id: Uuid =
+            tmpl.transaction
+                .journal_id
+                .try_evaluate(&ctx)
+                .map_err(|source| PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                })?;
         let journal_id = JournalId::from(journal_id);
-        let entries = self.prep_entries(tmpl, tx_id, journal_id, &ctx)?;
-        let effective: NaiveDate = tmpl.transaction.effective.try_evaluate(&ctx)?;
+        let entries = self.prep_entries(tmpl, posting, journal_id, &ctx)?;
+        let effective: NaiveDate =
+            tmpl.transaction
+                .effective
+                .try_evaluate(&ctx)
+                .map_err(|source| PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                })?;
 
         let correlation_id = tmpl
             .transaction
             .correlation_id
             .as_ref()
             .map(|e| e.try_evaluate(&ctx))
-            .transpose()?;
+            .transpose()
+            .map_err(|source| PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(source),
+            })?;
         let external_id = tmpl
             .transaction
             .external_id
             .as_ref()
             .map(|e| e.try_evaluate(&ctx))
-            .transpose()?;
+            .transpose()
+            .map_err(|source| PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(source),
+            })?;
         let description = tmpl
             .transaction
             .description
             .as_ref()
             .map(|e| e.try_evaluate(&ctx))
-            .transpose()?;
+            .transpose()
+            .map_err(|source| PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(source),
+            })?;
         let metadata = tmpl
             .transaction
             .metadata
             .as_ref()
             .map(|e| e.try_evaluate(&ctx))
-            .transpose()?;
+            .transpose()
+            .map_err(|source| PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(source),
+            })?;
 
         Ok(PreparedTransaction {
             tx_id,
@@ -217,7 +262,7 @@ impl TxTemplates {
         fields(
             template_id = %tmpl.id,
             template_code = %tmpl.code,
-            transaction_id = %transaction_id,
+            transaction_id = %posting.tx_id,
             journal_id = %journal_id,
             entries_count = tmpl.entries.len()
         ),
@@ -225,10 +270,11 @@ impl TxTemplates {
     fn prep_entries(
         &self,
         tmpl: &TxTemplateValues,
-        transaction_id: TransactionId,
+        posting: PostingRef,
         journal_id: JournalId,
         ctx: &cel_interpreter::CelContext,
-    ) -> Result<Vec<NewEntry>, PrepareEntriesRejection> {
+    ) -> Result<Vec<NewEntry>, PreparePostingRejection> {
+        let transaction_id = posting.tx_id;
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
         for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
@@ -238,18 +284,52 @@ impl TxTemplates {
                 .transaction_id(transaction_id)
                 .journal_id(journal_id)
                 .sequence(zero_based_sequence as u32 + 1);
-            let account_id: Uuid = entry.account_id.try_evaluate(ctx)?;
+            let account_id: Uuid = entry.account_id.try_evaluate(ctx).map_err(|source| {
+                PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                }
+            })?;
             builder.account_id(account_id);
 
-            let entry_type: String = entry.entry_type.try_evaluate(ctx)?;
+            let entry_type: String = entry.entry_type.try_evaluate(ctx).map_err(|source| {
+                PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                }
+            })?;
             builder.entry_type(entry_type);
 
-            let layer: Layer = entry.layer.try_evaluate(ctx)?;
+            let layer: Layer =
+                entry
+                    .layer
+                    .try_evaluate(ctx)
+                    .map_err(|source| PreparePostingRejection::Cel {
+                        posting,
+                        source: Box::new(source),
+                    })?;
             builder.layer(layer);
 
-            let units: Decimal = entry.units.try_evaluate(ctx)?;
-            let currency: Currency = entry.currency.try_evaluate(ctx)?;
-            let direction: DebitOrCredit = entry.direction.try_evaluate(ctx)?;
+            let units: Decimal =
+                entry
+                    .units
+                    .try_evaluate(ctx)
+                    .map_err(|source| PreparePostingRejection::Cel {
+                        posting,
+                        source: Box::new(source),
+                    })?;
+            let currency: Currency = entry.currency.try_evaluate(ctx).map_err(|source| {
+                PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                }
+            })?;
+            let direction: DebitOrCredit = entry.direction.try_evaluate(ctx).map_err(|source| {
+                PreparePostingRejection::Cel {
+                    posting,
+                    source: Box::new(source),
+                }
+            })?;
 
             let total = totals.entry((currency, layer)).or_insert(Decimal::ZERO);
             match direction {
@@ -261,12 +341,23 @@ impl TxTemplates {
             builder.direction(direction);
 
             if let Some(description) = entry.description.as_ref() {
-                let description: String = description.try_evaluate(ctx)?;
+                let description: String = description.try_evaluate(ctx).map_err(|source| {
+                    PreparePostingRejection::Cel {
+                        posting,
+                        source: Box::new(source),
+                    }
+                })?;
                 builder.description(description);
             }
 
             if let Some(metadata) = entry.metadata.as_ref() {
-                let metadata: serde_json::Value = metadata.try_evaluate(ctx)?;
+                let metadata: serde_json::Value =
+                    metadata
+                        .try_evaluate(ctx)
+                        .map_err(|source| PreparePostingRejection::Cel {
+                            posting,
+                            source: Box::new(source),
+                        })?;
                 builder.metadata(metadata);
             }
 
@@ -275,7 +366,7 @@ impl TxTemplates {
 
         for ((c, l), v) in totals {
             if v != Decimal::ZERO {
-                return Err(PrepareEntriesRejection::UnbalancedTransaction(c, l, v));
+                return Err(PreparePostingRejection::unbalanced(c, l, v, posting));
             }
         }
 

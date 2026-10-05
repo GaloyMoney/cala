@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::ResultExt;
 use sqlx::PgPool;
 
@@ -37,7 +38,7 @@ impl VelocityBalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         keys: impl Iterator<Item = &VelocityBalanceKey>,
-    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, crate::CalaFault> {
+    ) -> Result<HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>, CalaFault> {
         // The window participates in the lock key below, so it must
         // also participate in the canonical sort — keys differing only
         // by window map to distinct locks and need a deterministic
@@ -224,7 +225,7 @@ impl VelocityBalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         new_balances: HashMap<&VelocityBalanceKey, Vec<BalanceSnapshot>>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let mut journal_ids = Vec::new();
         let mut account_ids = Vec::new();
         let mut currencies = Vec::new();

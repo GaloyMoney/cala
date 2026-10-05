@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 use es_entity::*;
 use sqlx::PgPool;
@@ -54,7 +55,7 @@ impl VelocityLimitRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
-    ) -> Result<Vec<VelocityLimit>, crate::CalaFault> {
+    ) -> Result<Vec<VelocityLimit>, CalaFault> {
         let rows = op
             .into_executor()
             .fetch_all(sqlx::query_as!(

@@ -107,12 +107,27 @@ repository reads treat missing rows as invariants; public lookups that reject
 absence use optional repository reads and construct a typed rejection.
 
 Single posting exposes `PostingRejection`; batch posting exposes
-`BatchPostingRejection`. Both are flat: preparation and direct validation cases
-carry `PostingRef { index, tx_id }` beside their leaf payloads. Only the batch
-contract includes duplicates within the submitted batch. Template absence,
-ancestor locks, velocity enforcement and apply-time conflicts remain
-unattributed; faults carry no posting index. Attributed cases retain the
-`CALA_POSTING_REJECTED` telemetry code.
+`BatchPostingRejection`. Both have three variants: `Prepare`, `Validate`, and
+`Apply`, each carrying the rejection contract owned by that phase.
+
+Preparation covers template lookup, parameter binding/defaults, expression
+evaluation, balancing, and the distinct-balance budget. Its CEL and parameter
+causes are boxed, retaining parameter names and original diagnostic sources.
+Validation covers direct account and journal checks. Application covers ancestor
+locks, velocity enforcement, and write conflicts. Velocity owns
+`EnforceVelocityRejection::{Cel, LimitExceeded}`; posting exposes it through
+`ApplyPostingRejection::Velocity`.
+
+Preparation evaluation and direct validation retain `PostingRef { index, tx_id }`
+and the `CALA_POSTING_REJECTED` code. Template absence, budget failures, ancestor
+locks, velocity enforcement, and apply-time conflicts remain unattributed.
+Faults carry no posting index. The phase wrappers delegate diagnostic codes and
+display text to their causes.
+
+Batch preparation composes the single-posting preparation cases and adds
+duplicate IDs within the submitted batch. Batch validation and application use
+the same contracts as single posting. The single-to-batch conversion preserves
+phase, context, and diagnostics.
 
 Service contracts describe the operation: template creation has ID/code
 conflicts, lookup has only a missing-code leaf, and pure preparation has no
@@ -120,11 +135,33 @@ fault carrier. Account/journal persistence excludes primary-key conflicts.
 Account-only membership addition excludes graph cycles/depth and journal
 mismatch; removal excludes addition-only failures.
 
-CEL parsing, execution and coercion have separate contracts. `try_evaluate<T>`
-uses `CelTarget` to choose a concrete flat error family: scalar, external
-Layer/direction, Currency or JSON. Compiled expressions cannot report parse
-errors during evaluation. Pure helpers return bare rejection results; graph
-validation additionally has a fatal lane for corrupt stored graphs. EC waits
+Choose boundaries from the public use case inward. Phase helpers return their
+phase contract, and independent components return their own contract. Velocity
+enforcement does not return a posting rejection. Use `?` for supported total
+conversions and `.widen()` across rejection/lane boundaries; attach runtime
+context with direct constructors in `map_err`.
+
+Nest errors along meaningful phase and component boundaries, without a fixed
+depth cap. Avoid enums that merely mirror incidental helper calls, and avoid
+flattening independent component failures into their caller. Use
+`errlanes::compose` for unchanged union inclusion, such as extending single
+preparation with batch-only checks. Do not enumerate CEL variants just to copy
+them into a posting contract.
+
+Use `derive(Lift)` for structural mappings between contracts. When a variant's
+payload needs conversion, `#[lift(Source::Variant, into)]` converts it into the
+destination payload type before wrapping it. Batch posting uses this for its
+preparation phase and forwards validation/application unchanged. Keep
+`#[rejection(delegate)]` on these wrappers so diagnostics come from their payloads.
+
+CEL parsing returns `CelParseRejection`. Both `evaluate` and `try_evaluate<T>`
+return the same flat `CelConversionRejection`, covering
+evaluation and all supported result conversions. Individual targets produce
+only a subset of those cases. `evaluate` performs no target conversion but shares
+the same rejection type. Compiled expressions cannot report parse errors during
+evaluation. Pure helpers
+return bare rejection results; graph validation additionally has a fatal lane
+for corrupt stored graphs. EC waits
 expose `EcCaughtUpTimeout` with the observed positions and deadline; a missing
 registered rollup is a fault.
 

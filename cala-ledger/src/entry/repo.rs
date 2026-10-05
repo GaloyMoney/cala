@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use crate::primitives::{AccountId, AccountSetId, EntryId, JournalId, TransactionId};
 use es_entity::*;
 use sqlx::PgPool;
@@ -44,10 +45,8 @@ impl EntryRepo {
         account_set_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<entry_cursor::EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>, CalaFault>
+    {
         let es_entity::PaginatedQueryArgs { first, after } = query;
         let (id, created_at) = if let Some(after) = after {
             (Some(after.id), Some(after.created_at))
@@ -121,10 +120,8 @@ impl EntryRepo {
         filter: EntriesFilter,
         query: es_entity::PaginatedQueryArgs<entry_cursor::EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, entry_cursor::EntryByCreatedAtCursor>, CalaFault>
+    {
         let es_entity::PaginatedQueryArgs { first, after } = query;
         let (id, created_at) = if let Some(after) = after {
             (Some(after.id), Some(after.created_at))

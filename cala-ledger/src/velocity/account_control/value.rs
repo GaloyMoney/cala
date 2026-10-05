@@ -1,5 +1,4 @@
-use cel_interpreter::ScalarEvaluationRejection;
-use cel_interpreter::{CelContext, CelExpression};
+use cel_interpreter::{CelContext, CelConversionRejection, CelExpression};
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -26,7 +25,7 @@ pub struct AccountVelocityControl {
 }
 
 impl AccountVelocityControl {
-    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, ScalarEvaluationRejection> {
+    pub fn needs_enforcement(&self, ctx: &CelContext) -> Result<bool, CelConversionRejection> {
         if let Some(condition) = &self.condition {
             let result: bool = condition.try_evaluate(ctx)?;
             Ok(result)
@@ -51,7 +50,7 @@ impl AccountVelocityLimit {
         &self,
         ctx: &CelContext,
         entry: &EntryValues,
-    ) -> Result<Option<Window>, VelocityWindowRejection> {
+    ) -> Result<Option<Window>, CelConversionRejection> {
         if let Some(currency) = &self.currency {
             if currency != &entry.currency {
                 return Ok(None);

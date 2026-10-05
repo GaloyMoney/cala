@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use crate::primitives::{AccountId, AccountSetId};
 
-use super::error::SetMembershipGraphRejection;
+use super::error::AddSetMembersRejection;
 
 /// Maximum depth (in set->set edges) of any root-to-leaf membership
 /// chain. Rejecting edges past this bound keeps the read-time ancestor
@@ -210,7 +210,7 @@ pub(super) fn validate_set_memberships(
     existing_edges: &[SetMembership],
     proposed_edges: &[SetMembership],
     account_members: &[AccountMembership],
-) -> Result<(), Fail<SetMembershipGraphRejection, lanes!(Fatal)>> {
+) -> Result<(), Fail<AddSetMembersRejection, lanes!(Fatal)>> {
     let mut dag = SetDag::new(existing_edges.iter().chain(proposed_edges));
     for membership in account_members {
         dag.add_isolated(membership.account_set_id);
@@ -234,7 +234,7 @@ pub(super) fn validate_set_memberships(
             .with_context("cycle in the stored account-set graph")
             .into());
         };
-        return Err(SetMembershipGraphRejection::MembershipCycleDetected {
+        return Err(AddSetMembersRejection::MembershipCycleDetected {
             account_set_id: edge.account_set_id,
             member_account_set_id: edge.member_account_set_id,
         }
@@ -282,7 +282,7 @@ pub(super) fn validate_set_memberships(
     if traversal.max_depth() > MAX_MEMBERSHIP_DEPTH {
         let (index, depth) = first_depth_overflow(existing_edges, proposed_edges);
         let edge = proposed_edges[index];
-        return Err(SetMembershipGraphRejection::MembershipDepthExceeded {
+        return Err(AddSetMembersRejection::MembershipDepthExceeded {
             account_set_id: edge.account_set_id,
             member_account_set_id: edge.member_account_set_id,
             depth,
@@ -489,7 +489,7 @@ mod tests {
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
             Err(Fail::Rejected(
-                SetMembershipGraphRejection::MembershipCycleDetected { .. }
+                AddSetMembersRejection::MembershipCycleDetected { .. }
             ))
         ));
     }
@@ -514,9 +514,9 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&existing, &proposed, &[]),
-            Err(Fail::Rejected(
-                SetMembershipGraphRejection::MemberAlreadyAdded(_)
-            ))
+            Err(Fail::Rejected(AddSetMembersRejection::MemberAlreadyAdded(
+                _
+            )))
         ));
     }
 
@@ -529,9 +529,9 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&existing, &[], &account_members),
-            Err(Fail::Rejected(
-                SetMembershipGraphRejection::MemberAlreadyAdded(_)
-            ))
+            Err(Fail::Rejected(AddSetMembersRejection::MemberAlreadyAdded(
+                _
+            )))
         ));
     }
 
@@ -542,7 +542,7 @@ mod tests {
 
         assert!(matches!(
             validate_set_memberships(&[], &proposed, &[]),
-            Err(Fail::Rejected(SetMembershipGraphRejection::MembershipDepthExceeded {
+            Err(Fail::Rejected(AddSetMembersRejection::MembershipDepthExceeded {
                 account_set_id,
                 member_account_set_id,
                 depth: 17,

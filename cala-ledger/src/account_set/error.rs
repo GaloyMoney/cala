@@ -21,33 +21,23 @@ pub enum PersistAccountSetRejection {
     ExternalIdAlreadyExists(Option<Option<String>>),
 }
 
-// This lift is only used after inserting the backing account in the same op.
-// cala_account_sets.id references cala_accounts.id, so a duplicate ID must
-// already have rejected at that insert. A later Pkey failure is an invariant.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+// The set row is inserted only after its backing account in the same op.
+// Account Pkey/CodeKey conflicts reject; a later set Pkey conflict is fatal.
+#[lift(crate::account::error::AccountConstraintViolation, unhandled = fatal)]
 #[lift(AccountSetConstraintViolation, unhandled = fatal)]
-pub(super) enum InsertAfterBackingRejection {
-    #[error("Account set external id already exists: {0:?}")]
-    #[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
-    #[lift(AccountSetConstraintViolation::ExternalIdKey, field = attempted)]
-    ExternalIdAlreadyExists(Option<Option<String>>),
-}
-
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(crate::account::error::CreateBackingAccountRejection)]
-#[lift(InsertAfterBackingRejection)]
 pub enum CreateAccountSetRejection {
     #[error("Backing account id already exists: {0}")]
     #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
-    #[lift(crate::account::error::CreateBackingAccountRejection::DuplicateId)]
+    #[lift(crate::account::error::AccountConstraintViolation::Pkey, field = attempted)]
     BackingDuplicateId(AccountId),
     #[error("Backing account code already exists: {0:?}")]
     #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
-    #[lift(crate::account::error::CreateBackingAccountRejection::CodeAlreadyExists)]
+    #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
     BackingCodeAlreadyExists(Option<String>),
     #[error("Account set external id already exists: {0:?}")]
     #[rejection(code = "CALA_ACCOUNT_SET_EXTERNAL_ID_ALREADY_EXISTS")]
-    #[lift(InsertAfterBackingRejection::ExternalIdAlreadyExists)]
+    #[lift(AccountSetConstraintViolation::ExternalIdKey, field = attempted)]
     SetExternalIdAlreadyExists(Option<Option<String>>),
 }
 
@@ -69,38 +59,6 @@ pub struct MemberHasBalanceHistory {
 }
 
 #[derive(Debug, errlanes::Rejection)]
-pub enum SetMembershipGraphRejection {
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ALREADY_ADDED")]
-    #[error("{0}")]
-    #[rejection(from)]
-    MemberAlreadyAdded(MemberAlreadyAdded),
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_CYCLE_DETECTED")]
-    #[error(
-        "Membership {} -> {} would create a cycle",
-        account_set_id,
-        member_account_set_id
-    )]
-    MembershipCycleDetected {
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-    },
-    #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_DEPTH_EXCEEDED")]
-    #[error(
-        "Membership {} -> {} exceeds maximum depth {}: {}",
-        account_set_id,
-        member_account_set_id,
-        max,
-        depth
-    )]
-    MembershipDepthExceeded {
-        account_set_id: AccountSetId,
-        member_account_set_id: AccountSetId,
-        depth: i32,
-        max: i32,
-    },
-}
-
-#[derive(Debug, errlanes::Rejection)]
 pub enum AddAccountMembersRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
@@ -116,8 +74,7 @@ pub enum AddAccountMembersRejection {
     MemberAlreadyAdded(MemberAlreadyAdded),
 }
 
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(SetMembershipGraphRejection)]
+#[derive(Debug, errlanes::Rejection)]
 pub enum AddSetMembersRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
@@ -133,7 +90,6 @@ pub enum AddSetMembersRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_MEMBER_ALREADY_ADDED")]
     #[error("{0}")]
     #[rejection(from)]
-    #[lift(SetMembershipGraphRejection::MemberAlreadyAdded)]
     MemberAlreadyAdded(MemberAlreadyAdded),
     #[rejection(code = "CALA_ACCOUNT_SET_MEMBERSHIP_CYCLE_DETECTED")]
     #[error(
@@ -141,7 +97,6 @@ pub enum AddSetMembersRejection {
         account_set_id,
         member_account_set_id
     )]
-    #[lift(SetMembershipGraphRejection::MembershipCycleDetected)]
     MembershipCycleDetected {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
@@ -154,7 +109,6 @@ pub enum AddSetMembersRejection {
         max,
         depth
     )]
-    #[lift(SetMembershipGraphRejection::MembershipDepthExceeded)]
     MembershipDepthExceeded {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
@@ -166,7 +120,6 @@ pub enum AddSetMembersRejection {
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AddAccountMembersRejection)]
 #[lift(AddSetMembersRejection)]
-#[lift(SetMembershipGraphRejection)]
 pub enum AddMemberRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_COULD_NOT_FIND_BY_ID")]
     #[error("{0}")]
@@ -185,7 +138,6 @@ pub enum AddMemberRejection {
     #[rejection(from)]
     #[lift(AddAccountMembersRejection::MemberAlreadyAdded)]
     #[lift(AddSetMembersRejection::MemberAlreadyAdded)]
-    #[lift(SetMembershipGraphRejection::MemberAlreadyAdded)]
     MemberAlreadyAdded(MemberAlreadyAdded),
     #[rejection(code = "CALA_ACCOUNT_SET_JOURNAL_ID_MISMATCH")]
     #[error("Account sets must belong to the same journal")]
@@ -198,7 +150,6 @@ pub enum AddMemberRejection {
         member_account_set_id
     )]
     #[lift(AddSetMembersRejection::MembershipCycleDetected)]
-    #[lift(SetMembershipGraphRejection::MembershipCycleDetected)]
     MembershipCycleDetected {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
@@ -212,7 +163,6 @@ pub enum AddMemberRejection {
         depth
     )]
     #[lift(AddSetMembersRejection::MembershipDepthExceeded)]
-    #[lift(SetMembershipGraphRejection::MembershipDepthExceeded)]
     MembershipDepthExceeded {
         account_set_id: AccountSetId,
         member_account_set_id: AccountSetId,
@@ -270,7 +220,7 @@ mod tests {
             sqlx::Error::Protocol("unexpected second insert collision".into()),
             AccountSetId::new(),
         );
-        let result: Result<(), Fail<InsertAfterBackingRejection, lanes!(Transient, Fatal)>> =
+        let result: Result<(), Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> =
             Err::<(), _>(constraint).widen();
         let Fail::Fatal(fault) = result.unwrap_err() else {
             panic!("must be an invariant fault")

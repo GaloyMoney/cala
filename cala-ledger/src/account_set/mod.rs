@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 pub mod error;
@@ -88,11 +89,7 @@ impl AccountSets {
             .create_backing_in_op(db, backing_account(&new_account_set))
             .await
             .widen()?;
-        let inserted: Result<_, Fail<InsertAfterBackingRejection, lanes!(Transient, Fatal)>> =
-            self.repo.create_in_op(db, new_account_set).await.widen();
-        let account_set = inserted.widen()?;
-
-        Ok(account_set)
+        self.repo.create_in_op(db, new_account_set).await.widen()
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
@@ -117,14 +114,10 @@ impl AccountSets {
             .create_all_backing_in_op(db, backing)
             .await
             .widen()?;
-        let inserted: Result<_, Fail<InsertAfterBackingRejection, lanes!(Transient, Fatal)>> = self
-            .repo
+        self.repo
             .create_all_in_op(db, new_account_sets)
             .await
-            .widen();
-        let account_sets = inserted.widen()?;
-
-        Ok(account_sets)
+            .widen()
     }
 
     #[es_entity::errlanes::instrument(
@@ -600,7 +593,7 @@ impl AccountSets {
     pub async fn find_all<T: From<AccountSet>>(
         &self,
         account_set_ids: &[AccountSetId],
-    ) -> Result<HashMap<AccountSetId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountSetId, T>, CalaFault> {
         self.repo.find_all(account_set_ids).await
     }
 
@@ -609,7 +602,7 @@ impl AccountSets {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         account_set_ids: &[AccountSetId],
-    ) -> Result<HashMap<AccountSetId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountSetId, T>, CalaFault> {
         self.repo.find_all_in_op(op, account_set_ids).await
     }
 
@@ -671,8 +664,7 @@ impl AccountSets {
         &self,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, CalaFault> {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
@@ -696,10 +688,8 @@ impl AccountSets {
         &self,
         name: String,
         args: es_entity::PaginatedQueryArgs<AccountSetByCreatedAtCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>, CalaFault>
+    {
         self.repo
             .list_for_name_by_created_at(name, args, Default::default())
             .await
@@ -715,10 +705,8 @@ impl AccountSets {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         name: String,
         args: es_entity::PaginatedQueryArgs<AccountSetByCreatedAtCursor>,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByCreatedAtCursor>, CalaFault>
+    {
         self.repo
             .list_for_name_by_created_at_in_op(op, name, args, Default::default())
             .await
@@ -734,8 +722,7 @@ impl AccountSets {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         member: impl Into<AccountSetMemberId> + std::fmt::Debug,
         query: es_entity::PaginatedQueryArgs<AccountSetByNameCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountSet, AccountSetByNameCursor>, CalaFault> {
         match member.into() {
             AccountSetMemberId::Account(account_id) => {
                 self.repo
@@ -756,7 +743,7 @@ impl AccountSets {
         args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         Ok(self
             .account_set_members
@@ -771,7 +758,7 @@ impl AccountSets {
         args: es_entity::PaginatedQueryArgs<AccountSetMemberByCreatedAtCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountSetMember, AccountSetMemberByCreatedAtCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         Ok(self
             .account_set_members
@@ -788,7 +775,7 @@ impl AccountSets {
             AccountSetMemberByExternalId,
             AccountSetMemberByExternalIdCursor,
         >,
-        crate::CalaFault,
+        CalaFault,
     > {
         Ok(self
             .account_set_members
@@ -806,7 +793,7 @@ impl AccountSets {
             AccountSetMemberByExternalId,
             AccountSetMemberByExternalIdCursor,
         >,
-        crate::CalaFault,
+        CalaFault,
     > {
         Ok(self
             .account_set_members
@@ -829,7 +816,7 @@ impl AccountSets {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
         self.set_graph_cache
             .resolve_from_probe_in_op(op, journal_id, probe_epoch, probe_seeds, entry_pairs)
             .await

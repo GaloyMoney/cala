@@ -139,20 +139,25 @@ impl CelValue {
         }
     }
 
-    pub(crate) fn from_cel_value(value: Value) -> Result<Self, CelValueConversionRejection> {
+    pub(crate) fn from_cel_value(
+        value: Value,
+        expression: &str,
+    ) -> Result<Self, CelConversionRejection> {
         Ok(match value {
             Value::Map(map) => {
                 let mut res = CelMap::new();
                 for (k, v) in map.map.iter() {
-                    res.inner
-                        .insert(CelKey::from(k), CelValue::from_cel_value(v.clone())?);
+                    res.inner.insert(
+                        CelKey::from(k),
+                        CelValue::from_cel_value(v.clone(), expression)?,
+                    );
                 }
                 CelValue::Map(Arc::new(res))
             }
             Value::List(values) => {
                 let mut res = CelArray::new();
                 for value in values.iter() {
-                    res.push(CelValue::from_cel_value(value.clone())?);
+                    res.push(CelValue::from_cel_value(value.clone(), expression)?);
                 }
                 CelValue::List(Arc::new(res))
             }
@@ -165,24 +170,35 @@ impl CelValue {
             Value::Duration(d) => CelValue::String(Arc::new(format!("{d:?}"))),
             Value::Timestamp(ts) => CelValue::Timestamp(ts.with_timezone(&Utc)),
             Value::Opaque(o) if o.runtime_type_name() == "cala.Decimal" => {
-                let decimal = o
-                    .downcast_ref::<CelDecimal>()
-                    .ok_or(CelValueConversionRejection::OpaqueDowncast("decimal"))?;
+                let decimal = o.downcast_ref::<CelDecimal>().ok_or_else(|| {
+                    CelConversionRejection::OpaqueDowncast {
+                        expression: expression.to_owned(),
+                        type_name: "decimal",
+                    }
+                })?;
                 CelValue::Decimal(decimal.0)
             }
             Value::Opaque(o) if o.runtime_type_name() == "cala.Uuid" => {
-                let id = o
-                    .downcast_ref::<CelUuid>()
-                    .ok_or(CelValueConversionRejection::OpaqueDowncast("uuid"))?;
+                let id = o.downcast_ref::<CelUuid>().ok_or_else(|| {
+                    CelConversionRejection::OpaqueDowncast {
+                        expression: expression.to_owned(),
+                        type_name: "uuid",
+                    }
+                })?;
                 CelValue::Uuid(id.0)
             }
             Value::Opaque(o) => {
-                return Err(CelValueConversionRejection::UnsupportedOpaque(
-                    o.runtime_type_name().to_owned(),
-                ))
+                return Err(CelConversionRejection::UnsupportedOpaque {
+                    expression: expression.to_owned(),
+                    type_name: o.runtime_type_name().to_owned(),
+                })
             }
             Value::Null => CelValue::Null,
-            Value::Function(_, _) => return Err(CelValueConversionRejection::FunctionValue),
+            Value::Function(_, _) => {
+                return Err(CelConversionRejection::FunctionValue {
+                    expression: expression.to_owned(),
+                })
+            }
         })
     }
 }
@@ -554,28 +570,19 @@ impl TryFrom<CelResult<'_>> for serde_json::Value {
     }
 }
 
-/// A CEL result target with a concrete, flat evaluation error contract.
-pub trait CelTarget<'a>: TryFrom<CelResult<'a>> {
-    type EvaluationRejection: From<CelEvaluationRejection> + From<Self::Error>;
-}
-impl CelTarget<'_> for bool {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for NaiveDate {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for DateTime<Utc> {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for Uuid {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for String {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for Decimal {
-    type EvaluationRejection = ScalarEvaluationRejection;
-}
-impl CelTarget<'_> for serde_json::Value {
-    type EvaluationRejection = JsonEvaluationRejection;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use es_entity::errlanes::Rejection;
+
+    #[test]
+    fn nested_runtime_value_failure_keeps_the_expression_in_the_public_contract() {
+        let value = Value::List(Arc::new(vec![Value::Function(Arc::new("f".into()), None)]));
+        let error = CelValue::from_cel_value(value, "[f]").unwrap_err();
+        assert_eq!(<&str>::from(error.code()), "CEL_UNEXPECTED");
+        assert_eq!(error.to_string(), "Cannot convert function value in '[f]'");
+        assert!(
+            matches!(error, CelConversionRejection::FunctionValue { expression } if expression == "[f]")
+        );
+    }
 }

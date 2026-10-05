@@ -29,7 +29,7 @@ use cala_ledger::{
     balance::error::BalanceNotFound,
     job::Jobs,
     journal::NewJournal,
-    posting::PostingRejection,
+    posting::{PostingRejection, ValidatePostingRejection},
     primitives::BalanceRollup,
     tx_template::Params,
     AccountId, CalaLedger, CalaLedgerConfig, Currency, JournalId, TransactionId,
@@ -570,7 +570,9 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
             matches!(
                 &result,
                 Err(cala_ledger::errlanes::Fail::Rejected(
-                    PostingRejection::ValidationEntryTargetsAccountSet { .. }
+                    PostingRejection::Validate(
+                        ValidatePostingRejection::EntryTargetsAccountSet { .. }
+                    )
                 ))
             ),
             "posting to set-backing account {set_account} must be rejected, got {:?}",
@@ -648,9 +650,9 @@ async fn missing_account_is_not_reported_as_account_set() -> anyhow::Result<()> 
         .await;
 
     match result {
-        Err(cala_ledger::errlanes::Fail::Rejected(
-            PostingRejection::ValidationEntryTargetsAccountSet { .. },
-        )) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(PostingRejection::Validate(
+            ValidatePostingRejection::EntryTargetsAccountSet { .. },
+        ))) => {
             panic!("a missing account was misreported as targeting an account set")
         }
         Err(_) => {} // a referential-integrity / not-found error — correct

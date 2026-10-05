@@ -65,6 +65,7 @@
 //! posting boundaries with no global ordering — that could deadlock concurrent
 //! batches, not batching itself.
 
+use crate::error::CalaFault;
 use es_entity::errlanes::ResultExt;
 
 use std::collections::HashMap;
@@ -432,7 +433,7 @@ impl PostingRepo {
         account_ids: &[AccountId],
         journal_ids: &[JournalId],
         keys: &BalanceKeys,
-    ) -> Result<PostingState, crate::CalaFault> {
+    ) -> Result<PostingState, CalaFault> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -521,7 +522,7 @@ impl PostingRepo {
         op: &mut impl es_entity::AtomicOperation,
         set_account_ids: &[AccountId],
         keys: &BalanceKeys,
-    ) -> Result<AncestorState, crate::CalaFault> {
+    ) -> Result<AncestorState, CalaFault> {
         let row = sqlx::query!(
             r#"
             SELECT
@@ -778,12 +779,11 @@ impl PostingRepo {
 
     fn decode<T: serde::de::DeserializeOwned>(
         value: Option<serde_json::Value>,
-    ) -> Result<Vec<T>, crate::CalaFault> {
+    ) -> Result<Vec<T>, crate::error::CouldNotDecodeStored> {
         match value {
             Some(serde_json::Value::Null) | None => Ok(Vec::new()),
             Some(value) => {
-                Ok(serde_json::from_value(value)
-                    .classify::<crate::error::CouldNotDecodeStored>()?)
+                serde_json::from_value(value).classify::<crate::error::CouldNotDecodeStored>()
             }
         }
     }

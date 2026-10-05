@@ -2,7 +2,7 @@ use rusty_money::{crypto, iso};
 use serde::{Deserialize, Serialize};
 
 use crate::cel_error::*;
-use cel_interpreter::{CelResult, CelTarget, CelType, CelValue, ExternalTypeCoercion};
+use cel_interpreter::{CelResult, CelType, CelValue, ExternalTypeCoercion};
 
 es_entity::entity_id! { AccountId }
 impl From<AccountId> for cel_interpreter::CelValue {
@@ -272,18 +272,6 @@ impl TryFrom<CelResult<'_>> for Currency {
             }
         }
     }
-}
-
-impl CelTarget<'_> for Layer {
-    type EvaluationRejection = ExternalEvaluationRejection;
-}
-
-impl CelTarget<'_> for DebitOrCredit {
-    type EvaluationRejection = ExternalEvaluationRejection;
-}
-
-impl CelTarget<'_> for Currency {
-    type EvaluationRejection = CurrencyEvaluationRejection;
 }
 
 #[cfg(test)]

@@ -7,7 +7,6 @@ use cala_ledger::{
     errlanes::{lanes, Fail, Rejection},
     journal::{error::*, Journal},
     tx_template::error::*,
-    velocity::error::*,
     *,
 };
 use std::future::Future;
@@ -65,20 +64,5 @@ fn remove_members(e: RemoveMemberRejection) {
         RemoveMemberRejection::AccountSetNotFound(_)
         | RemoveMemberRejection::MemberHasBalanceHistory(_)
         | RemoveMemberRejection::JournalIdMismatch => {}
-    }
-}
-fn velocity_enforce(e: EnforceVelocityBatchRejection) {
-    match e {
-        EnforceVelocityBatchRejection::CoreTypeCoercion(_)
-        | EnforceVelocityBatchRejection::UnknownIdent { .. }
-        | EnforceVelocityBatchRejection::MissingArgument { .. }
-        | EnforceVelocityBatchRejection::NoMatchingOverload { .. }
-        | EnforceVelocityBatchRejection::Unexpected { .. }
-        | EnforceVelocityBatchRejection::UnsupportedOpaque { .. }
-        | EnforceVelocityBatchRejection::OpaqueDowncast { .. }
-        | EnforceVelocityBatchRejection::FunctionValue { .. }
-        | EnforceVelocityBatchRejection::NonStringKey(_)
-        | EnforceVelocityBatchRejection::UnsupportedBytes { .. }
-        | EnforceVelocityBatchRejection::LimitExceeded(_) => {}
     }
 }

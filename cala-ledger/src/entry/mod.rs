@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 mod entity;
 mod repo;
 
@@ -33,7 +34,7 @@ impl Entries {
     pub async fn find_all(
         &self,
         entry_ids: &[EntryId],
-    ) -> Result<HashMap<EntryId, Entry>, crate::CalaFault> {
+    ) -> Result<HashMap<EntryId, Entry>, CalaFault> {
         self.repo.find_all(entry_ids).await
     }
 
@@ -46,7 +47,7 @@ impl Entries {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         entry_ids: &[EntryId],
-    ) -> Result<HashMap<EntryId, Entry>, crate::CalaFault> {
+    ) -> Result<HashMap<EntryId, Entry>, CalaFault> {
         self.repo.find_all_in_op(op, entry_ids).await
     }
 
@@ -60,7 +61,7 @@ impl Entries {
         account_id: AccountId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, crate::CalaFault> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_account_id_by_created_at(account_id, query, direction)
             .await
@@ -76,7 +77,7 @@ impl Entries {
         account_id: AccountSetId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, crate::CalaFault> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_account_set_id_by_created_at(account_id, query, direction)
             .await
@@ -92,7 +93,7 @@ impl Entries {
         journal_id: JournalId,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, crate::CalaFault> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_journal_id_by_created_at(journal_id, query, direction)
             .await
@@ -114,7 +115,7 @@ impl Entries {
         filter: EntriesFilter,
         query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, crate::CalaFault> {
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
         self.repo
             .list_for_journal_id_filtered_by_created_at(journal_id, filter, query, direction)
             .await
@@ -128,7 +129,7 @@ impl Entries {
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
-    ) -> Result<Vec<Entry>, crate::CalaFault> {
+    ) -> Result<Vec<Entry>, CalaFault> {
         let page = self
             .repo
             .list_for_transaction_id_by_created_at(

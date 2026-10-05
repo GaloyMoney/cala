@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::*;
 use sqlx::PgPool;
 
@@ -64,7 +65,7 @@ impl AccountRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         latest_values: VelocityContextAccountValues,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let account_id = latest_values.id;
 
         sqlx::query!(
@@ -84,7 +85,7 @@ impl AccountRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Account,
         new_events: es_entity::LastPersisted<'_, AccountEvent>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         if entity.is_account_set() {
             return Ok(());
         }

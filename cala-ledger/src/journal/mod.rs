@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 pub mod error;
@@ -53,7 +54,7 @@ impl Journals {
     pub async fn find_all<T: From<Journal>>(
         &self,
         journal_ids: &[JournalId],
-    ) -> Result<HashMap<JournalId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<JournalId, T>, CalaFault> {
         self.repo.find_all(journal_ids).await
     }
 

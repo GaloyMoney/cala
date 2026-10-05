@@ -73,6 +73,7 @@
 //! evaluation itself is the template domain's logic and stays in
 //! [`TxTemplates::prepare_transaction`].
 
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 pub(crate) mod error;
 mod repo;
@@ -87,7 +88,7 @@ use cala_types::{balance::BalanceSnapshot, entry::EntryValues};
 
 use crate::{
     account_set::AccountSets,
-    balance::Balances,
+    balance::{error::BalanceAccountLocked, Balances},
     outbox::OutboxPublisher,
     primitives::*,
     transaction::Transaction,
@@ -95,11 +96,10 @@ use crate::{
     velocity::Velocities,
 };
 
-use error::{
-    ApplyPostingsRejection, AttributedPreparationRejection, PostingValidationRejection,
-    PrepareBatchRejection, ValidateBatchRejection,
+pub use error::{
+    ApplyPostingRejection, BatchPostingRejection, BatchPreparePostingRejection, PostingRef,
+    PostingRejection, PreparePostingRejection, TooManyPostingBalances, ValidatePostingRejection,
 };
-pub use error::{BatchPostingRejection, PostingRef, PostingRejection, TooManyPostingBalances};
 
 /// Ancestor account sets per journal: `journal -> (leaf -> its sets in that
 /// journal)`. Keyed by journal because a leaf account has no journal of its
@@ -253,15 +253,14 @@ impl Postings {
                 .await?;
         }
         let read = self.read_prepared(db, &prepared, &keys).await?;
-        Self::validate_one(&prepared[0], &read).map_err(|e| {
-            ValidateBatchRejection::from_rejection(
-                e,
-                PostingRef {
-                    index: 0,
-                    tx_id: input.tx_id,
-                },
-            )
-        })?;
+        Self::validate_one(
+            &prepared[0],
+            &read,
+            PostingRef {
+                index: 0,
+                tx_id: input.tx_id,
+            },
+        )?;
         let transactions = self
             .apply_prepared(db, prepared, read, locked.now)
             .await
@@ -284,10 +283,10 @@ impl Postings {
         codes: &[String],
     ) -> Result<
         (BalanceKeys, repo::LockOutcome),
-        Fail<TooManyPostingBalances, lanes!(Transient, Fatal)>,
+        Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
     > {
         let keys = Self::entry_balance_keys(prepared);
-        Self::check_balance_budget(&keys)?;
+        Self::check_balance_budget(&keys).widen()?;
         let locked = self
             .repo
             .lock_balances_and_probe_templates_in_op(db, &keys, codes, db.maybe_now())
@@ -310,7 +309,7 @@ impl Postings {
         db: &mut impl AtomicOperation,
         prepared: &[PreparedTransaction],
         keys: &BalanceKeys,
-    ) -> Result<PostingState, crate::CalaFault> {
+    ) -> Result<PostingState, CalaFault> {
         let account_ids = Self::dedup(
             prepared
                 .iter()
@@ -328,7 +327,7 @@ impl Postings {
         prepared: Vec<PreparedTransaction>,
         mut read: PostingState,
         now: DateTime<Utc>,
-    ) -> Result<Vec<Transaction>, Fail<ApplyPostingsRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<Vec<Transaction>, Fail<ApplyPostingRejection, lanes!(Transient, Fatal)>> {
         // ---- ancestor phase (only when memberships exist) --------------
         let mappings = self
             .resolve_ancestors(db, &prepared, &mut read)
@@ -409,20 +408,22 @@ impl Postings {
         input: &PostingInput,
         templates: &HashMap<String, ResolvedTemplate>,
         posting: PostingRef,
-    ) -> Result<PreparedTransaction, AttributedPreparationRejection> {
+    ) -> Result<PreparedTransaction, PreparePostingRejection> {
         let template = templates
             .get(&input.tx_template_code)
             .expect("template resolved above");
-        self.tx_templates
-            .prepare_transaction(input.tx_id, &template.values, input.params.clone())
-            .map_err(|e| AttributedPreparationRejection::from_rejection(e, posting))
+        posting.record_failure(self.tx_templates.prepare_transaction(
+            posting,
+            &template.values,
+            input.params.clone(),
+        ))
     }
 
     fn prepare_all(
         &self,
         batch: &[PostingInput],
         templates: &HashMap<String, ResolvedTemplate>,
-    ) -> Result<Vec<PreparedTransaction>, PrepareBatchRejection> {
+    ) -> Result<Vec<PreparedTransaction>, BatchPreparePostingRejection> {
         let mut prepared = Vec::with_capacity(batch.len());
         let mut seen_ids = HashSet::new();
         let mut seen_external = HashSet::new();
@@ -433,14 +434,16 @@ impl Postings {
             };
             let transaction = self.prepare_one(input, templates, posting)?;
             if !seen_ids.insert(transaction.tx_id) {
-                return Err(PrepareBatchRejection::DuplicateTransactionIdInBatch {
-                    posting: posting.record(),
-                    tx_id: transaction.tx_id,
-                });
+                return Err(
+                    BatchPreparePostingRejection::DuplicateTransactionIdInBatch {
+                        posting: posting.record(),
+                        tx_id: transaction.tx_id,
+                    },
+                );
             }
             if let Some(external_id) = transaction.external_id.as_ref() {
                 if !seen_external.insert(external_id.clone()) {
-                    return Err(PrepareBatchRejection::DuplicateExternalIdInBatch {
+                    return Err(BatchPreparePostingRejection::DuplicateExternalIdInBatch {
                         posting: posting.record(),
                         external_id: external_id.clone(),
                     });
@@ -454,15 +457,18 @@ impl Postings {
     fn validate_one(
         posting: &PreparedTransaction,
         read: &PostingState,
-    ) -> Result<(), PostingValidationRejection> {
+        attribution: PostingRef,
+    ) -> Result<(), ValidatePostingRejection> {
         match read.journals.get(&posting.journal_id) {
             None => {
-                return Err(PostingValidationRejection::JournalNotFound {
+                return Err(ValidatePostingRejection::JournalNotFound {
+                    posting: attribution.record(),
                     journal_id: posting.journal_id,
                 })
             }
             Some(journal) if journal.status == Status::Locked => {
-                return Err(PostingValidationRejection::JournalLocked {
+                return Err(ValidatePostingRejection::JournalLocked {
+                    posting: attribution.record(),
                     journal_id: posting.journal_id,
                 })
             }
@@ -471,13 +477,22 @@ impl Postings {
         for entry in &posting.entries {
             let account_id = entry.account_id();
             let Some(meta) = read.accounts.get(&account_id) else {
-                return Err(PostingValidationRejection::AccountNotFound { account_id });
+                return Err(ValidatePostingRejection::AccountNotFound {
+                    posting: attribution.record(),
+                    account_id,
+                });
             };
             if meta.is_account_set {
-                return Err(PostingValidationRejection::EntryTargetsAccountSet { account_id });
+                return Err(ValidatePostingRejection::EntryTargetsAccountSet {
+                    posting: attribution.record(),
+                    account_id,
+                });
             }
             if meta.locked {
-                return Err(PostingValidationRejection::AccountLocked { account_id });
+                return Err(ValidatePostingRejection::AccountLocked {
+                    posting: attribution.record(),
+                    account_id,
+                });
             }
         }
         Ok(())
@@ -488,17 +503,16 @@ impl Postings {
         batch: &[PostingInput],
         prepared: &[PreparedTransaction],
         read: &PostingState,
-    ) -> Result<(), ValidateBatchRejection> {
+    ) -> Result<(), ValidatePostingRejection> {
         for (index, prepared) in prepared.iter().enumerate() {
-            Self::validate_one(prepared, read).map_err(|e| {
-                ValidateBatchRejection::from_rejection(
-                    e,
-                    PostingRef {
-                        index,
-                        tx_id: batch[index].tx_id,
-                    },
-                )
-            })?;
+            Self::validate_one(
+                prepared,
+                read,
+                PostingRef {
+                    index,
+                    tx_id: batch[index].tx_id,
+                },
+            )?;
         }
         Ok(())
     }
@@ -529,10 +543,7 @@ impl Postings {
         db: &mut impl AtomicOperation,
         prepared: &[PreparedTransaction],
         read: &mut PostingState,
-    ) -> Result<
-        AncestorMappings,
-        Fail<crate::balance::error::BalanceAccountLocked, lanes!(Transient, Fatal)>,
-    > {
+    ) -> Result<AncestorMappings, Fail<BalanceAccountLocked, lanes!(Transient, Fatal)>> {
         let mut mappings: AncestorMappings = HashMap::new();
         if read.seeds.is_empty() {
             return Ok(mappings);
@@ -604,7 +615,7 @@ impl Postings {
         for account_id in ancestor_ids {
             if let Some(meta) = read.accounts.get(&account_id) {
                 if meta.locked {
-                    return Err(crate::balance::error::BalanceAccountLocked(account_id).into());
+                    return Err(BalanceAccountLocked(account_id).into());
                 }
             }
         }
@@ -725,7 +736,7 @@ impl Postings {
         read: &PostingState,
         mappings: &AncestorMappings,
         now: DateTime<Utc>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let mut groups: Vec<((JournalId, chrono::NaiveDate), Vec<EntryValues>)> = Vec::new();
         for (transaction, entries) in transactions.iter().zip(entry_values) {
             let journal_id = transaction.values().journal_id;

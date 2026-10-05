@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 pub mod config;
 pub mod error;
@@ -53,10 +54,7 @@ impl CalaLedger {
     /// `start_poll` to run it, and shut it down). The rollup only runs once
     /// `jobs` is polled.
     #[es_entity::errlanes::instrument(name = "cala_ledger.init", skip_all)]
-    pub async fn init(
-        config: CalaLedgerConfig,
-        jobs: &mut job::Jobs,
-    ) -> Result<Self, crate::CalaFault> {
+    pub async fn init(config: CalaLedgerConfig, jobs: &mut job::Jobs) -> Result<Self, CalaFault> {
         let pool = match (config.pool, config.pg_con) {
             (Some(pool), None) => pool,
             (None, Some(pg_con)) => {
@@ -141,9 +139,7 @@ impl CalaLedger {
         &self.clock
     }
 
-    pub async fn begin_operation(
-        &self,
-    ) -> Result<es_entity::DbOpWithTime<'static>, crate::CalaFault> {
+    pub async fn begin_operation(&self) -> Result<es_entity::DbOpWithTime<'static>, CalaFault> {
         let db_op = es_entity::DbOp::init_with_clock(&self.pool, &self.clock)
             .await?
             .with_clock_time();
@@ -300,7 +296,7 @@ impl CalaLedger {
         skip_all,
         fields(applied, frontier, lag)
     )]
-    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, crate::CalaFault> {
+    pub async fn ec_rollup_status(&self) -> Result<crate::EcRollupStatus, CalaFault> {
         let snapshot = self.ec_rollup.load().await.narrow_rejected()?;
         let status = crate::EcRollupStatus::new(
             snapshot.checkpoint(),

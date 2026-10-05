@@ -34,7 +34,7 @@ use crate::{
     tx_template::{error::TxTemplateNotFound, TxTemplateEvent},
 };
 
-use super::repo::PostingRepo;
+use super::{repo::PostingRepo, PreparePostingRejection};
 
 /// A template body resolved at a known version.
 #[derive(Clone)]
@@ -77,8 +77,10 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, Fail<TxTemplateNotFound, lanes!(Transient, Fatal)>>
-    {
+    ) -> Result<
+        HashMap<String, ResolvedTemplate>,
+        Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
+    > {
         let snapshot = self.load();
         let mut used = HashMap::new();
         let mut missing = Vec::new();
@@ -91,7 +93,7 @@ impl TemplateCache {
             }
         }
         if !missing.is_empty() {
-            used.extend(self.fetch_and_install(op, &missing).await?);
+            used.extend(self.fetch_and_install(op, &missing).await.widen()?);
         }
         Ok(used)
     }
@@ -106,9 +108,11 @@ impl TemplateCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         codes: &[String],
-    ) -> Result<HashMap<String, ResolvedTemplate>, Fail<TxTemplateNotFound, lanes!(Transient, Fatal)>>
-    {
-        self.fetch_and_install(op, codes).await
+    ) -> Result<
+        HashMap<String, ResolvedTemplate>,
+        Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
+    > {
+        self.fetch_and_install(op, codes).await.widen()
     }
 
     /// Assert that the versions this flow prepared against are the versions
@@ -149,7 +153,7 @@ impl TemplateCache {
         let mut resolved = HashMap::with_capacity(codes.len());
         for code in codes {
             let Some((id, version, event)) = fetched.remove(code) else {
-                return Err(TxTemplateNotFound(code.clone()).into());
+                return Err(TxTemplateNotFound(code.clone())).widen();
             };
             let event: TxTemplateEvent =
                 serde_json::from_value(event).classify::<crate::error::CouldNotDecodeStored>()?;

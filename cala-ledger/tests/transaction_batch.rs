@@ -9,7 +9,10 @@ use rust_decimal::Decimal;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetId, NewAccountSet},
-    posting::{BatchPostingRejection, PostingInput},
+    posting::{
+        BatchPostingRejection, BatchPreparePostingRejection, PostingInput, PreparePostingRejection,
+        ValidatePostingRejection,
+    },
     tx_template::*,
     velocity::*,
     *,
@@ -262,9 +265,9 @@ async fn a_rejected_posting_rolls_back_the_whole_batch() -> anyhow::Result<()> {
         .await;
 
     match result {
-        Err(cala_ledger::errlanes::Fail::Rejected(
-            BatchPostingRejection::ValidationAccountNotFound { posting, .. },
-        )) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Validate(
+            ValidatePostingRejection::AccountNotFound { posting, .. },
+        ))) => {
             assert_eq!(posting.index, 1, "the second posting is the offender");
         }
         Err(other) => panic!("expected an attributed posting rejection, got {other:?}"),
@@ -310,7 +313,7 @@ async fn a_locked_account_rejects_its_batch() -> anyhow::Result<()> {
     assert!(
         matches!(
             &result,
-            Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::ValidationAccountLocked { account_id: id, .. })) if *id == sender.id()
+            Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Validate(ValidatePostingRejection::AccountLocked { account_id: id, .. }))) if *id == sender.id()
         ),
         "expected AccountLocked, got {:?}",
         result.err()
@@ -342,9 +345,9 @@ async fn duplicate_transaction_ids_within_a_batch_are_rejected() -> anyhow::Resu
 
     let result = cala.post_transactions(vec![first, second]).await;
     match result {
-        Err(cala_ledger::errlanes::Fail::Rejected(
-            BatchPostingRejection::PreparationDuplicateTransactionIdInBatch { posting, tx_id },
-        )) => {
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Prepare(
+            BatchPreparePostingRejection::DuplicateTransactionIdInBatch { posting, tx_id },
+        ))) => {
             assert_eq!(posting.index, 1);
             assert_eq!(posting.tx_id, shared);
             assert_eq!(tx_id, shared)
@@ -651,8 +654,8 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
         .collect();
 
     match cala.post_transactions(batch).await {
-        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::TooManyBalances(
-            budget,
+        Err(cala_ledger::errlanes::Fail::Rejected(BatchPostingRejection::Prepare(
+            BatchPreparePostingRejection::PostingTooManyBalances(budget),
         ))) => {
             assert!(budget.distinct > budget.max);
         }
@@ -926,14 +929,16 @@ async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() 
                 .unwrap();
             assert_eq!(<&str>::from(error.code()), "CALA_POSTING_REJECTED");
             match error {
-                BatchPostingRejection::PreparationUnknownIdent {
+                BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingCel {
                     posting,
-                    expression,
+                    source,
                     ..
-                } => {
+                }) => {
                     assert_eq!(posting.index, 0);
                     assert_eq!(posting.tx_id, tx_id);
-                    assert_eq!(expression, "missing_after_refresh");
+                    assert!(
+                        matches!(*source, cel_interpreter::CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_after_refresh")
+                    );
                 }
                 other => panic!("unexpected refresh outcome: {other:?}"),
             }
@@ -947,14 +952,14 @@ async fn refreshed_preparation_errors_keep_leaf_payload_and_input_attribution() 
                 .unwrap();
             assert_eq!(<&str>::from(error.code()), "CALA_POSTING_REJECTED");
             match error {
-                PostingRejection::PreparationUnknownIdent {
-                    posting,
-                    expression,
-                    ..
-                } => {
+                PostingRejection::Prepare(PreparePostingRejection::Cel {
+                    posting, source, ..
+                }) => {
                     assert_eq!(posting.index, 0);
                     assert_eq!(posting.tx_id, tx_id);
-                    assert_eq!(expression, "missing_after_refresh");
+                    assert!(
+                        matches!(*source, cel_interpreter::CelConversionRejection::UnknownIdent { expression, .. } if expression == "missing_after_refresh")
+                    );
                 }
                 other => panic!("unexpected refresh outcome: {other:?}"),
             }

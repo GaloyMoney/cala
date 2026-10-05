@@ -1,4 +1,5 @@
-use es_entity::errlanes::{lanes, Fail, ResultExt};
+use crate::error::CalaFault;
+use es_entity::errlanes::{lanes, Fail, Fault, ResultExt};
 use sqlx::PgPool;
 
 use std::collections::{HashMap, HashSet};
@@ -84,7 +85,7 @@ impl BalanceRepo {
     pub(super) async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         self.find_all_in_op(&self.pool, ids).await
     }
 
@@ -96,7 +97,7 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         self.list_for_account_in_op(&self.pool, journal_id, account_id, args)
             .await
@@ -112,8 +113,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         self.list_for_accounts_in_op(&self.pool, journal_id, account_ids, args)
             .await
     }
@@ -123,7 +123,7 @@ impl BalanceRepo {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         let mut journal_ids = Vec::with_capacity(ids.len());
         let mut account_ids = Vec::with_capacity(ids.len());
         let mut currencies = Vec::with_capacity(ids.len());
@@ -182,7 +182,7 @@ impl BalanceRepo {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let after_currency = after.map(|cursor| cursor.currency.code().to_string());
@@ -218,7 +218,8 @@ impl BalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
+            .widen()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -240,8 +241,7 @@ impl BalanceRepo {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         let es_entity::PaginatedQueryArgs { first, after } = args;
         let (after_account_id, after_currency) = if let Some(after) = after {
             (
@@ -292,7 +292,8 @@ impl BalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, crate::CalaFault>>()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
+            .widen()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -343,7 +344,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<bool, crate::CalaFault> {
+    ) -> Result<bool, CalaFault> {
         sqlx::query!(
             r#"
             SELECT pg_advisory_xact_lock($1::int4, hashtext(($2::uuid)::text))
@@ -391,7 +392,7 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         pairs: &[(JournalId, AccountId)],
-    ) -> Result<Vec<AccountId>, crate::CalaFault> {
+    ) -> Result<Vec<AccountId>, CalaFault> {
         if pairs.is_empty() {
             return Ok(Vec::new());
         }
@@ -452,7 +453,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         new_balances: Vec<BalanceSnapshot>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         tracing::Span::current().record(
             "n_new_balances",
             tracing::field::display(new_balances.len()),
@@ -550,7 +551,7 @@ impl BalanceRepo {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
         // Adjacency-only membership: walk up the set->set edge table from
         // each account's direct memberships, then keep only EC ancestor
         // sets (the streaming rollup's targets). Mirrors
@@ -613,7 +614,7 @@ impl BalanceRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         account_ids: &[AccountId],
-    ) -> Result<HashSet<AccountId>, crate::CalaFault> {
+    ) -> Result<HashSet<AccountId>, CalaFault> {
         let rows = sqlx::query!(
             r#"
             SELECT a.id AS "id!: AccountId"

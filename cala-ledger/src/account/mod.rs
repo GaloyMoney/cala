@@ -1,4 +1,5 @@
 //! [Account] holds a balance in a [Journal](crate::journal::Journal)
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod entity;
 pub mod error;
@@ -69,7 +70,7 @@ impl Accounts {
         new_account: NewAccount,
     ) -> Result<Account, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
-        let account = self.insert_in_op(db, new_account).await.widen()?;
+        let account = self.repo.create_in_op(db, new_account).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs)
             .await
             .widen()?;
@@ -99,7 +100,7 @@ impl Accounts {
     ) -> Result<Vec<Account>, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(&new_accounts);
         tracing::Span::current().record("initial_set_count", pairs.len());
-        let accounts = self.insert_all_in_op(db, new_accounts).await.widen()?;
+        let accounts = self.repo.create_all_in_op(db, new_accounts).await.widen()?;
         self.attach_initial_account_set_in_op(db, pairs)
             .await
             .widen()?;
@@ -126,7 +127,7 @@ impl Accounts {
     pub async fn find_all<T: From<Account>>(
         &self,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountId, T>, CalaFault> {
         self.repo.find_all(account_ids).await
     }
 
@@ -135,7 +136,7 @@ impl Accounts {
         &self,
         db: impl es_entity::IntoOneTimeExecutor<'_>,
         account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountId, T>, CalaFault> {
         self.repo.find_all_in_op(db, account_ids).await
     }
 
@@ -245,31 +246,12 @@ impl Accounts {
         Ok(())
     }
 
-    async fn insert_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        account: NewAccount,
-    ) -> Result<Account, Fail<InsertAccountRejection, lanes!(Transient, Fatal)>> {
-        self.repo.create_in_op(db, account).await.widen()
-    }
-
-    async fn insert_all_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        accounts: Vec<NewAccount>,
-    ) -> Result<Vec<Account>, Fail<InsertAccountRejection, lanes!(Transient, Fatal)>> {
-        self.repo.create_all_in_op(db, accounts).await.widen()
-    }
-
     pub(crate) async fn create_backing_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         account: BackingAccount,
-    ) -> Result<(), Fail<CreateBackingAccountRejection, lanes!(Transient, Fatal)>> {
-        self.repo
-            .create_in_op(db, account.into_new())
-            .await
-            .widen()?;
+    ) -> Result<(), es_entity::RepoWriteError<AccountConstraintViolation>> {
+        self.repo.create_in_op(db, account.into_new()).await?;
         Ok(())
     }
 
@@ -277,14 +259,13 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         accounts: Vec<BackingAccount>,
-    ) -> Result<(), Fail<CreateBackingAccountRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), es_entity::RepoWriteError<AccountConstraintViolation>> {
         self.repo
             .create_all_in_op(
                 db,
                 accounts.into_iter().map(BackingAccount::into_new).collect(),
             )
-            .await
-            .widen()?;
+            .await?;
         Ok(())
     }
 
@@ -319,7 +300,6 @@ impl Accounts {
         self.account_set_members
             .attach_new_accounts_in_op(db, &pairs)
             .await
-            .map_rejected(InitialAccountSetNotFound::from_missing)
     }
 
     #[es_entity::errlanes::instrument(
@@ -331,7 +311,7 @@ impl Accounts {
         &self,
         db: &mut impl es_entity::AtomicOperation,
         values: impl Into<VelocityContextAccountValues>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         self.repo
             .update_velocity_context_values_in_op(db, values.into())
             .await

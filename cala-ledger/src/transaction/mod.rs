@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
 pub mod error;
 
@@ -87,10 +88,8 @@ impl Transactions {
         template_id: TxTemplateId,
         query: es_entity::PaginatedQueryArgs<TransactionByCreatedAtCursor>,
         direction: es_entity::ListDirection,
-    ) -> Result<
-        es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>,
-        crate::CalaFault,
-    > {
+    ) -> Result<es_entity::PaginatedQueryRet<Transaction, TransactionByCreatedAtCursor>, CalaFault>
+    {
         self.repo
             .list_for_tx_template_id_by_created_at(template_id, query, direction)
             .await
@@ -100,7 +99,7 @@ impl Transactions {
     pub async fn find_all<T: From<Transaction>>(
         &self,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<TransactionId, T>, CalaFault> {
         self.repo.find_all(transaction_ids).await
     }
 
@@ -109,7 +108,7 @@ impl Transactions {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         transaction_ids: &[TransactionId],
-    ) -> Result<HashMap<TransactionId, T>, crate::CalaFault> {
+    ) -> Result<HashMap<TransactionId, T>, CalaFault> {
         self.repo.find_all_in_op(op, transaction_ids).await
     }
 }

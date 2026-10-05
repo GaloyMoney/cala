@@ -1,4 +1,3 @@
-use crate::tx_template::error::PrepareTransactionRejection;
 use cala_types::{param::*, primitives::*};
 use cel_interpreter::*;
 use es_entity::errlanes;
@@ -12,6 +11,17 @@ pub struct PostingRef {
 }
 
 impl PostingRef {
+    // Called after instrumented preparation returns, so attribution is recorded
+    // on the posting span rather than on a nested CEL/template span.
+    pub(super) fn record_failure<T>(
+        self,
+        result: Result<T, PreparePostingRejection>,
+    ) -> Result<T, PreparePostingRejection> {
+        result.inspect_err(|_| {
+            self.record();
+        })
+    }
+
     pub(super) fn record(self) -> Self {
         let span = tracing::Span::current();
         span.record("failed_posting_index", self.index);
@@ -21,7 +31,34 @@ impl PostingRef {
 }
 
 #[derive(Debug, errlanes::Rejection)]
-pub enum AttributedPreparationRejection {
+#[rejection(code = "BATCH_TOO_MANY_ACCOUNTS")]
+#[error(
+    "Posting touches {} distinct balances; at most {} may be locked",
+    distinct,
+    max
+)]
+pub struct TooManyPostingBalances {
+    pub distinct: usize,
+    pub max: usize,
+}
+
+/// Rejections for posting one transaction, grouped by the phase that owns them.
+#[derive(Debug, errlanes::Rejection)]
+pub enum PostingRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Prepare(PreparePostingRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Validate(ValidatePostingRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Apply(ApplyPostingRejection),
+}
+
+/// Resolving and evaluating templates, then checking the preparation budget.
+#[derive(Debug, errlanes::Rejection)]
+pub enum PreparePostingRejection {
     #[rejection(code = "CALA_POSTING_REJECTED")]
     #[error(
         "Unbalanced transaction: currency {}, layer {:?}, amount {}",
@@ -35,356 +72,43 @@ pub enum AttributedPreparationRejection {
         layer: Layer,
         amount: Decimal,
     },
+    /// Evaluating a transaction or entry field, including result conversion.
     #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    CoreTypeCoercion {
+    #[error("{}", source)]
+    Cel {
         posting: PostingRef,
         #[source]
-        detail: CoreTypeCoercion,
+        source: Box<CelConversionRejection>,
     },
+    /// Evaluating the default for an omitted parameter.
     #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    UnknownIdent {
+    #[error("{}", source)]
+    Default {
         posting: PostingRef,
-        expression: String,
+        parameter: String,
         #[source]
-        source: CelExecutionError,
+        source: Box<CelConversionRejection>,
     },
+    /// Coercing a supplied parameter to its declared type.
     #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    MissingArgument {
+    #[error("{}", source)]
+    Param {
         posting: PostingRef,
-        expression: String,
+        parameter: String,
         #[source]
-        source: CelExecutionError,
+        source: Box<ParamValueRejection>,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    NoMatchingOverload {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    Unexpected {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
-    UnsupportedOpaque {
-        posting: PostingRef,
-        expression: String,
-        type_name: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not downcast {} in '{}'", type_name, expression)]
-    OpaqueDowncast {
-        posting: PostingRef,
-        expression: String,
-        type_name: &'static str,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert function value in '{}'", expression)]
-    FunctionValue {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    ExternalTypeCoercion {
-        posting: PostingRef,
-        #[source]
-        detail: ExternalTypeCoercion,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Invalid currency in '{}': {}", expression, source)]
-    InvalidCurrency {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: ParseCurrencyError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    NonStringKey {
-        posting: PostingRef,
-        #[source]
-        detail: CoreTypeCoercion,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert bytes to JSON in '{}'", expression)]
-    UnsupportedBytes {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultUnknownIdent {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultMissingArgument {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultNoMatchingOverload {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    DefaultUnexpected {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
-    DefaultUnsupportedOpaque {
-        posting: PostingRef,
-        expression: String,
-        type_name: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not downcast {} in '{}'", type_name, expression)]
-    DefaultOpaqueDowncast {
-        posting: PostingRef,
-        expression: String,
-        type_name: &'static str,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert function value in '{}'", expression)]
-    DefaultFunctionValue {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Type mismatch: expected {:?}, got {:?}", expected, actual)]
-    TypeMismatch {
-        posting: PostingRef,
-        expected: ParamDataType,
-        actual: CelType,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Uuid: {}", input, source)]
-    InvalidUuid {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: uuid::Error,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Decimal: {}", input, source)]
-    InvalidDecimal {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: rust_decimal::Error,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Date: {}", input, source)]
-    InvalidDate {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: chrono::ParseError,
-    },
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    TemplateNotFound(crate::tx_template::error::TxTemplateNotFound),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    TooManyBalances(TooManyPostingBalances),
 }
 
-impl AttributedPreparationRejection {
-    pub(super) fn from_rejection(
-        rejection: PrepareTransactionRejection,
-        posting: PostingRef,
-    ) -> Self {
-        let posting = posting.record();
-        match rejection {
-            PrepareTransactionRejection::UnbalancedTransaction(currency, layer, amount) => {
-                Self::UnbalancedTransaction {
-                    posting,
-                    currency,
-                    layer,
-                    amount,
-                }
-            }
-            PrepareTransactionRejection::CoreTypeCoercion(detail) => {
-                Self::CoreTypeCoercion { posting, detail }
-            }
-            PrepareTransactionRejection::UnknownIdent { expression, source } => {
-                Self::UnknownIdent {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::MissingArgument { expression, source } => {
-                Self::MissingArgument {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::NoMatchingOverload { expression, source } => {
-                Self::NoMatchingOverload {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::Unexpected { expression, source } => Self::Unexpected {
-                posting,
-                expression,
-                source,
-            },
-            PrepareTransactionRejection::UnsupportedOpaque {
-                expression,
-                type_name,
-            } => Self::UnsupportedOpaque {
-                posting,
-                expression,
-                type_name,
-            },
-            PrepareTransactionRejection::OpaqueDowncast {
-                expression,
-                type_name,
-            } => Self::OpaqueDowncast {
-                posting,
-                expression,
-                type_name,
-            },
-            PrepareTransactionRejection::FunctionValue { expression } => Self::FunctionValue {
-                posting,
-                expression,
-            },
-            PrepareTransactionRejection::ExternalTypeCoercion(detail) => {
-                Self::ExternalTypeCoercion { posting, detail }
-            }
-            PrepareTransactionRejection::InvalidCurrency { expression, source } => {
-                Self::InvalidCurrency {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::NonStringKey(detail) => {
-                Self::NonStringKey { posting, detail }
-            }
-            PrepareTransactionRejection::UnsupportedBytes { expression } => {
-                Self::UnsupportedBytes {
-                    posting,
-                    expression,
-                }
-            }
-            PrepareTransactionRejection::DefaultUnknownIdent { expression, source } => {
-                Self::DefaultUnknownIdent {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::DefaultMissingArgument { expression, source } => {
-                Self::DefaultMissingArgument {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::DefaultNoMatchingOverload { expression, source } => {
-                Self::DefaultNoMatchingOverload {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::DefaultUnexpected { expression, source } => {
-                Self::DefaultUnexpected {
-                    posting,
-                    expression,
-                    source,
-                }
-            }
-            PrepareTransactionRejection::DefaultUnsupportedOpaque {
-                expression,
-                type_name,
-            } => Self::DefaultUnsupportedOpaque {
-                posting,
-                expression,
-                type_name,
-            },
-            PrepareTransactionRejection::DefaultOpaqueDowncast {
-                expression,
-                type_name,
-            } => Self::DefaultOpaqueDowncast {
-                posting,
-                expression,
-                type_name,
-            },
-            PrepareTransactionRejection::DefaultFunctionValue { expression } => {
-                Self::DefaultFunctionValue {
-                    posting,
-                    expression,
-                }
-            }
-            PrepareTransactionRejection::TypeMismatch { expected, actual } => Self::TypeMismatch {
-                posting,
-                expected,
-                actual,
-            },
-            PrepareTransactionRejection::InvalidUuid { input, source } => Self::InvalidUuid {
-                posting,
-                input,
-                source,
-            },
-            PrepareTransactionRejection::InvalidDecimal { input, source } => Self::InvalidDecimal {
-                posting,
-                input,
-                source,
-            },
-            PrepareTransactionRejection::InvalidDate { input, source } => Self::InvalidDate {
-                posting,
-                input,
-                source,
-            },
-        }
-    }
-}
-
+/// Validating prepared postings against the accounts and journals read under lock.
 #[derive(Debug, errlanes::Rejection)]
-pub enum PostingValidationRejection {
-    #[rejection(code = "CALA_POSTING_ACCOUNT_NOT_FOUND")]
-    #[error("AccountNotFound: {}", account_id)]
-    AccountNotFound { account_id: AccountId },
-    #[rejection(code = "CALA_POSTING_ENTRY_TARGETS_ACCOUNT_SET")]
-    #[error("EntryTargetsAccountSet: {}", account_id)]
-    EntryTargetsAccountSet { account_id: AccountId },
-    #[rejection(code = "CALA_POSTING_ACCOUNT_LOCKED")]
-    #[error("AccountLocked: {}", account_id)]
-    AccountLocked { account_id: AccountId },
-    #[rejection(code = "CALA_POSTING_JOURNAL_NOT_FOUND")]
-    #[error("JournalNotFound: {}", journal_id)]
-    JournalNotFound { journal_id: JournalId },
-    #[rejection(code = "CALA_POSTING_JOURNAL_LOCKED")]
-    #[error("JournalLocked: {}", journal_id)]
-    JournalLocked { journal_id: JournalId },
-}
-
-#[derive(Debug, errlanes::Rejection)]
-pub enum ValidateBatchRejection {
+pub enum ValidatePostingRejection {
     #[rejection(code = "CALA_POSTING_REJECTED")]
     #[error("AccountNotFound: {}", account_id)]
     AccountNotFound {
@@ -417,42 +141,32 @@ pub enum ValidateBatchRejection {
     },
 }
 
-impl ValidateBatchRejection {
-    pub(super) fn from_rejection(
-        rejection: PostingValidationRejection,
-        posting: PostingRef,
-    ) -> Self {
-        let posting = posting.record();
-        match rejection {
-            PostingValidationRejection::AccountNotFound { account_id } => Self::AccountNotFound {
-                posting,
-                account_id,
-            },
-            PostingValidationRejection::EntryTargetsAccountSet { account_id } => {
-                Self::EntryTargetsAccountSet {
-                    posting,
-                    account_id,
-                }
-            }
-            PostingValidationRejection::AccountLocked { account_id } => Self::AccountLocked {
-                posting,
-                account_id,
-            },
-            PostingValidationRejection::JournalNotFound { journal_id } => Self::JournalNotFound {
-                posting,
-                journal_id,
-            },
-            PostingValidationRejection::JournalLocked { journal_id } => Self::JournalLocked {
-                posting,
-                journal_id,
-            },
-        }
-    }
+/// Applying prepared postings, including ancestor locks and velocity enforcement.
+#[derive(Debug, errlanes::Rejection)]
+pub enum ApplyPostingRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Velocity(crate::velocity::error::EnforceVelocityRejection),
+    #[rejection(code = "CALA_POSTING_DUPLICATETRANSACTIONID")]
+    #[error("Transaction id already posted")]
+    DuplicateTransactionId,
+    #[rejection(code = "CALA_POSTING_DUPLICATEEXTERNALID")]
+    #[error("Transaction external id already posted")]
+    DuplicateExternalId,
+    #[rejection(code = "CALA_POSTING_ENTRYTARGETSACCOUNTSET")]
+    #[error("Entry targets an account-set backing account")]
+    EntryTargetsAccountSet,
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    AncestorAccountLocked(crate::balance::error::BalanceAccountLocked),
 }
 
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AttributedPreparationRejection)]
-pub enum PrepareBatchRejection {
+/// Batch preparation reuses single-posting preparation and adds cross-input checks.
+#[errlanes::compose]
+#[derive(Debug)]
+pub enum BatchPreparePostingRejection {
+    #[compose(flatten)]
+    Posting(PreparePostingRejection),
     #[rejection(code = "CALA_POSTING_REJECTED")]
     #[error("Duplicate transaction id within the batch: {}", tx_id)]
     DuplicateTransactionIdInBatch {
@@ -465,288 +179,49 @@ pub enum PrepareBatchRejection {
         posting: PostingRef,
         external_id: String,
     },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error(
-        "Unbalanced transaction: currency {}, layer {:?}, amount {}",
-        currency,
-        layer,
-        amount
-    )]
-    #[lift(AttributedPreparationRejection::UnbalancedTransaction)]
-    UnbalancedTransaction {
-        posting: PostingRef,
+}
+
+/// Batch posting has the same phases; only preparation adds batch-specific outcomes.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(PostingRejection)]
+pub enum BatchPostingRejection {
+    #[lift(PostingRejection::Prepare, into)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Prepare(BatchPreparePostingRejection),
+    #[lift(PostingRejection::Validate)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Validate(ValidatePostingRejection),
+    #[lift(PostingRejection::Apply)]
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Apply(ApplyPostingRejection),
+}
+
+// The shared template/locking helpers return the preparation contract. Batch
+// posting adds no semantics to those errors beyond including that contract.
+impl From<PreparePostingRejection> for BatchPostingRejection {
+    fn from(error: PreparePostingRejection) -> Self {
+        Self::Prepare(error.into())
+    }
+}
+
+impl PreparePostingRejection {
+    pub(crate) fn unbalanced(
         currency: Currency,
         layer: Layer,
         amount: Decimal,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    #[lift(AttributedPreparationRejection::CoreTypeCoercion)]
-    CoreTypeCoercion {
         posting: PostingRef,
-        #[source]
-        detail: CoreTypeCoercion,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::UnknownIdent)]
-    UnknownIdent {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::MissingArgument)]
-    MissingArgument {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::NoMatchingOverload)]
-    NoMatchingOverload {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::Unexpected)]
-    Unexpected {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
-    #[lift(AttributedPreparationRejection::UnsupportedOpaque)]
-    UnsupportedOpaque {
-        posting: PostingRef,
-        expression: String,
-        type_name: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not downcast {} in '{}'", type_name, expression)]
-    #[lift(AttributedPreparationRejection::OpaqueDowncast)]
-    OpaqueDowncast {
-        posting: PostingRef,
-        expression: String,
-        type_name: &'static str,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert function value in '{}'", expression)]
-    #[lift(AttributedPreparationRejection::FunctionValue)]
-    FunctionValue {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    #[lift(AttributedPreparationRejection::ExternalTypeCoercion)]
-    ExternalTypeCoercion {
-        posting: PostingRef,
-        #[source]
-        detail: ExternalTypeCoercion,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Invalid currency in '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::InvalidCurrency)]
-    InvalidCurrency {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: ParseCurrencyError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("{}", detail)]
-    #[lift(AttributedPreparationRejection::NonStringKey)]
-    NonStringKey {
-        posting: PostingRef,
-        #[source]
-        detail: CoreTypeCoercion,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert bytes to JSON in '{}'", expression)]
-    #[lift(AttributedPreparationRejection::UnsupportedBytes)]
-    UnsupportedBytes {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::DefaultUnknownIdent)]
-    DefaultUnknownIdent {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::DefaultMissingArgument)]
-    DefaultMissingArgument {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::DefaultNoMatchingOverload)]
-    DefaultNoMatchingOverload {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Error evaluating expression '{}': {}", expression, source)]
-    #[lift(AttributedPreparationRejection::DefaultUnexpected)]
-    DefaultUnexpected {
-        posting: PostingRef,
-        expression: String,
-        #[source]
-        source: CelExecutionError,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Unsupported opaque value {} in '{}'", type_name, expression)]
-    #[lift(AttributedPreparationRejection::DefaultUnsupportedOpaque)]
-    DefaultUnsupportedOpaque {
-        posting: PostingRef,
-        expression: String,
-        type_name: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not downcast {} in '{}'", type_name, expression)]
-    #[lift(AttributedPreparationRejection::DefaultOpaqueDowncast)]
-    DefaultOpaqueDowncast {
-        posting: PostingRef,
-        expression: String,
-        type_name: &'static str,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Cannot convert function value in '{}'", expression)]
-    #[lift(AttributedPreparationRejection::DefaultFunctionValue)]
-    DefaultFunctionValue {
-        posting: PostingRef,
-        expression: String,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Type mismatch: expected {:?}, got {:?}", expected, actual)]
-    #[lift(AttributedPreparationRejection::TypeMismatch)]
-    TypeMismatch {
-        posting: PostingRef,
-        expected: ParamDataType,
-        actual: CelType,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Uuid: {}", input, source)]
-    #[lift(AttributedPreparationRejection::InvalidUuid)]
-    InvalidUuid {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: uuid::Error,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Decimal: {}", input, source)]
-    #[lift(AttributedPreparationRejection::InvalidDecimal)]
-    InvalidDecimal {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: rust_decimal::Error,
-    },
-    #[rejection(code = "CALA_POSTING_REJECTED")]
-    #[error("Could not parse {} as Date: {}", input, source)]
-    #[lift(AttributedPreparationRejection::InvalidDate)]
-    InvalidDate {
-        posting: PostingRef,
-        input: String,
-        #[source]
-        source: chrono::ParseError,
-    },
+    ) -> Self {
+        Self::UnbalancedTransaction {
+            posting,
+            currency,
+            layer,
+            amount,
+        }
+    }
 }
-
-#[derive(Debug, errlanes::Rejection)]
-pub enum PostWriteRejection {
-    #[rejection(code = "CALA_POSTING_DUPLICATETRANSACTIONID")]
-    #[error("Transaction id already posted")]
-    DuplicateTransactionId,
-    #[rejection(code = "CALA_POSTING_DUPLICATEEXTERNALID")]
-    #[error("Transaction external id already posted")]
-    DuplicateExternalId,
-    #[rejection(code = "CALA_POSTING_ENTRYTARGETSACCOUNTSET")]
-    #[error("Entry targets an account-set backing account")]
-    EntryTargetsAccountSet,
-}
-
-#[derive(Debug, errlanes::Rejection)]
-#[rejection(code = "BATCH_TOO_MANY_ACCOUNTS")]
-#[error(
-    "Posting touches {} distinct balances; at most {} may be locked",
-    distinct,
-    max
-)]
-pub struct TooManyPostingBalances {
-    pub distinct: usize,
-    pub max: usize,
-}
-
-#[errlanes::compose]
-#[derive(Debug)]
-pub enum ApplyPostingsRejection {
-    #[compose(flatten)]
-    Velocity(crate::velocity::error::EnforceVelocityBatchRejection),
-    #[compose(flatten)]
-    Write(PostWriteRejection),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    AncestorAccountLocked(crate::balance::error::BalanceAccountLocked),
-}
-
-/// Flat outcomes for one posting.
-#[errlanes::compose]
-#[derive(Debug)]
-pub enum PostingRejection {
-    #[compose(flatten)]
-    Preparation(AttributedPreparationRejection),
-    #[compose(flatten)]
-    Validation(ValidateBatchRejection),
-    #[compose(flatten)]
-    Apply(ApplyPostingsRejection),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    TemplateNotFound(crate::tx_template::error::TxTemplateNotFound),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    TooManyBalances(TooManyPostingBalances),
-}
-
-/// Flat outcomes for a batch of postings.
-#[errlanes::compose]
-#[derive(Debug)]
-pub enum BatchPostingRejection {
-    #[compose(flatten)]
-    Preparation(PrepareBatchRejection),
-    #[compose(flatten)]
-    Validation(ValidateBatchRejection),
-    #[compose(flatten)]
-    Apply(ApplyPostingsRejection),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    TemplateNotFound(crate::tx_template::error::TxTemplateNotFound),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    TooManyBalances(TooManyPostingBalances),
-}
-
 /// The number of distinct `(journal, account, currency)` triples one batch may
 /// lock.
 ///
@@ -769,7 +244,7 @@ pub(super) const MAX_DISTINCT_BALANCES_PER_BATCH: usize = 1_000;
 #[derive(Debug, errlanes::Classify)]
 pub(crate) enum PostWrite {
     #[classify(delegate)]
-    Domain(PostWriteRejection),
+    Domain(ApplyPostingRejection),
     #[classify(delegate)]
     Sqlx(sqlx::Error),
 }
@@ -777,13 +252,13 @@ impl From<sqlx::Error> for PostWrite {
     fn from(error: sqlx::Error) -> Self {
         match error.as_database_error().and_then(|e| e.constraint()) {
             Some("cala_transactions_pkey") => {
-                Self::Domain(PostWriteRejection::DuplicateTransactionId)
+                Self::Domain(ApplyPostingRejection::DuplicateTransactionId)
             }
             Some("cala_transactions_external_id_key") => {
-                Self::Domain(PostWriteRejection::DuplicateExternalId)
+                Self::Domain(ApplyPostingRejection::DuplicateExternalId)
             }
             Some("cala_entries_account_not_account_set_fkey") => {
-                Self::Domain(PostWriteRejection::EntryTargetsAccountSet)
+                Self::Domain(ApplyPostingRejection::EntryTargetsAccountSet)
             }
             _ => Self::Sqlx(error),
         }
@@ -793,149 +268,176 @@ impl From<sqlx::Error> for PostWrite {
 #[cfg(test)]
 mod contract_tests {
     use super::*;
-    use es_entity::errlanes::{Level, Rejection};
-    fn single_context(error: PostingRejection) -> Option<PostingRef> {
+    use es_entity::errlanes::{lanes, Fail, Level, Rejection, ResultExt};
+    use std::error::Error;
+
+    fn preparation_context(error: PreparePostingRejection) -> Option<PostingRef> {
         match error {
-            PostingRejection::PreparationUnbalancedTransaction { posting, .. }
-            | PostingRejection::PreparationCoreTypeCoercion { posting, .. }
-            | PostingRejection::PreparationUnknownIdent { posting, .. }
-            | PostingRejection::PreparationMissingArgument { posting, .. }
-            | PostingRejection::PreparationNoMatchingOverload { posting, .. }
-            | PostingRejection::PreparationUnexpected { posting, .. }
-            | PostingRejection::PreparationUnsupportedOpaque { posting, .. }
-            | PostingRejection::PreparationOpaqueDowncast { posting, .. }
-            | PostingRejection::PreparationFunctionValue { posting, .. }
-            | PostingRejection::PreparationExternalTypeCoercion { posting, .. }
-            | PostingRejection::PreparationInvalidCurrency { posting, .. }
-            | PostingRejection::PreparationNonStringKey { posting, .. }
-            | PostingRejection::PreparationUnsupportedBytes { posting, .. }
-            | PostingRejection::PreparationDefaultUnknownIdent { posting, .. }
-            | PostingRejection::PreparationDefaultMissingArgument { posting, .. }
-            | PostingRejection::PreparationDefaultNoMatchingOverload { posting, .. }
-            | PostingRejection::PreparationDefaultUnexpected { posting, .. }
-            | PostingRejection::PreparationDefaultUnsupportedOpaque { posting, .. }
-            | PostingRejection::PreparationDefaultOpaqueDowncast { posting, .. }
-            | PostingRejection::PreparationDefaultFunctionValue { posting, .. }
-            | PostingRejection::PreparationTypeMismatch { posting, .. }
-            | PostingRejection::PreparationInvalidUuid { posting, .. }
-            | PostingRejection::PreparationInvalidDecimal { posting, .. }
-            | PostingRejection::PreparationInvalidDate { posting, .. }
-            | PostingRejection::ValidationAccountNotFound { posting, .. }
-            | PostingRejection::ValidationEntryTargetsAccountSet { posting, .. }
-            | PostingRejection::ValidationAccountLocked { posting, .. }
-            | PostingRejection::ValidationJournalNotFound { posting, .. }
-            | PostingRejection::ValidationJournalLocked { posting, .. } => Some(posting),
-            PostingRejection::ApplyVelocityCoreTypeCoercion(..)
-            | PostingRejection::ApplyVelocityUnknownIdent { .. }
-            | PostingRejection::ApplyVelocityMissingArgument { .. }
-            | PostingRejection::ApplyVelocityNoMatchingOverload { .. }
-            | PostingRejection::ApplyVelocityUnexpected { .. }
-            | PostingRejection::ApplyVelocityUnsupportedOpaque { .. }
-            | PostingRejection::ApplyVelocityOpaqueDowncast { .. }
-            | PostingRejection::ApplyVelocityFunctionValue { .. }
-            | PostingRejection::ApplyVelocityNonStringKey(..)
-            | PostingRejection::ApplyVelocityUnsupportedBytes { .. }
-            | PostingRejection::ApplyVelocityLimitExceeded(..)
-            | PostingRejection::ApplyWriteDuplicateTransactionId
-            | PostingRejection::ApplyWriteDuplicateExternalId
-            | PostingRejection::ApplyWriteEntryTargetsAccountSet
-            | PostingRejection::ApplyAncestorAccountLocked(_)
-            | PostingRejection::TemplateNotFound(_)
-            | PostingRejection::TooManyBalances(_) => None,
+            PreparePostingRejection::UnbalancedTransaction { posting, .. }
+            | PreparePostingRejection::Cel { posting, .. }
+            | PreparePostingRejection::Default { posting, .. }
+            | PreparePostingRejection::Param { posting, .. } => Some(posting),
+            PreparePostingRejection::TemplateNotFound(_)
+            | PreparePostingRejection::TooManyBalances(_) => None,
         }
     }
+
+    fn validation_context(error: ValidatePostingRejection) -> PostingRef {
+        match error {
+            ValidatePostingRejection::AccountNotFound { posting, .. }
+            | ValidatePostingRejection::EntryTargetsAccountSet { posting, .. }
+            | ValidatePostingRejection::AccountLocked { posting, .. }
+            | ValidatePostingRejection::JournalNotFound { posting, .. }
+            | ValidatePostingRejection::JournalLocked { posting, .. } => posting,
+        }
+    }
+
+    fn single_context(error: PostingRejection) -> Option<PostingRef> {
+        match error {
+            PostingRejection::Prepare(error) => preparation_context(error),
+            PostingRejection::Validate(error) => Some(validation_context(error)),
+            PostingRejection::Apply(_) => None,
+        }
+    }
+
     fn batch_context(error: BatchPostingRejection) -> Option<PostingRef> {
         match error {
-            BatchPostingRejection::PreparationDuplicateTransactionIdInBatch { posting, .. }
-            | BatchPostingRejection::PreparationDuplicateExternalIdInBatch { posting, .. }
-            | BatchPostingRejection::PreparationUnbalancedTransaction { posting, .. }
-            | BatchPostingRejection::PreparationCoreTypeCoercion { posting, .. }
-            | BatchPostingRejection::PreparationUnknownIdent { posting, .. }
-            | BatchPostingRejection::PreparationMissingArgument { posting, .. }
-            | BatchPostingRejection::PreparationNoMatchingOverload { posting, .. }
-            | BatchPostingRejection::PreparationUnexpected { posting, .. }
-            | BatchPostingRejection::PreparationUnsupportedOpaque { posting, .. }
-            | BatchPostingRejection::PreparationOpaqueDowncast { posting, .. }
-            | BatchPostingRejection::PreparationFunctionValue { posting, .. }
-            | BatchPostingRejection::PreparationExternalTypeCoercion { posting, .. }
-            | BatchPostingRejection::PreparationInvalidCurrency { posting, .. }
-            | BatchPostingRejection::PreparationNonStringKey { posting, .. }
-            | BatchPostingRejection::PreparationUnsupportedBytes { posting, .. }
-            | BatchPostingRejection::PreparationDefaultUnknownIdent { posting, .. }
-            | BatchPostingRejection::PreparationDefaultMissingArgument { posting, .. }
-            | BatchPostingRejection::PreparationDefaultNoMatchingOverload { posting, .. }
-            | BatchPostingRejection::PreparationDefaultUnexpected { posting, .. }
-            | BatchPostingRejection::PreparationDefaultUnsupportedOpaque { posting, .. }
-            | BatchPostingRejection::PreparationDefaultOpaqueDowncast { posting, .. }
-            | BatchPostingRejection::PreparationDefaultFunctionValue { posting, .. }
-            | BatchPostingRejection::PreparationTypeMismatch { posting, .. }
-            | BatchPostingRejection::PreparationInvalidUuid { posting, .. }
-            | BatchPostingRejection::PreparationInvalidDecimal { posting, .. }
-            | BatchPostingRejection::PreparationInvalidDate { posting, .. }
-            | BatchPostingRejection::ValidationAccountNotFound { posting, .. }
-            | BatchPostingRejection::ValidationEntryTargetsAccountSet { posting, .. }
-            | BatchPostingRejection::ValidationAccountLocked { posting, .. }
-            | BatchPostingRejection::ValidationJournalNotFound { posting, .. }
-            | BatchPostingRejection::ValidationJournalLocked { posting, .. } => Some(posting),
-            BatchPostingRejection::ApplyVelocityCoreTypeCoercion(..)
-            | BatchPostingRejection::ApplyVelocityUnknownIdent { .. }
-            | BatchPostingRejection::ApplyVelocityMissingArgument { .. }
-            | BatchPostingRejection::ApplyVelocityNoMatchingOverload { .. }
-            | BatchPostingRejection::ApplyVelocityUnexpected { .. }
-            | BatchPostingRejection::ApplyVelocityUnsupportedOpaque { .. }
-            | BatchPostingRejection::ApplyVelocityOpaqueDowncast { .. }
-            | BatchPostingRejection::ApplyVelocityFunctionValue { .. }
-            | BatchPostingRejection::ApplyVelocityNonStringKey(..)
-            | BatchPostingRejection::ApplyVelocityUnsupportedBytes { .. }
-            | BatchPostingRejection::ApplyVelocityLimitExceeded(..)
-            | BatchPostingRejection::ApplyWriteDuplicateTransactionId
-            | BatchPostingRejection::ApplyWriteDuplicateExternalId
-            | BatchPostingRejection::ApplyWriteEntryTargetsAccountSet
-            | BatchPostingRejection::ApplyAncestorAccountLocked(_)
-            | BatchPostingRejection::TemplateNotFound(_)
-            | BatchPostingRejection::TooManyBalances(_) => None,
+            BatchPostingRejection::Prepare(error) => match error {
+                BatchPreparePostingRejection::DuplicateTransactionIdInBatch { posting, .. }
+                | BatchPreparePostingRejection::DuplicateExternalIdInBatch { posting, .. }
+                | BatchPreparePostingRejection::PostingUnbalancedTransaction { posting, .. }
+                | BatchPreparePostingRejection::PostingCel { posting, .. }
+                | BatchPreparePostingRejection::PostingDefault { posting, .. }
+                | BatchPreparePostingRejection::PostingParam { posting, .. } => Some(posting),
+                BatchPreparePostingRejection::PostingTemplateNotFound(_)
+                | BatchPreparePostingRejection::PostingTooManyBalances(_) => None,
+            },
+            BatchPostingRejection::Validate(error) => Some(validation_context(error)),
+            BatchPostingRejection::Apply(_) => None,
         }
     }
 
     #[test]
-    fn flat_single_and_batch_contracts_preserve_attribution_and_codes() {
+    fn single_and_batch_phases_preserve_attribution_and_codes() {
         let posting = PostingRef {
             index: 3,
             tx_id: TransactionId::new(),
         };
         let attributed = || {
-            AttributedPreparationRejection::from_rejection(
-                PrepareTransactionRejection::UnbalancedTransaction(
-                    Currency::USD,
-                    Layer::Settled,
-                    Decimal::ONE,
-                ),
+            PostingRejection::from(PreparePostingRejection::unbalanced(
+                Currency::USD,
+                Layer::Settled,
+                Decimal::ONE,
                 posting,
-            )
+            ))
         };
-        let single = PostingRejection::from(attributed());
+        let single = attributed();
         assert_eq!(<&str>::from(single.code()), "CALA_POSTING_REJECTED");
         assert_eq!(single.level(), Level::Info);
-        assert!(
-            matches!(&single, PostingRejection::PreparationUnbalancedTransaction { currency: Currency::Iso(_), layer: Layer::Settled, amount, .. } if *amount == Decimal::ONE)
-        );
+        assert!(matches!(&single, PostingRejection::Prepare(
+            PreparePostingRejection::UnbalancedTransaction { currency: Currency::Iso(_), layer: Layer::Settled, amount, .. }
+        ) if *amount == Decimal::ONE));
         assert_eq!(single_context(single), Some(posting));
-        let batch = BatchPostingRejection::from(PrepareBatchRejection::from(attributed()));
+        let batch = BatchPostingRejection::from(attributed());
         assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
         assert_eq!(batch_context(batch), Some(posting));
-        let duplicate =
-            BatchPostingRejection::from(PrepareBatchRejection::DuplicateExternalIdInBatch {
+
+        let validation = || {
+            PostingRejection::from(ValidatePostingRejection::AccountLocked {
                 posting,
-                external_id: "duplicate".into(),
-            });
-        assert_eq!(<&str>::from(duplicate.code()), "CALA_POSTING_REJECTED");
-        assert_eq!(batch_context(duplicate), Some(posting));
-        let shared = ApplyPostingsRejection::from(PostWriteRejection::DuplicateTransactionId);
-        assert_eq!(single_context(shared.into()), None);
-        let missing = BatchPostingRejection::from(crate::tx_template::error::TxTemplateNotFound(
-            "absent".into(),
+                account_id: AccountId::new(),
+            })
+        };
+        assert_eq!(single_context(validation()), Some(posting));
+        assert_eq!(batch_context(validation().into()), Some(posting));
+
+        let duplicate = BatchPreparePostingRejection::DuplicateExternalIdInBatch {
+            posting,
+            external_id: "duplicate".into(),
+        };
+        let batch = BatchPostingRejection::from(duplicate);
+        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(batch_context(batch), Some(posting));
+        let shared = PostingRejection::from(ApplyPostingRejection::DuplicateTransactionId);
+        assert_eq!(single_context(shared), None);
+        let missing = BatchPostingRejection::from(PreparePostingRejection::from(
+            crate::tx_template::error::TxTemplateNotFound("absent".into()),
+        ));
+        assert!(matches!(
+            &missing,
+            BatchPostingRejection::Prepare(BatchPreparePostingRejection::PostingTemplateNotFound(
+                _
+            ))
         ));
         assert_eq!(batch_context(missing), None);
+    }
+
+    #[test]
+    fn external_parse_failure_keeps_source_and_attribution_through_posting() {
+        let posting = PostingRef {
+            index: 2,
+            tx_id: TransactionId::new(),
+        };
+        let attributed = || {
+            let expression: CelExpression = "'INVALID'".parse().unwrap();
+            let error = expression
+                .try_evaluate::<Currency>(&CelContext::new())
+                .unwrap_err();
+            PostingRejection::from(PreparePostingRejection::Cel {
+                posting,
+                source: Box::new(error),
+            })
+        };
+        let single = attributed();
+        let batch = BatchPostingRejection::from(attributed());
+        assert!(single.source().unwrap().is::<PreparePostingRejection>());
+        assert!(batch.source().unwrap().is::<BatchPreparePostingRejection>());
+        for error in [&single as &dyn Error, &batch as &dyn Error] {
+            let source = error.source().unwrap().source().unwrap();
+            assert!(source.is::<Box<CelConversionRejection>>());
+            let detail = source
+                .source()
+                .unwrap()
+                .downcast_ref::<ExternalParseError>()
+                .unwrap();
+            assert_eq!(detail.type_name, "currency");
+            assert!(matches!(
+                detail.source().unwrap().downcast_ref::<ParseCurrencyError>(),
+                Some(ParseCurrencyError::UnknownCurrency(value)) if value == "INVALID"
+            ));
+        }
+        assert_eq!(<&str>::from(single.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(<&str>::from(batch.code()), "CALA_POSTING_REJECTED");
+        assert_eq!(single_context(single), Some(posting));
+        assert_eq!(batch_context(batch), Some(posting));
+    }
+
+    #[test]
+    fn velocity_cel_failure_widens_through_apply_without_changing_diagnostics() {
+        use crate::velocity::error::EnforceVelocityRejection;
+        let expression: CelExpression = "missing_variable".parse().unwrap();
+        let source = expression.evaluate(&CelContext::new()).unwrap_err();
+        let result: Result<(), EnforceVelocityRejection> = Err(source.into());
+        let apply = result.widen::<Fail<ApplyPostingRejection, lanes!(Transient, Fatal)>>();
+        let posting = apply.widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>();
+        let batch = posting
+            .widen::<Fail<BatchPostingRejection, lanes!(Transient, Fatal)>>()
+            .unwrap_err()
+            .rejected()
+            .unwrap();
+        assert_eq!(<&str>::from(batch.code()), "CEL_EVALUATION_ERROR");
+        assert_eq!(batch.level(), Level::Info);
+        assert!(matches!(&batch, BatchPostingRejection::Apply(
+            ApplyPostingRejection::Velocity(EnforceVelocityRejection::Cel(
+                CelConversionRejection::UnknownIdent { expression, .. }
+            ))
+        ) if expression == "missing_variable"));
+        let velocity = batch.source().unwrap().source().unwrap();
+        assert!(velocity.is::<EnforceVelocityRejection>());
+        let cel = velocity.source().unwrap();
+        assert!(cel.is::<CelConversionRejection>());
+        assert!(cel.source().unwrap().is::<CelExecutionError>());
+        assert_eq!(batch_context(batch), None);
     }
 }
 
@@ -965,7 +467,7 @@ mod attribution_telemetry_tests {
     }
 
     #[test]
-    fn context_adapters_record_each_attribution_field_once() {
+    fn preparation_records_attribution_after_leaving_nested_spans() {
         let records = Arc::new(Mutex::new(Vec::new()));
         let subscriber = tracing_subscriber::registry().with(Capture(records.clone()));
         tracing::subscriber::with_default(subscriber, || {
@@ -979,15 +481,19 @@ mod attribution_telemetry_tests {
                 index: 7,
                 tx_id: TransactionId::new(),
             };
-            let preparation = AttributedPreparationRejection::from_rejection(
-                PrepareTransactionRejection::UnbalancedTransaction(
+            let preparation: Result<(), PreparePostingRejection> = {
+                let child = tracing::info_span!("template_preparation");
+                let _child = child.enter();
+                Err(PreparePostingRejection::unbalanced(
                     Currency::USD,
                     Layer::Settled,
                     Decimal::ONE,
-                ),
-                posting,
-            );
-            let _: BatchPostingRejection = PrepareBatchRejection::from(preparation).into();
+                    posting,
+                ))
+            };
+            assert!(records.lock().unwrap().is_empty());
+            let error = posting.record_failure(preparation).unwrap_err();
+            let _: BatchPostingRejection = error.into();
             let captured = std::mem::take(&mut *records.lock().unwrap());
             assert_eq!(
                 captured,
@@ -996,12 +502,10 @@ mod attribution_telemetry_tests {
                     ("failed_posting_id".into(), posting.tx_id.to_string())
                 ]
             );
-            let validation = ValidateBatchRejection::from_rejection(
-                PostingValidationRejection::AccountLocked {
-                    account_id: AccountId::new(),
-                },
-                posting,
-            );
+            let validation = ValidatePostingRejection::AccountLocked {
+                account_id: AccountId::new(),
+                posting: posting.record(),
+            };
             let _: PostingRejection = validation.into();
             let captured = records.lock().unwrap();
             assert_eq!(captured.len(), 2);

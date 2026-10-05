@@ -3,10 +3,11 @@ mod helpers;
 use rand::distr::{Alphanumeric, SampleString};
 use rust_decimal::Decimal;
 
+use cala_ledger::velocity::error::EnforceVelocityRejection;
 use cala_ledger::{
     account::NewAccount,
     account_set::{AccountSetUpdate, NewAccountSet},
-    posting::PostingRejection,
+    posting::{ApplyPostingRejection, PostingRejection},
     velocity::*,
     *,
 };
@@ -481,7 +482,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -585,7 +588,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_1_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -596,7 +601,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_2_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -691,7 +698,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -807,7 +816,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_1_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -818,7 +829,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_2_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -851,7 +864,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_1_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -862,7 +877,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_2_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -882,7 +899,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_1_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 
@@ -893,7 +912,9 @@ mod limit_via_account_sets {
         assert!(matches!(
             account_2_send_res,
             Err(cala_ledger::errlanes::Fail::Rejected(
-                PostingRejection::ApplyVelocityLimitExceeded(_)
+                PostingRejection::Apply(ApplyPostingRejection::Velocity(
+                    EnforceVelocityRejection::LimitExceeded(_)
+                ))
             ))
         ));
 

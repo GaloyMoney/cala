@@ -43,6 +43,7 @@
 //!   membership carries no balance to seed/unfold — the live closure alone
 //!   routes future entries.
 
+use crate::error::CalaFault;
 use chrono::{DateTime, NaiveDate, Utc};
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 
@@ -87,7 +88,7 @@ pub(crate) async fn register_ec_balance_rollup(
     outbox: &ObixOutbox,
     balances: &Balances,
     entries: &Entries,
-) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, crate::CalaFault> {
+) -> Result<Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>, CalaFault> {
     outbox
         .register_singleton_subscriber(
             jobs,
@@ -405,7 +406,7 @@ impl EcRollupStatus {
         skip_all,
         fields(frontier = %self.frontier, applied, lag)
     )]
-    pub async fn refresh(&mut self) -> Result<(), crate::CalaFault> {
+    pub async fn refresh(&mut self) -> Result<(), CalaFault> {
         self.applied = self.handle.load().await.narrow_rejected()?.checkpoint();
 
         let span = tracing::Span::current();

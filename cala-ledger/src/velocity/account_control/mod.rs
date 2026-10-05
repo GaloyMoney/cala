@@ -13,7 +13,7 @@ use crate::{
     primitives::{AccountId, DebitOrCredit, Layer},
 };
 
-use super::error::EvaluateVelocityLimitsRejection;
+use super::error::AttachVelocityControlRejection;
 
 use repo::*;
 pub(crate) use value::*;
@@ -41,7 +41,7 @@ impl AccountControls {
         account_id: AccountId,
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), Fail<EvaluateVelocityLimitsRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>> {
         let velocity_limits = Self::evaluate_velocity_limits(&self.clock, limits, params.into())?;
 
         let control = AccountVelocityControl {
@@ -84,7 +84,7 @@ impl AccountControls {
         account_ids: &[AccountId],
         limits: Vec<VelocityLimitValues>,
         params: impl Into<Params> + std::fmt::Debug,
-    ) -> Result<(), Fail<EvaluateVelocityLimitsRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AttachVelocityControlRejection, lanes!(Transient, Fatal)>> {
         if account_ids.is_empty() {
             return Ok(());
         }
@@ -111,11 +111,16 @@ impl AccountControls {
         clock: &ClockHandle,
         limits: Vec<VelocityLimitValues>,
         params: Params,
-    ) -> Result<Vec<AccountVelocityLimit>, EvaluateVelocityLimitsRejection> {
+    ) -> Result<Vec<AccountVelocityLimit>, AttachVelocityControlRejection> {
         let mut velocity_limits = Vec::new();
         for velocity in limits {
             let defs = velocity.params;
-            let ctx = params.clone().into_context(clock, defs.as_ref())?;
+            let ctx = params.clone().into_context(
+                clock,
+                defs.as_ref(),
+                |_, source| AttachVelocityControlRejection::from(source),
+                |_, source| AttachVelocityControlRejection::from_default(source),
+            )?;
             let mut limits = Vec::new();
             for limit in velocity.limit.balance {
                 let layer: Layer = limit.layer.try_evaluate(&ctx)?;

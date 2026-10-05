@@ -83,6 +83,7 @@
 //! it. Memory: the whole graph is ~thousands of edges + meta — trivial,
 //! no eviction needed.
 
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 use std::{
     collections::{HashMap, HashSet, VecDeque},
@@ -92,7 +93,7 @@ use std::{
 use crate::primitives::{AccountId, AccountSetId, JournalId};
 
 use super::{
-    error::{MemberAlreadyAdded, SetMembershipGraphRejection},
+    error::{AddSetMembersRejection, MemberAlreadyAdded},
     graph_validation::{
         has_duplicate_account_membership_paths, validate_set_memberships, AccountMembership,
         SetMembership,
@@ -276,7 +277,7 @@ impl SetGraphCache {
         probe_epoch: i64,
         probe_seeds: &[AccountMembership],
         entry_pairs: &(Vec<AccountId>, Vec<&str>),
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, crate::CalaFault> {
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
         let span = tracing::Span::current();
         let probe = DirectMembershipProbe {
             epoch: probe_epoch,
@@ -550,7 +551,7 @@ impl SetGraphCache {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         members: &[SetMembership],
-    ) -> Result<(), Fail<SetMembershipGraphRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<AddSetMembersRejection, lanes!(Transient, Fatal)>> {
         let span = tracing::Span::current();
         let snapshot = self.load();
         let epoch = self.inner.repo.fetch_set_graph_epoch_in_op(op).await?;
@@ -718,7 +719,7 @@ impl SetGraphCache {
         skip_all,
         fields(epoch = tracing::field::Empty, sets = tracing::field::Empty)
     )]
-    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), crate::CalaFault> {
+    async fn refresh(inner: &SetGraphCacheInner) -> Result<(), CalaFault> {
         let Ok(_guard) = inner.refresh_lock.try_lock() else {
             return Ok(());
         };

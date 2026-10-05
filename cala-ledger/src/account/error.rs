@@ -1,23 +1,6 @@
-use super::repo::AccountConstraintViolation;
+pub(crate) use super::repo::AccountConstraintViolation;
 use crate::primitives::*;
 use es_entity::errlanes;
-
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AccountConstraintViolation, unhandled = fatal)]
-pub enum InsertAccountRejection {
-    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
-    #[error("DuplicateId: {0:?}")]
-    #[lift(AccountConstraintViolation::Pkey, field = attempted)]
-    DuplicateId(AccountId),
-    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
-    #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(AccountConstraintViolation::CodeKey, field = attempted)]
-    CodeAlreadyExists(Option<String>),
-    #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
-    #[error("ExternalIdAlreadyExists: {0:?}")]
-    #[lift(AccountConstraintViolation::ExternalIdKey, field = attempted)]
-    ExternalIdAlreadyExists(Option<Option<String>>),
-}
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(AccountConstraintViolation, unhandled = fatal)]
@@ -55,16 +38,8 @@ pub struct AccountExternalIdNotFound(pub String);
 #[error("Initial account set not found: {0}")]
 pub struct InitialAccountSetNotFound(pub AccountSetId);
 
-impl InitialAccountSetNotFound {
-    pub(crate) fn from_missing(
-        missing: crate::account_set_member::InitialAccountSetsNotFound,
-    ) -> Self {
-        Self(*missing.0.first().expect("missing ids are never empty"))
-    }
-}
-
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(InsertAccountRejection)]
+#[lift(AccountConstraintViolation, unhandled = fatal)]
 pub enum CreateAccountRejection {
     #[rejection(code = "CALA_ACCOUNT_INITIAL_ACCOUNT_SET_NOT_FOUND")]
     #[error("{0}")]
@@ -72,15 +47,15 @@ pub enum CreateAccountRejection {
     InitialAccountSetNotFound(InitialAccountSetNotFound),
     #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
     #[error("DuplicateId: {0:?}")]
-    #[lift(InsertAccountRejection::DuplicateId)]
+    #[lift(AccountConstraintViolation::Pkey, field = attempted)]
     DuplicateId(AccountId),
     #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
     #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(InsertAccountRejection::CodeAlreadyExists)]
+    #[lift(AccountConstraintViolation::CodeKey, field = attempted)]
     CodeAlreadyExists(Option<String>),
     #[rejection(code = "CALA_ACCOUNT_EXTERNAL_ID_ALREADY_EXISTS")]
     #[error("ExternalIdAlreadyExists: {0:?}")]
-    #[lift(InsertAccountRejection::ExternalIdAlreadyExists)]
+    #[lift(AccountConstraintViolation::ExternalIdKey, field = attempted)]
     ExternalIdAlreadyExists(Option<Option<String>>),
 }
 
@@ -103,17 +78,4 @@ pub enum SetAccountStatusRejection {
     #[error("Cannot update accounts backing an account set")]
     #[lift(PersistAccountRejection::CannotUpdateAccountSetAccounts)]
     CannotUpdateAccountSetAccounts,
-}
-
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AccountConstraintViolation, unhandled = fatal)]
-pub enum CreateBackingAccountRejection {
-    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
-    #[error("DuplicateId: {0:?}")]
-    #[lift(AccountConstraintViolation::Pkey, field = attempted)]
-    DuplicateId(AccountId),
-    #[rejection(code = "CALA_ACCOUNT_CODE_ALREADY_EXISTS")]
-    #[error("CodeAlreadyExists: {0:?}")]
-    #[lift(AccountConstraintViolation::CodeKey, field = attempted)]
-    CodeAlreadyExists(Option<String>),
 }

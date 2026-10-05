@@ -1,3 +1,5 @@
+use super::error::EnforceVelocityRejection;
+use cel_interpreter::CelConversionRejection;
 use es_entity::errlanes::{lanes, Fail};
 mod repo;
 
@@ -14,7 +16,7 @@ use cala_types::{
 
 use crate::primitives::{AccountId, AccountSetId, TransactionId};
 
-use super::{account_control::*, error::*};
+use super::account_control::*;
 
 use repo::*;
 
@@ -55,7 +57,7 @@ impl VelocityBalances {
         postings: &[(&TransactionValues, &[EntryValues])],
         controls: &HashMap<AccountId, (VelocityContextAccountValues, Vec<AccountVelocityControl>)>,
         account_set_mappings: &crate::posting::AncestorMappings,
-    ) -> Result<(), Fail<EnforceVelocityBatchRejection, lanes!(Transient, Fatal)>> {
+    ) -> Result<(), Fail<EnforceVelocityRejection, lanes!(Transient, Fatal)>> {
         if controls.is_empty() {
             return Ok(());
         }
@@ -138,7 +140,7 @@ impl VelocityBalances {
             VelocityBalanceKey,
             Vec<(&'a AccountVelocityLimit, &'a EntryValues)>,
         >,
-    ) -> Result<(), VelocityWindowRejection> {
+    ) -> Result<(), CelConversionRejection> {
         let empty = Vec::new();
         for entry in entries {
             for account_id in account_set_mappings

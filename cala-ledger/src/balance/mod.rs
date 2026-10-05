@@ -34,6 +34,7 @@
 //! posting to a not-yet-visible account can be in flight — from first
 //! visibility its membership already exists.
 
+use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod account_balance;
 mod cursor;
@@ -134,7 +135,7 @@ impl Balances {
     pub async fn find_all(
         &self,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         self.repo.find_all(ids).await
     }
 
@@ -150,7 +151,7 @@ impl Balances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         self.repo
             .list_for_account(journal_id, account_id.into(), args)
@@ -163,8 +164,7 @@ impl Balances {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         self.repo
             .list_for_accounts(journal_id, account_ids, args)
             .await
@@ -175,7 +175,7 @@ impl Balances {
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         ids: &[BalanceId],
-    ) -> Result<HashMap<BalanceId, AccountBalance>, crate::CalaFault> {
+    ) -> Result<HashMap<BalanceId, AccountBalance>, CalaFault> {
         self.repo.find_all_in_op(op, ids).await
     }
 
@@ -192,7 +192,7 @@ impl Balances {
         args: es_entity::PaginatedQueryArgs<AccountBalanceByCurrencyCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceByCurrencyCursor>,
-        crate::CalaFault,
+        CalaFault,
     > {
         self.repo
             .list_for_account_in_op(op, journal_id, account_id.into(), args)
@@ -206,8 +206,7 @@ impl Balances {
         journal_id: JournalId,
         account_ids: &[AccountId],
         args: es_entity::PaginatedQueryArgs<AccountBalanceCursor>,
-    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, crate::CalaFault>
-    {
+    ) -> Result<es_entity::PaginatedQueryRet<AccountBalance, AccountBalanceCursor>, CalaFault> {
         self.repo
             .list_for_accounts_in_op(op, journal_id, account_ids, args)
             .await
@@ -230,7 +229,7 @@ impl Balances {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         member_id: AccountId,
-    ) -> Result<bool, crate::CalaFault> {
+    ) -> Result<bool, CalaFault> {
         self.repo
             .member_has_balance_history_in_op(op, journal_id, member_id)
             .await
@@ -249,7 +248,7 @@ impl Balances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         pairs: &[(JournalId, AccountId)],
-    ) -> Result<Vec<AccountId>, crate::CalaFault> {
+    ) -> Result<Vec<AccountId>, CalaFault> {
         self.repo
             .members_with_balance_history_in_op(op, pairs)
             .await
@@ -285,7 +284,7 @@ impl Balances {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         txns: Vec<EcRollupTxn<'_>>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let mut groups: Vec<(JournalId, Vec<EcRollupTxn<'_>>)> = Vec::new();
         for tx in txns {
             match groups.iter_mut().find(|(j, _)| *j == tx.journal_id) {
@@ -305,7 +304,7 @@ impl Balances {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         group: Vec<EcRollupTxn<'_>>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         let member_account_ids: Vec<AccountId> = group
             .iter()
             .flat_map(|tx| tx.entries.iter().map(|e| e.account_id))

@@ -33,13 +33,11 @@ mod tests {
     use std::error::Error as _;
 
     #[test]
-    fn database_faults_keep_their_lane_and_source_across_rejection_mapping() {
-        let error: Fail<
-            crate::account::error::CreateBackingAccountRejection,
-            lanes!(Transient, Fatal),
-        > = sqlx::Error::PoolTimedOut.into();
+    fn database_faults_keep_their_lane_and_source_across_widening() {
+        let error: Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)> =
+            sqlx::Error::PoolTimedOut.into();
         let result = Err::<(), _>(error)
-            .map_rejected(crate::account_set::error::CreateAccountSetRejection::from);
+            .widen::<Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>>();
         let Fail::Transient(transient) = result.unwrap_err() else {
             panic!("transient")
         };
@@ -104,7 +102,7 @@ mod sql_contract_tests {
 
     #[tokio::test]
     async fn posting_constraints_reject_and_unknown_sql_keeps_its_lane_and_source() {
-        use crate::posting::error::{PostWrite, PostWriteRejection};
+        use crate::posting::error::{ApplyPostingRejection, PostWrite, PostingRejection};
         for (constraint, code, expected) in [
             ("cala_transactions_pkey", "23505", "id"),
             ("cala_transactions_external_id_key", "23505", "external"),
@@ -116,17 +114,18 @@ mod sql_contract_tests {
         ] {
             let result = Err::<(), _>(violation(constraint, code).await)
                 .classify::<PostWrite>()
-                .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>();
+                .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>();
             let actual = match result.unwrap_err().rejected().unwrap() {
-                PostWriteRejection::DuplicateTransactionId => "id",
-                PostWriteRejection::DuplicateExternalId => "external",
-                PostWriteRejection::EntryTargetsAccountSet => "entry",
+                PostingRejection::Apply(ApplyPostingRejection::DuplicateTransactionId) => "id",
+                PostingRejection::Apply(ApplyPostingRejection::DuplicateExternalId) => "external",
+                PostingRejection::Apply(ApplyPostingRejection::EntryTargetsAccountSet) => "entry",
+                other => panic!("unexpected posting rejection: {other:?}"),
             };
             assert_eq!(actual, expected);
         }
         let error = Err::<(), _>(violation("unrecognized_constraint", "23505").await)
             .classify::<PostWrite>()
-            .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>()
+            .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>()
             .unwrap_err();
         let Fail::Fatal(fault) = error else {
             panic!("unknown constraint must retain native fault classification")
@@ -135,7 +134,7 @@ mod sql_contract_tests {
         assert!(fault.source().unwrap().is::<sqlx::Error>());
         let error = Err::<(), _>(sqlx::Error::PoolTimedOut)
             .classify::<PostWrite>()
-            .widen::<Fail<PostWriteRejection, lanes!(Transient, Fatal)>>()
+            .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>()
             .unwrap_err();
         let Fail::Transient(fault) = error else {
             panic!("pool timeout")

@@ -1,3 +1,4 @@
+use crate::error::CalaFault;
 use es_entity::*;
 use sqlx::PgPool;
 
@@ -34,7 +35,7 @@ impl JournalRepo {
         op: &mut impl es_entity::AtomicOperation,
         entity: &Journal,
         new_events: es_entity::LastPersisted<'_, JournalEvent>,
-    ) -> Result<(), crate::CalaFault> {
+    ) -> Result<(), CalaFault> {
         self.publisher
             .publish_entity_events(op, entity, new_events)
             .await?;
