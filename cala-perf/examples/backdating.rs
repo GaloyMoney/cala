@@ -16,8 +16,8 @@
 //! Run against the dev database (`make start-deps`, then `PG_CON` set):
 //!
 //! ```text
-//! cargo run --release -p cala-perf --bin backdating
-//! BENCH_DATES=1500 BENCH_ENTRIES_PER_DATE=2000 cargo run --release -p cala-perf --bin backdating
+//! cargo run --release -p cala-perf --example backdating
+//! BENCH_DATES=1500 BENCH_ENTRIES_PER_DATE=2000 cargo run --release -p cala-perf --example backdating
 //! ```
 
 use chrono::{Duration, NaiveDate};

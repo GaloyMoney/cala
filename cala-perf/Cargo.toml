@@ -3,7 +3,6 @@ name = "cala-perf"
 version = "0.32.1-dev"
 edition = "2021"
 license = "Apache-2.0"
-default-run = "cala-perf"
 
 [dependencies]
 cala-ledger = { workspace = true }
