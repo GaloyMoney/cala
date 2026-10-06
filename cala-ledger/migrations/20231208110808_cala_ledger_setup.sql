@@ -219,36 +219,29 @@ CREATE TABLE cala_cumulative_effective_balances (
   version INT NOT NULL,
   all_time_version INT NOT NULL,
   latest_entry_id UUID NOT NULL,
-  values JSONB NOT NULL,
+  settled_dr_balance NUMERIC NOT NULL,
+  settled_cr_balance NUMERIC NOT NULL,
+  settled_entry_id UUID NOT NULL,
+  settled_modified_at TIMESTAMPTZ NOT NULL,
+  pending_dr_balance NUMERIC NOT NULL,
+  pending_cr_balance NUMERIC NOT NULL,
+  pending_entry_id UUID NOT NULL,
+  pending_modified_at TIMESTAMPTZ NOT NULL,
+  encumbrance_dr_balance NUMERIC NOT NULL,
+  encumbrance_cr_balance NUMERIC NOT NULL,
+  encumbrance_entry_id UUID NOT NULL,
+  encumbrance_modified_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(journal_id, account_id, currency, effective, version)
+  PRIMARY KEY (journal_id, account_id, currency, effective)
 );
-CREATE INDEX idx_cala_cumeff_bal_atv_desc
-ON cala_cumulative_effective_balances
-  (journal_id, account_id, currency, all_time_version DESC);
 
 -- Supports `EffectiveBalances::list_modified_since`: a CDC-style query that
 -- enumerates cumulative-effective-balance rows written since a caller-held
 -- watermark, scoped to one journal.
 --
--- The `updated_at` column (bound from `EffectiveBalanceSnapshot.modified_at`
--- in `EffectiveBalanceRepo::insert_new_snapshots`), not `created_at`, is the
--- correct watermark column: `created_at` is set once at row-genesis for a
--- given (account_id, currency) chain (`EffectiveBalanceData::first_snapshot`)
--- and is carried forward unchanged on every later row for that chain
--- (`EffectiveBalanceData::into_snapshots` copies it straight from the
--- carried-forward in-memory baseline) — it does NOT mark per-row insert
--- time. `updated_at` is what `EffectiveBalanceData::update_snapshot`
--- refreshes on every write, including backdating-rewritten rows, via the
--- same threaded `created_at: DateTime<Utc>` parameter passed into
--- `re_calculate_snapshots` (see spec-effective-balance-list-modified-since.md
--- for the detailed writeup of this discrepancy).
---
 -- The daily-cadence `updated_at >= since` window is narrow, so a
--- `(journal_id, updated_at)` index is sufficient for the initial row
--- filter — the post-filter DISTINCT ON over one day's changes does not
--- need a covering index on top.
+-- `(journal_id, updated_at)` index is sufficient for the row filter.
 CREATE INDEX idx_cala_cumulative_effective_balances_journal_updated_at
     ON cala_cumulative_effective_balances (journal_id, updated_at);
 

@@ -92,6 +92,54 @@ fn post_simple_transaction_with_effective_balances(c: &mut Criterion) {
     });
 }
 
+/// Days of existing daily history under the backdated posting.
+const BACKDATED_HISTORY_DAYS: i64 = 365;
+
+/// Posts at the oldest date of a pair that has one effective-balance row per
+/// day for `BACKDATED_HISTORY_DAYS`, so each iteration adjusts every later
+/// row of both accounts (a set-based UPDATE, no balance rows loaded).
+fn post_backdated_transaction_with_effective_balances(c: &mut Criterion) {
+    let rt = create_single_worker_runtime();
+
+    let (cala, journal, sender, recipient, oldest) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala, true).await.unwrap();
+        let (sender, recipient) = init_accounts(&cala, false).await.unwrap();
+        let today = chrono::Utc::now().date_naive();
+        let oldest = today - chrono::Duration::days(BACKDATED_HISTORY_DAYS - 1);
+        for day in 0..BACKDATED_HISTORY_DAYS {
+            simple_transfer::execute_effective(
+                &cala,
+                journal.id(),
+                sender.id(),
+                recipient.id(),
+                oldest + chrono::Duration::days(day),
+            )
+            .await
+            .unwrap();
+        }
+        (cala, journal, sender, recipient, oldest)
+    });
+
+    c.bench_function(
+        "10. post_backdated_transaction_with_effective_balances_365_days",
+        |b| {
+            b.to_async(&rt).iter(|| async {
+                simple_transfer::execute_effective(
+                    black_box(&cala),
+                    black_box(journal.id()),
+                    black_box(sender.id()),
+                    black_box(recipient.id()),
+                    black_box(oldest),
+                )
+                .await
+                .unwrap()
+            })
+        },
+    );
+}
+
 fn post_simple_transaction_with_velocity(c: &mut Criterion) {
     let rt = create_single_worker_runtime();
 
@@ -265,6 +313,7 @@ criterion_group!(
     post_simple_transaction,
     post_multi_layer_transaction,
     post_simple_transaction_with_effective_balances,
+    post_backdated_transaction_with_effective_balances,
     post_simple_transaction_with_one_account_set,
     post_simple_transaction_with_five_account_set,
     post_simple_transaction_with_velocity,

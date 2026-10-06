@@ -18,6 +18,8 @@ uuid = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 rust_decimal = { workspace = true }
 serde = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", default-features = false, features = ["registry"] }
 
 [[bench]]
 name = "ledger_benchmarks"

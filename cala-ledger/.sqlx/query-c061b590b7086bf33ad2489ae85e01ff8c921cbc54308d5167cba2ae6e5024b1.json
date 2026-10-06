@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH d AS (\n              SELECT * FROM UNNEST(\n                $2::uuid[], $3::text[], $4::date[],\n                $5::numeric[], $6::numeric[], $7::numeric[], $8::numeric[],\n                $9::numeric[], $10::numeric[],\n                $11::int[], $12::uuid[], $13::uuid[], $14::uuid[], $15::uuid[]\n              ) AS d(\n                account_id, currency, effective,\n                settled_dr, settled_cr, pending_dr, pending_cr, encumbrance_dr, encumbrance_cr,\n                n, last_entry_id, settled_entry_id, pending_entry_id, encumbrance_entry_id\n              )\n            ),\n            s AS (\n              SELECT\n                c.account_id, c.currency, c.effective,\n                SUM(d.settled_dr) AS settled_dr,\n                SUM(d.settled_cr) AS settled_cr,\n                SUM(d.pending_dr) AS pending_dr,\n                SUM(d.pending_cr) AS pending_cr,\n                SUM(d.encumbrance_dr) AS encumbrance_dr,\n                SUM(d.encumbrance_cr) AS encumbrance_cr,\n                SUM(d.n)::int AS n_total,\n                COALESCE(SUM(d.n) FILTER (WHERE d.effective = c.effective), 0)::int\n                  AS n_same_day,\n                (array_agg(d.last_entry_id) FILTER (WHERE d.effective = c.effective))[1]\n                  AS same_day_entry_id,\n                COALESCE(bool_or(d.settled_entry_id <> $16::uuid), FALSE) AS settled_touched,\n                COALESCE(bool_or(d.pending_entry_id <> $16::uuid), FALSE) AS pending_touched,\n                COALESCE(bool_or(d.encumbrance_entry_id <> $16::uuid), FALSE)\n                  AS encumbrance_touched,\n                (array_agg(d.settled_entry_id ORDER BY d.effective DESC) FILTER (\n                  WHERE d.settled_entry_id <> $16::uuid\n                    AND (c.effective = d.effective OR c.settled_entry_id = a.settled_entry_id)\n                ))[1] AS settled_entry_id,\n                (array_agg(d.pending_entry_id ORDER BY d.effective DESC) FILTER (\n                  WHERE d.pending_entry_id <> $16::uuid\n                    AND (c.effective = d.effective OR c.pending_entry_id = a.pending_entry_id)\n                ))[1] AS pending_entry_id,\n                (array_agg(d.encumbrance_entry_id ORDER BY d.effective DESC) FILTER (\n                  WHERE d.encumbrance_entry_id <> $16::uuid\n                    AND (c.effective = d.effective\n                         OR c.encumbrance_entry_id = a.encumbrance_entry_id)\n                ))[1] AS encumbrance_entry_id\n              FROM d\n              JOIN cala_cumulative_effective_balances c\n                ON c.journal_id = $1\n               AND c.account_id = d.account_id\n               AND c.currency = d.currency\n               AND c.effective >= d.effective\n              JOIN cala_cumulative_effective_balances a\n                ON a.journal_id = $1\n               AND a.account_id = d.account_id\n               AND a.currency = d.currency\n               AND a.effective = d.effective\n              GROUP BY c.account_id, c.currency, c.effective\n            )\n            UPDATE cala_cumulative_effective_balances c\n            SET settled_dr_balance = c.settled_dr_balance + s.settled_dr,\n                settled_cr_balance = c.settled_cr_balance + s.settled_cr,\n                settled_entry_id = COALESCE(s.settled_entry_id, c.settled_entry_id),\n                settled_modified_at =\n                  CASE WHEN s.settled_touched THEN $17 ELSE c.settled_modified_at END,\n                pending_dr_balance = c.pending_dr_balance + s.pending_dr,\n                pending_cr_balance = c.pending_cr_balance + s.pending_cr,\n                pending_entry_id = COALESCE(s.pending_entry_id, c.pending_entry_id),\n                pending_modified_at =\n                  CASE WHEN s.pending_touched THEN $17 ELSE c.pending_modified_at END,\n                encumbrance_dr_balance = c.encumbrance_dr_balance + s.encumbrance_dr,\n                encumbrance_cr_balance = c.encumbrance_cr_balance + s.encumbrance_cr,\n                encumbrance_entry_id = COALESCE(s.encumbrance_entry_id, c.encumbrance_entry_id),\n                encumbrance_modified_at =\n                  CASE WHEN s.encumbrance_touched THEN $17 ELSE c.encumbrance_modified_at END,\n                all_time_version = c.all_time_version + s.n_total,\n                version = c.version + s.n_same_day,\n                latest_entry_id = COALESCE(s.same_day_entry_id, c.latest_entry_id),\n                updated_at = $17\n            FROM s\n            WHERE c.journal_id = $1\n              AND c.account_id = s.account_id\n              AND c.currency = s.currency\n              AND c.effective = s.effective\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "DateArray",
+        "NumericArray",
+        "NumericArray",
+        "NumericArray",
+        "NumericArray",
+        "NumericArray",
+        "NumericArray",
+        "Int4Array",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "UuidArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c061b590b7086bf33ad2489ae85e01ff8c921cbc54308d5167cba2ae6e5024b1"
+}

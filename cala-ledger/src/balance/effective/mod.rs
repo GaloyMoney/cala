@@ -1,6 +1,10 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
-mod data;
+mod delta;
+#[cfg(test)]
+mod differential_tests;
+#[cfg(any(test, feature = "fuzz"))]
+mod fold_oracle;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -20,6 +24,7 @@ use super::{
     EcRollupTxn,
 };
 
+use delta::DeltaAccumulator;
 use repo::*;
 
 #[derive(Clone)]
@@ -244,14 +249,16 @@ impl EffectiveBalances {
         effective: NaiveDate,
         created_at: DateTime<Utc>,
         mappings: HashMap<AccountId, Vec<AccountSetId>>,
-        balance_ids: (Vec<AccountId>, Vec<&str>),
+        eligible: HashSet<(AccountId, Currency)>,
     ) -> Result<(), CalaFault> {
-        let mut all_data = self
-            .repo
-            .find_for_update(&mut *op, journal_id, balance_ids, effective)
-            .await?;
+        let mut deltas = DeltaAccumulator::new();
+        // Entries arrive grouped by transaction in landing order; the first
+        // appearance of a transaction id fixes its position in the batch.
+        let mut tx_indices: HashMap<TransactionId, usize> = HashMap::new();
         let empty = Vec::new();
         for entry in entries.iter() {
+            let next_index = tx_indices.len();
+            let tx_index = *tx_indices.entry(entry.transaction_id).or_insert(next_index);
             for account_id in mappings
                 .get(&entry.account_id)
                 .unwrap_or(&empty)
@@ -259,24 +266,15 @@ impl EffectiveBalances {
                 .map(AccountId::from)
                 .chain(std::iter::once(entry.account_id))
             {
-                if let Some(data) = all_data.get_mut(&(account_id, entry.currency)) {
-                    data.push(effective, 0, created_at, entry);
+                if eligible.contains(&(account_id, entry.currency)) {
+                    deltas.push(account_id, effective, tx_index, entry);
                 }
             }
         }
-        for data in all_data.values_mut() {
-            data.re_calculate_snapshots(created_at);
-        }
 
-        let new_balances = all_data
-            .into_values()
-            .flat_map(|data| data.into_snapshots(journal_id))
-            .collect();
         self.repo
-            .insert_new_snapshots(op, journal_id, new_balances)
-            .await?;
-
-        Ok(())
+            .apply_deltas_in_op(op, journal_id, &deltas.into_deltas(), created_at)
+            .await
     }
 
     /// EC counterpart of [`Self::update_cumulative_balances_in_op`] used by
@@ -285,16 +283,15 @@ impl EffectiveBalances {
     /// plain account (listed in `ec_leaves`), into that leaf's own
     /// cumulative-effective balance too.
     ///
-    /// Batched per pair rather than per transaction: each `(account,
-    /// currency)` pair's later history is read **once**, anchored at the
-    /// *earliest* effective date any of the batch's transactions gives it,
-    /// and every one of the batch's entries for that pair is folded into
-    /// the same in-memory replay before one insert. A backdated transaction
-    /// therefore still rewrites every later row for the pairs it touches,
-    /// but does so once per batch rather than once per transaction —
-    /// `SnapshotOrEntry`'s ordering (pre-existing rows before the batch's
-    /// own entries, then landing order) makes the fold equivalent to
-    /// applying the batch's transactions one at a time.
+    /// Batched per pair rather than per transaction: every entry of the
+    /// batch is folded in memory into one delta per `(account, currency,
+    /// effective date)`, and those deltas are applied by one set-based
+    /// statement pair (see `EffectiveBalanceRepo::apply_deltas_in_op`). No
+    /// stored balance row is loaded. A backdated transaction adds its delta
+    /// to every later date row of the pairs it touches — one row update per
+    /// later calendar date, once per batch rather than once per transaction —
+    /// which is equivalent to applying the batch's transactions one at a
+    /// time in landing order.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.balance.effective.apply_ec_rollup_batch_in_op",
@@ -318,71 +315,28 @@ impl EffectiveBalances {
                 .chain(ec_leaves.get(account_id).copied())
         };
 
-        // Each pair's later history only needs to be read from its
-        // *earliest* effective date in the batch — reading from the global
-        // minimum across all pairs would delete and rewrite rows for pairs
-        // whose own entries are all later, for no benefit.
-        let mut earliest: HashMap<(AccountId, Currency), NaiveDate> = HashMap::new();
-        for tx in txns {
-            for entry in tx.entries.iter().copied() {
-                for target in targets(&entry.account_id) {
-                    earliest
-                        .entry((target, entry.currency))
-                        .and_modify(|date| *date = (*date).min(tx.effective))
-                        .or_insert(tx.effective);
-                }
-            }
-        }
-        if earliest.is_empty() {
-            return Ok(());
-        }
-
-        // One `find_ec_for_update` call per distinct earliest date — in
-        // practice a batch spans one or two dates, so this is one or two
-        // queries instead of one per transaction.
-        let mut by_date: HashMap<NaiveDate, (Vec<AccountId>, Vec<&str>)> = HashMap::new();
-        for (&(account_id, currency), &date) in earliest.iter() {
-            let (ids, currencies) = by_date.entry(date).or_default();
-            ids.push(account_id);
-            currencies.push(currency.code());
-        }
-        let mut all_data = HashMap::new();
-        for (date, ids) in by_date {
-            all_data.extend(
-                self.repo
-                    .find_ec_for_update(&mut *op, journal_id, ids, date)
-                    .await?,
-            );
-        }
-
+        let mut deltas = DeltaAccumulator::new();
         for (tx_index, tx) in txns.iter().enumerate() {
             for entry in tx.entries.iter().copied() {
                 for target in targets(&entry.account_id) {
-                    if let Some(data) = all_data.get_mut(&(target, entry.currency)) {
-                        data.push(tx.effective, tx_index, tx.created_at, entry);
-                    }
+                    deltas.push(target, tx.effective, tx_index, entry);
                 }
             }
         }
+        if deltas.is_empty() {
+            return Ok(());
+        }
 
-        let rewritten_at = txns
+        // Every row the batch writes is stamped with the batch's newest
+        // transaction time.
+        let modified_at = txns
             .iter()
             .map(|tx| tx.created_at)
             .max()
-            .expect("txns is non-empty: earliest was populated from it above");
-        for data in all_data.values_mut() {
-            data.re_calculate_snapshots(rewritten_at);
-        }
-
-        let new_balances = all_data
-            .into_values()
-            .flat_map(|data| data.into_snapshots(journal_id))
-            .collect();
+            .expect("txns is non-empty: deltas was populated from it above");
         self.repo
-            .insert_new_snapshots(op, journal_id, new_balances)
-            .await?;
-
-        Ok(())
+            .apply_deltas_in_op(op, journal_id, &deltas.into_deltas(), modified_at)
+            .await
     }
 }
 
@@ -390,7 +344,7 @@ impl EffectiveBalances {
 mod __fuzz {
     //! Harness for the out-of-tree `effective_balance` fuzz target. Lives in
     //! this module so it can reach the `pub(super)` `EffectiveBalanceData`.
-    use super::data::{EffectiveBalanceData, SnapshotOrEntry};
+    use super::fold_oracle::{EffectiveBalanceData, SnapshotOrEntry};
     use cala_types::{
         balance::BalanceSnapshot,
         entry::EntryValues,
