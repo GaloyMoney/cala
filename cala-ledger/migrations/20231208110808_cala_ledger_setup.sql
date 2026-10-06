@@ -211,29 +211,6 @@ CREATE TABLE cala_balance_history (
   FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
 
--- Cumulative effective balances: ONE row per (journal, account, currency,
--- effective date), holding the balance cumulative as of the end of that date.
--- Every reader wants "the latest row at or before a date", which is a
--- primary-key seek on this shape.
---
--- Writers never load these rows into the application. A posting dated `d`
--- adds its per-date delta to the row at `d` (creating it from its
--- predecessor if needed) and to every later row of the pair, in a single
--- set-based UPDATE (`EffectiveBalanceRepo::apply_deltas_in_op`). A backdated
--- posting therefore costs one row update per later *calendar date* of each
--- touched pair, bounded by days of history rather than by entry volume.
---
---  * `version` counts the entries folded into this date.
---  * `all_time_version` counts the entries folded with effective <= this date.
---  * `latest_entry_id` is the last entry folded into this date; each layer's
---    `*_entry_id` is the latest entry of that layer with effective <= this
---    date (the nil UUID when there is none).
---  * `created_at` is set when the pair's first row is created and carried
---    forward unchanged onto every later row of the pair.
---  * `updated_at` is the write timestamp (the batch's timestamp), refreshed
---    on every row a write touches, including later rows adjusted by a
---    backdated posting. It is the CDC watermark column behind
---    `EffectiveBalances::list_modified_since`.
 CREATE TABLE cala_cumulative_effective_balances (
   journal_id UUID NOT NULL,
   account_id UUID NOT NULL,
@@ -261,8 +238,7 @@ CREATE TABLE cala_cumulative_effective_balances (
 
 -- Supports `EffectiveBalances::list_modified_since`: a CDC-style query that
 -- enumerates cumulative-effective-balance rows written since a caller-held
--- watermark, scoped to one journal. `updated_at`, not `created_at`, is the
--- watermark (see the column notes above).
+-- watermark, scoped to one journal.
 --
 -- The daily-cadence `updated_at >= since` window is narrow, so a
 -- `(journal_id, updated_at)` index is sufficient for the row filter.
