@@ -1613,3 +1613,262 @@ async fn list_modified_since_excludes_untouched_tuples() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// Backdating on the delta-UPDATE storage model: one stored row per
+// (pair, effective date), later rows adjusted in place.
+// ---------------------------------------------------------------------------
+
+/// Each posting debits the sender / credits the recipient 1290 BTC.
+const BTC_PER_POSTING: i64 = 1290;
+
+struct BackdatingFixture {
+    cala: CalaLedger,
+    journal_id: JournalId,
+    code: String,
+}
+
+impl BackdatingFixture {
+    async fn new() -> anyhow::Result<Self> {
+        let pool = helpers::init_pool().await?;
+        let mut jobs = helpers::init_jobs(pool.clone()).await?;
+        let cala_config = CalaLedgerConfig::builder()
+            .pool(pool)
+            .exec_migrations(false)
+            .build()?;
+        let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+        let journal = cala
+            .journals()
+            .create(helpers::test_journal_with_effective_balances())
+            .await?;
+        let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+        cala.tx_templates()
+            .create(helpers::currency_conversion_template(&code))
+            .await?;
+        Ok(Self {
+            cala,
+            journal_id: journal.id(),
+            code,
+        })
+    }
+
+    async fn account_pair(&self) -> anyhow::Result<(AccountId, AccountId)> {
+        let (sender, receiver) = helpers::test_accounts();
+        Ok((
+            self.cala.accounts().create(sender).await?.id(),
+            self.cala.accounts().create(receiver).await?.id(),
+        ))
+    }
+
+    fn posting(
+        &self,
+        sender: AccountId,
+        recipient: AccountId,
+        effective: NaiveDate,
+    ) -> cala_ledger::posting::PostingInput {
+        let mut params = Params::new();
+        params.insert("journal_id", self.journal_id.to_string());
+        params.insert("sender", sender);
+        params.insert("recipient", recipient);
+        params.insert("effective", effective);
+        cala_ledger::posting::PostingInput::new(TransactionId::new(), &self.code, params)
+    }
+
+    async fn post(
+        &self,
+        sender: AccountId,
+        recipient: AccountId,
+        effective: NaiveDate,
+    ) -> anyhow::Result<()> {
+        self.cala
+            .post_transactions(vec![self.posting(sender, recipient, effective)])
+            .await?;
+        Ok(())
+    }
+
+    /// The stored BTC rows of `account_id`:
+    /// `(effective, version, all_time_version, settled debit total)`.
+    async fn btc_rows(
+        &self,
+        account_id: AccountId,
+    ) -> anyhow::Result<Vec<(NaiveDate, i32, i32, rust_decimal::Decimal)>> {
+        Ok(sqlx::query_as(
+            "SELECT effective, version, all_time_version, settled_dr_balance \
+             FROM cala_cumulative_effective_balances \
+             WHERE journal_id = $1 AND account_id = $2 AND currency = 'BTC' \
+             ORDER BY effective",
+        )
+        .bind(uuid::Uuid::from(self.journal_id))
+        .bind(uuid::Uuid::from(account_id))
+        .fetch_all(self.cala.pool())
+        .await?)
+    }
+}
+
+fn btc(n: i64) -> rust_decimal::Decimal {
+    rust_decimal::Decimal::from(n * BTC_PER_POSTING)
+}
+
+fn day(d: u32) -> NaiveDate {
+    NaiveDate::from_ymd_opt(2025, 3, d).unwrap()
+}
+
+/// One batch that introduces two dates the pair has no row for. Both new
+/// rows are seeded from the same predecessor (or from zero), and the later
+/// one must also receive the earlier date's delta.
+#[tokio::test]
+async fn batch_with_two_new_dates_for_one_pair() -> anyhow::Result<()> {
+    let f = BackdatingFixture::new().await?;
+
+    // No history at all: two new dates, no predecessor.
+    let (fresh_sender, fresh_recipient) = f.account_pair().await?;
+    f.cala
+        .post_transactions(vec![
+            f.posting(fresh_sender, fresh_recipient, day(8)),
+            f.posting(fresh_sender, fresh_recipient, day(3)),
+        ])
+        .await?;
+    assert_eq!(
+        f.btc_rows(fresh_sender).await?,
+        vec![(day(3), 1, 1, btc(1)), (day(8), 1, 2, btc(2))],
+    );
+
+    // History at the 5th; the batch adds one date before it and one after.
+    let (sender, recipient) = f.account_pair().await?;
+    f.post(sender, recipient, day(5)).await?;
+    f.cala
+        .post_transactions(vec![
+            f.posting(sender, recipient, day(8)),
+            f.posting(sender, recipient, day(3)),
+        ])
+        .await?;
+    assert_eq!(
+        f.btc_rows(sender).await?,
+        vec![
+            (day(3), 1, 1, btc(1)),
+            (day(5), 1, 2, btc(2)),
+            (day(8), 1, 3, btc(3)),
+        ],
+    );
+
+    // The public readers agree, and the entry count of a range is the
+    // difference of `all_time_version`s.
+    let btc_ccy = Currency::BTC;
+    for (date, expected) in [(day(3), 1), (day(5), 2), (day(7), 2), (day(8), 3)] {
+        let balance = f
+            .cala
+            .balances()
+            .effective()
+            .find_cumulative(f.journal_id, sender, btc_ccy, date)
+            .await?;
+        assert_eq!(balance.details.settled.dr_balance, btc(expected), "{date}");
+    }
+    let range = f
+        .cala
+        .balances()
+        .effective()
+        .find_in_range(f.journal_id, sender, btc_ccy, day(4), Some(day(8)))
+        .await?;
+    assert_eq!(range.period.details.version, 2);
+    Ok(())
+}
+
+/// A posting dated before a pair's first row creates a new first row and
+/// adds its delta to every existing (later) row.
+#[tokio::test]
+async fn backdate_before_the_first_row() -> anyhow::Result<()> {
+    let f = BackdatingFixture::new().await?;
+    let (sender, recipient) = f.account_pair().await?;
+    f.post(sender, recipient, day(5)).await?;
+    f.post(sender, recipient, day(7)).await?;
+    assert_eq!(
+        f.btc_rows(sender).await?,
+        vec![(day(5), 1, 1, btc(1)), (day(7), 1, 2, btc(2))],
+    );
+
+    f.post(sender, recipient, day(1)).await?;
+    assert_eq!(
+        f.btc_rows(sender).await?,
+        vec![
+            (day(1), 1, 1, btc(1)),
+            (day(5), 1, 2, btc(2)),
+            (day(7), 1, 3, btc(3)),
+        ],
+    );
+
+    let effective = f.cala.balances().effective();
+    assert!(
+        effective
+            .find_cumulative(
+                f.journal_id,
+                sender,
+                Currency::BTC,
+                NaiveDate::from_ymd_opt(2025, 2, 28).unwrap(),
+            )
+            .await
+            .is_err(),
+        "nothing existed before the backdated date",
+    );
+    let first = effective
+        .find_cumulative(f.journal_id, sender, Currency::BTC, day(2))
+        .await?;
+    assert_eq!(first.details.settled.dr_balance, btc(1));
+    assert_eq!(first.details.version, 1);
+    let last = effective
+        .find_cumulative(f.journal_id, sender, Currency::BTC, day(9))
+        .await?;
+    assert_eq!(last.details.settled.dr_balance, btc(3));
+    Ok(())
+}
+
+/// A posting that lands on an effective date the pair already has a row for
+/// bumps that row's `version`, and shifts every later row's
+/// `all_time_version` without touching earlier rows.
+#[tokio::test]
+async fn backdate_onto_an_existing_date() -> anyhow::Result<()> {
+    let f = BackdatingFixture::new().await?;
+    let (sender, recipient) = f.account_pair().await?;
+    f.post(sender, recipient, day(3)).await?;
+    f.post(sender, recipient, day(5)).await?;
+    f.post(sender, recipient, day(7)).await?;
+    assert_eq!(
+        f.btc_rows(sender).await?,
+        vec![
+            (day(3), 1, 1, btc(1)),
+            (day(5), 1, 2, btc(2)),
+            (day(7), 1, 3, btc(3)),
+        ],
+    );
+
+    let before_posting = f
+        .cala
+        .balances()
+        .effective()
+        .find_cumulative(f.journal_id, sender, Currency::BTC, day(5))
+        .await?
+        .details;
+    f.post(sender, recipient, day(5)).await?;
+    assert_eq!(
+        f.btc_rows(sender).await?,
+        vec![
+            (day(3), 1, 1, btc(1)),
+            (day(5), 2, 3, btc(3)),
+            (day(7), 1, 4, btc(4)),
+        ],
+    );
+
+    // The 5th's latest entry moved; the untouched earlier date did not.
+    let effective = f.cala.balances().effective();
+    let on_5th = effective
+        .find_cumulative(f.journal_id, sender, Currency::BTC, day(5))
+        .await?
+        .details;
+    assert_ne!(on_5th.entry_id, before_posting.entry_id);
+    let on_3rd = effective
+        .find_cumulative(f.journal_id, sender, Currency::BTC, day(3))
+        .await?
+        .details;
+    assert_eq!(on_3rd.settled.dr_balance, btc(1));
+    assert_eq!(on_3rd.version, 1);
+    Ok(())
+}

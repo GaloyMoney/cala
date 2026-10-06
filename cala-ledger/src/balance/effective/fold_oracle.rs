@@ -1,3 +1,13 @@
+//! The previous in-memory fold, kept **only** as a test oracle.
+//!
+//! Production no longer loads or rewrites balance rows in the application:
+//! backdated postings are applied by a set-based `UPDATE` (see
+//! `EffectiveBalanceRepo::apply_deltas_in_op`). This module is compiled only
+//! under `cfg(test)` and the `fuzz` feature; it is the reference the
+//! differential test compares the SQL rule against, and what the
+//! `effective_balance` fuzz target drives. It must not be reachable from any
+//! other build.
+
 use chrono::{DateTime, NaiveDate, Utc};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -116,6 +126,7 @@ impl<'a> EffectiveBalanceData<'a> {
             })
     }
 
+    #[cfg(test)]
     pub fn push(
         &mut self,
         effective: NaiveDate,

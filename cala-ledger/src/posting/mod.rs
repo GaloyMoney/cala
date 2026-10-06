@@ -704,25 +704,12 @@ impl Postings {
     /// Maintain cumulative-effective balances for the batch, one pass per
     /// `(journal, effective date)` group.
     ///
-    /// **Why grouped by date rather than one pass over the batch.** The
-    /// effective read is destructive: it deletes every row *after* the posting's
-    /// effective date and returns them so the replay can shift them forward. The
-    /// replay's ordering (`SnapshotOrEntry: Ord`) sorts by effective date and
-    /// treats an `Entry` and a `Snapshot` sharing a date as `unreachable!()` —
-    /// an invariant that holds precisely because the deleted rows are strictly
-    /// *after* the date and the new entries are exactly *at* it. Reading once at
-    /// `min(effective)` across a mixed-date batch would delete a row at some
-    /// later posting's date and then push an entry at that same date, tripping
-    /// that assertion.
-    ///
-    /// Grouping restores the invariant exactly, and makes equivalence with the
-    /// per-posting path easy to see: a group's pass anchors at the row at-or-
-    /// before its date, chains its entries (all at that date, so versions
-    /// increment without the per-date reset), then shifts the deleted future
-    /// rows — which is precisely what running those postings one at a time
-    /// produces, since each would re-anchor on the row its predecessor just
-    /// wrote. `all_time_version` is a dense positional counter over the sorted
-    /// union, and both paths sort the same union, so the numbering is identical.
+    /// Each group's entries are folded in memory into one delta per
+    /// `(account, currency)` at the group's date, and applied by a set-based
+    /// statement pair that adds the delta to the date's row (creating it from
+    /// its predecessor if needed) and to every later row of the pair — see
+    /// `EffectiveBalanceRepo::apply_deltas_in_op`. No stored balance row is
+    /// loaded into the application, however far back the posting is dated.
     ///
     /// Groups run in ascending date order so a batch spanning dates behaves like
     /// the same postings submitted oldest-first. In the overwhelmingly common
@@ -759,7 +746,7 @@ impl Postings {
         for ((journal_id, effective), entries) in groups {
             // Only this journal's ancestor sets; see `resolve_ancestors`.
             let mappings = mappings.get(&journal_id).unwrap_or(&empty);
-            let involved: (Vec<AccountId>, Vec<&str>) = entries
+            let involved: HashSet<(AccountId, Currency)> = entries
                 .iter()
                 .flat_map(|entry| {
                     mappings
@@ -775,11 +762,8 @@ impl Postings {
                         .get(id)
                         .is_some_and(|meta| !meta.eventually_consistent)
                 })
-                .collect::<HashSet<_>>()
-                .into_iter()
-                .map(|(id, currency)| (id, currency.code()))
-                .unzip();
-            if involved.0.is_empty() {
+                .collect();
+            if involved.is_empty() {
                 continue;
             }
             self.balances

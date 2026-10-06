@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH d AS (\n              SELECT DISTINCT account_id, currency, effective\n              FROM UNNEST($2::uuid[], $3::text[], $4::date[])\n                AS d(account_id, currency, effective)\n            )\n            INSERT INTO cala_cumulative_effective_balances (\n              journal_id, account_id, currency, effective, version, all_time_version,\n              latest_entry_id,\n              settled_dr_balance, settled_cr_balance, settled_entry_id, settled_modified_at,\n              pending_dr_balance, pending_cr_balance, pending_entry_id, pending_modified_at,\n              encumbrance_dr_balance, encumbrance_cr_balance, encumbrance_entry_id,\n              encumbrance_modified_at,\n              updated_at, created_at\n            )\n            SELECT\n              $1::uuid, d.account_id, d.currency, d.effective, 0,\n              COALESCE(p.all_time_version, 0),\n              COALESCE(p.latest_entry_id, $5::uuid),\n              COALESCE(p.settled_dr_balance, 0), COALESCE(p.settled_cr_balance, 0),\n              COALESCE(p.settled_entry_id, $5::uuid), COALESCE(p.settled_modified_at, $6),\n              COALESCE(p.pending_dr_balance, 0), COALESCE(p.pending_cr_balance, 0),\n              COALESCE(p.pending_entry_id, $5::uuid), COALESCE(p.pending_modified_at, $6),\n              COALESCE(p.encumbrance_dr_balance, 0), COALESCE(p.encumbrance_cr_balance, 0),\n              COALESCE(p.encumbrance_entry_id, $5::uuid), COALESCE(p.encumbrance_modified_at, $6),\n              $6, COALESCE(p.created_at, $6)\n            FROM d\n            LEFT JOIN LATERAL (\n              SELECT *\n              FROM cala_cumulative_effective_balances c\n              WHERE c.journal_id = $1\n                AND c.account_id = d.account_id\n                AND c.currency = d.currency\n                AND c.effective < d.effective\n              ORDER BY c.effective DESC\n              LIMIT 1\n            ) p ON TRUE\n            ON CONFLICT (journal_id, account_id, currency, effective) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "TextArray",
+        "DateArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c1d46a8426c8476df552181c1b87558b17eb6bade869ab5090ea853e421a44c8"
+}

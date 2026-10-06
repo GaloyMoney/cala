@@ -55,7 +55,7 @@ async fn effective_rows(
 ) -> anyhow::Result<Vec<(chrono::NaiveDate, i32, i32, String)>> {
     Ok(sqlx::query_as::<_, (chrono::NaiveDate, i32, i32, String)>(
         "SELECT effective, version, all_time_version, \
-                (values->'settled'->>'dr_balance') \
+                settled_dr_balance::text \
          FROM cala_cumulative_effective_balances \
          WHERE journal_id = $1 AND account_id = $2 AND currency = 'BTC' \
          ORDER BY all_time_version",

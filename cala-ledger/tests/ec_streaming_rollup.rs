@@ -1093,15 +1093,17 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for SpanCallCounter {
     }
 }
 
-/// One EC set's cumulative-effective balance must be read once per flush
+/// One EC set's cumulative-effective balance must be written once per flush
 /// *group* that touches it, not once per transaction in that group, even
 /// when the group's transactions span several effective dates. This is the
 /// regression guard for the fix: temporarily reverting
 /// `Balances::apply_ec_rollup_group_in_op` to call
 /// `EffectiveBalances::apply_ec_rollup_in_op` once per transaction (the old
-/// per-tx loop) makes `find_ec_for_update` calls outnumber
+/// per-tx loop) makes `apply_deltas_in_op` calls outnumber
 /// `apply_ec_rollup_batch_in_op` calls by 45x (one per transaction) instead
 /// of matching 1:1; restoring the batched fold makes it pass again.
+/// (This counted `find_ec_for_update` reads before the delta-UPDATE redesign
+/// removed that function; the assertions are unchanged.)
 ///
 /// The resident job may drain a backlog this size in one flush or several
 /// (an obix/job cadence this fix does not control and has no reason to —
@@ -1151,7 +1153,7 @@ async fn streaming_rollup_reads_future_history_once_per_batch() -> anyhow::Resul
     let group_calls = Arc::new(AtomicUsize::new(0));
     let subscriber = tracing_subscriber::registry()
         .with(SpanCallCounter {
-            name: "effective_balance.find_ec_for_update",
+            name: "cala_ledger.balances.effective.apply_deltas_in_op",
             count: read_calls.clone(),
         })
         .with(SpanCallCounter {
@@ -1180,7 +1182,7 @@ async fn streaming_rollup_reads_future_history_once_per_batch() -> anyhow::Resul
     );
     assert_eq!(
         read_calls, group_calls,
-        "one EC pair must cost exactly one find_ec_for_update call per \
+        "one EC pair must cost exactly one apply_deltas_in_op call per \
          batch group that touches it, not one per transaction in that \
          group (read_calls={read_calls}, group_calls={group_calls})",
     );
@@ -1190,5 +1192,141 @@ async fn streaming_rollup_reads_future_history_once_per_batch() -> anyhow::Resul
          (read_calls={read_calls})",
     );
 
+    Ok(())
+}
+
+/// A member that has both an inline (synchronous) and an EC ancestor set must
+/// see the two sets agree on every effective date, whatever order the
+/// postings were dated in: the inline path applies each posting as it lands,
+/// the EC path applies the whole backlog as batches, and both must land on
+/// the same cumulative rows — amounts, `version`, `all_time_version` and the
+/// entry ids.
+#[tokio::test]
+async fn streaming_rollup_matches_inline_set_effective_history_with_backdating(
+) -> anyhow::Result<()> {
+    let usd: Currency = "USD".parse().unwrap();
+    let pool = helpers::init_isolated_pool().await?;
+    let (fixture, mut jobs) = setup(pool, helpers::test_journal_with_effective_balances()).await?;
+
+    let dated_tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    fixture
+        .cala
+        .tx_templates()
+        .create(helpers::velocity_template(&dated_tx_code))
+        .await?;
+
+    let recipient = fixture.members[0].id();
+    let inline_set = fixture
+        .cala
+        .account_sets()
+        .create(
+            NewAccountSet::builder()
+                .id(AccountSetId::new())
+                .name("inline ancestor")
+                .journal_id(fixture.journal_id)
+                .balance_rollup(BalanceRollup::Synchronous)
+                .build()?,
+        )
+        .await?;
+    let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "EC ancestor").await?;
+    for set in [inline_set.id(), ec_set.id()] {
+        fixture
+            .cala
+            .account_sets()
+            .add_member(set, recipient)
+            .await?;
+    }
+
+    let today = fixture.cala.clock().now().date_naive();
+    let day = |ago: i64| today - chrono::Duration::days(ago);
+    // Out-of-order dates: forward, backdated onto an existing date, backdated
+    // before the first row, and backdated between existing rows.
+    let schedule = [
+        (day(5), 2),
+        (day(1), 1),
+        (day(5), 1),
+        (day(9), 2),
+        (day(3), 1),
+        (day(1), 2),
+        (today, 1),
+        (day(7), 1),
+    ];
+    let mut total = 0;
+    for (date, n) in schedule {
+        post_dated(&fixture, &dated_tx_code, recipient, date, n).await?;
+        total += n;
+    }
+    let total_amount = POST_AMOUNT * Decimal::from(total);
+
+    jobs.start_poll().await?;
+    helpers::wait_for_effective(
+        &fixture.cala,
+        fixture.journal_id,
+        ec_set.id(),
+        usd,
+        today,
+        total_amount,
+    )
+    .await?;
+
+    let effective = fixture.cala.balances().effective();
+    let mut dates: Vec<_> = schedule.iter().map(|(date, _)| *date).collect();
+    dates.sort();
+    dates.dedup();
+    for date in dates {
+        let inline = effective
+            .find_cumulative(fixture.journal_id, inline_set.id(), usd, date)
+            .await?
+            .details;
+        let ec = effective
+            .find_cumulative(fixture.journal_id, ec_set.id(), usd, date)
+            .await?
+            .details;
+        // `modified_at` legitimately differs between the two paths (each
+        // stamps its own write time); everything else must agree.
+        for (layer, ec_layer, inline_layer) in [
+            ("settled", &ec.settled, &inline.settled),
+            ("pending", &ec.pending, &inline.pending),
+            ("encumbrance", &ec.encumbrance, &inline.encumbrance),
+        ] {
+            assert_eq!(
+                (ec_layer.dr_balance, ec_layer.cr_balance),
+                (inline_layer.dr_balance, inline_layer.cr_balance),
+                "{layer} amounts on {date}"
+            );
+            assert_eq!(
+                ec_layer.entry_id, inline_layer.entry_id,
+                "{layer} entry_id on {date}"
+            );
+        }
+        assert_eq!(ec.entry_id, inline.entry_id, "entry_id on {date}");
+        assert_eq!(ec.version, inline.version, "version on {date}");
+    }
+
+    // Range entry counts are derived from `all_time_version`, so they check
+    // it on both sets without reading it directly.
+    let ec_range = effective
+        .find_in_range(
+            fixture.journal_id,
+            ec_set.id().into(),
+            usd,
+            day(10),
+            Some(today),
+        )
+        .await?;
+    let inline_range = effective
+        .find_in_range(
+            fixture.journal_id,
+            inline_set.id().into(),
+            usd,
+            day(10),
+            Some(today),
+        )
+        .await?;
+    assert_eq!(
+        ec_range.period.details.version,
+        inline_range.period.details.version
+    );
+    assert_eq!(ec_range.period.details.version, total as u32);
     Ok(())
 }
