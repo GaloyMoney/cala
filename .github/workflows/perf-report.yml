@@ -22,6 +22,8 @@ jobs:
       - name: Generate performance data
         id: perf
         run: |
+          # DEBUG-TEMP: resource sampler, revert once the perf run is fixed
+          ( while true; do echo "=== SAMPLE $(date -u +%T)"; free -m | sed -n 1,2p; df -h / /nix 2>/dev/null | tail -2; uptime; ps -eo pid,rss,etime,args --sort=-rss | head -5 | cut -c1-160; sleep 15; done ) &
           nix run .#perf -- perf-report.md
           
           # Save the file content to a multiline string
