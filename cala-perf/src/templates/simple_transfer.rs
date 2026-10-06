@@ -21,6 +21,24 @@ pub async fn execute(
     Ok(())
 }
 
+pub async fn execute_effective(
+    cala: &CalaLedger,
+    journal_id: JournalId,
+    sender_id: AccountId,
+    recipient_id: AccountId,
+    effective: chrono::NaiveDate,
+) -> anyhow::Result<()> {
+    let mut params = Params::new();
+    params.insert("journal_id", journal_id);
+    params.insert("sender_id", sender_id);
+    params.insert("recipient_id", recipient_id);
+    params.insert("effective", effective);
+
+    cala.post_transaction(TransactionId::new(), SIMPLE_TRANSFER_TEMPLATE_CODE, params)
+        .await?;
+    Ok(())
+}
+
 pub async fn init(cala: &CalaLedger) -> anyhow::Result<()> {
     let params = vec![
         NewParamDefinition::builder()
