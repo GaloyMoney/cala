@@ -56,7 +56,7 @@ mod tests {
     fn stored_decode_overrides_serde_and_survives_the_job_boundary() {
         let result = serde_json::from_value::<u64>(serde_json::json!("bad"))
             .classify::<CouldNotDecodeStored>()
-            .widen::<CalaFault>();
+            .widen_via_builtin();
         let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(result.unwrap_err());
         let Fault::Fatal(fatal) = Fault::classify(&*boxed).narrow_denied() else {
             panic!("fatal")
