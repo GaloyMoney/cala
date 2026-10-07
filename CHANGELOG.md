@@ -1,3 +1,11 @@
+# [cala release v0.32.2](https://github.com/GaloyMoney/cala/releases/tag/0.32.2)
+
+
+
+### Miscellaneous Tasks
+
+- Es-entity 0.17, job 0.18.1, obix 0.14.1 (#903)
+
 # [cala release v0.32.1](https://github.com/GaloyMoney/cala/releases/tag/0.32.1)
 
 
