@@ -1,3 +1,12 @@
+# [cala release v0.32.3](https://github.com/GaloyMoney/cala/releases/tag/0.32.3)
+
+
+
+### Miscellaneous Tasks
+
+- Update es-entity, job, and obix (#904)
+- Bump the all-dependencies group across 1 directory with 3 updates (#901)
+
 # [cala release v0.32.2](https://github.com/GaloyMoney/cala/releases/tag/0.32.2)
 
 
