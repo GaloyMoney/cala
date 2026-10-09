@@ -312,7 +312,7 @@ mod tests {
         for result in results {
             let error = result.unwrap_err();
             assert_eq!(<&str>::from(error.code()), "CEL_UNKNOWN_IDENTIFIER");
-            assert_eq!(error.level(), Level::Info);
+            assert_eq!(error.level(), Level::Warn);
             assert!(error.source().unwrap().is::<CelExecutionError>());
             assert!(matches!(
                 error,
@@ -329,7 +329,7 @@ mod tests {
         let currency: Result<Currency, CelConversionRejection> = expression.try_evaluate(&context);
         let error = currency.unwrap_err();
         assert_eq!(<&str>::from(error.code()), "CEL_EXTERNAL_PARSE_ERROR");
-        assert_eq!(error.level(), Level::Info);
+        assert_eq!(error.level(), Level::Warn);
         assert!(error
             .source()
             .unwrap()

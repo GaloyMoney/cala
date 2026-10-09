@@ -195,13 +195,13 @@ impl Postings {
             return Ok(Vec::new());
         }
         let codes = Self::dedup(batch.iter().map(|p| p.tx_template_code.clone()));
-        let mut used = self.templates.resolve_in_op(db, &codes).await.widen()?;
+        let mut used = self.templates.resolve_in_op(db, &codes).await.lift()?;
         let mut prepared = self.prepare_all(&batch, &used)?;
-        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.widen()?;
+        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.lift()?;
         // A stale template must be refreshed, then prepared again before reading.
         // Supplemental locks retain the original order and SQL footprint.
         if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
-            used.extend(self.templates.refresh_in_op(db, &stale).await.widen()?);
+            used.extend(self.templates.refresh_in_op(db, &stale).await.lift()?);
             prepared = self.prepare_all(&batch, &used)?;
             keys = Self::entry_balance_keys(&prepared);
             self.repo
@@ -213,7 +213,7 @@ impl Postings {
         let transactions = self
             .apply_prepared(db, prepared, read, locked.now)
             .await
-            .widen()?;
+            .lift()?;
         Ok(transactions)
     }
 
@@ -225,7 +225,7 @@ impl Postings {
         input: PostingInput,
     ) -> Result<Transaction, Fail<PostingRejection, lanes!(Transient, Fatal)>> {
         let codes = vec![input.tx_template_code.clone()];
-        let mut used = self.templates.resolve_in_op(db, &codes).await.widen()?;
+        let mut used = self.templates.resolve_in_op(db, &codes).await.lift()?;
         let mut prepared = vec![self.prepare_one(
             &input,
             &used,
@@ -234,11 +234,11 @@ impl Postings {
                 tx_id: input.tx_id,
             },
         )?];
-        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.widen()?;
+        let (mut keys, locked) = self.lock_prepared(db, &prepared, &codes).await.lift()?;
         // A stale template must be refreshed, then prepared again before reading.
         // Supplemental locks retain the original order and SQL footprint.
         if let Err(stale) = TemplateCache::assert_up_to_date(&used, &locked.template_versions) {
-            used.extend(self.templates.refresh_in_op(db, &stale).await.widen()?);
+            used.extend(self.templates.refresh_in_op(db, &stale).await.lift()?);
             prepared = vec![self.prepare_one(
                 &input,
                 &used,
@@ -264,7 +264,7 @@ impl Postings {
         let transactions = self
             .apply_prepared(db, prepared, read, locked.now)
             .await
-            .widen()?;
+            .lift()?;
         Ok(transactions
             .into_iter()
             .next()
@@ -286,7 +286,7 @@ impl Postings {
         Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
     > {
         let keys = Self::entry_balance_keys(prepared);
-        Self::check_balance_budget(&keys).widen()?;
+        Self::check_balance_budget(&keys).lift()?;
         let locked = self
             .repo
             .lock_balances_and_probe_templates_in_op(db, &keys, codes, db.maybe_now())
@@ -332,7 +332,7 @@ impl Postings {
         let mappings = self
             .resolve_ancestors(db, &prepared, &mut read)
             .await
-            .widen()?;
+            .lift()?;
 
         // ---- fold + enforce (client-side) ------------------------------
         let (transactions, entries_per_posting) = prepared
@@ -369,7 +369,7 @@ impl Postings {
         self.velocities
             .enforce_batch_in_op(db, now, &for_enforcement, &read.controls, &mappings)
             .await
-            .widen()?;
+            .lift()?;
 
         // ---- phase 3: apply --------------------------------------------
         self.repo

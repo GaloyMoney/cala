@@ -360,5 +360,5 @@ pub(crate) async fn await_rollup(
     frontier: obix::EventSequence,
     timeout: std::time::Duration,
 ) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
-    handle.await_position(frontier, timeout).await.widen()
+    handle.await_position(frontier, timeout).await.lift()
 }

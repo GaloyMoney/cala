@@ -187,7 +187,9 @@ mod tests {
             AccountSetId::new(),
         );
         let result: Result<(), Fail<CreateAccountSetRejection, lanes!(Transient, Fatal)>> =
-            Err::<(), _>(constraint).widen();
+            Err::<(), _>(constraint)
+                .lift::<CreateAccountSetRejection>()
+                .map_err(|e| e.lift::<CreateAccountSetRejection, lanes!(Transient, Fatal)>());
         let Fail::Fatal(fault) = result.unwrap_err() else {
             panic!("must be an invariant fault")
         };

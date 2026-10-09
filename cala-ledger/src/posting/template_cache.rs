@@ -93,7 +93,7 @@ impl TemplateCache {
             }
         }
         if !missing.is_empty() {
-            used.extend(self.fetch_and_install(op, &missing).await.widen()?);
+            used.extend(self.fetch_and_install(op, &missing).await.lift()?);
         }
         Ok(used)
     }
@@ -112,7 +112,7 @@ impl TemplateCache {
         HashMap<String, ResolvedTemplate>,
         Fail<PreparePostingRejection, lanes!(Transient, Fatal)>,
     > {
-        self.fetch_and_install(op, codes).await.widen()
+        self.fetch_and_install(op, codes).await.lift()
     }
 
     /// Assert that the versions this flow prepared against are the versions
@@ -153,7 +153,7 @@ impl TemplateCache {
         let mut resolved = HashMap::with_capacity(codes.len());
         for code in codes {
             let Some((id, version, event)) = fetched.remove(code) else {
-                return Err(TxTemplateNotFound(code.clone())).widen();
+                return Err(Fail::Rejected(TxTemplateNotFound(code.clone())));
             };
             let event: TxTemplateEvent =
                 serde_json::from_value(event).classify::<crate::error::CouldNotDecodeStored>()?;

@@ -282,7 +282,7 @@ impl EffectiveBalanceRepo {
         } in rows
         {
             let all_time_version = account_row.row.all_time_version as u32;
-            let balance = Some(account_row.into_account_balance().widen()?);
+            let balance = Some(account_row.into_account_balance()?);
             if is_first {
                 first = balance;
                 first_version = all_time_version;
@@ -347,7 +347,7 @@ impl EffectiveBalanceRepo {
 
         let mut ret = HashMap::new();
         for row in rows {
-            let balance = row.into_account_balance().widen()?;
+            let balance = row.into_account_balance()?;
             let details = &balance.details;
             ret.insert(
                 (details.journal_id, details.account_id, details.currency),
@@ -410,8 +410,7 @@ impl EffectiveBalanceRepo {
             .into_iter()
             .take(first)
             .map(AccountEffectiveRow::into_account_balance)
-            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
-            .widen()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -488,8 +487,7 @@ impl EffectiveBalanceRepo {
             .into_iter()
             .take(first)
             .map(AccountEffectiveRow::into_account_balance)
-            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
-            .widen()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -564,8 +562,7 @@ impl EffectiveBalanceRepo {
             .into_iter()
             .take(first)
             .map(EffectiveRow::into_snapshot)
-            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
-            .widen()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()?;
         let end_cursor = entities.last().map(EffectiveBalancesModifiedCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -582,7 +579,7 @@ impl EffectiveBalanceRepo {
         let mut ret: BalanceRangeResult = HashMap::new();
         for RangeEndRow { first, account_row } in rows {
             let all_time_version = account_row.row.all_time_version as u32;
-            let balance = account_row.into_account_balance().widen()?;
+            let balance = account_row.into_account_balance()?;
             let details = &balance.details;
             let entry = ret
                 .entry((details.journal_id, details.account_id, details.currency))

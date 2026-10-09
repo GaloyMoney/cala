@@ -112,7 +112,7 @@ impl TxTemplates {
         db: &mut impl es_entity::AtomicOperation,
         new_tx_template: NewTxTemplate,
     ) -> Result<TxTemplate, Fail<CreateTxTemplateRejection, lanes!(Transient, Fatal)>> {
-        let tx_template = self.repo.create_in_op(db, new_tx_template).await.widen()?;
+        let tx_template = self.repo.create_in_op(db, new_tx_template).await.lift()?;
         Ok(tx_template)
     }
 

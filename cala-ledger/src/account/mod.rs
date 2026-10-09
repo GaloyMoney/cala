@@ -70,10 +70,10 @@ impl Accounts {
         new_account: NewAccount,
     ) -> Result<Account, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
-        let account = self.repo.create_in_op(db, new_account).await.widen()?;
+        let account = self.repo.create_in_op(db, new_account).await.lift()?;
         self.attach_initial_account_set_in_op(db, pairs)
             .await
-            .widen()?;
+            .lift()?;
         Ok(account)
     }
 
@@ -100,10 +100,10 @@ impl Accounts {
     ) -> Result<Vec<Account>, Fail<CreateAccountRejection, lanes!(Transient, Fatal)>> {
         let pairs = initial_membership_pairs(&new_accounts);
         tracing::Span::current().record("initial_set_count", pairs.len());
-        let accounts = self.repo.create_all_in_op(db, new_accounts).await.widen()?;
+        let accounts = self.repo.create_all_in_op(db, new_accounts).await.lift()?;
         self.attach_initial_account_set_in_op(db, pairs)
             .await
-            .widen()?;
+            .lift()?;
         Ok(accounts)
     }
 
@@ -188,7 +188,7 @@ impl Accounts {
             .await?
             .ok_or(AccountNotFound(id))?;
         if account.update_status(Status::Locked).did_execute() {
-            self.persist_in_op(db, &mut account).await.widen()?;
+            self.persist_in_op(db, &mut account).await.lift()?;
         }
         Ok(())
     }
@@ -209,7 +209,7 @@ impl Accounts {
             .await?
             .ok_or(AccountNotFound(id))?;
         if account.update_status(Status::Active).did_execute() {
-            self.persist_in_op(db, &mut account).await.widen()?;
+            self.persist_in_op(db, &mut account).await.lift()?;
         }
         Ok(())
     }
@@ -242,7 +242,7 @@ impl Accounts {
         if account.is_account_set() {
             return Err(PersistAccountRejection::CannotUpdateAccountSetAccounts.into());
         }
-        self.repo.update_in_op(db, account).await.widen()?;
+        self.repo.update_in_op(db, account).await.lift()?;
         Ok(())
     }
 

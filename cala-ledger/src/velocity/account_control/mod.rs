@@ -204,7 +204,7 @@ mod tests {
             <&str>::from(default.code()),
             "CALA_VELOCITY_PARAMETER_DEFAULT_FAILED"
         );
-        assert_eq!(default.level(), Level::Info);
+        assert_eq!(default.level(), Level::Warn);
         assert!(matches!(&default, AttachVelocityControlRejection::Default(
             ParamDefaultRejection::Evaluation(CelConversionRejection::UnknownIdent { expression, .. })
         ) if expression == "missing_default"));
@@ -271,7 +271,7 @@ mod tests {
                 .downcast_ref::<CelConversionRejection>()
                 .unwrap();
             assert_eq!(<&str>::from(source.code()), code);
-            assert_eq!(field.level(), Level::Info);
+            assert_eq!(field.level(), Level::Warn);
             assert!(field.source().unwrap().is::<CelConversionRejection>());
             match field {
                 AttachVelocityControlRejection::Cel(CelConversionRejection::UnknownIdent {

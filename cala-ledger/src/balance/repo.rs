@@ -218,8 +218,7 @@ impl BalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
-            .widen()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()?;
         let end_cursor = entities.last().map(AccountBalanceByCurrencyCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
@@ -292,8 +291,7 @@ impl BalanceRepo {
                     .classify::<crate::error::CouldNotDecodeStored>()?;
                 Ok(AccountBalance::new(row.normal_balance_type, details))
             })
-            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()
-            .widen()?;
+            .collect::<Result<Vec<_>, Fault<lanes!(Fatal)>>>()?;
         let end_cursor = entities.last().map(AccountBalanceCursor::from);
 
         Ok(es_entity::PaginatedQueryRet::new(
