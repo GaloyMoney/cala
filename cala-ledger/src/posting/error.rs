@@ -267,7 +267,7 @@ impl From<sqlx::Error> for PostWrite {
 #[cfg(test)]
 mod contract_tests {
     use super::*;
-    use es_entity::errlanes::{lanes, Fail, Level, Rejection, ResultExt};
+    use es_entity::errlanes::{Level, Rejection, ResultExt};
     use std::error::Error;
 
     fn preparation_context(error: PreparePostingRejection) -> Option<PostingRef> {
@@ -335,7 +335,7 @@ mod contract_tests {
             <&str>::from(single.code()),
             "CALA_POSTING_UNBALANCED_TRANSACTION"
         );
-        assert_eq!(single.level(), Level::Info);
+        assert_eq!(single.level(), Level::Warn);
         assert!(matches!(&single, PostingRejection::Prepare(
             PreparePostingRejection::UnbalancedTransaction { currency: Currency::Iso(_), layer: Layer::Settled, amount, .. }
         ) if *amount == Decimal::ONE));
@@ -422,20 +422,20 @@ mod contract_tests {
     }
 
     #[test]
-    fn velocity_cel_failure_widens_through_apply_without_changing_diagnostics() {
+    fn velocity_cel_failure_lifts_through_apply_without_changing_diagnostics() {
         use crate::velocity::error::EnforceVelocityRejection;
         let expression: CelExpression = "missing_variable".parse().unwrap();
         let source = expression.evaluate(&CelContext::new()).unwrap_err();
         let result: Result<(), EnforceVelocityRejection> = Err(source.into());
-        let apply = result.widen::<Fail<ApplyPostingRejection, lanes!(Transient, Fatal)>>();
-        let posting = apply.widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>();
+        let apply = result.lift::<ApplyPostingRejection>();
+        let posting = apply.lift::<PostingRejection>();
         let batch = posting
-            .widen::<Fail<BatchPostingRejection, lanes!(Transient, Fatal)>>()
+            .lift::<BatchPostingRejection>()
             .unwrap_err()
             .rejected()
             .unwrap();
         assert_eq!(<&str>::from(batch.code()), "CEL_UNKNOWN_IDENTIFIER");
-        assert_eq!(batch.level(), Level::Info);
+        assert_eq!(batch.level(), Level::Warn);
         assert!(matches!(&batch, BatchPostingRejection::Apply(
             ApplyPostingRejection::Velocity(EnforceVelocityRejection::Cel(
                 CelConversionRejection::UnknownIdent { expression, .. }

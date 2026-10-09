@@ -32,8 +32,9 @@ mod tests {
             target: obix::StreamPosition::Insert(obix::EventSequence::from(9)),
             waited,
         };
-        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> =
-            Err(source).widen();
+        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> = Err(source)
+            .lift::<EcCaughtUpTimeout>()
+            .map_err(|e| e.lift::<EcCaughtUpTimeout, lanes!(Transient, Fatal)>());
         let Fail::Rejected(timeout) = result.unwrap_err() else {
             panic!("timeout")
         };
@@ -51,8 +52,9 @@ mod tests {
             subscriber_type: "rollup".into(),
             key: "private-key".into(),
         };
-        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> =
-            Err(source).widen();
+        let result: Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> = Err(source)
+            .lift::<EcCaughtUpTimeout>()
+            .map_err(|e| e.lift::<EcCaughtUpTimeout, lanes!(Transient, Fatal)>());
         let Fail::Fatal(fatal) = result.unwrap_err() else {
             panic!("invariant")
         };

@@ -575,7 +575,8 @@ impl SetGraphCache {
             .repo
             .fetch_affected_account_memberships_in_op(op, &existing_edges, members)
             .await?;
-        validate_set_memberships(&existing_edges, members, &account_members).widen()
+        validate_set_memberships(&existing_edges, members, &account_members).lift()?;
+        Ok(())
     }
 
     fn load(&self) -> Arc<GraphSnapshot> {

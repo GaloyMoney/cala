@@ -293,7 +293,7 @@ mod tests {
                 <&str>::from(single.code()),
                 "CALA_POSTING_PARAMETER_DEFAULT_FAILED"
             );
-            assert_eq!(single.level(), Level::Info);
+            assert_eq!(single.level(), Level::Warn);
             assert_eq!(single.to_string(), attachment.to_string());
             let batch = BatchPostingRejection::from(single);
             assert_eq!(

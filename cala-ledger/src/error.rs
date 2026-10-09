@@ -29,15 +29,14 @@ pub(crate) struct CouldNotSerialize(#[source] serde_json::Error);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use es_entity::errlanes::{lanes, Fail, FatalKind, ResultExt, TransientKind};
+    use es_entity::errlanes::{Fail, FatalKind, ResultExt, TransientKind};
     use std::error::Error as _;
 
     #[test]
-    fn database_faults_keep_their_lane_and_source_across_widening() {
+    fn database_faults_keep_their_lane_and_source_across_lifting() {
         let error: Fail<crate::posting::PostingRejection, lanes!(Transient, Fatal)> =
             sqlx::Error::PoolTimedOut.into();
-        let result = Err::<(), _>(error)
-            .widen::<Fail<crate::posting::BatchPostingRejection, lanes!(Transient, Fatal)>>();
+        let result = Err::<(), _>(error).lift::<crate::posting::BatchPostingRejection>();
         let Fail::Transient(transient) = result.unwrap_err() else {
             panic!("transient")
         };
@@ -56,7 +55,7 @@ mod tests {
     fn stored_decode_overrides_serde_and_survives_the_job_boundary() {
         let result = serde_json::from_value::<u64>(serde_json::json!("bad"))
             .classify::<CouldNotDecodeStored>()
-            .widen_via_builtin();
+            .into_fault();
         let boxed: Box<dyn std::error::Error + Send + Sync> = Box::new(result.unwrap_err());
         let Fault::Fatal(fatal) = Fault::classify(&*boxed).narrow_denied() else {
             panic!("fatal")
@@ -85,7 +84,7 @@ mod tests {
 
 #[cfg(test)]
 mod sql_contract_tests {
-    use es_entity::errlanes::{lanes, Fail, FatalKind, ResultExt, TransientKind};
+    use es_entity::errlanes::{Fail, FatalKind, ResultExt, TransientKind};
     use std::error::Error;
 
     // Real PostgreSQL diagnostics exercise SQLSTATE and constraint extraction,
@@ -114,7 +113,7 @@ mod sql_contract_tests {
         ] {
             let result = Err::<(), _>(violation(constraint, code).await)
                 .classify::<PostWrite>()
-                .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>();
+                .lift::<PostingRejection>();
             let actual = match result.unwrap_err().rejected().unwrap() {
                 PostingRejection::Apply(ApplyPostingRejection::DuplicateTransactionId) => "id",
                 PostingRejection::Apply(ApplyPostingRejection::DuplicateExternalId) => "external",
@@ -125,7 +124,7 @@ mod sql_contract_tests {
         }
         let error = Err::<(), _>(violation("unrecognized_constraint", "23505").await)
             .classify::<PostWrite>()
-            .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>()
+            .lift::<PostingRejection>()
             .unwrap_err();
         let Fail::Fatal(fault) = error else {
             panic!("unknown constraint must retain native fault classification")
@@ -134,7 +133,7 @@ mod sql_contract_tests {
         assert!(fault.source().unwrap().is::<sqlx::Error>());
         let error = Err::<(), _>(sqlx::Error::PoolTimedOut)
             .classify::<PostWrite>()
-            .widen::<Fail<PostingRejection, lanes!(Transient, Fatal)>>()
+            .lift::<PostingRejection>()
             .unwrap_err();
         let Fail::Transient(fault) = error else {
             panic!("pool timeout")
@@ -156,7 +155,7 @@ mod sql_contract_tests {
             assert!(matches!(
                 Err::<(), _>(violation(name, "23505").await)
                     .classify::<MembershipWrite>()
-                    .widen::<Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>>(),
+                    .lift::<MemberAlreadyAdded>(),
                 Err(Fail::Rejected(MemberAlreadyAdded))
             ));
         }
@@ -169,19 +168,19 @@ mod sql_contract_tests {
                 .await
             )
             .classify::<AttachLimit>()
-            .widen::<Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>>(),
+            .lift::<LimitAlreadyAddedToControl>(),
             Err(Fail::Rejected(LimitAlreadyAddedToControl))
         ));
         assert!(matches!(
             Err::<(), _>(violation("unknown", "23505").await)
                 .classify::<MembershipWrite>()
-                .widen::<Fail<MemberAlreadyAdded, lanes!(Transient, Fatal)>>(),
+                .lift::<MemberAlreadyAdded>(),
             Err(Fail::Fatal(_))
         ));
         assert!(matches!(
             Err::<(), _>(violation("unknown", "23505").await)
                 .classify::<AttachLimit>()
-                .widen::<Fail<LimitAlreadyAddedToControl, lanes!(Transient, Fatal)>>(),
+                .lift::<LimitAlreadyAddedToControl>(),
             Err(Fail::Fatal(_))
         ));
     }
@@ -197,6 +196,7 @@ mod rejection_code_contracts {
     };
     use cala_types::{param::*, primitives::*};
     use cel_interpreter::*;
+    use es_entity::errlanes::RejectionCode;
 
     #[test]
     fn shared_conflict_lifts_preserve_attempted_values() {
@@ -213,7 +213,7 @@ mod rejection_code_contracts {
                             sqlx::Error::Protocol("constraint fixture".into()),
                         );
                         let result: Result<(), Fail<$owner, lanes!(Fatal)>> =
-                            Err::<(), _>($source(conflict)).widen();
+                            Err::<(), _>($source(conflict)).lift();
                         let Fail::Rejected(rejection) = result.unwrap_err() else {
                             panic!("known constraint must reject");
                         };
@@ -250,12 +250,11 @@ mod rejection_code_contracts {
     }
 
     #[test]
-    fn rendering_codes_have_one_canonical_declaration() {
-        // ALL lists locally owned codes, excluding delegated/forwarded codes.
-        // Register every source family as well as composed contracts so that
-        // reuse through composition and shared leaves retains one code owner.
+    fn rendering_codes_have_consistent_metadata_across_catalogues() {
+        // Composed catalogues include delegated codes. Shared codes must keep
+        // the same description at every public boundary.
         macro_rules! catalogs {
-            ($($code:ident),+ $(,)?) => { [$( (stringify!($code), $code::ALL) ),+] };
+            ($($code:ident),+ $(,)?) => { [$( (stringify!($code), $code::CODES) ),+] };
         }
         let catalogs = catalogs![
             CelParseRejectionCode,
@@ -319,15 +318,20 @@ mod rejection_code_contracts {
         ];
         let mut owners = std::collections::HashMap::new();
         for (owner, codes) in catalogs {
-            for code in codes {
+            for entry in codes {
+                let code = entry.code;
                 assert!(!code.is_empty());
                 assert!(code
                     .bytes()
                     .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == b'_'));
-                assert!(
-                    owners.insert(code, owner).is_none(),
-                    "duplicate rendering code {code} in {owner}"
-                );
+                if let Some((description, first_owner)) =
+                    owners.insert(code, (entry.description, owner))
+                {
+                    assert_eq!(
+                        description, entry.description,
+                        "inconsistent rendering code {code} in {owner} and {first_owner}"
+                    );
+                }
             }
         }
     }

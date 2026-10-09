@@ -60,7 +60,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
     ) -> Result<VelocityLimit, Fail<CreateVelocityLimitRejection, lanes!(Transient, Fatal)>> {
-        let res = self.limits.create_in_op(db, new_limit).await.widen()?;
+        let res = self.limits.create_in_op(db, new_limit).await.lift()?;
         Ok(res)
     }
 
@@ -83,7 +83,7 @@ impl Velocities {
         new_control: NewVelocityControl,
     ) -> Result<VelocityControl, Fail<CreateVelocityControlRejection, lanes!(Transient, Fatal)>>
     {
-        let res = self.controls.create_in_op(db, new_control).await.widen()?;
+        let res = self.controls.create_in_op(db, new_control).await.lift()?;
         Ok(res)
     }
 

@@ -46,7 +46,7 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         new_journal: NewJournal,
     ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
-        let journal = self.repo.create_in_op(db, new_journal).await.widen()?;
+        let journal = self.repo.create_in_op(db, new_journal).await.lift()?;
         Ok(journal)
     }
 
@@ -108,7 +108,7 @@ impl Journals {
         db: &mut impl es_entity::AtomicOperation,
         journal: &mut Journal,
     ) -> Result<(), Fail<PersistJournalRejection, lanes!(Transient, Fatal)>> {
-        self.repo.update_in_op(db, journal).await.widen()?;
+        self.repo.update_in_op(db, journal).await.lift()?;
         Ok(())
     }
 

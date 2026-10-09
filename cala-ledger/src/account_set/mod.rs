@@ -88,8 +88,8 @@ impl AccountSets {
         self.accounts
             .create_backing_in_op(db, backing_account(&new_account_set))
             .await
-            .widen()?;
-        self.repo.create_in_op(db, new_account_set).await.widen()
+            .lift()?;
+        self.repo.create_in_op(db, new_account_set).await.lift()
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
@@ -113,11 +113,11 @@ impl AccountSets {
         self.accounts
             .create_all_backing_in_op(db, backing)
             .await
-            .widen()?;
+            .lift()?;
         self.repo
             .create_all_in_op(db, new_account_sets)
             .await
-            .widen()
+            .lift()
     }
 
     #[es_entity::errlanes::instrument(
@@ -145,7 +145,7 @@ impl AccountSets {
         db: &mut impl es_entity::AtomicOperation,
         account_set: &mut AccountSet,
     ) -> Result<(), Fail<PersistAccountSetRejection, lanes!(Transient, Fatal)>> {
-        self.repo.update_in_op(db, account_set).await.widen()?;
+        self.repo.update_in_op(db, account_set).await.lift()?;
 
         self.accounts
             .update_velocity_context_values_in_op(db, account_set.values())
@@ -232,7 +232,7 @@ impl AccountSets {
             member_id,
         )
         .await
-        .widen()?;
+        .lift()?;
 
         match member {
             AccountSetMemberId::Account(id) => {
@@ -249,7 +249,7 @@ impl AccountSets {
                         }],
                     )
                     .await
-                    .widen()?;
+                    .lift()?;
                 self.account_set_members
                     .add_in_op(&mut *op, &[(account_set_id, id)])
                     .await
@@ -264,7 +264,7 @@ impl AccountSets {
                 self.set_graph_cache
                     .assert_valid_set_memberships_in_op(op, &[edge])
                     .await
-                    .widen()?;
+                    .lift()?;
                 self.repo.insert_member_sets(op, &[edge]).await?;
             }
         }
@@ -349,7 +349,7 @@ impl AccountSets {
         self.set_graph_cache
             .assert_no_double_membership_in_op(op, &members)
             .await
-            .widen()?;
+            .lift()?;
         let pairs: Vec<(AccountSetId, AccountId)> = members
             .iter()
             .map(|m| (m.account_set_id, m.account_id))
@@ -470,7 +470,7 @@ impl AccountSets {
         self.set_graph_cache
             .assert_valid_set_memberships_in_op(op, &members)
             .await
-            .widen()?;
+            .lift()?;
         self.repo.insert_member_sets(op, &members).await?;
 
         Ok(())
@@ -571,7 +571,7 @@ impl AccountSets {
             member_id,
         )
         .await
-        .widen()?;
+        .lift()?;
 
         match member {
             AccountSetMemberId::Account(id) => {
