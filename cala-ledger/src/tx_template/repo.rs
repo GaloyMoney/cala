@@ -9,6 +9,7 @@ use super::entity::*;
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "TxTemplate",
+    id(source = caller),
     columns(code(
         ty = "String",
         update(accessor = "values().code", persist = false),

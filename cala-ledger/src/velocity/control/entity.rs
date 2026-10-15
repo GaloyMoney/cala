@@ -81,8 +81,13 @@ impl NewVelocityControl {
 }
 
 impl IntoEvents<VelocityControlEvent> for NewVelocityControl {
-    fn into_events(self) -> EntityEvents<VelocityControlEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<VelocityControlEvent, FromCaller>,
+    ) -> EntityEvents<VelocityControlEvent> {
+        builder.initial_events(
             self.id,
             [VelocityControlEvent::Initialized {
                 values: VelocityControlValues {

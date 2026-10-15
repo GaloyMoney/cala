@@ -81,9 +81,14 @@ impl NewVelocityLimit {
 }
 
 impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {
-    fn into_events(self) -> EntityEvents<VelocityLimitEvent> {
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<VelocityLimitEvent, FromCaller>,
+    ) -> EntityEvents<VelocityLimitEvent> {
         let limit = self.limit;
-        EntityEvents::init(
+        builder.initial_events(
             self.id,
             [VelocityLimitEvent::Initialized {
                 values: VelocityLimitValues {

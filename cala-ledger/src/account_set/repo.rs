@@ -100,6 +100,7 @@ use account_set_cursor::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "AccountSet",
+    id(source = caller),
     columns(
         name(
             ty = "String",

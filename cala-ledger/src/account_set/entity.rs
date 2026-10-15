@@ -235,8 +235,13 @@ impl NewAccountSet {
 }
 
 impl IntoEvents<AccountSetEvent> for NewAccountSet {
-    fn into_events(self) -> EntityEvents<AccountSetEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<AccountSetEvent, FromCaller>,
+    ) -> EntityEvents<AccountSetEvent> {
+        builder.initial_events(
             self.id,
             [AccountSetEvent::Initialized {
                 values: AccountSetValues {

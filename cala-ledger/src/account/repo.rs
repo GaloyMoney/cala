@@ -12,6 +12,7 @@ use super::entity::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Account",
+    id(source = caller),
     columns(
         // No `find_by` / `list_by`: nothing reads accounts by name, and the
         // index that would back either was dropped from the migration.
