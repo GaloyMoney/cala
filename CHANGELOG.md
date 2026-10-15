@@ -1,3 +1,11 @@
+# [cala release v0.32.4](https://github.com/GaloyMoney/cala/releases/tag/0.32.4)
+
+
+
+### Bug Fixes
+
+- Make account set member pagination continuable (#893)
+
 # [cala release v0.32.3](https://github.com/GaloyMoney/cala/releases/tag/0.32.3)
 
 
