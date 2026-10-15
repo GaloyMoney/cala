@@ -9,7 +9,7 @@ use es_entity::errlanes;
 pub struct JournalCodeAlreadyExists(pub Option<Option<String>>);
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(JournalConstraintViolation, unhandled = fatal)]
+#[lift(JournalConstraintViolation)]
 pub enum CreateJournalRejection {
     #[rejection(code = "CALA_JOURNAL_DUPLICATE_ID")]
     #[error("DuplicateId: {0:?}")]

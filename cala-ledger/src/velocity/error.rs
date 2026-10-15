@@ -30,7 +30,7 @@ pub enum EnforceVelocityRejection {
 }
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(VelocityControlConstraintViolation, unhandled = fatal)]
+#[lift(VelocityControlConstraintViolation)]
 pub enum CreateVelocityControlRejection {
     #[error("Velocity control id already exists: {0}")]
     #[rejection(code = "CALA_VELOCITY_CONTROL_ID_ALREADY_EXISTS")]
@@ -39,7 +39,7 @@ pub enum CreateVelocityControlRejection {
 }
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(VelocityLimitConstraintViolation, unhandled = fatal)]
+#[lift(VelocityLimitConstraintViolation)]
 pub enum CreateVelocityLimitRejection {
     #[error("Velocity limit id already exists: {0}")]
     #[rejection(code = "CALA_VELOCITY_LIMIT_ID_ALREADY_EXISTS")]

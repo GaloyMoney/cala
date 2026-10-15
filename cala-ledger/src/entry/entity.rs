@@ -119,8 +119,13 @@ impl NewEntry {
 }
 
 impl IntoEvents<EntryEvent> for NewEntry {
-    fn into_events(self) -> EntityEvents<EntryEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<EntryEvent, FromCaller>,
+    ) -> EntityEvents<EntryEvent> {
+        builder.initial_events(
             self.id,
             [EntryEvent::Initialized {
                 values: EntryValues {

@@ -116,8 +116,13 @@ impl NewTransaction {
 }
 
 impl IntoEvents<TransactionEvent> for NewTransaction {
-    fn into_events(self) -> EntityEvents<TransactionEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<TransactionEvent, FromCaller>,
+    ) -> EntityEvents<TransactionEvent> {
+        builder.initial_events(
             self.id,
             [TransactionEvent::Initialized {
                 values: TransactionValues {

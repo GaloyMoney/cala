@@ -256,8 +256,8 @@ impl PostingRows {
         new_tx: NewTransaction,
         now: DateTime<Utc>,
     ) -> Transaction {
-        use es_entity::{IntoEvents, TryFromEvents};
-        let mut events = new_tx.into_events();
+        use es_entity::{EntityEventsBuilder, IntoEvents, TryFromEvents};
+        let mut events = new_tx.into_events(EntityEventsBuilder::__from_caller());
         let types = events.new_event_types();
         let serialized = events.serialize_new_events();
         events.mark_new_events_persisted_at(now);
@@ -280,8 +280,8 @@ impl PostingRows {
     }
 
     pub(super) fn push_entry(&mut self, new_entry: NewEntry, now: DateTime<Utc>) -> Entry {
-        use es_entity::{IntoEvents, TryFromEvents};
-        let mut events = new_entry.into_events();
+        use es_entity::{EntityEventsBuilder, IntoEvents, TryFromEvents};
+        let mut events = new_entry.into_events(EntityEventsBuilder::__from_caller());
         let types = events.new_event_types();
         let serialized = events.serialize_new_events();
         events.mark_new_events_persisted_at(now);

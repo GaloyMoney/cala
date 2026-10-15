@@ -8,6 +8,7 @@ use super::entity::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Entry",
+    id(source = caller),
     columns(
         account_id(ty = "AccountId", list_for(by(created_at)), update(persist = false)),
         journal_id(ty = "JournalId", list_for(by(created_at)), update(persist = false)),

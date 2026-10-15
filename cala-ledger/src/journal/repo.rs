@@ -9,6 +9,7 @@ use super::entity::*;
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
     entity = "Journal",
+    id(source = caller),
     columns(
         name(ty = "String", update(accessor = "values().name")),
         code(ty = "Option<String>", update(accessor = "values().code")),

@@ -96,8 +96,13 @@ impl NewTxTemplate {
 }
 
 impl IntoEvents<TxTemplateEvent> for NewTxTemplate {
-    fn into_events(self) -> EntityEvents<TxTemplateEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<TxTemplateEvent, FromCaller>,
+    ) -> EntityEvents<TxTemplateEvent> {
+        builder.initial_events(
             self.id,
             [TxTemplateEvent::Initialized {
                 values: TxTemplateValues {

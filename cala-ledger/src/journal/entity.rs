@@ -178,8 +178,13 @@ impl NewJournal {
 }
 
 impl IntoEvents<JournalEvent> for NewJournal {
-    fn into_events(self) -> EntityEvents<JournalEvent> {
-        EntityEvents::init(
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<JournalEvent, FromCaller>,
+    ) -> EntityEvents<JournalEvent> {
+        builder.initial_events(
             self.id,
             [JournalEvent::Initialized {
                 values: JournalValues {

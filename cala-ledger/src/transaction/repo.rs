@@ -8,6 +8,7 @@ use super::entity::*;
 #[derive(EsRepo, Clone)]
 #[es_repo(
     entity = "Transaction",
+    id(source = caller),
     columns(
         external_id(ty = "Option<String>", update(persist = false)),
         // No `find_by`: nothing looks a transaction up by correlation id, and

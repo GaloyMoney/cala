@@ -3,7 +3,7 @@ use cala_types::primitives::*;
 use es_entity::errlanes;
 
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(TxTemplateConstraintViolation, unhandled = fatal)]
+#[lift(TxTemplateConstraintViolation)]
 pub enum CreateTxTemplateRejection {
     #[error("template id already exists: {0}")]
     #[rejection(code = "CALA_TX_TEMPLATE_DUPLICATE_ID")]

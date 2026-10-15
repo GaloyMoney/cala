@@ -350,9 +350,14 @@ impl NewAccount {
 }
 
 impl IntoEvents<AccountEvent> for NewAccount {
-    fn into_events(self) -> EntityEvents<AccountEvent> {
+    type IdSource = FromCaller;
+
+    fn into_events(
+        self,
+        builder: EntityEventsBuilder<AccountEvent, FromCaller>,
+    ) -> EntityEvents<AccountEvent> {
         let values = self.into_values();
-        EntityEvents::init(values.id, [AccountEvent::Initialized { values }])
+        builder.initial_events(values.id, [AccountEvent::Initialized { values }])
     }
 }
 
