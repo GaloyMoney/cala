@@ -5,7 +5,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -75,6 +75,81 @@ impl Accounts {
             .await
             .lift()?;
         Ok(account)
+    }
+
+    /// Creates the account, or returns the stored one when an account with
+    /// the same id already exists.
+    ///
+    /// On [`Ensured::Found`] the stored account is returned unchanged:
+    /// `new_account`'s events are dropped, nothing is persisted, no outbox
+    /// events are published and `initial_account_set` is **not** attached.
+    ///
+    /// The insert is `ON CONFLICT (id) DO NOTHING`: no savepoint is needed
+    /// and a concurrent creator yields exactly one `Created`. A `code` or
+    /// `external_id` already held by a *different* account is still a
+    /// rejection.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.ensure_in_op",
+        skip(self, db),
+        fields(initial_set_count = new_account.initial_account_set.is_some() as u8)
+    )]
+    pub async fn ensure_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_account: NewAccount,
+    ) -> Result<Ensured<Account>, Fail<EnsureAccountRejection, lanes!(Transient, Fatal)>> {
+        let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
+        let ensured = self
+            .repo
+            .create_or_find_by_id_in_op(db, new_account)
+            .await
+            .lift()?;
+        if ensured.is_created() {
+            self.attach_initial_account_set_in_op(db, pairs)
+                .await
+                .lift()?;
+        }
+        Ok(ensured)
+    }
+
+    /// Creates the account, or returns the stored one when an account with
+    /// the same `external_id` already exists.
+    ///
+    /// On [`Ensured::Found`] the stored account is returned unchanged:
+    /// `new_account`'s events are dropped, nothing is persisted, no outbox
+    /// events are published and `initial_account_set` is **not** attached.
+    /// The stored account may have a different id than `new_account`'s.
+    ///
+    /// The insert is `ON CONFLICT (external_id) DO NOTHING`: no savepoint is
+    /// needed and a concurrent creator yields exactly one `Created`. An id or
+    /// `code` already held by a *different* account is still a rejection.
+    /// An account without an `external_id` has no key to find by, so it is
+    /// always created (and the `code`/id checks apply).
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.ensure_by_external_id_in_op",
+        skip(self, db),
+        fields(initial_set_count = new_account.initial_account_set.is_some() as u8)
+    )]
+    pub async fn ensure_by_external_id_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_account: NewAccount,
+    ) -> Result<Ensured<Account>, Fail<EnsureAccountByExternalIdRejection, lanes!(Transient, Fatal)>>
+    {
+        let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
+        let ensured = self
+            .repo
+            .create_or_find_by_external_id_in_op(db, new_account)
+            .await
+            .lift()?;
+        if ensured.is_created() {
+            self.attach_initial_account_set_in_op(db, pairs)
+                .await
+                .lift()?;
+        }
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(

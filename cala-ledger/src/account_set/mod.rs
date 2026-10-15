@@ -1,14 +1,14 @@
 use crate::error::CalaFault;
-use es_entity::errlanes::{lanes, Fail, ResultExt};
+use es_entity::errlanes::{lanes, Fail, ResultExt, Transient, TransientKind};
 mod entity;
 pub mod error;
 mod graph_cache;
 mod graph_validation;
 mod repo;
 
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::{
     account::*, account_set_member::AccountSetMembers, balance::*, outbox::*, primitives::JournalId,
@@ -90,6 +90,69 @@ impl AccountSets {
             .await
             .lift()?;
         self.repo.create_in_op(db, new_account_set).await.lift()
+    }
+
+    /// Creates the account set, or returns the stored one when a set with the
+    /// same `external_id` already exists.
+    ///
+    /// On [`Ensured::Found`] the stored set is returned unchanged:
+    /// `new_account_set`'s events are dropped, nothing is persisted (no
+    /// backing account either) and no outbox events are published. The stored
+    /// set may have a different id than `new_account_set`'s.
+    ///
+    /// The set row is inserted `ON CONFLICT (external_id) DO NOTHING`, so a
+    /// taken `external_id` neither fails nor poisons the surrounding
+    /// transaction and no savepoint is needed. Because the backing account is
+    /// written first (the set row references it), the call first takes a
+    /// transaction-scoped advisory lock on the `external_id` and looks the set
+    /// up, so that two concurrent ensures yield one `Created` and one `Found`
+    /// and neither leaves a backing account without a set. Should a creator
+    /// that does not take that lock (`create_in_op`) commit the same
+    /// `external_id` in between, the call fails with a `Transient`
+    /// optimistic-conflict fault instead of keeping the orphaned backing
+    /// account; the retry finds the set.
+    ///
+    /// A set without an `external_id` has no key to find by and is always
+    /// created. A set id or backing account already in use is still a
+    /// rejection.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.ensure_by_external_id_in_op",
+        skip(self, db)
+    )]
+    pub async fn ensure_by_external_id_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_account_set: NewAccountSet,
+    ) -> Result<
+        Ensured<AccountSet>,
+        Fail<EnsureAccountSetByExternalIdRejection, lanes!(Transient, Fatal)>,
+    > {
+        if let Some(external_id) = new_account_set.external_id.clone() {
+            self.repo.lock_external_id_in_op(db, &external_id).await?;
+            if let Some(stored) = self
+                .repo
+                .maybe_find_by_external_id_in_op(&mut *db, Some(external_id))
+                .await?
+            {
+                return Ok(Ensured::Found(stored));
+            }
+        }
+        self.accounts
+            .create_backing_in_op(db, backing_account(&new_account_set))
+            .await
+            .lift()?;
+        let ensured = self
+            .repo
+            .create_or_find_by_external_id_in_op(db, new_account_set)
+            .await
+            .lift()?;
+        if !ensured.is_created() {
+            return Err(Transient::new(TransientKind::OptimisticConflict)
+                .with_context("cala_account_sets (external_id): concurrent creator")
+                .into());
+        }
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.account_sets.create_all", skip(self, new_account_sets), fields(count = new_account_sets.len()))]
@@ -417,6 +480,102 @@ impl AccountSets {
         let members: Vec<SetMembership> =
             members.iter().copied().map(SetMembership::from).collect();
 
+        self.check_new_member_sets_in_op(&mut *op, &members).await?;
+
+        self.repo.lock_for_set_membership_op(op).await?;
+        self.set_graph_cache
+            .assert_valid_set_memberships_in_op(op, &members)
+            .await
+            .lift()?;
+        self.repo.insert_member_sets(op, &members).await?;
+
+        Ok(())
+    }
+
+    /// Idempotent [`add_member_sets_in_op`](Self::add_member_sets_in_op):
+    /// edges that are already direct set memberships are `Found` and left
+    /// alone; the rest are validated and inserted as in `add_member_sets_in_op`.
+    /// The result is [`Ensured::Created`] when at least one edge was added and
+    /// [`Ensured::Found`] when every edge already existed (an empty `members`
+    /// is `Found`). Nothing is written, validated or published for an
+    /// existing edge, so re-ensuring a member that has since accumulated
+    /// balance history is `Found`, not [`MemberHasBalanceHistory`].
+    ///
+    /// Concurrent ensures of one edge are serialized by the exclusive
+    /// membership-graph lock the insert path already takes: the loser re-reads
+    /// the stored edges under that lock, sees the winner's committed edge and
+    /// reports `Found`; the insert is also `ON CONFLICT DO NOTHING`, so no
+    /// savepoint is needed and the transaction is never poisoned.
+    ///
+    /// [`AddSetMembersRejection::MemberAlreadyAdded`] no longer means "this
+    /// edge exists" here. It is still raised when a *new* edge would give an
+    /// account a second, indirect path into a set (double membership).
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.ensure_member_sets_in_op",
+        skip(self, op, members),
+        fields(count = members.len())
+    )]
+    pub async fn ensure_member_sets_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        members: &[(AccountSetId, AccountSetId)],
+    ) -> Result<Ensured<()>, Fail<AddSetMembersRejection, lanes!(Transient, Fatal)>> {
+        let proposed: Vec<SetMembership> = {
+            let mut seen = HashSet::new();
+            members
+                .iter()
+                .copied()
+                .map(SetMembership::from)
+                .filter(|edge| seen.insert(*edge))
+                .collect()
+        };
+
+        let new_edges = self.without_existing_set_memberships(op, proposed).await?;
+        if new_edges.is_empty() {
+            return Ok(Ensured::Found(()));
+        }
+        self.check_new_member_sets_in_op(&mut *op, &new_edges)
+            .await?;
+
+        self.repo.lock_for_set_membership_op(op).await?;
+        // Re-read under the exclusive lock: a concurrent ensure of the same
+        // edge has committed by now and must not be validated as a duplicate.
+        let new_edges = self.without_existing_set_memberships(op, new_edges).await?;
+        if new_edges.is_empty() {
+            return Ok(Ensured::Found(()));
+        }
+        self.set_graph_cache
+            .assert_valid_set_memberships_in_op(op, &new_edges)
+            .await
+            .lift()?;
+        self.repo
+            .insert_member_sets_if_absent(op, &new_edges)
+            .await?;
+
+        Ok(Ensured::Created(()))
+    }
+
+    async fn without_existing_set_memberships(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        edges: Vec<SetMembership>,
+    ) -> Result<Vec<SetMembership>, CalaFault> {
+        let existing = self.repo.existing_set_memberships_in_op(op, &edges).await?;
+        Ok(edges
+            .into_iter()
+            .filter(|edge| !existing.contains(edge))
+            .collect())
+    }
+
+    /// Existence, journal and balance-history checks shared by
+    /// [`add_member_sets_in_op`](Self::add_member_sets_in_op) and
+    /// [`ensure_member_sets_in_op`](Self::ensure_member_sets_in_op).
+    async fn check_new_member_sets_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<(), Fail<AddSetMembersRejection, lanes!(Transient, Fatal)>> {
         let account_set_ids: Vec<AccountSetId> = {
             let mut ids: Vec<AccountSetId> = members
                 .iter()
@@ -432,7 +591,7 @@ impl AccountSets {
             .await?;
 
         let mut check_pairs = Vec::with_capacity(members.len());
-        for edge in &members {
+        for edge in members {
             let account_set = sets
                 .get(&edge.account_set_id)
                 .ok_or(AccountSetNotFound(edge.account_set_id))?;
@@ -465,14 +624,6 @@ impl AccountSets {
             }
             .into());
         }
-
-        self.repo.lock_for_set_membership_op(op).await?;
-        self.set_graph_cache
-            .assert_valid_set_memberships_in_op(op, &members)
-            .await
-            .lift()?;
-        self.repo.insert_member_sets(op, &members).await?;
-
         Ok(())
     }
 

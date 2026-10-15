@@ -8,7 +8,7 @@ pub mod error;
 mod limit;
 
 use chrono::{DateTime, Utc};
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -85,6 +85,66 @@ impl Velocities {
     {
         let res = self.controls.create_in_op(db, new_control).await.lift()?;
         Ok(res)
+    }
+
+    /// Creates the limit, or returns the stored one when a limit with the
+    /// same id already exists.
+    ///
+    /// On [`Ensured::Found`] the stored limit is returned unchanged:
+    /// `new_limit`'s events are dropped and nothing is persisted. The id is
+    /// the only key (`cala_velocity_limits` has no other unique constraint),
+    /// so nothing is left to reject on and the only failures are faults.
+    /// The insert is `ON CONFLICT (id) DO NOTHING`: no savepoint is needed
+    /// and a concurrent creator yields exactly one `Created`.
+    #[es_entity::errlanes::instrument(name = "velocity.ensure_limit_in_op", skip_all)]
+    pub async fn ensure_limit_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_limit: NewVelocityLimit,
+    ) -> Result<Ensured<VelocityLimit>, CalaFault> {
+        self.limits.create_or_find_by_id_in_op(db, new_limit).await
+    }
+
+    /// Creates the control, or returns the stored one when a control with the
+    /// same id already exists.
+    ///
+    /// On [`Ensured::Found`] the stored control is returned unchanged:
+    /// `new_control`'s events are dropped and nothing is persisted. The id is
+    /// the only key (`cala_velocity_controls` has no other unique
+    /// constraint), so nothing is left to reject on and the only failures are
+    /// faults. The insert is `ON CONFLICT (id) DO NOTHING`: no savepoint is
+    /// needed and a concurrent creator yields exactly one `Created`.
+    #[es_entity::errlanes::instrument(name = "velocity.ensure_control_in_op", skip_all)]
+    pub async fn ensure_control_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_control: NewVelocityControl,
+    ) -> Result<Ensured<VelocityControl>, CalaFault> {
+        self.controls
+            .create_or_find_by_id_in_op(db, new_control)
+            .await
+    }
+
+    /// Idempotent [`add_limit_to_control_in_op`](Self::add_limit_to_control_in_op):
+    /// attaches the limit to the control, or reports [`Ensured::Found`] when
+    /// it is already attached. Nothing is written on `Found`.
+    ///
+    /// The insert is `ON CONFLICT (velocity_control_id, velocity_limit_id) DO
+    /// NOTHING`, so an existing or concurrently committed attachment neither
+    /// fails nor poisons the transaction and needs no savepoint; a concurrent
+    /// attacher blocks until the other transaction finishes. The "already
+    /// attached" rejection is gone, and the remaining failures (an unknown
+    /// control or limit violates a foreign key) are faults, not rejections.
+    #[es_entity::errlanes::instrument(name = "velocity.ensure_limit_added_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
+    pub async fn ensure_limit_added_to_control_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
+    ) -> Result<Ensured<()>, CalaFault> {
+        self.limits
+            .ensure_limit_in_control(db, control, limit)
+            .await
     }
 
     #[es_entity::errlanes::instrument(name = "velocity.add_limit_to_control", skip(self), fields(control_id = %control, limit_id = %limit))]

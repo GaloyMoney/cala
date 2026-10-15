@@ -95,6 +95,11 @@ const ADDVISORY_LOCK_ID: i32 = 123456;
 /// `crate::account_set_member`).
 const GRAPH_LOCK_CLASS: i32 = 3;
 
+/// `classid` namespace for the per-`external_id` lock that serializes
+/// concurrent `ensure_by_external_id_in_op` calls. Disjoint from the
+/// namespaces above (1, 2 and 3).
+const EXTERNAL_ID_LOCK_CLASS: i32 = 4;
+
 use account_set_cursor::*;
 
 #[derive(EsRepo, Debug, Clone)]
@@ -369,6 +374,109 @@ impl AccountSetRepo {
         skip_all,
         fields(count = members.len())
     )]
+    pub(super) async fn insert_member_sets_if_absent(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<(), CalaFault> {
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+
+        let inserted: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+            r#"
+          INSERT INTO cala_account_set_member_account_sets
+            (account_set_id, member_account_set_id)
+          SELECT account_set_id, member_account_set_id
+          FROM UNNEST($1::uuid[], $2::uuid[])
+            AS proposed(account_set_id, member_account_set_id)
+          ON CONFLICT (account_set_id, member_account_set_id) DO NOTHING
+          RETURNING account_set_id, member_account_set_id
+          "#,
+        )
+        .bind(&account_set_ids)
+        .bind(&member_account_set_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        if inserted.is_empty() {
+            return Ok(());
+        }
+
+        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
+            .execute(db.as_executor())
+            .await?;
+
+        self.publisher
+            .publish_all(
+                db,
+                inserted.into_iter().map(|(account_set_id, member_id)| {
+                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::AccountSet(member_id),
+                    }
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// The proposed set-membership edges that are already stored as direct
+    /// edges.
+    pub(super) async fn existing_set_memberships_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<HashSet<SetMembership>, CalaFault> {
+        if members.is_empty() {
+            return Ok(HashSet::new());
+        }
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+        let rows: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+            r#"
+          SELECT existing.account_set_id, existing.member_account_set_id
+          FROM cala_account_set_member_account_sets existing
+          JOIN UNNEST($1::uuid[], $2::uuid[])
+            AS proposed(account_set_id, member_account_set_id)
+          ON existing.account_set_id = proposed.account_set_id
+            AND existing.member_account_set_id = proposed.member_account_set_id
+          "#,
+        )
+        .bind(&account_set_ids)
+        .bind(&member_account_set_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        Ok(rows.into_iter().map(SetMembership::from).collect())
+    }
+
+    /// Serialize concurrent ensures of one `external_id` (see
+    /// `AccountSets::ensure_by_external_id_in_op`). The lock is keyed on a
+    /// hash of the external id in its own `classid` namespace and is released
+    /// at the end of the transaction.
+    pub(super) async fn lock_external_id_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        external_id: &str,
+    ) -> Result<(), CalaFault> {
+        sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2))")
+            .bind(EXTERNAL_ID_LOCK_CLASS)
+            .bind(external_id)
+            .execute(db.as_executor())
+            .await?;
+        Ok(())
+    }
+
     pub(super) async fn insert_member_sets(
         &self,
         db: &mut impl es_entity::AtomicOperation,

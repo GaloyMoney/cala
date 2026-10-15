@@ -1,4 +1,6 @@
-pub(crate) use super::repo::AccountConstraintViolation;
+pub(crate) use super::repo::{
+    AccountConstraintViolation, AccountEnsureByExternalIdRejection, AccountEnsureByIdRejection,
+};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -76,4 +78,40 @@ pub enum SetAccountStatusRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     AccountNotFound(AccountNotFound),
+}
+
+/// What [`Accounts::ensure_in_op`](super::Accounts::ensure_in_op) can still
+/// reject on once an account with the same id is `Found`.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountEnsureByIdRejection, unhandled = fatal)]
+pub enum EnsureAccountRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    InitialAccountSetNotFound(InitialAccountSetNotFound),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    #[lift(AccountEnsureByIdRejection::CodeKey, into)]
+    CodeAlreadyExists(AccountCodeAlreadyExists),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    #[lift(AccountEnsureByIdRejection::ExternalIdKey, into)]
+    ExternalIdAlreadyExists(AccountExternalIdAlreadyExists),
+}
+
+/// What [`Accounts::ensure_by_external_id_in_op`](super::Accounts::ensure_by_external_id_in_op)
+/// can still reject on once an account with the same `external_id` is `Found`.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountEnsureByExternalIdRejection, unhandled = fatal)]
+pub enum EnsureAccountByExternalIdRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    InitialAccountSetNotFound(InitialAccountSetNotFound),
+    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
+    #[error("DuplicateId: {0:?}")]
+    #[lift(AccountEnsureByExternalIdRejection::Pkey, field = attempted)]
+    DuplicateId(AccountId),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    #[lift(AccountEnsureByExternalIdRejection::CodeKey, into)]
+    CodeAlreadyExists(AccountCodeAlreadyExists),
 }

@@ -1,4 +1,6 @@
-pub(crate) use super::repo::AccountSetConstraintViolation;
+pub(crate) use super::repo::{
+    AccountSetConstraintViolation, AccountSetEnsureByExternalIdRejection,
+};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -50,6 +52,25 @@ pub enum CreateAccountSetRejection {
     #[rejection(delegate, from)]
     #[lift(AccountSetConstraintViolation::ExternalIdKey, into)]
     SetExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
+}
+
+/// What [`AccountSets::ensure_by_external_id_in_op`](super::AccountSets::ensure_by_external_id_in_op)
+/// can still reject on once a set with the same `external_id` is `Found`:
+/// [`CreateAccountSetRejection`] without `SetExternalIdAlreadyExists`.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+// As in `CreateAccountSetRejection`, the set row follows its backing account
+// in the same op, so a set-row Pkey conflict is an invariant, not a rejection.
+#[lift(crate::account::error::AccountConstraintViolation, unhandled = fatal)]
+#[lift(AccountSetEnsureByExternalIdRejection, unhandled = fatal)]
+pub enum EnsureAccountSetByExternalIdRejection {
+    #[error("Backing account id already exists: {0}")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_ID_ALREADY_EXISTS")]
+    #[lift(crate::account::error::AccountConstraintViolation::Pkey, field = attempted)]
+    BackingDuplicateId(AccountId),
+    #[error("Backing account code already exists: {0:?}")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_CODE_ALREADY_EXISTS")]
+    #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
+    BackingCodeAlreadyExists(Option<String>),
 }
 
 #[derive(Debug, errlanes::Rejection)]

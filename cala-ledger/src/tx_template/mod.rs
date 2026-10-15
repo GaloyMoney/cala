@@ -8,6 +8,7 @@ pub mod error;
 
 use chrono::NaiveDate;
 use es_entity::clock::ClockHandle;
+use es_entity::Ensured;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -114,6 +115,40 @@ impl TxTemplates {
     ) -> Result<TxTemplate, Fail<CreateTxTemplateRejection, lanes!(Transient, Fatal)>> {
         let tx_template = self.repo.create_in_op(db, new_tx_template).await.lift()?;
         Ok(tx_template)
+    }
+
+    /// Creates the template, or returns the stored one when a template with
+    /// the same `code` already exists.
+    ///
+    /// The `code` is the only key compared. On [`Ensured::Found`] the stored
+    /// template is returned unchanged: `new_tx_template`'s events are dropped,
+    /// nothing is persisted and no outbox events are published, even if its
+    /// params, transaction input or entries differ from the stored ones.
+    ///
+    /// The insert is `ON CONFLICT (code) DO NOTHING`, so a conflicting code
+    /// neither fails nor poisons the surrounding transaction and no savepoint
+    /// is needed. A concurrent creator holding the same `code` uncommitted
+    /// blocks this insert until it finishes: one caller gets `Created`, the
+    /// other `Found`.
+    ///
+    /// The only rejection left is [`EnsureTxTemplateRejection::DuplicateId`]:
+    /// the caller-chosen id belongs to a template with a different `code`.
+    #[es_entity::errlanes::instrument(
+        name = "cala_ledger.tx_template.ensure_in_op",
+        skip(self, db)
+    )]
+    pub async fn ensure_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_tx_template: NewTxTemplate,
+    ) -> Result<Ensured<TxTemplate>, Fail<EnsureTxTemplateRejection, lanes!(Transient, Fatal)>>
+    {
+        let ensured = self
+            .repo
+            .create_or_find_by_code_in_op(db, new_tx_template)
+            .await
+            .lift()?;
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
