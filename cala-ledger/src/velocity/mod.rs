@@ -94,15 +94,15 @@ impl Velocities {
     /// `new_limit`'s events are dropped and nothing is persisted. The id is
     /// the only key (`cala_velocity_limits` has no other unique constraint),
     /// so nothing is left to reject on and the only failures are faults.
-    /// The insert is `ON CONFLICT (id) DO NOTHING`: no savepoint is needed
-    /// and a concurrent creator yields exactly one `Created`.
+    /// The insert is `ON CONFLICT DO NOTHING`: no savepoint is needed and a
+    /// concurrent creator yields exactly one `Created`.
     #[es_entity::errlanes::instrument(name = "velocity.ensure_limit_in_op", skip_all)]
     pub async fn ensure_limit_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_limit: NewVelocityLimit,
     ) -> Result<Ensured<VelocityLimit>, CalaFault> {
-        self.limits.create_or_find_by_id_in_op(db, new_limit).await
+        self.limits.create_or_find_in_op(db, new_limit).await
     }
 
     /// Creates the control, or returns the stored one when a control with the
@@ -112,7 +112,7 @@ impl Velocities {
     /// `new_control`'s events are dropped and nothing is persisted. The id is
     /// the only key (`cala_velocity_controls` has no other unique
     /// constraint), so nothing is left to reject on and the only failures are
-    /// faults. The insert is `ON CONFLICT (id) DO NOTHING`: no savepoint is
+    /// faults. The insert is `ON CONFLICT DO NOTHING`: no savepoint is
     /// needed and a concurrent creator yields exactly one `Created`.
     #[es_entity::errlanes::instrument(name = "velocity.ensure_control_in_op", skip_all)]
     pub async fn ensure_control_in_op(
@@ -120,9 +120,7 @@ impl Velocities {
         db: &mut impl es_entity::AtomicOperation,
         new_control: NewVelocityControl,
     ) -> Result<Ensured<VelocityControl>, CalaFault> {
-        self.controls
-            .create_or_find_by_id_in_op(db, new_control)
-            .await
+        self.controls.create_or_find_in_op(db, new_control).await
     }
 
     /// Idempotent [`add_limit_to_control_in_op`](Self::add_limit_to_control_in_op):

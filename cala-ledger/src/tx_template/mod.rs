@@ -117,22 +117,24 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    /// Creates the template, or returns the stored one when a template with
-    /// the same `code` already exists.
+    /// Creates the template, or returns the stored one when
+    /// `new_tx_template`'s unique keys (id, `code`) name exactly one stored
+    /// template.
     ///
-    /// The `code` is the only key compared. On [`Ensured::Found`] the stored
-    /// template is returned unchanged: `new_tx_template`'s events are dropped,
-    /// nothing is persisted and no outbox events are published, even if its
-    /// params, transaction input or entries differ from the stored ones.
+    /// Only keys are compared. On [`Ensured::Found`] the stored template is
+    /// returned unchanged: `new_tx_template`'s events are dropped, nothing is
+    /// persisted and no outbox events are published, even if its params,
+    /// transaction input or entries differ from the stored ones. **The stored
+    /// template's id may differ from `new_tx_template`'s id** (it was found
+    /// through its `code`): take the id from the returned template.
     ///
-    /// The insert is `ON CONFLICT (code) DO NOTHING`, so a conflicting code
-    /// neither fails nor poisons the surrounding transaction and no savepoint
-    /// is needed. A concurrent creator holding the same `code` uncommitted
-    /// blocks this insert until it finishes: one caller gets `Created`, the
-    /// other `Found`.
+    /// The insert is `ON CONFLICT DO NOTHING`, so a taken key neither fails
+    /// nor poisons the surrounding transaction and no savepoint is needed. A
+    /// concurrent creator holding a key uncommitted blocks this insert until
+    /// it finishes: one caller gets `Created`, the other `Found`.
     ///
-    /// The only rejection left is [`EnsureTxTemplateRejection::DuplicateId`]:
-    /// the caller-chosen id belongs to a template with a different `code`.
+    /// The only rejection is [`EnsureTxTemplateRejection::KeysSpanEntities`]:
+    /// the id belongs to one stored template and the `code` to another.
     #[es_entity::errlanes::instrument(
         name = "cala_ledger.tx_template.ensure_in_op",
         skip(self, db)
@@ -145,7 +147,7 @@ impl TxTemplates {
     {
         let ensured = self
             .repo
-            .create_or_find_by_code_in_op(db, new_tx_template)
+            .create_or_find_in_op(db, new_tx_template)
             .await
             .lift()?;
         Ok(ensured)

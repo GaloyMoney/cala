@@ -95,10 +95,11 @@ const ADDVISORY_LOCK_ID: i32 = 123456;
 /// `crate::account_set_member`).
 const GRAPH_LOCK_CLASS: i32 = 3;
 
-/// `classid` namespace for the per-`external_id` lock that serializes
-/// concurrent `ensure_by_external_id_in_op` calls. Disjoint from the
-/// namespaces above (1, 2 and 3).
-const EXTERNAL_ID_LOCK_CLASS: i32 = 4;
+/// `classid` namespaces for the per-key locks that serialize concurrent
+/// `AccountSets::ensure_in_op` calls: one for the set id, one for the
+/// `external_id`. Disjoint from the namespaces above (1, 2 and 3).
+const ID_LOCK_CLASS: i32 = 4;
+const EXTERNAL_ID_LOCK_CLASS: i32 = 5;
 
 use account_set_cursor::*;
 
@@ -460,21 +461,61 @@ impl AccountSetRepo {
         Ok(rows.into_iter().map(SetMembership::from).collect())
     }
 
-    /// Serialize concurrent ensures of one `external_id` (see
-    /// `AccountSets::ensure_by_external_id_in_op`). The lock is keyed on a
-    /// hash of the external id in its own `classid` namespace and is released
-    /// at the end of the transaction.
-    pub(super) async fn lock_external_id_in_op(
+    /// Serialize concurrent ensures that share a unique key (see
+    /// `AccountSets::ensure_in_op`): one transaction-scoped lock per non-null
+    /// key, each keyed on a hash of the key in its own `classid` namespace.
+    /// Always id first, then `external_id`, so ensures never wait on each
+    /// other in opposite orders.
+    pub(super) async fn lock_ensure_keys_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
-        external_id: &str,
+        id: AccountSetId,
+        external_id: Option<&str>,
     ) -> Result<(), CalaFault> {
-        sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2))")
-            .bind(EXTERNAL_ID_LOCK_CLASS)
-            .bind(external_id)
+        sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2::text))")
+            .bind(ID_LOCK_CLASS)
+            .bind(id)
             .execute(db.as_executor())
             .await?;
+        if let Some(external_id) = external_id {
+            sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2))")
+                .bind(EXTERNAL_ID_LOCK_CLASS)
+                .bind(external_id)
+                .execute(db.as_executor())
+                .await?;
+        }
         Ok(())
+    }
+
+    /// The stored sets that hold any of the given unique keys, each with the
+    /// names of the keys it holds. A `None` `external_id` matches nothing.
+    pub(super) async fn find_ensure_key_holders_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        id: AccountSetId,
+        external_id: Option<&str>,
+    ) -> Result<Vec<(AccountSetId, Vec<&'static str>)>, CalaFault> {
+        let rows: Vec<(AccountSetId, bool, bool)> = sqlx::query_as(
+            r#"
+          SELECT id, id = $1, COALESCE(external_id = $2, FALSE)
+          FROM cala_account_sets
+          WHERE id = $1 OR external_id = $2
+          "#,
+        )
+        .bind(id)
+        .bind(external_id)
+        .fetch_all(db.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|(id, by_id, by_external_id)| {
+                let keys = [(by_id, "id"), (by_external_id, "external_id")]
+                    .into_iter()
+                    .filter_map(|(matched, key)| matched.then_some(key))
+                    .collect();
+                (id, keys)
+            })
+            .collect())
     }
 
     pub(super) async fn insert_member_sets(

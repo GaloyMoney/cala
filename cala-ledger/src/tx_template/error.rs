@@ -1,4 +1,4 @@
-use super::repo::{TxTemplateConstraintViolation, TxTemplateEnsureByCodeRejection};
+use super::repo::{TxTemplateConstraintViolation, TxTemplateEnsureRejection};
 use cala_types::primitives::*;
 use es_entity::errlanes;
 
@@ -21,14 +21,22 @@ pub enum CreateTxTemplateRejection {
 pub struct TxTemplateNotFound(pub String);
 
 /// What [`TxTemplates::ensure_in_op`](super::TxTemplates::ensure_in_op) can
-/// still reject on once a stored template with the same `code` is `Found`:
-/// only a caller-chosen id that is already taken by a template with another
-/// code.
+/// reject: the new template's id and `code` name two different stored
+/// templates.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(TxTemplateEnsureByCodeRejection)]
+#[lift(TxTemplateEnsureRejection)]
 pub enum EnsureTxTemplateRejection {
-    #[error("template id already exists: {0}")]
-    #[rejection(code = "CALA_TX_TEMPLATE_DUPLICATE_ID")]
-    #[lift(TxTemplateEnsureByCodeRejection::Pkey, field = attempted)]
-    DuplicateId(TxTemplateId),
+    /// Carries the stored ids and the key column names, never values.
+    #[rejection(code = "CALA_TX_TEMPLATE_KEYS_SPAN_ENTITIES")]
+    #[error("Template keys {:?} match more than one template: {:?}", keys, ids)]
+    #[lift(TxTemplateEnsureRejection::KeysSpanEntities, with = keys_span_tx_templates)]
+    KeysSpanEntities {
+        ids: Vec<TxTemplateId>,
+        keys: Vec<&'static str>,
+    },
+}
+
+fn keys_span_tx_templates(rejection: TxTemplateEnsureRejection) -> EnsureTxTemplateRejection {
+    let TxTemplateEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureTxTemplateRejection::KeysSpanEntities { ids, keys }
 }

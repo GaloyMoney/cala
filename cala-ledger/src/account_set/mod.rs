@@ -92,50 +92,65 @@ impl AccountSets {
         self.repo.create_in_op(db, new_account_set).await.lift()
     }
 
-    /// Creates the account set, or returns the stored one when a set with the
-    /// same `external_id` already exists.
+    /// Creates the account set, or returns the stored one when
+    /// `new_account_set`'s unique keys (id, `external_id`) name exactly one
+    /// stored set.
     ///
     /// On [`Ensured::Found`] the stored set is returned unchanged:
     /// `new_account_set`'s events are dropped, nothing is persisted (no
-    /// backing account either) and no outbox events are published. The stored
-    /// set may have a different id than `new_account_set`'s.
+    /// backing account either) and no outbox events are published. **The
+    /// stored set's id may differ from `new_account_set`'s id** (it was found
+    /// through another key): take the id from the returned set. Only keys are
+    /// compared; differing non-key fields keep the stored ones. An absent
+    /// `external_id` does not participate. When the keys name more than one
+    /// stored set the call is rejected with
+    /// [`EnsureAccountSetRejection::KeysSpanEntities`].
     ///
-    /// The set row is inserted `ON CONFLICT (external_id) DO NOTHING`, so a
-    /// taken `external_id` neither fails nor poisons the surrounding
-    /// transaction and no savepoint is needed. Because the backing account is
-    /// written first (the set row references it), the call first takes a
-    /// transaction-scoped advisory lock on the `external_id` and looks the set
-    /// up, so that two concurrent ensures yield one `Created` and one `Found`
-    /// and neither leaves a backing account without a set. Should a creator
-    /// that does not take that lock (`create_in_op`) commit the same
-    /// `external_id` in between, the call fails with a `Transient`
-    /// optimistic-conflict fault instead of keeping the orphaned backing
-    /// account; the retry finds the set.
-    ///
-    /// A set without an `external_id` has no key to find by and is always
-    /// created. A set id or backing account already in use is still a
-    /// rejection.
+    /// Nothing here fails a statement for a taken key, so the surrounding
+    /// transaction stays usable and no savepoint is needed. Because the
+    /// backing account is written first (the set row references it), the
+    /// call first takes one transaction-scoped advisory lock per non-null
+    /// key (always id, then `external_id`) and looks the set up, so that two
+    /// concurrent ensures yield one `Created` and one `Found` and neither
+    /// leaves a backing account without a set. Should a creator that does
+    /// not take those locks (`create_in_op`) commit a matching key in
+    /// between, the call fails with a `Transient` optimistic-conflict fault
+    /// instead of keeping the orphaned backing account; the retry finds the
+    /// set. A backing account id or code already held by a plain account is
+    /// still a rejection.
     #[es_entity::errlanes::instrument(
         level = "debug",
-        name = "cala_ledger.account_sets.ensure_by_external_id_in_op",
+        name = "cala_ledger.account_sets.ensure_in_op",
         skip(self, db)
     )]
-    pub async fn ensure_by_external_id_in_op(
+    pub async fn ensure_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         new_account_set: NewAccountSet,
-    ) -> Result<
-        Ensured<AccountSet>,
-        Fail<EnsureAccountSetByExternalIdRejection, lanes!(Transient, Fatal)>,
-    > {
-        if let Some(external_id) = new_account_set.external_id.clone() {
-            self.repo.lock_external_id_in_op(db, &external_id).await?;
-            if let Some(stored) = self
-                .repo
-                .maybe_find_by_external_id_in_op(&mut *db, Some(external_id))
-                .await?
-            {
+    ) -> Result<Ensured<AccountSet>, Fail<EnsureAccountSetRejection, lanes!(Transient, Fatal)>>
+    {
+        let id = new_account_set.id;
+        let external_id = new_account_set.external_id.clone();
+        self.repo
+            .lock_ensure_keys_in_op(db, id, external_id.as_deref())
+            .await?;
+        let mut holders = self
+            .repo
+            .find_ensure_key_holders_in_op(db, id, external_id.as_deref())
+            .await?;
+        match holders.len() {
+            0 => (),
+            1 => {
+                let (stored_id, _) = holders.remove(0);
+                let stored = self.repo.find_by_id_in_op(&mut *db, stored_id).await?;
                 return Ok(Ensured::Found(stored));
+            }
+            _ => {
+                let (ids, keys): (Vec<_>, Vec<_>) = holders.into_iter().unzip();
+                let mut keys: Vec<_> = keys.into_iter().flatten().collect();
+                keys.sort_unstable();
+                keys.dedup();
+                return Err(EnsureAccountSetRejection::KeysSpanEntities { ids, keys }.into());
             }
         }
         self.accounts
@@ -144,12 +159,12 @@ impl AccountSets {
             .lift()?;
         let ensured = self
             .repo
-            .create_or_find_by_external_id_in_op(db, new_account_set)
+            .create_or_find_in_op(db, new_account_set)
             .await
             .lift()?;
         if !ensured.is_created() {
             return Err(Transient::new(TransientKind::OptimisticConflict)
-                .with_context("cala_account_sets (external_id): concurrent creator")
+                .with_context("cala_account_sets: concurrent creator")
                 .into());
         }
         Ok(ensured)

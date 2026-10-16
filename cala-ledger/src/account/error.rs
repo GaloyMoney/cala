@@ -1,6 +1,4 @@
-pub(crate) use super::repo::{
-    AccountConstraintViolation, AccountEnsureByExternalIdRejection, AccountEnsureByIdRejection,
-};
+pub(crate) use super::repo::{AccountConstraintViolation, AccountEnsureRejection};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -80,38 +78,25 @@ pub enum SetAccountStatusRejection {
     AccountNotFound(AccountNotFound),
 }
 
-/// What [`Accounts::ensure_in_op`](super::Accounts::ensure_in_op) can still
-/// reject on once an account with the same id is `Found`.
+/// What [`Accounts::ensure_in_op`](super::Accounts::ensure_in_op) can reject.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AccountEnsureByIdRejection, unhandled = fatal)]
+#[lift(AccountEnsureRejection)]
 pub enum EnsureAccountRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     InitialAccountSetNotFound(InitialAccountSetNotFound),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    #[lift(AccountEnsureByIdRejection::CodeKey, into)]
-    CodeAlreadyExists(AccountCodeAlreadyExists),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    #[lift(AccountEnsureByIdRejection::ExternalIdKey, into)]
-    ExternalIdAlreadyExists(AccountExternalIdAlreadyExists),
+    /// The new account's id, code and external_id name more than one stored
+    /// account. Carries the stored ids and the key column names, never values.
+    #[rejection(code = "CALA_ACCOUNT_KEYS_SPAN_ENTITIES")]
+    #[error("Account keys {:?} match more than one account: {:?}", keys, ids)]
+    #[lift(AccountEnsureRejection::KeysSpanEntities, with = keys_span_accounts)]
+    KeysSpanEntities {
+        ids: Vec<AccountId>,
+        keys: Vec<&'static str>,
+    },
 }
 
-/// What [`Accounts::ensure_by_external_id_in_op`](super::Accounts::ensure_by_external_id_in_op)
-/// can still reject on once an account with the same `external_id` is `Found`.
-#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-#[lift(AccountEnsureByExternalIdRejection, unhandled = fatal)]
-pub enum EnsureAccountByExternalIdRejection {
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    InitialAccountSetNotFound(InitialAccountSetNotFound),
-    #[rejection(code = "CALA_ACCOUNT_DUPLICATE_ID")]
-    #[error("DuplicateId: {0:?}")]
-    #[lift(AccountEnsureByExternalIdRejection::Pkey, field = attempted)]
-    DuplicateId(AccountId),
-    #[error("{0}")]
-    #[rejection(delegate, from)]
-    #[lift(AccountEnsureByExternalIdRejection::CodeKey, into)]
-    CodeAlreadyExists(AccountCodeAlreadyExists),
+fn keys_span_accounts(rejection: AccountEnsureRejection) -> EnsureAccountRejection {
+    let AccountEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureAccountRejection::KeysSpanEntities { ids, keys }
 }

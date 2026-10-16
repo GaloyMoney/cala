@@ -1,6 +1,4 @@
-pub(crate) use super::repo::{
-    AccountSetConstraintViolation, AccountSetEnsureByExternalIdRejection,
-};
+pub(crate) use super::repo::{AccountSetConstraintViolation, AccountSetEnsureRejection};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -54,15 +52,25 @@ pub enum CreateAccountSetRejection {
     SetExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
 }
 
-/// What [`AccountSets::ensure_by_external_id_in_op`](super::AccountSets::ensure_by_external_id_in_op)
-/// can still reject on once a set with the same `external_id` is `Found`:
-/// [`CreateAccountSetRejection`] without `SetExternalIdAlreadyExists`.
+/// What [`AccountSets::ensure_in_op`](super::AccountSets::ensure_in_op) can
+/// reject: the new set's keys name more than one stored set, or its backing
+/// account's id or code is held by a plain account.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
-// As in `CreateAccountSetRejection`, the set row follows its backing account
-// in the same op, so a set-row Pkey conflict is an invariant, not a rejection.
 #[lift(crate::account::error::AccountConstraintViolation, unhandled = fatal)]
-#[lift(AccountSetEnsureByExternalIdRejection, unhandled = fatal)]
-pub enum EnsureAccountSetByExternalIdRejection {
+#[lift(AccountSetEnsureRejection)]
+pub enum EnsureAccountSetRejection {
+    /// Carries the stored ids and the key column names, never values.
+    #[rejection(code = "CALA_ACCOUNT_SET_KEYS_SPAN_ENTITIES")]
+    #[error(
+        "Account set keys {:?} match more than one account set: {:?}",
+        keys,
+        ids
+    )]
+    #[lift(AccountSetEnsureRejection::KeysSpanEntities, with = keys_span_account_sets)]
+    KeysSpanEntities {
+        ids: Vec<AccountSetId>,
+        keys: Vec<&'static str>,
+    },
     #[error("Backing account id already exists: {0}")]
     #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_ID_ALREADY_EXISTS")]
     #[lift(crate::account::error::AccountConstraintViolation::Pkey, field = attempted)]
@@ -71,6 +79,11 @@ pub enum EnsureAccountSetByExternalIdRejection {
     #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_CODE_ALREADY_EXISTS")]
     #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
     BackingCodeAlreadyExists(Option<String>),
+}
+
+fn keys_span_account_sets(rejection: AccountSetEnsureRejection) -> EnsureAccountSetRejection {
+    let AccountSetEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureAccountSetRejection::KeysSpanEntities { ids, keys }
 }
 
 #[derive(Debug, errlanes::Rejection)]
