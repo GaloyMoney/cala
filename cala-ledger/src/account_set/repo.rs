@@ -99,6 +99,15 @@ const GRAPH_LOCK_CLASS: i32 = 3;
 const ID_LOCK_CLASS: i32 = 4;
 const EXTERNAL_ID_LOCK_CLASS: i32 = 5;
 
+/// What `AccountSets::ensure_in_op` reads before writing.
+#[derive(Default)]
+pub(super) struct EnsureLookup {
+    /// The stored sets holding any of the keys, with the keys each holds.
+    pub holders: Vec<(AccountSetId, Vec<&'static str>)>,
+    pub backing_id_taken: bool,
+    pub backing_code_taken: bool,
+}
+
 use account_set_cursor::*;
 
 #[derive(EsRepo, Debug, Clone)]
@@ -480,53 +489,41 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// Whether a stored account already holds the backing account's id or
-    /// code (the set id as text).
-    pub(super) async fn backing_keys_taken_in_op(
-        &self,
-        db: &mut impl es_entity::AtomicOperation,
-        id: AccountSetId,
-    ) -> Result<(bool, bool), CalaFault> {
-        Ok(sqlx::query_as(
-            r#"
-          SELECT
-            EXISTS (SELECT 1 FROM cala_accounts WHERE id = $1),
-            EXISTS (SELECT 1 FROM cala_accounts WHERE code = $1::text)
-          "#,
-        )
-        .bind(id)
-        .fetch_one(db.as_executor())
-        .await?)
-    }
-
-    /// The stored sets holding any of the keys, with the keys each holds.
-    pub(super) async fn find_ensure_key_holders_in_op(
+    /// The stored sets holding any of the keys, and whether an account holds
+    /// the backing account's id or code, read in one snapshot.
+    pub(super) async fn ensure_lookup_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
         id: AccountSetId,
         external_id: Option<&str>,
-    ) -> Result<Vec<(AccountSetId, Vec<&'static str>)>, CalaFault> {
-        let rows: Vec<(AccountSetId, bool, bool)> = sqlx::query_as(
+    ) -> Result<EnsureLookup, CalaFault> {
+        type Row = (Option<AccountSetId>, Option<bool>, Option<bool>, bool, bool);
+        let rows: Vec<Row> = sqlx::query_as(
             r#"
-          SELECT id, id = $1, COALESCE(external_id = $2, FALSE)
-          FROM cala_account_sets
-          WHERE id = $1 OR external_id = $2
+          SELECT s.id, s.id = $1, COALESCE(s.external_id = $2, FALSE),
+            EXISTS (SELECT 1 FROM cala_accounts WHERE id = $1),
+            EXISTS (SELECT 1 FROM cala_accounts WHERE code = $1::text)
+          FROM (SELECT 1) one
+          LEFT JOIN cala_account_sets s ON s.id = $1 OR s.external_id = $2
           "#,
         )
         .bind(id)
         .bind(external_id)
         .fetch_all(db.as_executor())
         .await?;
-        Ok(rows
-            .into_iter()
-            .map(|(id, by_id, by_external_id)| {
+        let mut lookup = EnsureLookup::default();
+        for (set_id, by_id, by_external_id, id_taken, code_taken) in rows {
+            lookup.backing_id_taken = id_taken;
+            lookup.backing_code_taken = code_taken;
+            if let Some(set_id) = set_id {
                 let keys = [(by_id, "id"), (by_external_id, "external_id")]
                     .into_iter()
-                    .filter_map(|(matched, key)| matched.then_some(key))
+                    .filter_map(|(matched, key)| matched.unwrap_or(false).then_some(key))
                     .collect();
-                (id, keys)
-            })
-            .collect())
+                lookup.holders.push((set_id, keys));
+            }
+        }
+        Ok(lookup)
     }
 
     pub(super) async fn insert_member_sets(

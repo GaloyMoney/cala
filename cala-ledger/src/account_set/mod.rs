@@ -111,9 +111,15 @@ impl AccountSets {
         self.repo
             .lock_ensure_keys_in_op(db, id, external_id.as_deref())
             .await?;
-        let mut holders = self
+        // One snapshot: a set and its backing account commit together, so a
+        // taken backing key with no matching set is a genuine conflict.
+        let repo::EnsureLookup {
+            mut holders,
+            backing_id_taken,
+            backing_code_taken,
+        } = self
             .repo
-            .find_ensure_key_holders_in_op(db, id, external_id.as_deref())
+            .ensure_lookup_in_op(db, id, external_id.as_deref())
             .await?;
         match holders.len() {
             0 => (),
@@ -130,17 +136,13 @@ impl AccountSets {
                 return Err(EnsureAccountSetRejection::KeysSpanEntities { ids, keys }.into());
             }
         }
-        match self.repo.backing_keys_taken_in_op(db, id).await? {
-            (true, _) => {
-                return Err(EnsureAccountSetRejection::BackingDuplicateId(id.into()).into());
-            }
-            (_, true) => {
-                return Err(EnsureAccountSetRejection::BackingCodeAlreadyExists(Some(
-                    id.to_string(),
-                ))
-                .into());
-            }
-            _ => (),
+        if backing_id_taken {
+            return Err(EnsureAccountSetRejection::BackingDuplicateId(id.into()).into());
+        }
+        if backing_code_taken {
+            return Err(
+                EnsureAccountSetRejection::BackingCodeAlreadyExists(Some(id.to_string())).into(),
+            );
         }
         // Backing keys were free above, so a conflict now is a concurrent creator.
         let backing: Result<(), Fail<EnsureAccountSetRejection, lanes!(Transient, Fatal)>> = self
