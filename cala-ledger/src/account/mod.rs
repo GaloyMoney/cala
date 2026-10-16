@@ -77,23 +77,10 @@ impl Accounts {
         Ok(account)
     }
 
-    /// Creates the account, or returns the stored one when `new_account`'s
-    /// unique keys (id, `code`, `external_id`) name exactly one stored account.
-    ///
-    /// On [`Ensured::Found`] the stored account is returned unchanged:
-    /// `new_account`'s events are dropped, nothing is persisted, no outbox
-    /// events are published and `initial_account_set` is **not** attached.
-    /// **The stored account's id may differ from `new_account`'s id** (it was
-    /// found through another key): take the id from the returned account.
-    /// Only keys are compared; differing non-key fields keep the stored ones.
-    /// An absent `external_id` does not participate.
-    ///
-    /// The insert is `ON CONFLICT DO NOTHING`: no savepoint is needed and a
-    /// concurrent creator yields exactly one `Created`. When the keys name
-    /// more than one stored account (its id held by one, its code by
-    /// another) the call is rejected with
-    /// [`EnsureAccountRejection::KeysSpanEntities`]; the transaction stays
-    /// usable.
+    /// Creates the account, or returns the stored account its id, `code` or
+    /// `external_id` matches, unchanged and possibly with a different id
+    /// (`initial_account_set` is then not attached). Rejected when the keys
+    /// match more than one account.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.accounts.ensure_in_op",

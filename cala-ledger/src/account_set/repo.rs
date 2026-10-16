@@ -95,9 +95,7 @@ const ADDVISORY_LOCK_ID: i32 = 123456;
 /// `crate::account_set_member`).
 const GRAPH_LOCK_CLASS: i32 = 3;
 
-/// `classid` namespaces for the per-key locks that serialize concurrent
-/// `AccountSets::ensure_in_op` calls: one for the set id, one for the
-/// `external_id`. Disjoint from the namespaces above (1, 2 and 3).
+/// `classid` namespaces for the `AccountSets::ensure_in_op` key locks.
 const ID_LOCK_CLASS: i32 = 4;
 const EXTERNAL_ID_LOCK_CLASS: i32 = 5;
 
@@ -428,8 +426,7 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// The proposed set-membership edges that are already stored as direct
-    /// edges.
+    /// The given edges that already exist.
     pub(super) async fn existing_set_memberships_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -461,11 +458,7 @@ impl AccountSetRepo {
         Ok(rows.into_iter().map(SetMembership::from).collect())
     }
 
-    /// Serialize concurrent ensures that share a unique key (see
-    /// `AccountSets::ensure_in_op`): one transaction-scoped lock per non-null
-    /// key, each keyed on a hash of the key in its own `classid` namespace.
-    /// Always id first, then `external_id`, so ensures never wait on each
-    /// other in opposite orders.
+    /// Locks each non-null key for the transaction, id first.
     pub(super) async fn lock_ensure_keys_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -487,8 +480,7 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// The stored sets that hold any of the given unique keys, each with the
-    /// names of the keys it holds. A `None` `external_id` matches nothing.
+    /// The stored sets holding any of the keys, with the keys each holds.
     pub(super) async fn find_ensure_key_holders_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,

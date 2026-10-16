@@ -117,24 +117,9 @@ impl TxTemplates {
         Ok(tx_template)
     }
 
-    /// Creates the template, or returns the stored one when
-    /// `new_tx_template`'s unique keys (id, `code`) name exactly one stored
-    /// template.
-    ///
-    /// Only keys are compared. On [`Ensured::Found`] the stored template is
-    /// returned unchanged: `new_tx_template`'s events are dropped, nothing is
-    /// persisted and no outbox events are published, even if its params,
-    /// transaction input or entries differ from the stored ones. **The stored
-    /// template's id may differ from `new_tx_template`'s id** (it was found
-    /// through its `code`): take the id from the returned template.
-    ///
-    /// The insert is `ON CONFLICT DO NOTHING`, so a taken key neither fails
-    /// nor poisons the surrounding transaction and no savepoint is needed. A
-    /// concurrent creator holding a key uncommitted blocks this insert until
-    /// it finishes: one caller gets `Created`, the other `Found`.
-    ///
-    /// The only rejection is [`EnsureTxTemplateRejection::KeysSpanEntities`]:
-    /// the id belongs to one stored template and the `code` to another.
+    /// Creates the template, or returns the stored template its id or `code`
+    /// matches, unchanged and possibly with a different id. Rejected when the
+    /// id and `code` match different templates.
     #[es_entity::errlanes::instrument(
         name = "cala_ledger.tx_template.ensure_in_op",
         skip(self, db)

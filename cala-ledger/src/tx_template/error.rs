@@ -20,13 +20,11 @@ pub enum CreateTxTemplateRejection {
 #[error("Template code '{0}' not found")]
 pub struct TxTemplateNotFound(pub String);
 
-/// What [`TxTemplates::ensure_in_op`](super::TxTemplates::ensure_in_op) can
-/// reject: the new template's id and `code` name two different stored
-/// templates.
+/// What [`TxTemplates::ensure_in_op`](super::TxTemplates::ensure_in_op) can reject.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(TxTemplateEnsureRejection)]
 pub enum EnsureTxTemplateRejection {
-    /// Carries the stored ids and the key column names, never values.
+    /// The new template's id and `code` match two different stored templates.
     #[rejection(code = "CALA_TX_TEMPLATE_KEYS_SPAN_ENTITIES")]
     #[error("Template keys {:?} match more than one template: {:?}", keys, ids)]
     #[lift(TxTemplateEnsureRejection::KeysSpanEntities, with = keys_span_tx_templates)]

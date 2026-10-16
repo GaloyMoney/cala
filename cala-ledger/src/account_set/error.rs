@@ -52,14 +52,12 @@ pub enum CreateAccountSetRejection {
     SetExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
 }
 
-/// What [`AccountSets::ensure_in_op`](super::AccountSets::ensure_in_op) can
-/// reject: the new set's keys name more than one stored set, or its backing
-/// account's id or code is held by a plain account.
+/// What [`AccountSets::ensure_in_op`](super::AccountSets::ensure_in_op) can reject.
 #[derive(Debug, errlanes::Rejection, errlanes::Lift)]
 #[lift(crate::account::error::AccountConstraintViolation, unhandled = fatal)]
 #[lift(AccountSetEnsureRejection)]
 pub enum EnsureAccountSetRejection {
-    /// Carries the stored ids and the key column names, never values.
+    /// The new set's keys match more than one stored set.
     #[rejection(code = "CALA_ACCOUNT_SET_KEYS_SPAN_ENTITIES")]
     #[error(
         "Account set keys {:?} match more than one account set: {:?}",

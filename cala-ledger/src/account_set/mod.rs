@@ -92,32 +92,9 @@ impl AccountSets {
         self.repo.create_in_op(db, new_account_set).await.lift()
     }
 
-    /// Creates the account set, or returns the stored one when
-    /// `new_account_set`'s unique keys (id, `external_id`) name exactly one
-    /// stored set.
-    ///
-    /// On [`Ensured::Found`] the stored set is returned unchanged:
-    /// `new_account_set`'s events are dropped, nothing is persisted (no
-    /// backing account either) and no outbox events are published. **The
-    /// stored set's id may differ from `new_account_set`'s id** (it was found
-    /// through another key): take the id from the returned set. Only keys are
-    /// compared; differing non-key fields keep the stored ones. An absent
-    /// `external_id` does not participate. When the keys name more than one
-    /// stored set the call is rejected with
-    /// [`EnsureAccountSetRejection::KeysSpanEntities`].
-    ///
-    /// Nothing here fails a statement for a taken key, so the surrounding
-    /// transaction stays usable and no savepoint is needed. Because the
-    /// backing account is written first (the set row references it), the
-    /// call first takes one transaction-scoped advisory lock per non-null
-    /// key (always id, then `external_id`) and looks the set up, so that two
-    /// concurrent ensures yield one `Created` and one `Found` and neither
-    /// leaves a backing account without a set. Should a creator that does
-    /// not take those locks (`create_in_op`) commit a matching key in
-    /// between, the call fails with a `Transient` optimistic-conflict fault
-    /// instead of keeping the orphaned backing account; the retry finds the
-    /// set. A backing account id or code already held by a plain account is
-    /// still a rejection.
+    /// Creates the account set, or returns the stored set its id or
+    /// `external_id` matches, unchanged and possibly with a different id.
+    /// Rejected when the keys match more than one set.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.account_sets.ensure_in_op",
@@ -508,23 +485,8 @@ impl AccountSets {
     }
 
     /// Idempotent [`add_member_sets_in_op`](Self::add_member_sets_in_op):
-    /// edges that are already direct set memberships are `Found` and left
-    /// alone; the rest are validated and inserted as in `add_member_sets_in_op`.
-    /// The result is [`Ensured::Created`] when at least one edge was added and
-    /// [`Ensured::Found`] when every edge already existed (an empty `members`
-    /// is `Found`). Nothing is written, validated or published for an
-    /// existing edge, so re-ensuring a member that has since accumulated
-    /// balance history is `Found`, not [`MemberHasBalanceHistory`].
-    ///
-    /// Concurrent ensures of one edge are serialized by the exclusive
-    /// membership-graph lock the insert path already takes: the loser re-reads
-    /// the stored edges under that lock, sees the winner's committed edge and
-    /// reports `Found`; the insert is also `ON CONFLICT DO NOTHING`, so no
-    /// savepoint is needed and the transaction is never poisoned.
-    ///
-    /// [`AddSetMembersRejection::MemberAlreadyAdded`] no longer means "this
-    /// edge exists" here. It is still raised when a *new* edge would give an
-    /// account a second, indirect path into a set (double membership).
+    /// existing memberships are skipped, and the result is `Found` when none
+    /// were added.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.account_sets.ensure_member_sets_in_op",
@@ -554,8 +516,7 @@ impl AccountSets {
             .await?;
 
         self.repo.lock_for_set_membership_op(op).await?;
-        // Re-read under the exclusive lock: a concurrent ensure of the same
-        // edge has committed by now and must not be validated as a duplicate.
+        // Re-read under the lock to catch a concurrently committed edge.
         let new_edges = self.without_existing_set_memberships(op, new_edges).await?;
         if new_edges.is_empty() {
             return Ok(Ensured::Found(()));
@@ -583,9 +544,7 @@ impl AccountSets {
             .collect())
     }
 
-    /// Existence, journal and balance-history checks shared by
-    /// [`add_member_sets_in_op`](Self::add_member_sets_in_op) and
-    /// [`ensure_member_sets_in_op`](Self::ensure_member_sets_in_op).
+    /// Checks shared by `add_member_sets_in_op` and `ensure_member_sets_in_op`.
     async fn check_new_member_sets_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

@@ -85,8 +85,7 @@ pub enum EnsureAccountRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     InitialAccountSetNotFound(InitialAccountSetNotFound),
-    /// The new account's id, code and external_id name more than one stored
-    /// account. Carries the stored ids and the key column names, never values.
+    /// The new account's keys match more than one stored account.
     #[rejection(code = "CALA_ACCOUNT_KEYS_SPAN_ENTITIES")]
     #[error("Account keys {:?} match more than one account: {:?}", keys, ids)]
     #[lift(AccountEnsureRejection::KeysSpanEntities, with = keys_span_accounts)]
