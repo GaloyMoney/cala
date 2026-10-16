@@ -121,6 +121,7 @@ impl TxTemplates {
     /// matches, unchanged and possibly with a different id. Rejected when the
     /// id and `code` match different templates.
     #[es_entity::errlanes::instrument(
+        level = "debug",
         name = "cala_ledger.tx_template.ensure_in_op",
         skip(self, db)
     )]

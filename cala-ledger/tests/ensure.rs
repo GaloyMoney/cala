@@ -950,6 +950,53 @@ async fn account_set_ensure_concurrent_creates_once_and_leaves_one_backing_accou
     Ok(())
 }
 
+/// A plain `create_in_op` of the same set id commits while the ensure waits
+/// on its backing insert: that is a retryable race, not `BackingDuplicateId`,
+/// and the retry finds the set.
+#[tokio::test]
+async fn account_set_ensure_racing_a_plain_create_of_the_same_id_is_transient() -> anyhow::Result<()>
+{
+    let (cala, pool) = init().await?;
+    let journal = cala.journals().create(helpers::test_journal()).await?;
+    let journal_id = journal.id();
+    let set_id = AccountSetId::new();
+
+    let mut op_a = cala.begin_operation().await?;
+    cala.account_sets()
+        .create_in_op(&mut op_a, new_set(set_id, journal_id, "a", None))
+        .await?;
+    let cala_b = cala.clone();
+    let b = tokio::spawn(async move {
+        let mut op_b = cala_b.begin_operation().await?;
+        let res = cala_b
+            .account_sets()
+            .ensure_in_op(&mut op_b, new_set(set_id, journal_id, "b", None))
+            .await;
+        anyhow::Ok(res.map(|ensured| ensured.is_created()))
+    });
+    let_it_block().await;
+    assert!(!b.is_finished(), "B must wait for A's backing account");
+    op_a.commit().await?;
+    let res = b.await??;
+    assert!(
+        matches!(res, Err(Fail::Transient(_))),
+        "expected a transient conflict, got {res:?}"
+    );
+
+    let mut op = cala.begin_operation().await?;
+    let Ensured::Found(found) = cala
+        .account_sets()
+        .ensure_in_op(&mut op, new_set(set_id, journal_id, "retry", None))
+        .await?
+    else {
+        panic!("the retry must find A's set");
+    };
+    op.commit().await?;
+    assert_eq!(found.values().name, "a");
+    assert_eq!(orphan_backing_accounts(&pool).await?, 0);
+    Ok(())
+}
+
 /// A holds id `s` and external id `e`, uncommitted. B shares only the id, C
 /// only the external id: each waits on the per-key lock it shares with A, then
 /// finds A's set through that key. Nobody deadlocks or orphans a backing

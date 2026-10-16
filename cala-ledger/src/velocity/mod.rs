@@ -89,7 +89,11 @@ impl Velocities {
 
     /// Creates the limit, or returns the stored limit with the same id,
     /// unchanged.
-    #[es_entity::errlanes::instrument(name = "velocity.ensure_limit_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "velocity.ensure_limit_in_op",
+        skip_all
+    )]
     pub async fn ensure_limit_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -100,7 +104,11 @@ impl Velocities {
 
     /// Creates the control, or returns the stored control with the same id,
     /// unchanged.
-    #[es_entity::errlanes::instrument(name = "velocity.ensure_control_in_op", skip_all)]
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "velocity.ensure_control_in_op",
+        skip_all
+    )]
     pub async fn ensure_control_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,
@@ -111,7 +119,7 @@ impl Velocities {
 
     /// Idempotent [`add_limit_to_control_in_op`](Self::add_limit_to_control_in_op):
     /// returns `Found` when the limit is already attached.
-    #[es_entity::errlanes::instrument(name = "velocity.ensure_limit_added_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
+    #[es_entity::errlanes::instrument(level = "debug", name = "velocity.ensure_limit_added_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
     pub async fn ensure_limit_added_to_control_in_op(
         &self,
         db: &mut impl es_entity::AtomicOperation,

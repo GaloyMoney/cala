@@ -130,19 +130,35 @@ impl AccountSets {
                 return Err(EnsureAccountSetRejection::KeysSpanEntities { ids, keys }.into());
             }
         }
-        self.accounts
+        match self.repo.backing_keys_taken_in_op(db, id).await? {
+            (true, _) => {
+                return Err(EnsureAccountSetRejection::BackingDuplicateId(id.into()).into());
+            }
+            (_, true) => {
+                return Err(EnsureAccountSetRejection::BackingCodeAlreadyExists(Some(
+                    id.to_string(),
+                ))
+                .into());
+            }
+            _ => (),
+        }
+        // Backing keys were free above, so a conflict now is a concurrent creator.
+        let backing: Result<(), Fail<EnsureAccountSetRejection, lanes!(Transient, Fatal)>> = self
+            .accounts
             .create_backing_in_op(db, backing_account(&new_account_set))
             .await
-            .lift()?;
+            .lift();
+        match backing {
+            Err(Fail::Rejected(_)) => return Err(concurrent_set_creator()),
+            other => other?,
+        }
         let ensured = self
             .repo
             .create_or_find_in_op(db, new_account_set)
             .await
             .lift()?;
         if !ensured.is_created() {
-            return Err(Transient::new(TransientKind::OptimisticConflict)
-                .with_context("cala_account_sets: concurrent creator")
-                .into());
+            return Err(concurrent_set_creator());
         }
         Ok(ensured)
     }
@@ -964,6 +980,12 @@ impl From<&AccountSetEvent> for OutboxEventPayload {
             },
         }
     }
+}
+
+fn concurrent_set_creator<R>() -> Fail<R, lanes!(Transient, Fatal)> {
+    Transient::new(TransientKind::OptimisticConflict)
+        .with_context("cala_account_sets: concurrent creator")
+        .into()
 }
 
 fn backing_account(set: &NewAccountSet) -> BackingAccount {

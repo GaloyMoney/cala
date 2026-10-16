@@ -480,6 +480,25 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    /// Whether a stored account already holds the backing account's id or
+    /// code (the set id as text).
+    pub(super) async fn backing_keys_taken_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        id: AccountSetId,
+    ) -> Result<(bool, bool), CalaFault> {
+        Ok(sqlx::query_as(
+            r#"
+          SELECT
+            EXISTS (SELECT 1 FROM cala_accounts WHERE id = $1),
+            EXISTS (SELECT 1 FROM cala_accounts WHERE code = $1::text)
+          "#,
+        )
+        .bind(id)
+        .fetch_one(db.as_executor())
+        .await?)
+    }
+
     /// The stored sets holding any of the keys, with the keys each holds.
     pub(super) async fn find_ensure_key_holders_in_op(
         &self,
