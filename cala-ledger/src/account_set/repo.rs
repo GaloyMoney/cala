@@ -95,6 +95,19 @@ const ADDVISORY_LOCK_ID: i32 = 123456;
 /// `crate::account_set_member`).
 const GRAPH_LOCK_CLASS: i32 = 3;
 
+/// `classid` namespaces for the `AccountSets::ensure_in_op` key locks.
+const ID_LOCK_CLASS: i32 = 4;
+const EXTERNAL_ID_LOCK_CLASS: i32 = 5;
+
+/// What `AccountSets::ensure_in_op` reads before writing.
+#[derive(Default)]
+pub(super) struct EnsureLookup {
+    /// The stored sets holding any of the keys, with the keys each holds.
+    pub holders: Vec<(AccountSetId, Vec<&'static str>)>,
+    pub backing_id_taken: bool,
+    pub backing_code_taken: bool,
+}
+
 use account_set_cursor::*;
 
 #[derive(EsRepo, Debug, Clone)]
@@ -369,6 +382,150 @@ impl AccountSetRepo {
         skip_all,
         fields(count = members.len())
     )]
+    pub(super) async fn insert_member_sets_if_absent(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<(), CalaFault> {
+        if members.is_empty() {
+            return Ok(());
+        }
+
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+
+        let inserted: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+            r#"
+          INSERT INTO cala_account_set_member_account_sets
+            (account_set_id, member_account_set_id)
+          SELECT account_set_id, member_account_set_id
+          FROM UNNEST($1::uuid[], $2::uuid[])
+            AS proposed(account_set_id, member_account_set_id)
+          ON CONFLICT (account_set_id, member_account_set_id) DO NOTHING
+          RETURNING account_set_id, member_account_set_id
+          "#,
+        )
+        .bind(&account_set_ids)
+        .bind(&member_account_set_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        if inserted.is_empty() {
+            return Ok(());
+        }
+
+        sqlx::query!("UPDATE cala_account_set_graph_epoch SET epoch = epoch + 1")
+            .execute(db.as_executor())
+            .await?;
+
+        self.publisher
+            .publish_all(
+                db,
+                inserted.into_iter().map(|(account_set_id, member_id)| {
+                    crate::outbox::OutboxEventPayload::AccountSetMemberCreated {
+                        account_set_id,
+                        member_id: crate::account_set::AccountSetMemberId::AccountSet(member_id),
+                    }
+                }),
+            )
+            .await?;
+        Ok(())
+    }
+
+    /// The given edges that already exist.
+    pub(super) async fn existing_set_memberships_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        members: &[SetMembership],
+    ) -> Result<HashSet<SetMembership>, CalaFault> {
+        if members.is_empty() {
+            return Ok(HashSet::new());
+        }
+        let account_set_ids: Vec<AccountSetId> =
+            members.iter().map(|edge| edge.account_set_id).collect();
+        let member_account_set_ids: Vec<AccountSetId> = members
+            .iter()
+            .map(|edge| edge.member_account_set_id)
+            .collect();
+        let rows: Vec<(AccountSetId, AccountSetId)> = sqlx::query_as(
+            r#"
+          SELECT existing.account_set_id, existing.member_account_set_id
+          FROM cala_account_set_member_account_sets existing
+          JOIN UNNEST($1::uuid[], $2::uuid[])
+            AS proposed(account_set_id, member_account_set_id)
+          ON existing.account_set_id = proposed.account_set_id
+            AND existing.member_account_set_id = proposed.member_account_set_id
+          "#,
+        )
+        .bind(&account_set_ids)
+        .bind(&member_account_set_ids)
+        .fetch_all(db.as_executor())
+        .await?;
+        Ok(rows.into_iter().map(SetMembership::from).collect())
+    }
+
+    /// Locks each non-null key for the transaction, id first.
+    pub(super) async fn lock_ensure_keys_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        id: AccountSetId,
+        external_id: Option<&str>,
+    ) -> Result<(), CalaFault> {
+        sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2::text))")
+            .bind(ID_LOCK_CLASS)
+            .bind(id)
+            .execute(db.as_executor())
+            .await?;
+        if let Some(external_id) = external_id {
+            sqlx::query("SELECT pg_advisory_xact_lock($1, hashtext($2))")
+                .bind(EXTERNAL_ID_LOCK_CLASS)
+                .bind(external_id)
+                .execute(db.as_executor())
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// The stored sets holding any of the keys, and whether an account holds
+    /// the backing account's id or code, read in one snapshot.
+    pub(super) async fn ensure_lookup_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        id: AccountSetId,
+        external_id: Option<&str>,
+    ) -> Result<EnsureLookup, CalaFault> {
+        type Row = (Option<AccountSetId>, Option<bool>, Option<bool>, bool, bool);
+        let rows: Vec<Row> = sqlx::query_as(
+            r#"
+          SELECT s.id, s.id = $1, COALESCE(s.external_id = $2, FALSE),
+            EXISTS (SELECT 1 FROM cala_accounts WHERE id = $1),
+            EXISTS (SELECT 1 FROM cala_accounts WHERE code = $1::text)
+          FROM (SELECT 1) one
+          LEFT JOIN cala_account_sets s ON s.id = $1 OR s.external_id = $2
+          "#,
+        )
+        .bind(id)
+        .bind(external_id)
+        .fetch_all(db.as_executor())
+        .await?;
+        let mut lookup = EnsureLookup::default();
+        for (set_id, by_id, by_external_id, id_taken, code_taken) in rows {
+            lookup.backing_id_taken = id_taken;
+            lookup.backing_code_taken = code_taken;
+            if let Some(set_id) = set_id {
+                let keys = [(by_id, "id"), (by_external_id, "external_id")]
+                    .into_iter()
+                    .filter_map(|(matched, key)| matched.unwrap_or(false).then_some(key))
+                    .collect();
+                lookup.holders.push((set_id, keys));
+            }
+        }
+        Ok(lookup)
+    }
+
     pub(super) async fn insert_member_sets(
         &self,
         db: &mut impl es_entity::AtomicOperation,

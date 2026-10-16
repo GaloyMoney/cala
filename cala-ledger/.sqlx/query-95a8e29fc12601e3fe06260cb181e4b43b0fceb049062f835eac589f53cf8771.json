@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO cala_velocity_control_limits (velocity_control_id, velocity_limit_id)\n            VALUES ($1, $2)\n            ON CONFLICT (velocity_control_id, velocity_limit_id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95a8e29fc12601e3fe06260cb181e4b43b0fceb049062f835eac589f53cf8771"
+}

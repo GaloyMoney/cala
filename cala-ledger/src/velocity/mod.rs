@@ -8,7 +8,7 @@ pub mod error;
 mod limit;
 
 use chrono::{DateTime, Utc};
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
 use std::collections::HashMap;
 
@@ -85,6 +85,50 @@ impl Velocities {
     {
         let res = self.controls.create_in_op(db, new_control).await.lift()?;
         Ok(res)
+    }
+
+    /// Creates the limit, or returns the stored limit with the same id,
+    /// unchanged.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "velocity.ensure_limit_in_op",
+        skip_all
+    )]
+    pub async fn ensure_limit_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_limit: NewVelocityLimit,
+    ) -> Result<Ensured<VelocityLimit>, CalaFault> {
+        self.limits.create_or_find_in_op(db, new_limit).await
+    }
+
+    /// Creates the control, or returns the stored control with the same id,
+    /// unchanged.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "velocity.ensure_control_in_op",
+        skip_all
+    )]
+    pub async fn ensure_control_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_control: NewVelocityControl,
+    ) -> Result<Ensured<VelocityControl>, CalaFault> {
+        self.controls.create_or_find_in_op(db, new_control).await
+    }
+
+    /// Idempotent [`add_limit_to_control_in_op`](Self::add_limit_to_control_in_op):
+    /// returns `Found` when the limit is already attached.
+    #[es_entity::errlanes::instrument(level = "debug", name = "velocity.ensure_limit_added_to_control_in_op", skip(self, db), fields(control_id = %control, limit_id = %limit))]
+    pub async fn ensure_limit_added_to_control_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
+    ) -> Result<Ensured<()>, CalaFault> {
+        self.limits
+            .ensure_limit_in_control(db, control, limit)
+            .await
     }
 
     #[es_entity::errlanes::instrument(name = "velocity.add_limit_to_control", skip(self), fields(control_id = %control, limit_id = %limit))]

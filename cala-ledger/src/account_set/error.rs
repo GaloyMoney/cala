@@ -1,4 +1,4 @@
-pub(crate) use super::repo::AccountSetConstraintViolation;
+pub(crate) use super::repo::{AccountSetConstraintViolation, AccountSetEnsureRejection};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -50,6 +50,38 @@ pub enum CreateAccountSetRejection {
     #[rejection(delegate, from)]
     #[lift(AccountSetConstraintViolation::ExternalIdKey, into)]
     SetExternalIdAlreadyExists(AccountSetExternalIdAlreadyExists),
+}
+
+/// What [`AccountSets::ensure_in_op`](super::AccountSets::ensure_in_op) can reject.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(crate::account::error::AccountConstraintViolation, unhandled = fatal)]
+#[lift(AccountSetEnsureRejection)]
+pub enum EnsureAccountSetRejection {
+    /// The new set's keys match more than one stored set.
+    #[rejection(code = "CALA_ACCOUNT_SET_KEYS_SPAN_ENTITIES")]
+    #[error(
+        "Account set keys {:?} match more than one account set: {:?}",
+        keys,
+        ids
+    )]
+    #[lift(AccountSetEnsureRejection::KeysSpanEntities, with = keys_span_account_sets)]
+    KeysSpanEntities {
+        ids: Vec<AccountSetId>,
+        keys: Vec<&'static str>,
+    },
+    #[error("Backing account id already exists: {0}")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_ID_ALREADY_EXISTS")]
+    #[lift(crate::account::error::AccountConstraintViolation::Pkey, field = attempted)]
+    BackingDuplicateId(AccountId),
+    #[error("Backing account code already exists: {0:?}")]
+    #[rejection(code = "CALA_ACCOUNT_SET_BACKING_ACCOUNT_CODE_ALREADY_EXISTS")]
+    #[lift(crate::account::error::AccountConstraintViolation::CodeKey, field = attempted)]
+    BackingCodeAlreadyExists(Option<String>),
+}
+
+fn keys_span_account_sets(rejection: AccountSetEnsureRejection) -> EnsureAccountSetRejection {
+    let AccountSetEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureAccountSetRejection::KeysSpanEntities { ids, keys }
 }
 
 #[derive(Debug, errlanes::Rejection)]

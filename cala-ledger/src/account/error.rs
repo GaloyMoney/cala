@@ -1,4 +1,4 @@
-pub(crate) use super::repo::AccountConstraintViolation;
+pub(crate) use super::repo::{AccountConstraintViolation, AccountEnsureRejection};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -76,4 +76,26 @@ pub enum SetAccountStatusRejection {
     #[error("{0}")]
     #[rejection(delegate, from)]
     AccountNotFound(AccountNotFound),
+}
+
+/// What [`Accounts::ensure_in_op`](super::Accounts::ensure_in_op) can reject.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(AccountEnsureRejection)]
+pub enum EnsureAccountRejection {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    InitialAccountSetNotFound(InitialAccountSetNotFound),
+    /// The new account's keys match more than one stored account.
+    #[rejection(code = "CALA_ACCOUNT_KEYS_SPAN_ENTITIES")]
+    #[error("Account keys {:?} match more than one account: {:?}", keys, ids)]
+    #[lift(AccountEnsureRejection::KeysSpanEntities, with = keys_span_accounts)]
+    KeysSpanEntities {
+        ids: Vec<AccountId>,
+        keys: Vec<&'static str>,
+    },
+}
+
+fn keys_span_accounts(rejection: AccountEnsureRejection) -> EnsureAccountRejection {
+    let AccountEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureAccountRejection::KeysSpanEntities { ids, keys }
 }

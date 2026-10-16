@@ -1,4 +1,4 @@
-use super::repo::TxTemplateConstraintViolation;
+use super::repo::{TxTemplateConstraintViolation, TxTemplateEnsureRejection};
 use cala_types::primitives::*;
 use es_entity::errlanes;
 
@@ -19,3 +19,22 @@ pub enum CreateTxTemplateRejection {
 #[rejection(code = "CALA_TX_TEMPLATE_COULD_NOT_FIND_BY_CODE")]
 #[error("Template code '{0}' not found")]
 pub struct TxTemplateNotFound(pub String);
+
+/// What [`TxTemplates::ensure_in_op`](super::TxTemplates::ensure_in_op) can reject.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(TxTemplateEnsureRejection)]
+pub enum EnsureTxTemplateRejection {
+    /// The new template's id and `code` match two different stored templates.
+    #[rejection(code = "CALA_TX_TEMPLATE_KEYS_SPAN_ENTITIES")]
+    #[error("Template keys {:?} match more than one template: {:?}", keys, ids)]
+    #[lift(TxTemplateEnsureRejection::KeysSpanEntities, with = keys_span_tx_templates)]
+    KeysSpanEntities {
+        ids: Vec<TxTemplateId>,
+        keys: Vec<&'static str>,
+    },
+}
+
+fn keys_span_tx_templates(rejection: TxTemplateEnsureRejection) -> EnsureTxTemplateRejection {
+    let TxTemplateEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureTxTemplateRejection::KeysSpanEntities { ids, keys }
+}

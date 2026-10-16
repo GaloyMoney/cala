@@ -49,6 +49,34 @@ impl VelocityLimitRepo {
 
     #[es_entity::errlanes::instrument(
         level = "debug",
+        name = "velocity_limit.ensure_limit_in_control",
+        skip_all
+    )]
+    pub async fn ensure_limit_in_control(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        control: VelocityControlId,
+        limit: VelocityLimitId,
+    ) -> Result<Ensured<()>, CalaFault> {
+        let inserted = sqlx::query!(
+            r#"INSERT INTO cala_velocity_control_limits (velocity_control_id, velocity_limit_id)
+            VALUES ($1, $2)
+            ON CONFLICT (velocity_control_id, velocity_limit_id) DO NOTHING"#,
+            control as VelocityControlId,
+            limit as VelocityLimitId,
+        )
+        .execute(op.as_executor())
+        .await?
+        .rows_affected();
+        Ok(if inserted == 0 {
+            Ensured::Found(())
+        } else {
+            Ensured::Created(())
+        })
+    }
+
+    #[es_entity::errlanes::instrument(
+        level = "debug",
         name = "velocity_limit.list_for_control",
         skip_all
     )]

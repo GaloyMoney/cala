@@ -5,7 +5,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -75,6 +75,35 @@ impl Accounts {
             .await
             .lift()?;
         Ok(account)
+    }
+
+    /// Creates the account, or returns the stored account its id, `code` or
+    /// `external_id` matches, unchanged and possibly with a different id
+    /// (`initial_account_set` is then not attached). Rejected when the keys
+    /// match more than one account.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.ensure_in_op",
+        skip(self, db),
+        fields(initial_set_count = new_account.initial_account_set.is_some() as u8)
+    )]
+    pub async fn ensure_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_account: NewAccount,
+    ) -> Result<Ensured<Account>, Fail<EnsureAccountRejection, lanes!(Transient, Fatal)>> {
+        let pairs = initial_membership_pairs(std::slice::from_ref(&new_account));
+        let ensured = self
+            .repo
+            .create_or_find_in_op(db, new_account)
+            .await
+            .lift()?;
+        if ensured.is_created() {
+            self.attach_initial_account_set_in_op(db, pairs)
+                .await
+                .lift()?;
+        }
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(

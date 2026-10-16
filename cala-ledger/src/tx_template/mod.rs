@@ -8,6 +8,7 @@ pub mod error;
 
 use chrono::NaiveDate;
 use es_entity::clock::ClockHandle;
+use es_entity::Ensured;
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -114,6 +115,28 @@ impl TxTemplates {
     ) -> Result<TxTemplate, Fail<CreateTxTemplateRejection, lanes!(Transient, Fatal)>> {
         let tx_template = self.repo.create_in_op(db, new_tx_template).await.lift()?;
         Ok(tx_template)
+    }
+
+    /// Creates the template, or returns the stored template its id or `code`
+    /// matches, unchanged and possibly with a different id. Rejected when the
+    /// id and `code` match different templates.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.tx_template.ensure_in_op",
+        skip(self, db)
+    )]
+    pub async fn ensure_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_tx_template: NewTxTemplate,
+    ) -> Result<Ensured<TxTemplate>, Fail<EnsureTxTemplateRejection, lanes!(Transient, Fatal)>>
+    {
+        let ensured = self
+            .repo
+            .create_or_find_in_op(db, new_tx_template)
+            .await
+            .lift()?;
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.tx_templates.find_all", skip(self, tx_template_ids), fields(tx_template_ids_count = tx_template_ids.len()))]
