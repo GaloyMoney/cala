@@ -1,3 +1,11 @@
+# [cala release v0.32.6](https://github.com/GaloyMoney/cala/releases/tag/0.32.6)
+
+
+
+### Features
+
+- Ensure_in_op (create-or-find) on tx templates, velocity, accounts, account sets (#908)
+
 # [cala release v0.32.5](https://github.com/GaloyMoney/cala/releases/tag/0.32.5)
 
 
