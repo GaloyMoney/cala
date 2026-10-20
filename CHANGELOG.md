@@ -1,3 +1,15 @@
+# [cala release v0.32.7](https://github.com/GaloyMoney/cala/releases/tag/0.32.7)
+
+
+
+### Features
+
+- Journals::ensure_in_op (create-or-find) (#909)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 3 updates (#906)
+
 # [cala release v0.32.6](https://github.com/GaloyMoney/cala/releases/tag/0.32.6)
 
 
