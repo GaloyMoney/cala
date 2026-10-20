@@ -1,5 +1,5 @@
-//! `ensure_*_in_op`: create-or-find on tx templates, velocity limits and
-//! controls, accounts and account sets, plus the idempotent attach / add-member
+//! `ensure_*_in_op`: create-or-find on tx templates, journals, velocity limits
+//! and controls, accounts and account sets, plus the idempotent attach / add-member
 //! variants. Each `Found` returns the stored entity and persists nothing.
 mod helpers;
 
@@ -7,6 +7,7 @@ use cala_ledger::{
     account::{error::*, NewAccount},
     account_set::{error::*, NewAccountSet},
     errlanes::Fail,
+    journal::{error::*, NewJournal},
     tx_template::error::*,
     velocity::*,
     *,
@@ -51,6 +52,11 @@ fn residual_rejections_are_exhaustive_and_pinned() {
             EnsureTxTemplateRejection::KeysSpanEntities { .. } => {}
         }
     }
+    fn journal(r: EnsureJournalRejection) {
+        match r {
+            EnsureJournalRejection::KeysSpanEntities { .. } => {}
+        }
+    }
     fn account(r: EnsureAccountRejection) {
         match r {
             EnsureAccountRejection::InitialAccountSetNotFound(_)
@@ -64,11 +70,15 @@ fn residual_rejections_are_exhaustive_and_pinned() {
             | EnsureAccountSetRejection::BackingCodeAlreadyExists(_) => {}
         }
     }
-    let _ = (tx_template, account, account_set);
+    let _ = (tx_template, journal, account, account_set);
 
     assert_eq!(
         codes::<EnsureTxTemplateRejectionCode>(),
         ["CALA_TX_TEMPLATE_KEYS_SPAN_ENTITIES"]
+    );
+    assert_eq!(
+        codes::<EnsureJournalRejectionCode>(),
+        ["CALA_JOURNAL_KEYS_SPAN_ENTITIES"]
     );
     assert_eq!(
         codes::<EnsureAccountRejectionCode>(),
@@ -285,6 +295,198 @@ async fn tx_template_ensure_concurrent_creates_once_and_finds_once() -> anyhow::
     };
     assert_eq!(found.id(), a.into_inner().id());
     let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cala_tx_templates WHERE code = $1")
+        .bind(&code)
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(rows, 1);
+    Ok(())
+}
+
+// --- journals -------------------------------------------------------------
+
+fn new_journal(id: JournalId, code: Option<&str>, name: &str) -> NewJournal {
+    let mut builder = NewJournal::builder();
+    builder.id(id).name(name);
+    if let Some(code) = code {
+        builder.code(code);
+    }
+    builder.build().unwrap()
+}
+
+#[tokio::test]
+async fn journal_ensure_creates_then_finds() -> anyhow::Result<()> {
+    let (cala, _) = init().await?;
+    let id = JournalId::new();
+    let code = random("ensure-journal");
+
+    let mut op = cala.begin_operation().await?;
+    let first = cala
+        .journals()
+        .ensure_in_op(&mut op, new_journal(id, Some(&code), "first"))
+        .await?;
+    let second = cala
+        .journals()
+        .ensure_in_op(&mut op, new_journal(id, Some(&code), "second"))
+        .await?;
+    op.commit().await?;
+
+    assert!(first.is_created());
+    let Ensured::Found(found) = second else {
+        panic!("the same journal must be found");
+    };
+    assert_eq!(found.id(), id);
+    assert_eq!(found.values().name, "first");
+    Ok(())
+}
+
+#[tokio::test]
+async fn journal_ensure_found_through_code_returns_stored_not_new() -> anyhow::Result<()> {
+    let (cala, pool) = init().await?;
+    let code = random("ensure-journal-code");
+    let stored = cala
+        .journals()
+        .create(new_journal(JournalId::new(), Some(&code), "stored"))
+        .await?;
+
+    let fresh_id = JournalId::new();
+    let mut op = cala.begin_operation().await?;
+    let Ensured::Found(found) = cala
+        .journals()
+        .ensure_in_op(&mut op, new_journal(fresh_id, Some(&code), "other"))
+        .await?
+    else {
+        panic!("a taken code must be found");
+    };
+    op.commit().await?;
+
+    assert_eq!(found.id(), stored.id());
+    assert_eq!(found.values().name, "stored");
+    let fresh_rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cala_journals WHERE id = $1")
+        .bind(uuid::Uuid::from(fresh_id))
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(fresh_rows, 0, "Found must not write the new id");
+    let events: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM cala_journal_events e JOIN cala_journals j ON j.id = e.id WHERE j.code = $1",
+    )
+    .bind(&code)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(events, 1, "Found must not persist the new events");
+    Ok(())
+}
+
+#[tokio::test]
+async fn journal_ensure_found_through_id_keeps_the_stored_code() -> anyhow::Result<()> {
+    let (cala, _) = init().await?;
+    let reused_id = JournalId::new();
+    let code = random("ensure-journal-id-a");
+    cala.journals()
+        .create(new_journal(reused_id, Some(&code), "stored"))
+        .await?;
+
+    let mut op = cala.begin_operation().await?;
+    let Ensured::Found(found) = cala
+        .journals()
+        .ensure_in_op(
+            &mut op,
+            new_journal(reused_id, Some(&random("ensure-journal-id-b")), "other"),
+        )
+        .await?
+    else {
+        panic!("a taken id must be found");
+    };
+    assert_eq!(found.id(), reused_id);
+    assert_eq!(found.values().code.as_deref(), Some(code.as_str()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn journal_ensure_absent_code_does_not_match() -> anyhow::Result<()> {
+    let (cala, _) = init().await?;
+    let mut op = cala.begin_operation().await?;
+    for name in ["a", "b"] {
+        let ensured = cala
+            .journals()
+            .ensure_in_op(&mut op, new_journal(JournalId::new(), None, name))
+            .await?;
+        assert!(ensured.is_created(), "two NULL codes are no match");
+    }
+    op.commit().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn journal_ensure_keys_spanning_two_journals_is_a_rejection() -> anyhow::Result<()> {
+    let (cala, _) = init().await?;
+    let x = cala
+        .journals()
+        .create(new_journal(
+            JournalId::new(),
+            Some(&random("ensure-journal-x")),
+            "x",
+        ))
+        .await?;
+    let y_code = random("ensure-journal-y");
+    let y = cala
+        .journals()
+        .create(new_journal(JournalId::new(), Some(&y_code), "y"))
+        .await?;
+
+    let mut op = cala.begin_operation().await?;
+    let err = cala
+        .journals()
+        .ensure_in_op(&mut op, new_journal(x.id(), Some(&y_code), "z"))
+        .await
+        .err()
+        .expect("keys held by two journals must be rejected");
+    let Fail::Rejected(EnsureJournalRejection::KeysSpanEntities { ids, keys }) = err else {
+        panic!("expected KeysSpanEntities, got {err:?}");
+    };
+    assert_eq!(sorted(&ids), sorted(&[x.id(), y.id()]));
+    assert_eq!(sorted(&keys), ["code", "id"]);
+    // The rejection did not abort the transaction.
+    cala.journals()
+        .create_in_op(&mut op, new_journal(JournalId::new(), None, "after"))
+        .await?;
+    op.commit().await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn journal_ensure_concurrent_creates_once_and_finds_once() -> anyhow::Result<()> {
+    let (cala, pool) = init().await?;
+    let code = random("ensure-journal-concurrent");
+
+    let mut op_a = cala.begin_operation().await?;
+    let a = cala
+        .journals()
+        .ensure_in_op(&mut op_a, new_journal(JournalId::new(), Some(&code), "a"))
+        .await?;
+
+    let cala_b = cala.clone();
+    let code_b = code.clone();
+    let b = tokio::spawn(async move {
+        let mut op_b = cala_b.begin_operation().await?;
+        let ensured = cala_b
+            .journals()
+            .ensure_in_op(&mut op_b, new_journal(JournalId::new(), Some(&code_b), "b"))
+            .await
+            .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+        op_b.commit().await?;
+        anyhow::Ok(ensured)
+    });
+    let_it_block().await;
+    assert!(!b.is_finished(), "B must wait for A's uncommitted insert");
+    op_a.commit().await?;
+    let b = b.await??;
+
+    assert!(a.is_created());
+    let Ensured::Found(found) = b else {
+        panic!("the loser must find the winner's journal");
+    };
+    assert_eq!(found.id(), a.into_inner().id());
+    let rows: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM cala_journals WHERE code = $1")
         .bind(&code)
         .fetch_one(&pool)
         .await?;

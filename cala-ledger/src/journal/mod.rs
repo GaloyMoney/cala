@@ -4,7 +4,7 @@ mod entity;
 pub mod error;
 mod repo;
 
-use es_entity::clock::ClockHandle;
+use es_entity::{clock::ClockHandle, Ensured};
 use sqlx::PgPool;
 
 use std::collections::HashMap;
@@ -48,6 +48,27 @@ impl Journals {
     ) -> Result<Journal, Fail<CreateJournalRejection, lanes!(Transient, Fatal)>> {
         let journal = self.repo.create_in_op(db, new_journal).await.lift()?;
         Ok(journal)
+    }
+
+    /// Creates the journal, or returns the stored journal its id or `code`
+    /// matches, unchanged and possibly with a different id. Rejected when the
+    /// id and `code` match different journals.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.journals.ensure_in_op",
+        skip(self, db)
+    )]
+    pub async fn ensure_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        new_journal: NewJournal,
+    ) -> Result<Ensured<Journal>, Fail<EnsureJournalRejection, lanes!(Transient, Fatal)>> {
+        let ensured = self
+            .repo
+            .create_or_find_in_op(db, new_journal)
+            .await
+            .lift()?;
+        Ok(ensured)
     }
 
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.journals.find_all", skip(self, journal_ids), fields(journal_ids_count = journal_ids.len()))]
