@@ -1,5 +1,5 @@
 #! Auto synced from Shared CI Resources repository
-#! Don't change this file, instead change it in github.com/GaloyMoney/concourse-shared
+#! Don't change this file, instead change it in github.com/GaloyMoney/galoy-concourse-shared
 
 name: Check Code
 
@@ -7,16 +7,19 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   check-code:
     name: Check Code
     runs-on: ubuntu-latest
     steps:
       - name: Install Nix
-        uses: DeterminateSystems/nix-installer-action@v4
+        uses: DeterminateSystems/nix-installer-action@v23
       - name: Run the Magic Nix Cache
-        uses: DeterminateSystems/magic-nix-cache-action@v8
-      - uses: actions/checkout@v4
+        uses: DeterminateSystems/magic-nix-cache-action@v15
+      - uses: actions/checkout@v7
       - name: Run check code
         run: |
           check_code_command=$(make -s --no-print-directory -n check-code)
