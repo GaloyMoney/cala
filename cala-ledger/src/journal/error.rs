@@ -1,4 +1,4 @@
-pub(crate) use super::repo::JournalConstraintViolation;
+pub(crate) use super::repo::{JournalConstraintViolation, JournalEnsureRejection};
 use crate::primitives::*;
 use es_entity::errlanes;
 
@@ -39,3 +39,22 @@ pub struct JournalNotFound(pub JournalId);
 #[rejection(code = "CALA_JOURNAL_COULD_NOT_FIND_BY_CODE")]
 #[error("Journal code not found: {0}")]
 pub struct JournalCodeNotFound(pub String);
+
+/// What [`Journals::ensure_in_op`](super::Journals::ensure_in_op) can reject.
+#[derive(Debug, errlanes::Rejection, errlanes::Lift)]
+#[lift(JournalEnsureRejection)]
+pub enum EnsureJournalRejection {
+    /// The new journal's id and `code` match two different stored journals.
+    #[rejection(code = "CALA_JOURNAL_KEYS_SPAN_ENTITIES")]
+    #[error("Journal keys {:?} match more than one journal: {:?}", keys, ids)]
+    #[lift(JournalEnsureRejection::KeysSpanEntities, with = keys_span_journals)]
+    KeysSpanEntities {
+        ids: Vec<JournalId>,
+        keys: Vec<&'static str>,
+    },
+}
+
+fn keys_span_journals(rejection: JournalEnsureRejection) -> EnsureJournalRejection {
+    let JournalEnsureRejection::KeysSpanEntities { ids, keys } = rejection;
+    EnsureJournalRejection::KeysSpanEntities { ids, keys }
+}
