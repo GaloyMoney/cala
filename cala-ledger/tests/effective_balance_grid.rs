@@ -24,19 +24,31 @@ async fn grid_matches_single_ranges_with_backdating_missing_currencies_and_versi
     let (sender, recipient) = helpers::test_accounts();
     let sender = cala.accounts().create(sender).await?;
     let recipient = cala.accounts().create(recipient).await?;
+    let (parent, child) = helpers::test_account_sets(journal.id().into());
+    let parent = cala.account_sets().create(parent).await?;
+    let child = cala.account_sets().create(child).await?;
+    cala.account_sets()
+        .add_member(child.id(), sender.id())
+        .await?;
+    cala.account_sets()
+        .add_member(parent.id(), child.id())
+        .await?;
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     cala.tx_templates()
         .create(helpers::currency_conversion_template(&code))
         .await?;
     let date = |value: &str| value.parse::<NaiveDate>().unwrap();
+    let mut entry_ids = Vec::new();
     for effective in ["2024-03-31", "2024-01-31", "2024-03-31", "2024-02-29"] {
         let mut params = Params::new();
         params.insert("journal_id", journal.id());
         params.insert("sender", sender.id());
         params.insert("recipient", recipient.id());
         params.insert("effective", date(effective));
-        cala.post_transaction(TransactionId::new(), &code, params)
+        let tx = cala
+            .post_transaction(TransactionId::new(), &code, params)
             .await?;
+        entry_ids.extend(tx.values().entry_ids.iter().copied());
     }
     let ids: Vec<_> = [sender.id(), recipient.id(), AccountId::new()]
         .into_iter()
@@ -54,6 +66,35 @@ async fn grid_matches_single_ranges_with_backdating_missing_currencies_and_versi
     ];
     let grid = EffectiveBalanceGrid::try_new(&ids, &ranges)?;
     let mut op = cala.begin_operation().await?;
+    let ancestors = cala
+        .account_sets()
+        .find_all_ancestor_ids_in_op(
+            &mut op,
+            journal.id(),
+            &[sender.id(), recipient.id(), sender.id()],
+        )
+        .await?;
+    let expected = std::collections::HashSet::from([parent.id(), child.id()]);
+    assert_eq!(
+        ancestors[&sender.id()]
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>(),
+        expected
+    );
+    assert!(!ancestors.contains_key(&recipient.id()));
+    assert!(cala
+        .account_sets()
+        .find_all_ancestor_ids_in_op(&mut op, JournalId::new(), &[sender.id()])
+        .await?
+        .is_empty());
+    assert_eq!(
+        cala.entries()
+            .find_all_in_op(&mut op, &entry_ids)
+            .await?
+            .len(),
+        entry_ids.len()
+    );
     let actual = cala
         .balances()
         .effective()

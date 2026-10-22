@@ -82,6 +82,32 @@ mod tests {
     }
 
     #[test]
+    fn report_shapes_share_checkpoints_at_one_four_twelve_and_maximum_buckets() {
+        let id = (JournalId::new(), AccountId::new(), Currency::USD);
+        let start = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
+        for buckets in [1, 4, 12, 24] {
+            let mut ranges: Vec<_> = (0..buckets)
+                .map(|month| {
+                    let from = start
+                        .checked_add_months(chrono::Months::new(month))
+                        .unwrap();
+                    (
+                        from,
+                        from.checked_add_months(chrono::Months::new(1))
+                            .unwrap()
+                            .pred_opt()
+                            .unwrap(),
+                    )
+                })
+                .collect();
+            ranges.push((start, ranges.last().unwrap().1));
+            let grid = EffectiveBalanceGrid::try_new(&[id], &ranges).unwrap();
+            assert_eq!(grid.boundaries.len(), buckets as usize + 1);
+            assert_eq!(grid.ranges.len(), buckets as usize + 1);
+        }
+    }
+
+    #[test]
     fn validates_dates_and_bounds_work() {
         let date = NaiveDate::from_ymd_opt(2024, 1, 1).unwrap();
         assert!(EffectiveBalanceGrid::try_new(&[], &[(date, date.pred_opt().unwrap())]).is_err());
