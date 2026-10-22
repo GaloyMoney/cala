@@ -50,6 +50,23 @@ async fn grid_matches_single_ranges_with_backdating_missing_currencies_and_versi
             .await?;
         entry_ids.extend(tx.values().entry_ids.iter().copied());
     }
+    let reversal_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::velocity_template(&reversal_code))
+        .await?;
+    for (effective, amount) in [("2024-05-01", 100), ("2024-06-01", -100)] {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id());
+        params.insert("sender", sender.id());
+        params.insert("recipient", recipient.id());
+        params.insert("effective", date(effective));
+        params.insert("layer", "PENDING");
+        params.insert("amount", rust_decimal::Decimal::from(amount));
+        let tx = cala
+            .post_transaction(TransactionId::new(), &reversal_code, params)
+            .await?;
+        entry_ids.extend(tx.values().entry_ids.iter().copied());
+    }
     let ids: Vec<_> = [sender.id(), recipient.id(), AccountId::new()]
         .into_iter()
         .flat_map(|account| {
@@ -63,6 +80,8 @@ async fn grid_matches_single_ranges_with_backdating_missing_currencies_and_versi
         (date("2024-03-01"), date("2024-03-31")),
         (date("2024-01-01"), date("2024-03-31")),
         (date("2024-04-01"), date("2024-04-30")),
+        (date("2024-05-01"), date("2024-05-31")),
+        (date("2024-06-01"), date("2024-06-30")),
     ];
     let grid = EffectiveBalanceGrid::try_new(&ids, &ranges)?;
     let mut op = cala.begin_operation().await?;
@@ -122,5 +141,12 @@ async fn grid_matches_single_ranges_with_backdating_missing_currencies_and_versi
             }
         }
     }
+    let june = actual.last().unwrap();
+    assert!(june[&(journal.id(), recipient.id(), Currency::USD)]
+        .period
+        .details
+        .pending
+        .cr_balance
+        .is_sign_negative());
     Ok(())
 }
