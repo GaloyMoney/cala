@@ -800,6 +800,19 @@ impl AccountSets {
             .ok_or(AccountSetExternalIdNotFound(external_id))?)
     }
 
+    /// Current ancestor IDs for a bounded batch of account IDs. This is a
+    /// read-only walk, not a historical membership or rollup-completion API.
+    pub async fn find_all_ancestor_ids_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        self.repo
+            .find_all_ancestor_ids_in_op(op, journal_id, account_ids)
+            .await
+    }
+
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.account_sets.find_where_member",

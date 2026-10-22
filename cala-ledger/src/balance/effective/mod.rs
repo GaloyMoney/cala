@@ -1,6 +1,11 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
 mod delta;
+mod grid;
+pub use grid::{
+    EffectiveBalanceGrid, InvalidEffectiveBalanceGrid, MAX_EFFECTIVE_BALANCE_GRID_WORK,
+    MAX_EFFECTIVE_BALANCE_RANGES,
+};
 #[cfg(test)]
 mod differential_tests;
 #[cfg(any(test, feature = "fuzz"))]
@@ -142,6 +147,26 @@ impl EffectiveBalances {
                     .map(|range| (id, range))
             })
             .collect())
+    }
+
+    /// Reads every range in one SQL statement, sharing cumulative checkpoints.
+    /// The statement sees currently materialized snapshots: it does not wait
+    /// for eventually-consistent rollups or establish a posting frontier.
+    pub async fn find_all_in_ranges(
+        &self,
+        grid: &EffectiveBalanceGrid,
+    ) -> Result<Vec<HashMap<BalanceId, BalanceRange>>, CalaFault> {
+        self.repo.find_grid(&self._pool, grid).await
+    }
+
+    /// As `find_all_in_ranges`, using the caller's executor. A caller may use
+    /// a repeatable-read transaction to share a snapshot with other reads.
+    pub async fn find_all_in_ranges_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        grid: &EffectiveBalanceGrid,
+    ) -> Result<Vec<HashMap<BalanceId, BalanceRange>>, CalaFault> {
+        self.repo.find_grid(op, grid).await
     }
 
     #[es_entity::errlanes::instrument(
