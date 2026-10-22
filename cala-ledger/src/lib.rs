@@ -38,8 +38,7 @@
 //!     let new_journal = NewJournal::builder()
 //!         .id(journal_id)
 //!         .name("Ledger")
-//!         .build()
-//!         .expect("Couldn't build NewJournal");
+//!         .build();
 //!     let _ = cala.journals().create(new_journal).await;
 //!
 //!     // Initialize an income omnibus account
@@ -48,7 +47,7 @@
 //!         .id(main_account_id)
 //!         .name("Income")
 //!         .code("Income")
-//!         .build()?;
+//!         .build();
 //!     cala.accounts().create(new_account).await?;
 //!
 //!     // Create the trivial 'income' template
@@ -94,7 +93,7 @@
 //!                 .build()?,
 //!         )
 //!         .entries(entries)
-//!         .build()?;
+//!         .build();
 //!
 //!     cala.tx_templates().create(new_template).await?;
 //!     Ok(cala)
@@ -110,7 +109,7 @@
 //!         .id(sender_account_id)
 //!         .name(format!("Sender-{}", sender_account_id))
 //!         .code(format!("Sender-{}", sender_account_id))
-//!         .build()?;
+//!         .build();
 //!     cala.accounts().create(sender_account).await?;
 //!     // Prepare the input parameters that the template requires
 //!     let mut params = Params::new();

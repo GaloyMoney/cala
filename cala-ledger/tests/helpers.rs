@@ -131,7 +131,6 @@ pub fn test_journal() -> NewJournal {
         .id(JournalId::new())
         .name(name)
         .build()
-        .unwrap()
 }
 
 pub fn test_journal_with_effective_balances() -> NewJournal {
@@ -141,7 +140,6 @@ pub fn test_journal_with_effective_balances() -> NewJournal {
         .name(name)
         .enable_effective_balance(true)
         .build()
-        .unwrap()
 }
 
 pub fn test_accounts() -> (NewAccount, NewAccount) {
@@ -150,16 +148,14 @@ pub fn test_accounts() -> (NewAccount, NewAccount) {
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Sender Account {code}"))
         .code(code)
-        .build()
-        .unwrap();
+        .build();
 
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account = NewAccount::builder()
         .id(uuid::Uuid::now_v7())
         .name(format!("Test Recipient Account {code}"))
         .code(code)
-        .build()
-        .unwrap();
+        .build();
     (sender_account, recipient_account)
 }
 
@@ -170,8 +166,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .name(format!("Test Sender Account Set {code}"))
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
 
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account_set = NewAccountSet::builder()
@@ -179,8 +174,7 @@ pub fn test_account_sets(journal_id: uuid::Uuid) -> (NewAccountSet, NewAccountSe
         .name(format!("Test Recipient Account Set {code}"))
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
 
     (sender_account_set, recipient_account_set)
 }
@@ -280,7 +274,6 @@ pub fn currency_conversion_template(code: &str) -> NewTxTemplate {
         )
         .entries(entries)
         .build()
-        .unwrap()
 }
 
 pub fn simple_template_with_date_default(code: &str) -> NewTxTemplate {
@@ -339,7 +332,6 @@ pub fn simple_template_with_date_default(code: &str) -> NewTxTemplate {
         )
         .entries(entries)
         .build()
-        .unwrap()
 }
 
 pub fn velocity_template(code: &str) -> NewTxTemplate {
@@ -423,5 +415,4 @@ pub fn velocity_template(code: &str) -> NewTxTemplate {
         )
         .entries(entries)
         .build()
-        .unwrap()
 }

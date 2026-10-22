@@ -388,8 +388,7 @@ async fn concurrent_overlapping_batches_do_not_deadlock() -> anyhow::Result<()> 
                         .id(AccountId::new())
                         .name(format!("batch deadlock probe {i}"))
                         .code(format!("BATCH-DEADLOCK-{i}-{suffix}"))
-                        .build()
-                        .unwrap(),
+                        .build(),
                 )
                 .await?
                 .id(),
@@ -643,8 +642,7 @@ async fn a_batch_touching_too_many_accounts_is_refused_with_a_clear_error() -> a
                 .id(id)
                 .name(format!("lock ceiling {i}"))
                 .code(format!("LOCKCEIL-{}-{i}", uuid::Uuid::now_v7().simple()))
-                .build()
-                .unwrap(),
+                .build(),
         );
     }
     cala.accounts().create_all(pending).await?;
@@ -827,14 +825,12 @@ async fn a_multi_journal_batch_does_not_cross_ancestor_sets_between_journals() -
     let recipient = cala.accounts().create(b).await?;
 
     let set_in = |journal_id, name: &str| {
-        let s = NewAccountSet::builder()
+        NewAccountSet::builder()
             .id(AccountSetId::new())
             .name(name.to_string())
             .journal_id(journal_id)
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap();
-        s
     };
     let set_a = cala
         .account_sets()

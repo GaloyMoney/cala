@@ -272,7 +272,7 @@ async fn main() -> anyhow::Result<()> {
                 .name("backdating benchmark set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     cala.account_sets()

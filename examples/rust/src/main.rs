@@ -33,7 +33,7 @@ async fn main() -> anyhow::Result<()> {
         .name(format!("SENDER #{random_number:03}"))
         .code(format!("SENDER.{example_suffix}"))
         .description("sender account")
-        .build()?;
+        .build();
     let mut sender = cala.accounts().create(new_sender).await?;
     println!("sender_account_id: {}", sender.id());
 
@@ -42,16 +42,15 @@ async fn main() -> anyhow::Result<()> {
         .name(format!("RECIPIENT #{random_number:03}"))
         .code(format!("RECIPIENT.{example_suffix}"))
         .description("recipient account")
-        .build()?;
+        .build();
     let recipient = cala.accounts().create(new_recipient).await?;
     println!("recipient_account_id: {}", recipient.id());
 
     // Demonstrate the update flow: rename the sender and re-persist.
-    let mut sender_update = AccountUpdate::default();
-    sender_update
+    let sender_update = AccountUpdate::builder()
         .name(format!("SENDER #{random_number:04}"))
         .description("updated description")
-        .build()?;
+        .build();
     if sender.update(sender_update).did_execute() {
         cala.accounts().persist(&mut sender).await?;
     }
@@ -63,15 +62,14 @@ async fn main() -> anyhow::Result<()> {
         .id(journal_id)
         .name("MY JOURNAL")
         .description("description")
-        .build()?;
+        .build();
     let mut journal = cala.journals().create(new_journal).await?;
     println!("journal_id: {journal_id}");
 
-    let mut journal_update = JournalUpdate::default();
-    journal_update
+    let journal_update = JournalUpdate::builder()
         .name("UPDATED_JOURNAL_NAME")
         .description("new description")
-        .build()?;
+        .build();
     if journal.update(journal_update).did_execute() {
         cala.journals().persist(&mut journal).await?;
     }
@@ -123,7 +121,7 @@ async fn main() -> anyhow::Result<()> {
                 .build()?,
         )
         .entries(entries)
-        .build()?;
+        .build();
     let tx_template = cala.tx_templates().create(new_tx_template).await?;
     println!("tx_template_code: {}", tx_template.values().code);
 

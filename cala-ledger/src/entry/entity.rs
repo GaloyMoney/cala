@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
@@ -27,8 +26,7 @@ pub enum EntryEvent {
     Initialized { values: EntryValues },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct Entry {
     pub id: EntryId,
     values: EntryValues,
@@ -57,52 +55,46 @@ impl Entry {
 
 impl TryFromEvents<EntryEvent> for Entry {
     fn try_from_events(events: EntityEvents<EntryEvent>) -> Result<Self, EntityHydrationError> {
-        let mut builder = EntryBuilder::default();
+        let mut hydrator = Entry::hydrator();
         for event in events.iter_all() {
             match event {
                 EntryEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
-#[derive(Builder, Debug)]
+#[derive(bon::Builder, Debug)]
 #[allow(dead_code)]
 pub struct NewEntry {
-    #[builder(setter(into))]
+    #[builder(into)]
     pub id: EntryId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) transaction_id: TransactionId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) journal_id: JournalId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) account_id: AccountId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) entry_type: String,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) sequence: u32,
     #[builder(default)]
     pub(super) layer: Layer,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) units: rust_decimal::Decimal,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) currency: Currency,
     #[builder(default)]
     pub(super) direction: DebitOrCredit,
-    #[builder(setter(strip_option), default)]
     pub(super) description: Option<String>,
-    #[builder(setter(into), default)]
     pub(super) metadata: Option<serde_json::Value>,
 }
 
 impl NewEntry {
-    pub fn builder() -> NewEntryBuilder {
-        NewEntryBuilder::default()
-    }
-
     /// The account this entry will be booked against. Exposed so the
     /// posting flow can take its attach-fence locks on the distinct
     /// entry accounts *before* the entry rows are inserted.
@@ -154,10 +146,9 @@ mod tests {
 
     #[test]
     fn it_builds() {
-        let mut builder = NewEntry::builder();
         let currency = "USD".parse::<Currency>().unwrap();
         let entry_id = EntryId::new();
-        builder
+        let new_entry = NewEntry::builder()
             .id(entry_id)
             .transaction_id(TransactionId::new())
             .account_id(AccountId::new())
@@ -168,16 +159,8 @@ mod tests {
             .units(rust_decimal::Decimal::from(1))
             .currency(currency)
             .direction(DebitOrCredit::Debit)
-            .metadata(Some(serde_json::Value::String(String::new())));
-        let new_entry = builder.build().unwrap();
+            .maybe_metadata(Some(serde_json::Value::String(String::new())))
+            .build();
         assert_eq!(new_entry.id, entry_id);
-    }
-
-    #[test]
-    fn fails_when_missing_required_fields() {
-        let mut builder = NewEntry::builder();
-        builder.id(EntryId::new());
-        let new_entry = builder.build();
-        assert!(new_entry.is_err());
     }
 }

@@ -28,8 +28,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .name("SET ONE")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let set_one = cala.account_sets().create(set_one).await.unwrap();
 
     let set_two = NewAccountSet::builder()
@@ -37,8 +36,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .name("SET TWO")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let set_two = cala.account_sets().create(set_two).await.unwrap();
 
     let parent = NewAccountSet::builder()
@@ -46,8 +44,7 @@ async fn errors_on_collision() -> anyhow::Result<()> {
         .name("parent")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let parent = cala.account_sets().create(parent).await.unwrap();
 
     // Cannot add the same account twice
@@ -111,7 +108,6 @@ async fn errors_on_membership_cycle() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let set_a = cala.account_sets().create(new_set("SET A")).await.unwrap();
     let set_b = cala.account_sets().create(new_set("SET B")).await.unwrap();
@@ -191,8 +187,7 @@ async fn errors_on_membership_depth_exceeded() -> anyhow::Result<()> {
             .name(format!("depth-set-{i}"))
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         sets.push(cala.account_sets().create(set).await.unwrap());
     }
 
@@ -249,7 +244,6 @@ async fn errors_on_double_membership() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     // grandparent <- {branch_a, branch_b}
     let grandparent = cala
@@ -444,7 +438,6 @@ async fn add_members_batch() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let recipient_set = cala
         .account_sets()
@@ -559,7 +552,6 @@ async fn add_member_sets_batch() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let root = cala.account_sets().create(new_set("batch-root")).await?;
     let left = cala.account_sets().create(new_set("batch-left")).await?;
@@ -632,7 +624,6 @@ async fn add_member_sets_batch_rejects_interacting_edges_atomically() -> anyhow:
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let set_a = cala.account_sets().create(new_set("batch-cycle-a")).await?;
     let set_b = cala.account_sets().create(new_set("batch-cycle-b")).await?;
@@ -683,7 +674,6 @@ async fn add_member_sets_batch_rejects_duplicate_paths_atomically() -> anyhow::R
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let root = cala
         .account_sets()
@@ -749,7 +739,6 @@ async fn add_member_sets_batch_rejects_account_conflict_from_interacting_edges(
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let root = cala
         .account_sets()
@@ -832,7 +821,6 @@ async fn add_member_sets_batch_rejects_a_duplicate_of_a_committed_edge() -> anyh
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let parent = cala
         .account_sets()
@@ -893,7 +881,6 @@ async fn add_member_sets_batch_rejects_a_path_through_committed_edges() -> anyho
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let root = cala
         .account_sets()
@@ -963,7 +950,7 @@ async fn add_member_sets_batch_attributes_depth_overflow_through_existing_edges(
             .name(format!("batch-existing-depth-{i}"))
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()?;
+            .build();
         sets.push(cala.account_sets().create(set).await?);
     }
     // Commit a 10-chain, then propose 8 more edges to exceed depth 16.
@@ -1023,7 +1010,6 @@ async fn add_member_sets_batch_matches_serial_add_member_set() -> anyhow::Result
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     // Two identical trees: one attached in a batch, one edge at a time.
     let batch_sets: Vec<_> = (0..5)
@@ -1097,7 +1083,7 @@ async fn add_member_sets_batch_rejects_dense_duplicate_paths_without_path_explos
             .name(format!("batch-dense-{i}"))
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()?;
+            .build();
         sets.push(cala.account_sets().create(set).await?);
     }
     let mut edges = Vec::new();
@@ -1141,7 +1127,7 @@ async fn add_member_sets_batch_rejects_depth_overflow_atomically() -> anyhow::Re
             .name(format!("batch-depth-{i}"))
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()?;
+            .build();
         sets.push(cala.account_sets().create(set).await?);
     }
     let edges: Vec<_> = sets
@@ -1196,7 +1182,6 @@ async fn add_member_sets_batch_rejects_journal_mismatch_atomically() -> anyhow::
             .journal_id(journal_id)
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let parent = cala
         .account_sets()
@@ -1266,7 +1251,6 @@ async fn add_member_sets_batch_rejects_member_history_atomically() -> anyhow::Re
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let parent = cala
         .account_sets()
@@ -1351,8 +1335,7 @@ async fn balances() -> anyhow::Result<()> {
                 .name("Recipient Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1364,8 +1347,7 @@ async fn balances() -> anyhow::Result<()> {
                 .name("Sender Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1377,8 +1359,7 @@ async fn balances() -> anyhow::Result<()> {
                 .name("Parent")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1484,16 +1465,17 @@ async fn account_set_update() -> anyhow::Result<()> {
         .name(initial_name.clone())
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()?;
+        .build();
 
     let mut account_set = cala.account_sets().create(new_account_set).await?;
     assert_eq!(initial_name, account_set.values().name);
 
     // update account set name and description
     let updated_name = Alphanumeric.sample_string(&mut rand::rng(), 32);
-    let mut builder = AccountSetUpdate::default();
-    builder.name(updated_name.clone()).build()?;
-    if account_set.update(builder).did_execute() {
+    let update = AccountSetUpdate::builder()
+        .name(updated_name.clone())
+        .build();
+    if account_set.update(update).did_execute() {
         cala.account_sets().persist(&mut account_set).await?;
     }
     assert_eq!(updated_name, account_set.values().name);
@@ -1521,16 +1503,14 @@ async fn members_pagination() -> anyhow::Result<()> {
         .name("SET ONE")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let set_one = cala.account_sets().create(set_one).await.unwrap();
     let set_two = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name("SET TWO")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let set_two = cala.account_sets().create(set_two).await.unwrap();
 
     let parent = NewAccountSet::builder()
@@ -1538,8 +1518,7 @@ async fn members_pagination() -> anyhow::Result<()> {
         .name("parent")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let parent = cala.account_sets().create(parent).await.unwrap();
 
     cala.account_sets()
@@ -1644,7 +1623,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                 .name("Parent Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
 
@@ -1658,7 +1637,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                     .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .external_id(format!("a-{random}"))
-                    .build()?,
+                    .build(),
             )
             .await?,
         cala.accounts()
@@ -1668,7 +1647,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                     .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .external_id(format!("z-{random}"))
-                    .build()?,
+                    .build(),
             )
             .await?,
         cala.accounts()
@@ -1677,7 +1656,7 @@ async fn list_members_by_external_id() -> anyhow::Result<()> {
                     .id(AccountId::new())
                     .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
                     .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
-                    .build()?,
+                    .build(),
             )
             .await?,
     ];
@@ -1764,8 +1743,7 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
                 .name("Target")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1796,8 +1774,7 @@ async fn add_member_errors_when_member_has_history() -> anyhow::Result<()> {
                 .id(uuid::Uuid::now_v7())
                 .name("Fresh")
                 .code(Alphanumeric.sample_string(&mut rand::rng(), 32))
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1846,8 +1823,7 @@ async fn remove_member_errors_when_member_has_history() -> anyhow::Result<()> {
                 .name("Target")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap(),
+                .build(),
         )
         .await
         .unwrap();
@@ -1916,7 +1892,6 @@ async fn double_membership_memory_path_parity() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     // gp <- {branch_a, branch_b}: the shared ancestor that turns a
     // second attach into a second path.
@@ -2059,7 +2034,6 @@ async fn double_membership_check_same_op_structure() -> anyhow::Result<()> {
             .journal_id(journal.id())
             .balance_rollup(BalanceRollup::Synchronous)
             .build()
-            .unwrap()
     };
     let gp = cala
         .account_sets()
@@ -2171,15 +2145,13 @@ async fn create_account(
     cala: &CalaLedger,
     external_id: Option<String>,
 ) -> anyhow::Result<AccountId> {
-    let mut builder = NewAccount::builder();
-    builder
+    let new_account = NewAccount::builder()
         .id(AccountId::new())
         .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
-        .code(Alphanumeric.sample_string(&mut rand::rng(), 8));
-    if let Some(external_id) = external_id {
-        builder.external_id(external_id);
-    }
-    Ok(cala.accounts().create(builder.build()?).await?.id())
+        .code(Alphanumeric.sample_string(&mut rand::rng(), 8))
+        .maybe_external_id(external_id)
+        .build();
+    Ok(cala.accounts().create(new_account).await?.id())
 }
 
 async fn create_account_set(
@@ -2187,16 +2159,14 @@ async fn create_account_set(
     journal_id: JournalId,
     external_id: Option<String>,
 ) -> anyhow::Result<AccountSetId> {
-    let mut builder = NewAccountSet::builder();
-    builder
+    let new_account_set = NewAccountSet::builder()
         .id(AccountSetId::new())
         .name(Alphanumeric.sample_string(&mut rand::rng(), 8))
         .journal_id(journal_id)
-        .balance_rollup(BalanceRollup::Synchronous);
-    if let Some(external_id) = external_id {
-        builder.external_id(external_id);
-    }
-    Ok(cala.account_sets().create(builder.build()?).await?.id())
+        .balance_rollup(BalanceRollup::Synchronous)
+        .maybe_external_id(external_id)
+        .build();
+    Ok(cala.account_sets().create(new_account_set).await?.id())
 }
 
 /// Following the continuation es-entity derives from `end_cursor`

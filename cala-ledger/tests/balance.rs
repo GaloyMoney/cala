@@ -204,7 +204,7 @@ async fn list_current_balances_for_account_set() -> anyhow::Result<()> {
                 .name("Recipient Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     cala.account_sets()
@@ -337,7 +337,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
                 .name("Inline Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = cala
@@ -348,7 +348,7 @@ async fn list_current_balances_for_eventually_consistent_account_set() -> anyhow
                 .name("EC Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::EventuallyConsistent)
-                .build()?,
+                .build(),
         )
         .await?;
     cala.account_sets()

@@ -443,8 +443,7 @@ mod limit_via_account_sets {
             .metadata(json!({ "closed": true }))
             .unwrap()
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let account_set = cala.account_sets().create(new_account_set).await?;
         velocity
             .attach_control_to_account_set(control.id(), account_set.id(), Params::new())
@@ -455,8 +454,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Recipient Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let open_account = cala.accounts().create(new_open_account).await.unwrap();
 
         let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
@@ -464,8 +462,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account = cala.accounts().create(new_account).await.unwrap();
         cala.account_sets()
             .add_member(account_set.id(), account.id())
@@ -518,8 +515,7 @@ mod limit_via_account_sets {
             .metadata(json!({ "closed": true }))
             .unwrap()
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
         let new_account_set_2 = NewAccountSet::builder()
             .id(uuid::Uuid::now_v7())
@@ -528,8 +524,7 @@ mod limit_via_account_sets {
             .metadata(json!({ "closed": true }))
             .unwrap()
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let res = cala
             .account_sets()
             .create_all(vec![new_account_set_1, new_account_set_2])
@@ -548,8 +543,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Recipient Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let open_account = cala.accounts().create(new_open_account).await.unwrap();
 
         let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
@@ -557,8 +551,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account_1 = cala.accounts().create(new_account_1).await.unwrap();
         cala.account_sets()
             .add_member(account_set_1.id(), account_1.id())
@@ -569,8 +562,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account_2 = cala.accounts().create(new_account_2).await.unwrap();
         cala.account_sets()
             .add_member(account_set_2.id(), account_2.id())
@@ -641,8 +633,7 @@ mod limit_via_account_sets {
             .name(format!("Test Account Set {code}"))
             .journal_id(journal_id)
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let mut account_set = cala.account_sets().create(new_account_set).await?;
         velocity
             .attach_control_to_account_set(control.id(), account_set.id(), Params::new())
@@ -653,8 +644,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Recipient Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let open_account = cala.accounts().create(new_open_account).await.unwrap();
 
         let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
@@ -662,8 +652,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account = cala.accounts().create(new_account).await.unwrap();
         cala.account_sets()
             .add_member(account_set.id(), account.id())
@@ -686,8 +675,9 @@ mod limit_via_account_sets {
         }
         assert!(account_res.is_ok());
 
-        let mut update = AccountSetUpdate::default();
-        update.metadata(json!({ "closed": true }))?;
+        let update = AccountSetUpdate::builder()
+            .metadata(json!({ "closed": true }))?
+            .build();
         if account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut account_set).await?;
         }
@@ -740,8 +730,7 @@ mod limit_via_account_sets {
             .name(format!("Test Parent Account Set {code}"))
             .journal_id(journal_id)
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let mut parent_account_set = cala
             .account_sets()
             .create(new_parent_account_set)
@@ -757,8 +746,7 @@ mod limit_via_account_sets {
             .name(format!("Test Child Account Set {code}"))
             .journal_id(journal_id)
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         let child_account_set = cala
             .account_sets()
             .create(new_child_account_set)
@@ -773,8 +761,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account_1 = cala.accounts().create(new_account_1).await.unwrap();
         cala.account_sets()
             .add_member(child_account_set.id(), account_1.id())
@@ -785,8 +772,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Sender Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let account_2 = cala.accounts().create(new_account_2).await.unwrap();
         cala.account_sets()
             .add_member(child_account_set.id(), account_2.id())
@@ -797,8 +783,7 @@ mod limit_via_account_sets {
             .id(uuid::Uuid::now_v7())
             .name(format!("Test Recipient Account {code}"))
             .code(code)
-            .build()
-            .unwrap();
+            .build();
         let open_account = cala.accounts().create(new_open_account).await.unwrap();
 
         // Execute transactions
@@ -836,8 +821,9 @@ mod limit_via_account_sets {
         ));
 
         // Add first closing date and re-check
-        let mut update = AccountSetUpdate::default();
-        update.metadata(json!({ "closedAsOf": "2024-12-31" }))?;
+        let update = AccountSetUpdate::builder()
+            .metadata(json!({ "closedAsOf": "2024-12-31" }))?
+            .build();
         if parent_account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut parent_account_set).await?;
         }
@@ -884,8 +870,9 @@ mod limit_via_account_sets {
         ));
 
         // Update closing date and re-check
-        let mut update = AccountSetUpdate::default();
-        update.metadata(json!({ "closedAsOf": "2025-01-31" }))?;
+        let update = AccountSetUpdate::builder()
+            .metadata(json!({ "closedAsOf": "2025-01-31" }))?
+            .build();
         if parent_account_set.update(update).did_execute() {
             cala.account_sets().persist(&mut parent_account_set).await?;
         }

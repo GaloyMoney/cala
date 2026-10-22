@@ -41,7 +41,7 @@ obix = { workspace = true }
 
 cached = { workspace = true }
 chrono = { workspace = true }
-derive_builder = { workspace = true }
+bon = { workspace = true }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 regex = { workspace = true }

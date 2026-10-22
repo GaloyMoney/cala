@@ -115,8 +115,7 @@ pub async fn init(cala: &CalaLedger) -> anyhow::Result<()> {
                 .unwrap(),
         )
         .entries(entries)
-        .build()
-        .unwrap();
+        .build();
     match cala.tx_templates().create(template).await {
         Err(cala_ledger::errlanes::Fail::Rejected(CreateTxTemplateRejection::DuplicateCode(_))) => {
             Ok(())

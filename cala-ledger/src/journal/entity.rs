@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
@@ -19,8 +18,7 @@ pub enum JournalEvent {
     },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct Journal {
     pub id: JournalId,
     values: JournalValues,
@@ -44,15 +42,12 @@ impl Journal {
         self.values.config.enable_effective_balances
     }
 
-    pub fn update(&mut self, builder: impl Into<JournalUpdate>) -> es_entity::Idempotent<()> {
-        let JournalUpdateValues {
+    pub fn update(&mut self, update: impl Into<JournalUpdate>) -> es_entity::Idempotent<()> {
+        let JournalUpdate {
             name,
             status,
             description,
-        } = builder
-            .into()
-            .build()
-            .expect("JournalUpdateValues always exist");
+        } = update.into();
         let mut updated_fields = Vec::new();
 
         if let Some(name) = name {
@@ -101,80 +96,73 @@ impl Journal {
     }
 }
 
-#[derive(Builder, Debug, Default)]
-#[builder(name = "JournalUpdate", default)]
-pub struct JournalUpdateValues {
-    #[builder(setter(into, strip_option))]
+#[derive(Debug, Default, bon::Builder)]
+pub struct JournalUpdate {
+    #[builder(into)]
     pub name: Option<String>,
-    #[builder(setter(into, strip_option))]
+    #[builder(into)]
     pub status: Option<Status>,
-    #[builder(setter(into, strip_option))]
+    #[builder(into)]
     pub description: Option<String>,
 }
 
 impl From<(JournalValues, Vec<String>)> for JournalUpdate {
     fn from((values, fields): (JournalValues, Vec<String>)) -> Self {
-        let mut builder = JournalUpdate::default();
+        let mut update = JournalUpdate::default();
 
         for field in fields {
             match field.as_str() {
                 "name" => {
-                    builder.name(values.name.clone());
+                    update.name = Some(values.name.clone());
                 }
                 "status" => {
-                    builder.status(values.status);
+                    update.status = Some(values.status);
                 }
                 "description" => {
                     if let Some(ref desc) = values.description {
-                        builder.description(desc);
+                        update.description = Some(desc.clone());
                     }
                 }
                 _ => unreachable!("Unknown field: {}", field),
             }
         }
-        builder
+        update
     }
 }
 
 impl TryFromEvents<JournalEvent> for Journal {
     fn try_from_events(events: EntityEvents<JournalEvent>) -> Result<Self, EntityHydrationError> {
-        let mut builder = JournalBuilder::default();
+        let mut hydrator = Journal::hydrator();
         for event in events.iter_all() {
             match event {
                 JournalEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
                 JournalEvent::Updated { values, .. } => {
-                    builder = builder.values(values.clone());
+                    hydrator.values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
 /// Representation of a new ledger journal entity
 /// with required/optional properties and a builder.
-#[derive(Debug, Builder)]
+#[derive(Debug, bon::Builder)]
 pub struct NewJournal {
-    #[builder(setter(into))]
+    #[builder(into)]
     pub id: JournalId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) name: String,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) code: Option<String>,
-    #[builder(setter(into), default)]
+    #[builder(into, default)]
     status: Status,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     description: Option<String>,
     #[builder(default)]
     enable_effective_balance: bool,
-}
-
-impl NewJournal {
-    pub fn builder() -> NewJournalBuilder {
-        NewJournalBuilder::default()
-    }
 }
 
 impl IntoEvents<JournalEvent> for NewJournal {
@@ -212,16 +200,9 @@ mod tests {
         let new_journal = NewJournal::builder()
             .id(JournalId::new())
             .name("name")
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(new_journal.name, "name");
         assert_eq!(new_journal.status, Status::Active);
         assert_eq!(new_journal.description, None);
-    }
-
-    #[test]
-    fn fails_when_mandatory_fields_are_missing() {
-        let new_account = NewJournal::builder().build();
-        assert!(new_account.is_err());
     }
 }

@@ -58,7 +58,6 @@ fn new_set(journal_id: JournalId, name: &str) -> NewAccountSet {
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::Synchronous)
         .build()
-        .unwrap()
 }
 
 fn new_ec_set(journal_id: JournalId, name: &str) -> NewAccountSet {
@@ -68,7 +67,6 @@ fn new_ec_set(journal_id: JournalId, name: &str) -> NewAccountSet {
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::EventuallyConsistent)
         .build()
-        .unwrap()
 }
 
 fn new_account_in(set_id: AccountSetId) -> NewAccount {
@@ -79,7 +77,6 @@ fn new_account_in(set_id: AccountSetId) -> NewAccount {
         .code(code)
         .initial_account_set(set_id)
         .build()
-        .unwrap()
 }
 
 /// Count the direct membership rows for `(set, account)`.

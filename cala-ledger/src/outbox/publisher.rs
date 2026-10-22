@@ -15,8 +15,7 @@ impl OutboxPublisher {
             .clock(clock.clone())
             .event_buffer_size(50_000)
             .event_cache_size(10_000)
-            .build()
-            .expect("MailboxConfig");
+            .build();
         let outbox = ObixOutbox::init(pool, config).await?;
         Ok(Self { inner: outbox })
     }

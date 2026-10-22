@@ -209,6 +209,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "bon"
+version = "3.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a602c73c7b0148ec6d12af6fd5cc7a46e2eacc8878271a999abac56eed12f561"
+dependencies = [
+ "bon-macros",
+ "rustversion",
+]
+
+[[package]]
+name = "bon-macros"
+version = "3.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6dee98b0db6a962de883bf5d20362dee4d7ca0d12fe39a7c6c73c844e1cd7c1f"
+dependencies = [
+ "darling 0.23.0",
+ "ident_case",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "rustversion",
+ "syn 2.0.117",
+]
+
+[[package]]
 name = "borsh"
 version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -316,11 +341,11 @@ name = "cala-ledger"
 version = "0.32.8-dev"
 dependencies = [
  "anyhow",
+ "bon",
  "cached",
  "cala-cel-interpreter",
  "cala-ledger-core-types",
  "chrono",
- "derive_builder",
  "es-entity",
  "futures",
  "job",
@@ -347,7 +372,6 @@ version = "0.32.8-dev"
 dependencies = [
  "cala-cel-interpreter",
  "chrono",
- "derive_builder",
  "es-entity",
  "rust_decimal",
  "rusty-money",
@@ -775,37 +799,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "derive_builder"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "507dfb09ea8b7fa618fcf76e953f4f5e192547945816d5358edffe39f6f94947"
-dependencies = [
- "derive_builder_macro",
-]
-
-[[package]]
-name = "derive_builder_core"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8"
-dependencies = [
- "darling 0.20.11",
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "derive_builder_macro"
-version = "0.20.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
-dependencies = [
- "derive_builder_core",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -857,9 +850,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "errlanes"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25dfdae2f7893b3ec4102986fd48205cf98eb25fb2458f42df3042e1a50e6fb6"
+checksum = "6f2d5680bfa2d1007b8023dae0d14b821bfd2edba0164b7dbddf209c984365cc"
 dependencies = [
  "errlanes-derive",
  "serde_json",
@@ -869,9 +862,9 @@ dependencies = [
 
 [[package]]
 name = "errlanes-derive"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65eac962b72db642e8d06b9489a88a1270d5b83c0d464cc08a0c4c15ea7e907f"
+checksum = "34a2bd7dc97d0b8f78bdf6e27dfd38eb7f222ead4109ee0ac2171d9f5bcacd01"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -883,13 +876,12 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f43c3a3d950c8caca512e3912869ec953bac81bd182648ac449976997d27eb28"
+checksum = "6ad45d42c5bfc77b1e22f995b2cbd931bcfdc07e77008f55923978f6c79df94e"
 dependencies = [
  "async-stream",
  "chrono",
- "derive_builder",
  "errlanes",
  "es-entity-macros",
  "futures-core",
@@ -911,9 +903,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.19.2"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8daa0472d972d677db5845f19188c6ad140a1de882a4a6493f2447b1cd117b77"
+checksum = "3233edc9906cbeecadaed6f0c5bde2be46f57010af00ea005142da37b8bb57dd"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1432,13 +1424,13 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.18.3"
+version = "0.18.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccf9f443618874fe8d04e9f461ded09549d8757c49c5e01db24f493e80ea8105"
+checksum = "dfc1bda5a3afb3e01efdcd260ebb82990ecfb8176244f15b03c4176bba34801c"
 dependencies = [
  "async-trait",
+ "bon",
  "chrono",
- "derive_builder",
  "es-entity",
  "futures",
  "rand 0.10.3",
@@ -1637,13 +1629,13 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7b15bc3738e83df0e3b108ee6210392c1e57c24a327e0cae797c726c62401f0"
+checksum = "dc0d2082bbad7a3ee648902bb07a0ed86f0e128689dd6f848fa85561bbc3527c"
 dependencies = [
  "async-trait",
+ "bon",
  "chrono",
- "derive_builder",
  "es-entity",
  "futures",
  "im",
@@ -1659,9 +1651,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.14.3"
+version = "0.14.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "468e9fb6e7f970907220b737e993fc27e18aca9017013edcbfb57f230a78a532"
+checksum = "edba34aa7f28936e54726c6314f57d85dfb7d3793dfb0961e65b9c669bcac9ba"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -3319,7 +3311,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

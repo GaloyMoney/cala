@@ -30,7 +30,6 @@ async fn duplicates_reject_but_missing_rows_and_corrupt_events_keep_distinct_con
             .name("lanes")
             .code("lanes-code")
             .build()
-            .unwrap()
     };
     cala.accounts().create(new_account()).await?;
     assert!(matches!(cala.accounts().create(new_account()).await,
@@ -40,7 +39,7 @@ async fn duplicates_reject_but_missing_rows_and_corrupt_events_keep_distinct_con
         .id(AccountId::new())
         .name("another")
         .code("lanes-code")
-        .build()?;
+        .build();
     assert!(matches!(cala.accounts().create(duplicate_code).await,
         Err(Fail::Rejected(CreateAccountRejection::CodeAlreadyExists(AccountCodeAlreadyExists(Some(code))))) if code == "lanes-code"));
 
@@ -127,7 +126,6 @@ async fn account_set_creation_rejects_at_the_backing_insert() -> anyhow::Result<
             .balance_rollup(cala_ledger::primitives::BalanceRollup::Synchronous)
             .journal_id(journal.id())
             .build()
-            .unwrap()
     };
     cala.account_sets().create(set()).await?;
     assert!(matches!(cala.account_sets().create(set()).await,
@@ -142,7 +140,7 @@ async fn account_set_creation_rejects_at_the_backing_insert() -> anyhow::Result<
                 .id(plain_id)
                 .name("plain")
                 .code("plain")
-                .build()?,
+                .build(),
         )
         .await?;
     let set = NewAccountSet::builder()
@@ -150,7 +148,7 @@ async fn account_set_creation_rejects_at_the_backing_insert() -> anyhow::Result<
         .name("set")
         .balance_rollup(cala_ledger::primitives::BalanceRollup::Synchronous)
         .journal_id(journal.id())
-        .build()?;
+        .build();
     assert!(matches!(cala.account_sets().create(set).await,
         Err(Fail::Rejected(CreateAccountSetRejection::BackingDuplicateId(conflict))) if conflict == AccountId::from(plain_id)));
 
@@ -161,7 +159,7 @@ async fn account_set_creation_rejects_at_the_backing_insert() -> anyhow::Result<
                 .id(AccountId::new())
                 .name("code collision")
                 .code(code_id.to_string())
-                .build()?,
+                .build(),
         )
         .await?;
     let set = NewAccountSet::builder()
@@ -169,7 +167,7 @@ async fn account_set_creation_rejects_at_the_backing_insert() -> anyhow::Result<
         .name("set")
         .balance_rollup(cala_ledger::primitives::BalanceRollup::Synchronous)
         .journal_id(journal.id())
-        .build()?;
+        .build();
     assert!(matches!(cala.account_sets().create(set).await,
         Err(Fail::Rejected(CreateAccountSetRejection::BackingCodeAlreadyExists(Some(code)))) if code == code_id.to_string()));
     Ok(())

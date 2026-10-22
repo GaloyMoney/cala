@@ -1,5 +1,4 @@
-use cel_interpreter::CelExpression;
-use derive_builder::Builder;
+use cel_interpreter::{CelExpression, CelParseRejection};
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
@@ -14,8 +13,7 @@ pub enum VelocityControlEvent {
     Initialized { values: VelocityControlValues },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct VelocityControl {
     pub id: VelocityControlId,
     values: VelocityControlValues,
@@ -46,37 +44,46 @@ impl TryFromEvents<VelocityControlEvent> for VelocityControl {
     fn try_from_events(
         events: EntityEvents<VelocityControlEvent>,
     ) -> Result<Self, EntityHydrationError> {
-        let mut builder = VelocityControlBuilder::default();
+        let mut hydrator = VelocityControl::hydrator();
         for event in events.iter_all() {
             match event {
                 VelocityControlEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
 /// Representation of a ***new*** velocity control entity with required/optional properties and a builder.
-#[derive(Builder, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Debug)]
 pub struct NewVelocityControl {
-    #[builder(setter(into))]
     pub(super) id: VelocityControlId,
-    #[builder(setter(into))]
     pub(super) name: String,
-    #[builder(setter(into))]
     description: String,
-    #[builder(setter(into), default)]
     enforcement: NewVelocityEnforcement,
-    #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
 }
 
+#[bon::bon]
 impl NewVelocityControl {
-    pub fn builder() -> NewVelocityControlBuilder {
-        NewVelocityControlBuilder::default()
+    #[builder]
+    pub fn new(
+        #[builder(into)] id: VelocityControlId,
+        #[builder(into)] name: String,
+        #[builder(into)] description: String,
+        #[builder(into, default)] enforcement: NewVelocityEnforcement,
+        #[builder(into)] condition: Option<String>,
+    ) -> Result<Self, CelParseRejection> {
+        validate_optional_expression(&condition)?;
+        Ok(Self {
+            id,
+            name,
+            description,
+            enforcement,
+            condition,
+        })
     }
 }
 
@@ -104,28 +111,15 @@ impl IntoEvents<VelocityControlEvent> for NewVelocityControl {
     }
 }
 
-impl NewVelocityControlBuilder {
-    fn validate(&self) -> Result<(), String> {
-        validate_optional_expression(&self.condition)?;
-        Ok(())
-    }
-}
-
-fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
-    if let Some(Some(expr)) = expr.as_ref() {
-        CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
+fn validate_optional_expression(expr: &Option<String>) -> Result<(), CelParseRejection> {
+    if let Some(expr) = expr {
+        CelExpression::try_from(expr.as_str())?;
     }
     Ok(())
 }
 
-#[derive(Builder, Debug, Clone, Default)]
+#[derive(bon::Builder, Debug, Clone, Default)]
 pub struct NewVelocityEnforcement {
-    #[builder(setter(into), default)]
+    #[builder(into, default)]
     pub(super) action: VelocityEnforcementAction,
-}
-
-impl NewVelocityEnforcement {
-    pub fn builder() -> NewVelocityEnforcementBuilder {
-        NewVelocityEnforcementBuilder::default()
-    }
 }

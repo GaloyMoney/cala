@@ -63,7 +63,7 @@ async fn setup(pool: sqlx::PgPool, journal: NewJournal) -> anyhow::Result<(Fixtu
         .id(uuid::Uuid::now_v7())
         .name(format!("Streaming rollup sender {sender_code}"))
         .code(sender_code)
-        .build()?;
+        .build();
     let sender = cala.accounts().create(sender).await?;
 
     let mut members = Vec::with_capacity(N_MEMBERS);
@@ -73,7 +73,7 @@ async fn setup(pool: sqlx::PgPool, journal: NewJournal) -> anyhow::Result<(Fixtu
             .id(uuid::Uuid::now_v7())
             .name(format!("Streaming rollup member {i} {code}"))
             .code(code)
-            .build()?;
+            .build();
         members.push(cala.accounts().create(acc).await?);
     }
 
@@ -105,7 +105,7 @@ async fn create_ec_set(
         .name(name)
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::EventuallyConsistent)
-        .build()?;
+        .build();
     Ok(cala.account_sets().create(set).await?)
 }
 
@@ -118,7 +118,7 @@ async fn create_ec_plain_account(cala: &CalaLedger, name: &str) -> anyhow::Resul
         .name(format!("{name} {code}"))
         .code(code)
         .balance_rollup(BalanceRollup::EventuallyConsistent)
-        .build()?;
+        .build();
     Ok(cala.accounts().create(account).await?)
 }
 
@@ -309,7 +309,7 @@ async fn streaming_rollup_matches_inline_set_history() -> anyhow::Result<()> {
                 .name("inline reference set")
                 .journal_id(fixture.journal_id)
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "EC vs inline set").await?;
@@ -547,7 +547,7 @@ async fn rejects_direct_entry_to_account_set() -> anyhow::Result<()> {
                 .name("guard sync set")
                 .journal_id(fixture.journal_id)
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
 
@@ -991,7 +991,7 @@ async fn streaming_rollup_folds_backdated_batch_like_sequential() -> anyhow::Res
                 .name("backdating inline reference set")
                 .journal_id(fixture.journal_id)
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "backdating EC set").await?;
@@ -1225,7 +1225,7 @@ async fn streaming_rollup_matches_inline_set_effective_history_with_backdating(
                 .name("inline ancestor")
                 .journal_id(fixture.journal_id)
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = create_ec_set(&fixture.cala, fixture.journal_id, "EC ancestor").await?;

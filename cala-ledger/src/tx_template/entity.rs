@@ -1,10 +1,9 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
 pub use crate::param::definition::*;
 pub use cala_types::{primitives::TxTemplateId, tx_template::*};
-use cel_interpreter::CelExpression;
+use cel_interpreter::{CelExpression, CelParseRejection};
 use es_entity::*;
 
 #[derive(EsEvent, Debug, Serialize, Deserialize)]
@@ -23,8 +22,7 @@ impl TxTemplateEvent {
     }
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct TxTemplate {
     pub id: TxTemplateId,
     values: TxTemplateValues,
@@ -61,38 +59,33 @@ impl TryFromEvents<TxTemplateEvent> for TxTemplate {
     fn try_from_events(
         events: EntityEvents<TxTemplateEvent>,
     ) -> Result<Self, EntityHydrationError> {
-        let mut builder = TxTemplateBuilder::default();
+        let mut hydrator = TxTemplate::hydrator();
         for event in events.iter_all() {
             match event {
                 TxTemplateEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
-#[derive(Builder, Debug)]
+#[derive(bon::Builder, Debug)]
 pub struct NewTxTemplate {
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) id: TxTemplateId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) code: String,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) description: Option<String>,
-    #[builder(setter(strip_option), default)]
     pub(super) params: Option<Vec<NewParamDefinition>>,
     pub(super) transaction: NewTxTemplateTransaction,
     pub(super) entries: Vec<NewTxTemplateEntry>,
-    #[builder(setter(custom), default)]
+    #[builder(with = |metadata: impl serde::Serialize| -> Result<_, serde_json::Error> {
+        serde_json::to_value(metadata)
+    })]
     pub(super) metadata: Option<serde_json::Value>,
-}
-
-impl NewTxTemplate {
-    pub fn builder() -> NewTxTemplateBuilder {
-        NewTxTemplateBuilder::default()
-    }
 }
 
 impl IntoEvents<TxTemplateEvent> for NewTxTemplate {
@@ -122,75 +115,54 @@ impl IntoEvents<TxTemplateEvent> for NewTxTemplate {
     }
 }
 
-impl NewTxTemplateBuilder {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
-    }
-}
-
-#[derive(Clone, Debug, Builder)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Clone, Debug)]
 pub struct NewTxTemplateEntry {
-    #[builder(setter(into))]
     entry_type: String,
-    #[builder(setter(into))]
     account_id: String,
-    #[builder(setter(into))]
     layer: String,
-    #[builder(setter(into))]
     direction: String,
-    #[builder(setter(into))]
     units: String,
-    #[builder(setter(into))]
     currency: String,
-    #[builder(setter(strip_option, into), default)]
     description: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     metadata: Option<String>,
 }
 
+#[bon::bon]
 impl NewTxTemplateEntry {
-    pub fn builder() -> NewTxTemplateEntryBuilder {
-        NewTxTemplateEntryBuilder::default()
+    #[builder]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        #[builder(into)] entry_type: String,
+        #[builder(into)] account_id: String,
+        #[builder(into)] layer: String,
+        #[builder(into)] direction: String,
+        #[builder(into)] units: String,
+        #[builder(into)] currency: String,
+        #[builder(into)] description: Option<String>,
+        #[builder(into)] metadata: Option<String>,
+    ) -> Result<Self, CelParseRejection> {
+        let entry = Self {
+            entry_type,
+            account_id,
+            layer,
+            direction,
+            units,
+            currency,
+            description,
+            metadata,
+        };
+        entry.validate()?;
+        Ok(entry)
     }
-}
-impl NewTxTemplateEntryBuilder {
+
     #[instrument(name = "tx_template_entry.validate", skip(self), err(level = tracing::Level::WARN))]
-    fn validate(&self) -> Result<(), String> {
-        validate_expression(
-            self.entry_type
-                .as_ref()
-                .expect("Mandatory field 'entry_type' not set"),
-        )?;
-        validate_expression(
-            self.account_id
-                .as_ref()
-                .expect("Mandatory field 'account_id' not set"),
-        )?;
-        validate_expression(
-            self.layer
-                .as_ref()
-                .expect("Mandatory field 'layer' not set"),
-        )?;
-        validate_expression(
-            self.direction
-                .as_ref()
-                .expect("Mandatory field 'direction' not set"),
-        )?;
-        validate_expression(
-            self.units
-                .as_ref()
-                .expect("Mandatory field 'units' not set"),
-        )?;
-        validate_expression(
-            self.currency
-                .as_ref()
-                .expect("Mandatory field 'currency' not set"),
-        )?;
+    fn validate(&self) -> Result<(), CelParseRejection> {
+        validate_expression(&self.entry_type)?;
+        validate_expression(&self.account_id)?;
+        validate_expression(&self.layer)?;
+        validate_expression(&self.direction)?;
+        validate_expression(&self.units)?;
+        validate_expression(&self.currency)?;
         validate_optional_expression(&self.description)?;
         validate_optional_expression(&self.metadata)
     }
@@ -218,42 +190,43 @@ impl From<NewTxTemplateEntry> for cala_types::tx_template::TxTemplateEntry {
 }
 
 /// Contains the transaction-level details needed to create a `Transaction`.
-#[derive(Clone, Debug, Serialize, Builder, Deserialize)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NewTxTemplateTransaction {
-    #[builder(setter(into))]
     effective: String,
-    #[builder(setter(into))]
     journal_id: String,
-    #[builder(setter(strip_option, into), default)]
     correlation_id: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     external_id: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     description: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     metadata: Option<String>,
 }
 
+#[bon::bon]
 impl NewTxTemplateTransaction {
-    pub fn builder() -> NewTxTemplateTransactionBuilder {
-        NewTxTemplateTransactionBuilder::default()
+    #[builder]
+    pub fn new(
+        #[builder(into)] effective: String,
+        #[builder(into)] journal_id: String,
+        #[builder(into)] correlation_id: Option<String>,
+        #[builder(into)] external_id: Option<String>,
+        #[builder(into)] description: Option<String>,
+        #[builder(into)] metadata: Option<String>,
+    ) -> Result<Self, CelParseRejection> {
+        let transaction = Self {
+            effective,
+            journal_id,
+            correlation_id,
+            external_id,
+            description,
+            metadata,
+        };
+        transaction.validate()?;
+        Ok(transaction)
     }
-}
 
-impl NewTxTemplateTransactionBuilder {
     #[instrument(name = "tx_template_transaction.validate", skip(self), err(level = tracing::Level::WARN))]
-    fn validate(&self) -> Result<(), String> {
-        validate_expression(
-            self.effective
-                .as_ref()
-                .expect("Mandatory field 'effective' not set"),
-        )?;
-        validate_expression(
-            self.journal_id
-                .as_ref()
-                .expect("Mandatory field 'journal_id' not set"),
-        )?;
+    fn validate(&self) -> Result<(), CelParseRejection> {
+        validate_expression(&self.effective)?;
+        validate_expression(&self.journal_id)?;
         validate_optional_expression(&self.correlation_id)?;
         validate_optional_expression(&self.external_id)?;
         validate_optional_expression(&self.description)?;
@@ -288,15 +261,15 @@ impl From<NewTxTemplateTransaction> for cala_types::tx_template::TxTemplateTrans
 }
 
 #[instrument(name = "tx_template.validate_expression", skip(expr), fields(expression = %expr), err(level = tracing::Level::WARN))]
-fn validate_expression(expr: &str) -> Result<(), String> {
-    CelExpression::try_from(expr).map_err(|e| e.to_string())?;
+fn validate_expression(expr: &str) -> Result<(), CelParseRejection> {
+    CelExpression::try_from(expr)?;
     Ok(())
 }
 
 #[instrument(name = "tx_template.validate_optional_expression", skip(expr), err(level = tracing::Level::WARN))]
-fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
-    if let Some(Some(expr)) = expr.as_ref() {
-        CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
+fn validate_optional_expression(expr: &Option<String>) -> Result<(), CelParseRejection> {
+    if let Some(expr) = expr {
+        CelExpression::try_from(expr.as_str())?;
     }
     Ok(())
 }
@@ -330,14 +303,26 @@ mod tests {
                     .unwrap(),
             )
             .entries(entries)
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(new_tx_template.description, None);
     }
 
     #[test]
-    fn fails_when_mandatory_fields_are_missing() {
-        let new_tx_template = NewTxTemplate::builder().build();
-        assert!(new_tx_template.is_err());
+    fn rejects_invalid_expressions() {
+        let entry = NewTxTemplateEntry::builder()
+            .entry_type("'TEST_DR'")
+            .account_id("param.recipient")
+            .layer("'Settled'")
+            .direction("'Settled'")
+            .units("1290 +")
+            .currency("'BTC'")
+            .build();
+        assert!(matches!(entry, Err(CelParseRejection::ParseError(_))));
+
+        let transaction = NewTxTemplateTransaction::builder()
+            .effective("date('2022-11-01')")
+            .journal_id("uuid(")
+            .build();
+        assert!(matches!(transaction, Err(CelParseRejection::ParseError(_))));
     }
 }

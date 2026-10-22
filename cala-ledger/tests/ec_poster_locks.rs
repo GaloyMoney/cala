@@ -40,7 +40,6 @@ fn new_account(name: &str, rollup: BalanceRollup) -> NewAccount {
         .code(code)
         .balance_rollup(rollup)
         .build()
-        .unwrap()
 }
 
 fn new_set(journal_id: JournalId, name: &str, rollup: BalanceRollup) -> NewAccountSet {
@@ -51,7 +50,6 @@ fn new_set(journal_id: JournalId, name: &str, rollup: BalanceRollup) -> NewAccou
         .journal_id(journal_id)
         .balance_rollup(rollup)
         .build()
-        .unwrap()
 }
 
 /// Count all advisory locks in the membership-guard namespace (classid

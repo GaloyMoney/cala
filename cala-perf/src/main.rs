@@ -203,8 +203,7 @@ async fn transactions_with_contention(
                 .name(format!("Contention Set {}", i))
                 .journal_id(journal_id)
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()
-                .unwrap();
+                .build();
             let created_set = cala.account_sets().create(account_set).await?;
             account_sets.push(created_set);
             println!("  ✓ Account set {} created", i);

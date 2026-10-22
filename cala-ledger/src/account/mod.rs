@@ -400,6 +400,5 @@ impl BackingAccount {
             .eventually_consistent(self.eventually_consistent)
             .velocity_context_values(self.context)
             .build()
-            .expect("backing account fields are complete")
     }
 }
