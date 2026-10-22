@@ -59,7 +59,7 @@ pub use account_balance::*;
 pub use cursor::*;
 #[cfg(feature = "fuzz")]
 pub use effective::fuzz_recalculate;
-use effective::*;
+pub use effective::*;
 use error::BalanceNotFound;
 use repo::*;
 pub(crate) use snapshot::*;
