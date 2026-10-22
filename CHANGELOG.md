@@ -1,3 +1,11 @@
+# [cala release v0.33.0](https://github.com/GaloyMoney/cala/releases/tag/0.33.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Es-entity 0.20.0, job 0.18.5, obix 0.14.4; bon replaces derive_builder (#912)
+
 # [cala release v0.32.7](https://github.com/GaloyMoney/cala/releases/tag/0.32.7)
 
 
