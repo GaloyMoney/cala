@@ -1,51 +1,66 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 pub use cala_types::param::*;
-use cel_interpreter::CelExpression;
+use cel_interpreter::{CelConversionRejection, CelExpression, CelParseRejection};
+use es_entity::errlanes;
 
-#[derive(Clone, Debug, Deserialize, Serialize, Builder)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Debug, errlanes::Rejection)]
+pub enum InvalidParamDefinition {
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Parse(CelParseRejection),
+    #[error("{0}")]
+    #[rejection(delegate, from)]
+    Evaluation(CelConversionRejection),
+    #[error("Default expression does not match parameter type {specified:?}: {source}")]
+    #[rejection(code = "CALA_PARAM_DEFAULT_TYPE_MISMATCH")]
+    DefaultTypeMismatch {
+        specified: ParamDataType,
+        #[source]
+        source: ParamValueRejection,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct NewParamDefinition {
-    #[builder(setter(into))]
     pub(crate) name: String,
     pub(crate) r#type: ParamDataType,
-    #[builder(setter(strip_option, name = "default_expr", into), default)]
     pub(crate) default: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     pub(crate) description: Option<String>,
 }
 
+#[bon::bon]
 impl NewParamDefinition {
-    pub fn builder() -> NewParamDefinitionBuilder {
-        NewParamDefinitionBuilder::default()
+    #[builder]
+    pub fn new(
+        #[builder(into)] name: String,
+        r#type: ParamDataType,
+        #[builder(into, name = default_expr)] default: Option<String>,
+        #[builder(into)] description: Option<String>,
+    ) -> Result<Self, InvalidParamDefinition> {
+        use es_entity::clock::Clock;
+        if let Some(expr) = default.as_ref() {
+            let expr = CelExpression::try_from(expr.as_str())?;
+            let value = expr.evaluate(&crate::cel_context::initialize(Clock::handle().clone()))?;
+            r#type.coerce_value(value).map_err(|source| {
+                InvalidParamDefinition::DefaultTypeMismatch {
+                    specified: r#type.clone(),
+                    source,
+                }
+            })?;
+        }
+        Ok(Self {
+            name,
+            r#type,
+            default,
+            description,
+        })
     }
 
     pub fn default_expr(&self) -> Option<CelExpression> {
         self.default
             .as_ref()
             .map(|v| v.parse().expect("Couldn't create default_expr"))
-    }
-}
-
-impl NewParamDefinitionBuilder {
-    fn validate(&self) -> Result<(), String> {
-        use es_entity::clock::Clock;
-        if let Some(Some(expr)) = self.default.as_ref() {
-            let expr = CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
-            let specified_type = self.r#type.as_ref().unwrap();
-            specified_type
-                .coerce_value(
-                    expr.evaluate(&crate::cel_context::initialize(Clock::handle().clone()))
-                        .map_err(|e| format!("{e}"))?,
-                )
-                .map_err(|e| {
-                    format!(
-                        "Default expression does not match parameter type {specified_type:?}: {e}"
-                    )
-                })?;
-        }
-        Ok(())
     }
 }
 
@@ -84,5 +99,21 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!(definition.name, "effective");
+    }
+
+    #[test]
+    fn rejects_default_not_matching_type() {
+        let definition = NewParamDefinition::builder()
+            .name("amount")
+            .r#type(ParamDataType::Decimal)
+            .default_expr("'not a decimal'")
+            .build();
+        assert!(matches!(
+            definition,
+            Err(InvalidParamDefinition::DefaultTypeMismatch {
+                specified: ParamDataType::Decimal,
+                ..
+            })
+        ));
     }
 }

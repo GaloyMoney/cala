@@ -1,36 +1,68 @@
-use derive_builder::Builder;
 use es_entity::clock::{Clock, ClockHandle};
+use es_entity::errlanes;
 
-#[derive(Builder, Clone, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Debug, errlanes::Rejection)]
+pub enum InvalidCalaLedgerConfig {
+    #[rejection(code = "CALA_LEDGER_CONFIG_NO_CONNECTION")]
+    #[error("One of pg_con or pool must be set")]
+    NoConnection,
+    #[rejection(code = "CALA_LEDGER_CONFIG_BOTH_CONNECTIONS")]
+    #[error("Only one of pg_con or pool must be set")]
+    BothConnections,
+}
+
+#[derive(Clone, Debug)]
 pub struct CalaLedgerConfig {
-    #[builder(setter(into, strip_option), default)]
     pub(super) pg_con: Option<String>,
-    #[builder(setter(into, strip_option), default)]
     pub(super) max_connections: Option<u32>,
-    #[builder(default)]
     pub(super) exec_migrations: bool,
-    #[builder(setter(into, strip_option), default)]
     pub(super) pool: Option<sqlx::PgPool>,
-    #[builder(setter(into), default = "Clock::handle().clone()")]
     pub(super) clock: ClockHandle,
 }
 
+#[bon::bon]
 impl CalaLedgerConfig {
-    pub fn builder() -> CalaLedgerConfigBuilder {
-        CalaLedgerConfigBuilder::default()
+    #[builder]
+    pub fn new(
+        #[builder(into)] pg_con: Option<String>,
+        #[builder(into)] max_connections: Option<u32>,
+        #[builder(default)] exec_migrations: bool,
+        #[builder(into)] pool: Option<sqlx::PgPool>,
+        #[builder(into, default = Clock::handle().clone())] clock: ClockHandle,
+    ) -> Result<Self, InvalidCalaLedgerConfig> {
+        match (pg_con.as_ref(), pool.as_ref()) {
+            (None, None) => return Err(InvalidCalaLedgerConfig::NoConnection),
+            (Some(_), Some(_)) => return Err(InvalidCalaLedgerConfig::BothConnections),
+            _ => (),
+        }
+        Ok(Self {
+            pg_con,
+            max_connections,
+            exec_migrations,
+            pool,
+            clock,
+        })
     }
 }
 
-impl CalaLedgerConfigBuilder {
-    fn validate(&self) -> Result<(), String> {
-        match (self.pg_con.as_ref(), self.pool.as_ref()) {
-            (None, None) | (Some(None), None) | (None, Some(None)) => {
-                return Err("One of pg_con or pool must be set".to_string())
-            }
-            (Some(_), Some(_)) => return Err("Only one of pg_con or pool must be set".to_string()),
-            _ => (),
-        }
-        Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn requires_exactly_one_connection_source() {
+        assert!(matches!(
+            CalaLedgerConfig::builder().build(),
+            Err(InvalidCalaLedgerConfig::NoConnection)
+        ));
+
+        let pool = sqlx::PgPool::connect_lazy("postgres://localhost/unused").unwrap();
+        assert!(matches!(
+            CalaLedgerConfig::builder()
+                .pg_con("postgres://localhost/unused")
+                .pool(pool)
+                .build(),
+            Err(InvalidCalaLedgerConfig::BothConnections)
+        ));
     }
 }

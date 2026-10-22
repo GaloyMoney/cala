@@ -83,7 +83,6 @@ fn new_set(journal_id: JournalId, name: &str) -> NewAccountSet {
         .journal_id(journal_id)
         .balance_rollup(BalanceRollup::Synchronous)
         .build()
-        .unwrap()
 }
 
 #[tokio::test]

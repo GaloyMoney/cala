@@ -1,5 +1,4 @@
-use cel_interpreter::CelExpression;
-use derive_builder::Builder;
+use cel_interpreter::{CelExpression, CelParseRejection};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
@@ -16,8 +15,7 @@ pub enum VelocityLimitEvent {
     Initialized { values: VelocityLimitValues },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct VelocityLimit {
     pub id: VelocityLimitId,
     values: VelocityLimitValues,
@@ -42,41 +40,56 @@ impl TryFromEvents<VelocityLimitEvent> for VelocityLimit {
     fn try_from_events(
         events: EntityEvents<VelocityLimitEvent>,
     ) -> Result<Self, EntityHydrationError> {
-        let mut builder = VelocityLimitBuilder::default();
+        let mut hydrator = VelocityLimit::hydrator();
         for event in events.iter_all() {
             match event {
                 VelocityLimitEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
 /// Representation of a ***new*** velocity limit entity with required/optional properties and a builder.
-#[derive(Builder, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Debug)]
 pub struct NewVelocityLimit {
-    #[builder(setter(into))]
     pub(super) id: VelocityLimitId,
-    #[builder(setter(into))]
     pub(super) name: String,
-    #[builder(setter(into))]
     description: String,
     window: Vec<NewPartitionKey>,
-    #[builder(setter(strip_option, into), default)]
     condition: Option<String>,
-    #[builder(setter(strip_option, into), default)]
     currency: Option<Currency>,
-    #[builder(setter(strip_option), default)]
     params: Option<Vec<NewParamDefinition>>,
     limit: NewLimit,
 }
 
+#[bon::bon]
 impl NewVelocityLimit {
-    pub fn builder() -> NewVelocityLimitBuilder {
-        NewVelocityLimitBuilder::default()
+    #[builder]
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        #[builder(into)] id: VelocityLimitId,
+        #[builder(into)] name: String,
+        #[builder(into)] description: String,
+        window: Vec<NewPartitionKey>,
+        #[builder(into)] condition: Option<String>,
+        #[builder(into)] currency: Option<Currency>,
+        params: Option<Vec<NewParamDefinition>>,
+        limit: NewLimit,
+    ) -> Result<Self, CelParseRejection> {
+        validate_optional_expression(&condition)?;
+        Ok(Self {
+            id,
+            name,
+            description,
+            window,
+            condition,
+            currency,
+            params,
+            limit,
+        })
     }
 }
 
@@ -143,117 +156,101 @@ impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {
     }
 }
 
-impl NewVelocityLimitBuilder {
-    fn validate(&self) -> Result<(), String> {
-        validate_optional_expression(&self.condition)?;
-        Ok(())
-    }
-}
-
-#[derive(Clone, Builder, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Clone, Debug)]
 pub struct NewPartitionKey {
-    #[builder(setter(into))]
     alias: String,
-    #[builder(setter(into))]
     value: String,
 }
+
+#[bon::bon]
 impl NewPartitionKey {
-    pub fn builder() -> NewPartitionKeyBuilder {
-        NewPartitionKeyBuilder::default()
-    }
-}
-impl NewPartitionKeyBuilder {
-    fn validate(&self) -> Result<(), String> {
-        validate_expression(
-            self.value
-                .as_ref()
-                .expect("Mandatory field 'value' not set"),
-        )?;
-        Ok(())
+    #[builder]
+    pub fn new(
+        #[builder(into)] alias: String,
+        #[builder(into)] value: String,
+    ) -> Result<Self, CelParseRejection> {
+        validate_expression(&value)?;
+        Ok(Self { alias, value })
     }
 }
 
-#[derive(Clone, Builder, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Clone, Debug)]
 pub struct NewLimit {
-    #[builder(setter(strip_option, into), default)]
     timestamp_source: Option<String>,
     balance: Vec<NewBalanceLimit>,
 }
+
+#[bon::bon]
 impl NewLimit {
-    pub fn builder() -> NewLimitBuilder {
-        NewLimitBuilder::default()
-    }
-}
-impl NewLimitBuilder {
-    fn validate(&self) -> Result<(), String> {
-        validate_optional_expression(&self.timestamp_source)
+    #[builder]
+    pub fn new(
+        #[builder(into)] timestamp_source: Option<String>,
+        balance: Vec<NewBalanceLimit>,
+    ) -> Result<Self, CelParseRejection> {
+        validate_optional_expression(&timestamp_source)?;
+        Ok(Self {
+            timestamp_source,
+            balance,
+        })
     }
 }
 
-#[derive(Clone, Builder, Debug)]
-#[builder(build_fn(validate = "Self::validate"))]
+#[derive(Clone, Debug)]
 pub struct NewBalanceLimit {
-    #[builder(setter(into), default)]
     limit_type: BalanceLimitType,
-    #[builder(setter(into))]
     layer: String,
-    #[builder(setter(into))]
     amount: String,
-    #[builder(setter(into))]
     enforcement_direction: String,
-    #[builder(setter(into))]
     start: String,
-    #[builder(setter(into, strip_option), default)]
     end: Option<String>,
 }
+
+#[bon::bon]
 impl NewBalanceLimit {
-    pub fn builder() -> NewBalanceLimitBuilder {
-        NewBalanceLimitBuilder::default()
+    #[builder]
+    pub fn new(
+        #[builder(into, default)] limit_type: BalanceLimitType,
+        #[builder(into)] layer: String,
+        #[builder(into)] amount: String,
+        #[builder(into)] enforcement_direction: String,
+        #[builder(into)] start: String,
+        #[builder(into)] end: Option<String>,
+    ) -> Result<Self, CelParseRejection> {
+        validate_expression(&layer)?;
+        validate_expression(&amount)?;
+        validate_expression(&enforcement_direction)?;
+        validate_expression(&start)?;
+        validate_optional_expression(&end)?;
+        Ok(Self {
+            limit_type,
+            layer,
+            amount,
+            enforcement_direction,
+            start,
+            end,
+        })
     }
 }
-impl NewBalanceLimitBuilder {
-    pub fn always_active(&mut self) -> &mut Self {
-        self.start("timestamp('1970-01-01T00:00:00Z')")
-    }
 
-    fn validate(&self) -> Result<(), String> {
-        validate_expression(
-            self.layer
-                .as_ref()
-                .expect("Mandatory field 'layer' not set"),
-        )?;
-        validate_expression(
-            self.amount
-                .as_ref()
-                .expect("Mandatory field 'amount' not set"),
-        )?;
-        validate_expression(
-            self.enforcement_direction
-                .as_ref()
-                .expect("Mandatory field 'enforcement_direction' not set"),
-        )?;
-        validate_expression(
-            self.start
-                .as_ref()
-                .expect("Mandatory field 'start' not set"),
-        )?;
-        validate_optional_expression(&self.end)?;
-        Ok(())
+impl<S: new_balance_limit_builder::State> NewBalanceLimitBuilder<S> {
+    pub fn always_active(self) -> NewBalanceLimitBuilder<new_balance_limit_builder::SetStart<S>>
+    where
+        S::Start: new_balance_limit_builder::IsUnset,
+    {
+        self.start("timestamp('1970-01-01T00:00:00Z')")
     }
 }
 
 #[instrument(name = "velocity_limit.validate_expression", skip(expr), fields(expression = %expr), err(level = tracing::Level::WARN))]
-fn validate_expression(expr: &str) -> Result<(), String> {
-    CelExpression::try_from(expr).map_err(|e| e.to_string())?;
+fn validate_expression(expr: &str) -> Result<(), CelParseRejection> {
+    CelExpression::try_from(expr)?;
     Ok(())
 }
 
 #[instrument(name = "velocity_limit.validate_optional_expression", skip(expr), err(level = tracing::Level::WARN))]
-fn validate_optional_expression(expr: &Option<Option<String>>) -> Result<(), String> {
-    if let Some(Some(expr)) = expr.as_ref() {
-        CelExpression::try_from(expr.as_str()).map_err(|e| e.to_string())?;
+fn validate_optional_expression(expr: &Option<String>) -> Result<(), CelParseRejection> {
+    if let Some(expr) = expr {
+        CelExpression::try_from(expr.as_str())?;
     }
     Ok(())
 }

@@ -47,30 +47,19 @@ impl PreparedTransaction {
         self,
         created_at: chrono::DateTime<chrono::Utc>,
     ) -> (NewTransaction, Vec<NewEntry>) {
-        let mut builder = NewTransaction::builder();
-        builder
+        let new_transaction = NewTransaction::builder()
             .id(self.tx_id)
             .created_at(created_at)
             .journal_id(self.journal_id)
             .tx_template_id(self.tx_template_id)
             .effective(self.effective)
-            .entry_ids(self.entries.iter().map(|e| e.id).collect());
-        if let Some(correlation_id) = self.correlation_id {
-            builder.correlation_id(correlation_id);
-        }
-        if let Some(external_id) = self.external_id {
-            builder.external_id(external_id);
-        }
-        if let Some(description) = self.description {
-            builder.description(description);
-        }
-        if let Some(metadata) = self.metadata {
-            builder.metadata(Some(metadata));
-        }
-        (
-            builder.build().expect("tx_build should succeed"),
-            self.entries,
-        )
+            .entry_ids(self.entries.iter().map(|e| e.id).collect())
+            .maybe_correlation_id(self.correlation_id)
+            .maybe_external_id(self.external_id)
+            .maybe_description(self.description)
+            .maybe_metadata(self.metadata)
+            .build();
+        (new_transaction, self.entries)
     }
 }
 
@@ -301,19 +290,12 @@ impl TxTemplates {
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
         for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
-            let mut builder = NewEntry::builder();
-            builder
-                .id(EntryId::new())
-                .transaction_id(transaction_id)
-                .journal_id(journal_id)
-                .sequence(zero_based_sequence as u32 + 1);
             let account_id: Uuid = entry.account_id.try_evaluate(ctx).map_err(|source| {
                 PreparePostingRejection::Cel {
                     posting,
                     source: Box::new(source),
                 }
             })?;
-            builder.account_id(account_id);
 
             let entry_type: String = entry.entry_type.try_evaluate(ctx).map_err(|source| {
                 PreparePostingRejection::Cel {
@@ -321,7 +303,6 @@ impl TxTemplates {
                     source: Box::new(source),
                 }
             })?;
-            builder.entry_type(entry_type);
 
             let layer: Layer =
                 entry
@@ -331,7 +312,6 @@ impl TxTemplates {
                         posting,
                         source: Box::new(source),
                     })?;
-            builder.layer(layer);
 
             let units: Decimal =
                 entry
@@ -359,32 +339,42 @@ impl TxTemplates {
                 DebitOrCredit::Debit => *total -= units,
                 DebitOrCredit::Credit => *total += units,
             };
-            builder.units(units);
-            builder.currency(currency);
-            builder.direction(direction);
-
-            if let Some(description) = entry.description.as_ref() {
-                let description: String = description.try_evaluate(ctx).map_err(|source| {
+            let description: Option<String> = match entry.description.as_ref() {
+                Some(description) => Some(description.try_evaluate(ctx).map_err(|source| {
                     PreparePostingRejection::Cel {
                         posting,
                         source: Box::new(source),
                     }
-                })?;
-                builder.description(description);
-            }
+                })?),
+                None => None,
+            };
 
-            if let Some(metadata) = entry.metadata.as_ref() {
-                let metadata: serde_json::Value =
-                    metadata
-                        .try_evaluate(ctx)
-                        .map_err(|source| PreparePostingRejection::Cel {
-                            posting,
-                            source: Box::new(source),
-                        })?;
-                builder.metadata(metadata);
-            }
+            let metadata: Option<serde_json::Value> = match entry.metadata.as_ref() {
+                Some(metadata) => Some(metadata.try_evaluate(ctx).map_err(|source| {
+                    PreparePostingRejection::Cel {
+                        posting,
+                        source: Box::new(source),
+                    }
+                })?),
+                None => None,
+            };
 
-            new_entries.push(builder.build().expect("Couldn't build entry"));
+            new_entries.push(
+                NewEntry::builder()
+                    .id(EntryId::new())
+                    .transaction_id(transaction_id)
+                    .journal_id(journal_id)
+                    .sequence(zero_based_sequence as u32 + 1)
+                    .account_id(account_id)
+                    .entry_type(entry_type)
+                    .layer(layer)
+                    .units(units)
+                    .currency(currency)
+                    .direction(direction)
+                    .maybe_description(description)
+                    .maybe_metadata(metadata)
+                    .build(),
+            );
         }
 
         for ((c, l), v) in totals {

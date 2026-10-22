@@ -411,7 +411,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
                 .name("Inline Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = cala
@@ -422,7 +422,7 @@ async fn list_cumulative_balances_for_account_sets() -> anyhow::Result<()> {
                 .name("EC Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::EventuallyConsistent)
-                .build()?,
+                .build(),
         )
         .await?;
     cala.account_sets()
@@ -786,7 +786,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
                 .name("Inline Range Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::Synchronous)
-                .build()?,
+                .build(),
         )
         .await?;
     let ec_set = cala
@@ -797,7 +797,7 @@ async fn list_range_balances_for_account_sets() -> anyhow::Result<()> {
                 .name("EC Range Set")
                 .journal_id(journal.id())
                 .balance_rollup(BalanceRollup::EventuallyConsistent)
-                .build()?,
+                .build(),
         )
         .await?;
     cala.account_sets()
@@ -1025,8 +1025,7 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         .name("Inline Set")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::Synchronous)
-        .build()
-        .unwrap();
+        .build();
     let inline_set = cala.account_sets().create(inline_set).await.unwrap();
 
     // EC set — effective balances maintained by the streaming rollup.
@@ -1035,8 +1034,7 @@ async fn ec_account_set_effective_balance_streaming() -> anyhow::Result<()> {
         .name("EC Set")
         .journal_id(journal.id())
         .balance_rollup(BalanceRollup::EventuallyConsistent)
-        .build()
-        .unwrap();
+        .build();
     let ec_set = cala.account_sets().create(ec_set).await.unwrap();
 
     cala.account_sets()

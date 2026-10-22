@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
@@ -20,8 +19,7 @@ pub enum AccountEvent {
     },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct Account {
     pub id: AccountId,
     values: AccountValues,
@@ -50,13 +48,11 @@ impl Account {
     }
 
     pub fn update_status(&mut self, status: Status) -> es_entity::Idempotent<()> {
-        let mut update = AccountUpdate::default();
-        update.status(status);
-        self.update(update)
+        self.update(AccountUpdate::builder().status(status).build())
     }
 
-    pub fn update(&mut self, builder: impl Into<AccountUpdate>) -> es_entity::Idempotent<()> {
-        let AccountUpdateValues {
+    pub fn update(&mut self, update: impl Into<AccountUpdate>) -> es_entity::Idempotent<()> {
+        let AccountUpdate {
             external_id,
             code,
             name,
@@ -64,10 +60,7 @@ impl Account {
             description,
             status,
             metadata,
-        } = builder
-            .into()
-            .build()
-            .expect("AccountUpdateValues always exist");
+        } = update.into();
 
         let mut updated_fields = Vec::new();
 
@@ -148,74 +141,88 @@ impl Account {
 
 impl TryFromEvents<AccountEvent> for Account {
     fn try_from_events(events: EntityEvents<AccountEvent>) -> Result<Self, EntityHydrationError> {
-        let mut builder = AccountBuilder::default();
+        let mut hydrator = Account::hydrator();
         for event in events.iter_all() {
             match event {
                 AccountEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
                 AccountEvent::Updated { values, .. } => {
-                    builder = builder.values(values.clone());
+                    hydrator.values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
-#[derive(Debug, Builder, Default)]
-#[builder(name = "AccountUpdate", default)]
-pub struct AccountUpdateValues {
-    #[builder(setter(strip_option, into))]
+#[derive(Debug, Default, bon::Builder)]
+pub struct AccountUpdate {
+    #[builder(into)]
     pub external_id: Option<String>,
-    #[builder(setter(strip_option, into))]
+    #[builder(into)]
     pub code: Option<String>,
-    #[builder(setter(strip_option, into))]
+    #[builder(into)]
     pub name: Option<String>,
-    #[builder(setter(strip_option, into))]
+    #[builder(into)]
     pub normal_balance_type: Option<DebitOrCredit>,
-    #[builder(setter(strip_option, into))]
+    #[builder(into)]
     pub description: Option<String>,
-    #[builder(setter(strip_option, into))]
+    #[builder(into)]
     pub status: Option<Status>,
-    #[builder(setter(custom))]
+    #[builder(with = |metadata: impl serde::Serialize| -> Result<_, serde_json::Error> {
+        serde_json::to_value(metadata)
+    })]
     pub metadata: Option<serde_json::Value>,
 }
 
-impl AccountUpdate {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
-    }
-}
-
 /// Representation of a ***new*** ledger account entity with required/optional properties and a builder.
-#[derive(Builder, Debug, Clone)]
+#[derive(bon::Builder, Debug, Clone)]
 pub struct NewAccount {
-    #[builder(setter(into))]
+    #[builder(into)]
     pub id: AccountId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) code: String,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) name: String,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) external_id: Option<String>,
     #[builder(default)]
     pub(super) normal_balance_type: DebitOrCredit,
     #[builder(default)]
     pub(super) status: Status,
-    #[builder(setter(custom), default)]
+    /// Marks the account as eventually consistent: posters skip the
+    /// exclusive per-(journal, account, currency) advisory lock and do not
+    /// maintain its balance inline. The streaming EC rollup job
+    /// (`cala.ec_balance_rollup`, registered in `CalaLedger::init`) is then
+    /// the sole writer of its balance, folding the account's entries into
+    /// `cala_current_balances` and `cala_balance_history` from the outbox
+    /// stream.
+    ///
+    /// Sound for rollup-only counterparty accounts (e.g. product omnibus
+    /// accounts that exist so double-entry postings share a counterparty),
+    /// **including account-set members** — the rollup resolves set closure
+    /// from live membership, not member history. Constraints:
+    ///
+    /// - **Attach before first entry.** A member may only join a set with
+    ///   zero balance history (the attach guard rejects the rest, EC or
+    ///   not): the rollup folds a member's activity from the point it
+    ///   joins, so pre-join balance would be silently dropped.
+    /// - **Readers must tolerate rollup lag.** The balance is eventually
+    ///   consistent — do not read it in post-time enforcement paths.
+    /// - **The rollup job must be running.** If it stalls, EC balances
+    ///   drift silently behind the entry stream.
+    #[builder(default)]
     pub(super) eventually_consistent: bool,
-    #[builder(setter(custom), default)]
+    #[builder(default, setters(vis = "pub(crate)"))]
     pub(super) is_account_set: bool,
-    #[builder(setter(custom), default)]
+    #[builder(into, setters(vis = "pub(crate)"))]
     velocity_context_values: Option<VelocityContextAccountValues>,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     description: Option<String>,
-    #[builder(setter(custom), default)]
+    #[builder(with = |metadata: impl serde::Serialize| -> Result<_, serde_json::Error> {
+        serde_json::to_value(metadata)
+    })]
     metadata: Option<serde_json::Value>,
     /// The account set this account joins **in the same atomic operation
     /// that creates it** — the lock-free create-inside-set fast path
@@ -315,15 +322,11 @@ pub struct NewAccount {
     /// truth is the member table + `AccountSetMemberCreated` outbox
     /// events, and duplicating the set id into the account's event
     /// stream would go stale on any later `remove_member`.
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) initial_account_set: Option<AccountSetId>,
 }
 
 impl NewAccount {
-    pub fn builder() -> NewAccountBuilder {
-        NewAccountBuilder::default()
-    }
-
     pub(super) fn context_values(&self) -> VelocityContextAccountValues {
         self.velocity_context_values
             .clone()
@@ -361,54 +364,7 @@ impl IntoEvents<AccountEvent> for NewAccount {
     }
 }
 
-impl NewAccountBuilder {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
-    }
-
-    pub(crate) fn velocity_context_values(
-        &mut self,
-        values: impl Into<VelocityContextAccountValues>,
-    ) -> &mut Self {
-        self.velocity_context_values = Some(Some(values.into()));
-        self
-    }
-
-    pub(crate) fn is_account_set(&mut self, is_account_set: bool) -> &mut Self {
-        self.is_account_set = Some(is_account_set);
-        self
-    }
-
-    /// Marks the account as eventually consistent: posters skip the
-    /// exclusive per-(journal, account, currency) advisory lock and do not
-    /// maintain its balance inline. The streaming EC rollup job
-    /// (`cala.ec_balance_rollup`, registered in `CalaLedger::init`) is then
-    /// the sole writer of its balance, folding the account's entries into
-    /// `cala_current_balances` and `cala_balance_history` from the outbox
-    /// stream.
-    ///
-    /// Sound for rollup-only counterparty accounts (e.g. product omnibus
-    /// accounts that exist so double-entry postings share a counterparty),
-    /// **including account-set members** — the rollup resolves set closure
-    /// from live membership, not member history. Constraints:
-    ///
-    /// - **Attach before first entry.** A member may only join a set with
-    ///   zero balance history (the attach guard rejects the rest, EC or
-    ///   not): the rollup folds a member's activity from the point it
-    ///   joins, so pre-join balance would be silently dropped.
-    /// - **Readers must tolerate rollup lag.** The balance is eventually
-    ///   consistent — do not read it in post-time enforcement paths.
-    /// - **The rollup job must be running.** If it stalls, EC balances
-    ///   drift silently behind the entry stream.
-    pub fn eventually_consistent(&mut self, eventually_consistent: bool) -> &mut Self {
-        self.eventually_consistent = Some(eventually_consistent);
-        self
-    }
-
+impl<S: new_account_builder::State> NewAccountBuilder<S> {
     /// Choose how this account's balance is maintained.
     ///
     /// - [`BalanceRollup::Synchronous`] (the default): the balance is
@@ -420,12 +376,17 @@ impl NewAccountBuilder {
     ///   therefore *lags* until the rollup catches up. Only pick this for
     ///   accounts no flow reads synchronously right after posting (e.g.
     ///   product omnibus summary accounts).
-    pub fn balance_rollup(&mut self, balance_rollup: BalanceRollup) -> &mut Self {
-        self.eventually_consistent = Some(matches!(
+    pub fn balance_rollup(
+        self,
+        balance_rollup: BalanceRollup,
+    ) -> NewAccountBuilder<new_account_builder::SetEventuallyConsistent<S>>
+    where
+        S::EventuallyConsistent: new_account_builder::IsUnset,
+    {
+        self.eventually_consistent(matches!(
             balance_rollup,
             BalanceRollup::EventuallyConsistent
-        ));
-        self
+        ))
     }
 }
 
@@ -439,8 +400,7 @@ mod tests {
             .id(uuid::Uuid::now_v7())
             .code("code")
             .name("name")
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(new_account.code, "code");
         assert_eq!(new_account.name, "name");
         assert_eq!(new_account.normal_balance_type, DebitOrCredit::Credit);
@@ -450,19 +410,12 @@ mod tests {
     }
 
     #[test]
-    fn fails_when_mandatory_fields_are_missing() {
-        let new_account = NewAccount::builder().build();
-        assert!(new_account.is_err());
-    }
-
-    #[test]
     fn defaults_to_synchronous_balance_rollup() {
         let new_account = NewAccount::builder()
             .id(uuid::Uuid::now_v7())
             .code("code")
             .name("name")
-            .build()
-            .unwrap();
+            .build();
         assert!(!new_account.eventually_consistent);
     }
 
@@ -473,8 +426,7 @@ mod tests {
             .code("ec-code")
             .name("name")
             .balance_rollup(BalanceRollup::EventuallyConsistent)
-            .build()
-            .unwrap();
+            .build();
         assert!(ec.eventually_consistent);
 
         let sync = NewAccount::builder()
@@ -482,8 +434,7 @@ mod tests {
             .code("sync-code")
             .name("name")
             .balance_rollup(BalanceRollup::Synchronous)
-            .build()
-            .unwrap();
+            .build();
         assert!(!sync.eventually_consistent);
     }
 
@@ -496,8 +447,7 @@ mod tests {
             .name("name")
             .metadata(json!({"foo": "bar"}))
             .unwrap()
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(new_account.metadata, Some(json!({"foo": "bar"})));
     }
 }

@@ -258,7 +258,6 @@ fn template_with_id(id: TxTemplateId, code: &str) -> cala_ledger::tx_template::N
         )
         .entries(vec![])
         .build()
-        .unwrap()
 }
 
 #[tokio::test]
@@ -305,12 +304,11 @@ async fn tx_template_ensure_concurrent_creates_once_and_finds_once() -> anyhow::
 // --- journals -------------------------------------------------------------
 
 fn new_journal(id: JournalId, code: Option<&str>, name: &str) -> NewJournal {
-    let mut builder = NewJournal::builder();
-    builder.id(id).name(name);
-    if let Some(code) = code {
-        builder.code(code);
-    }
-    builder.build().unwrap()
+    NewJournal::builder()
+        .id(id)
+        .name(name)
+        .maybe_code(code)
+        .build()
 }
 
 #[tokio::test]
@@ -699,12 +697,12 @@ async fn attach_limit_to_control_concurrent_is_found_not_a_fault() -> anyhow::Re
 // --- accounts -------------------------------------------------------------
 
 fn new_account(id: AccountId, code: &str, external_id: Option<&str>, name: &str) -> NewAccount {
-    let mut builder = NewAccount::builder();
-    builder.id(id).name(name).code(code);
-    if let Some(external_id) = external_id {
-        builder.external_id(external_id);
-    }
-    builder.build().unwrap()
+    NewAccount::builder()
+        .id(id)
+        .name(name)
+        .code(code)
+        .maybe_external_id(external_id)
+        .build()
 }
 
 #[tokio::test]
@@ -928,16 +926,13 @@ fn new_set(
     name: &str,
     external_id: Option<&str>,
 ) -> NewAccountSet {
-    let mut builder = NewAccountSet::builder();
-    builder
+    NewAccountSet::builder()
         .id(id)
         .name(name)
         .journal_id(journal_id)
-        .balance_rollup(primitives::BalanceRollup::Synchronous);
-    if let Some(external_id) = external_id {
-        builder.external_id(external_id);
-    }
-    builder.build().unwrap()
+        .balance_rollup(primitives::BalanceRollup::Synchronous)
+        .maybe_external_id(external_id)
+        .build()
 }
 
 /// Backing accounts without a set row: what a lost ensure would leave behind.

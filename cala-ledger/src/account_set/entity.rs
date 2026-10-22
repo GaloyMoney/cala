@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use es_entity::*;
 use serde::{Deserialize, Serialize};
 
@@ -22,8 +21,7 @@ pub enum AccountSetEvent {
     },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct AccountSet {
     pub id: AccountSetId,
     values: AccountSetValues,
@@ -39,17 +37,14 @@ impl AccountSet {
         &self.values
     }
 
-    pub fn update(&mut self, builder: impl Into<AccountSetUpdate>) -> es_entity::Idempotent<()> {
-        let AccountSetUpdateValues {
+    pub fn update(&mut self, update: impl Into<AccountSetUpdate>) -> es_entity::Idempotent<()> {
+        let AccountSetUpdate {
             external_id,
             name,
             normal_balance_type,
             description,
             metadata,
-        } = builder
-            .into()
-            .build()
-            .expect("AccountSetUpdateValues always exist");
+        } = update.into();
         let mut updated_fields = Vec::new();
 
         if let Some(name) = name {
@@ -111,67 +106,56 @@ impl AccountSet {
     }
 }
 
-#[derive(Debug, Builder, Default)]
-#[builder(name = "AccountSetUpdate", default)]
-pub struct AccountSetUpdateValues {
-    #[builder(setter(strip_option, into))]
+#[derive(Debug, Default, bon::Builder)]
+pub struct AccountSetUpdate {
+    #[builder(into)]
     pub external_id: Option<String>,
-    #[builder(setter(into, strip_option))]
+    #[builder(into)]
     pub name: Option<String>,
-    #[builder(setter(into, strip_option))]
+    #[builder(into)]
     pub normal_balance_type: Option<DebitOrCredit>,
-    #[builder(setter(into, strip_option))]
+    #[builder(into)]
     pub description: Option<String>,
-    #[builder(setter(custom))]
+    #[builder(with = |metadata: impl serde::Serialize| -> Result<_, serde_json::Error> {
+        serde_json::to_value(metadata)
+    })]
     pub metadata: Option<serde_json::Value>,
-}
-
-impl AccountSetUpdate {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
-    }
 }
 
 impl From<(AccountSetValues, Vec<String>)> for AccountSetUpdate {
     fn from((values, fields): (AccountSetValues, Vec<String>)) -> Self {
-        let mut builder = AccountSetUpdate::default();
+        let mut update = AccountSetUpdate::default();
 
         for field in fields {
             match field.as_str() {
                 "external_id" => {
                     if let Some(ref ext_id) = values.external_id {
-                        builder.external_id(ext_id);
+                        update.external_id = Some(ext_id.clone());
                     }
                 }
                 "name" => {
-                    builder.name(values.name.clone());
+                    update.name = Some(values.name.clone());
                 }
 
                 "normal_balance_type" => {
-                    builder.normal_balance_type(values.normal_balance_type);
+                    update.normal_balance_type = Some(values.normal_balance_type);
                 }
 
                 "description" => {
                     if let Some(ref desc) = values.description {
-                        builder.description(desc);
+                        update.description = Some(desc.clone());
                     }
                 }
 
                 "metadata" => {
                     if let Some(metadata) = values.metadata.clone() {
-                        builder
-                            .metadata(metadata)
-                            .expect("Failed to serialize metadata");
+                        update.metadata = Some(metadata);
                     }
                 }
                 _ => unreachable!("Unknown field: {}", field),
             }
         }
-        builder
+        update
     }
 }
 
@@ -179,46 +163,44 @@ impl TryFromEvents<AccountSetEvent> for AccountSet {
     fn try_from_events(
         events: EntityEvents<AccountSetEvent>,
     ) -> Result<Self, EntityHydrationError> {
-        let mut builder = AccountSetBuilder::default();
+        let mut hydrator = AccountSet::hydrator();
         for event in events.iter_all() {
             match event {
                 AccountSetEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
                 AccountSetEvent::Updated { values, .. } => {
-                    builder = builder.values(values.clone());
+                    hydrator.values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
 /// Representation of a ***new*** ledger account set entity with required/optional properties and a builder.
-#[derive(Builder, Debug)]
+#[derive(bon::Builder, Debug)]
 pub struct NewAccountSet {
-    #[builder(setter(into))]
+    #[builder(into)]
     pub id: AccountSetId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) name: String,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) external_id: Option<String>,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) journal_id: JournalId,
     #[builder(default)]
     pub(super) normal_balance_type: DebitOrCredit,
     pub(super) balance_rollup: BalanceRollup,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) description: Option<String>,
-    #[builder(setter(custom), default)]
+    #[builder(with = |metadata: impl serde::Serialize| -> Result<_, serde_json::Error> {
+        serde_json::to_value(metadata)
+    })]
     pub(super) metadata: Option<serde_json::Value>,
 }
 
 impl NewAccountSet {
-    pub fn builder() -> NewAccountSetBuilder {
-        NewAccountSetBuilder::default()
-    }
-
     pub(super) fn is_eventually_consistent(&self) -> bool {
         matches!(self.balance_rollup, BalanceRollup::EventuallyConsistent)
     }
@@ -256,15 +238,5 @@ impl IntoEvents<AccountSetEvent> for NewAccountSet {
                 },
             }],
         )
-    }
-}
-
-impl NewAccountSetBuilder {
-    pub fn metadata<T: serde::Serialize>(
-        &mut self,
-        metadata: T,
-    ) -> Result<&mut Self, serde_json::Error> {
-        self.metadata = Some(Some(serde_json::to_value(metadata)?));
-        Ok(self)
     }
 }

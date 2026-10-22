@@ -39,8 +39,7 @@ pub async fn init_journal(cala: &CalaLedger, effective_balances: bool) -> anyhow
         .id(JournalId::new())
         .name(name)
         .enable_effective_balance(effective_balances)
-        .build()
-        .unwrap();
+        .build();
     let journal = cala.journals().create(new_journal).await?;
     Ok(journal)
 }
@@ -56,8 +55,7 @@ pub async fn init_accounts(
         .code(code)
         .metadata(serde_json::json!({"check_velocity": check_velocity}))
         .unwrap()
-        .build()
-        .unwrap();
+        .build();
 
     let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
     let recipient_account = NewAccount::builder()
@@ -66,8 +64,7 @@ pub async fn init_accounts(
         .code(code)
         .metadata(serde_json::json!({"check_velocity": check_velocity}))
         .unwrap()
-        .build()
-        .unwrap();
+        .build();
     let sender = cala.accounts().create(sender_account).await?;
     let recipient = cala.accounts().create(recipient_account).await?;
     Ok((sender, recipient))
@@ -160,8 +157,7 @@ pub async fn init_accounts_with_account_sets_depth(
             } else {
                 BalanceRollup::Synchronous
             })
-            .build()
-            .unwrap();
+            .build();
         let sender_set = cala.account_sets().create(sender_set).await?;
         sender_sets.push(sender_set);
     }
@@ -178,8 +174,7 @@ pub async fn init_accounts_with_account_sets_depth(
             } else {
                 BalanceRollup::Synchronous
             })
-            .build()
-            .unwrap();
+            .build();
         let recipient_set = cala.account_sets().create(recipient_set).await?;
         recipient_sets.push(recipient_set);
     }

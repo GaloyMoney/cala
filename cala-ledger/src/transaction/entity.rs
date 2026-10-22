@@ -1,4 +1,3 @@
-use derive_builder::Builder;
 use serde::{Deserialize, Serialize};
 
 use crate::primitives::*;
@@ -19,8 +18,7 @@ pub enum TransactionEvent {
     },
 }
 
-#[derive(EsEntity, Builder)]
-#[builder(pattern = "owned", build_fn(error = "EntityHydrationError"))]
+#[derive(EsEntity)]
 pub struct Transaction {
     pub id: TransactionId,
     values: TransactionValues,
@@ -72,47 +70,40 @@ impl TryFromEvents<TransactionEvent> for Transaction {
     fn try_from_events(
         events: EntityEvents<TransactionEvent>,
     ) -> Result<Self, EntityHydrationError> {
-        let mut builder = TransactionBuilder::default();
+        let mut hydrator = Transaction::hydrator();
         for event in events.iter_all() {
             match event {
                 TransactionEvent::Initialized { values } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
                 TransactionEvent::Updated { values, .. } => {
-                    builder = builder.id(values.id).values(values.clone());
+                    hydrator.id(values.id).values(values.clone());
                 }
             }
         }
-        builder.events(events).build()
+        hydrator.build(events)
     }
 }
 
-#[derive(Builder, Debug)]
+#[derive(bon::Builder, Debug)]
 #[allow(dead_code)]
 pub struct NewTransaction {
-    #[builder(setter(custom))]
+    #[builder(into)]
     pub(super) id: TransactionId,
     pub(super) created_at: chrono::DateTime<chrono::Utc>,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) journal_id: JournalId,
-    #[builder(setter(into))]
+    #[builder(into)]
     pub(super) tx_template_id: TxTemplateId,
     pub(super) effective: chrono::NaiveDate,
-    #[builder(setter(into), default)]
+    #[builder(into, default = id.to_string())]
     pub(super) correlation_id: String,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) external_id: Option<String>,
-    #[builder(setter(strip_option, into), default)]
+    #[builder(into)]
     pub(super) description: Option<String>,
-    #[builder(setter(into), default)]
     pub(super) metadata: Option<serde_json::Value>,
     pub(super) entry_ids: Vec<EntryId>,
-}
-
-impl NewTransaction {
-    pub fn builder() -> NewTransactionBuilder {
-        NewTransactionBuilder::default()
-    }
 }
 
 impl IntoEvents<TransactionEvent> for NewTransaction {
@@ -144,16 +135,6 @@ impl IntoEvents<TransactionEvent> for NewTransaction {
     }
 }
 
-impl NewTransactionBuilder {
-    pub fn id(&mut self, id: impl Into<TransactionId>) -> &mut Self {
-        self.id = Some(id.into());
-        if self.correlation_id.is_none() {
-            self.correlation_id = Some(self.id.unwrap().to_string());
-        }
-        self
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,16 +149,9 @@ mod tests {
             .tx_template_id(uuid::Uuid::now_v7())
             .entry_ids(vec![EntryId::new()])
             .effective(chrono::NaiveDate::default())
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(id.to_string(), new_transaction.correlation_id);
         assert!(new_transaction.external_id.is_none());
-    }
-
-    #[test]
-    fn fails_when_mandatory_fields_are_missing() {
-        let new_transaction = NewTransaction::builder().build();
-        assert!(new_transaction.is_err());
     }
 
     #[test]
@@ -191,8 +165,7 @@ mod tests {
             .effective(chrono::NaiveDate::default())
             .metadata(json!({"foo": "bar"}))
             .entry_ids(vec![EntryId::new()])
-            .build()
-            .unwrap();
+            .build();
         assert_eq!(new_transaction.metadata, Some(json!({"foo": "bar"})));
     }
 }
