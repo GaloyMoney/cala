@@ -138,6 +138,37 @@ pub(super) struct AccountSetRepo {
 }
 
 impl AccountSetRepo {
+    pub(super) async fn find_all_ancestor_ids_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        let rows: Vec<(AccountId, AccountSetId)> = sqlx::query_as(
+            "WITH RECURSIVE ancestors AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                JOIN cala_account_sets s ON s.id = m.account_set_id
+                WHERE m.member_account_id = ANY($1) AND s.journal_id = $2
+                UNION
+                SELECT a.account_id, m.account_set_id FROM ancestors a
+                JOIN cala_account_set_member_account_sets m
+                    ON m.member_account_set_id = a.account_set_id
+                JOIN cala_account_sets s ON s.id = m.account_set_id
+                WHERE s.journal_id = $2
+            ) SELECT account_id, account_set_id FROM ancestors",
+        )
+        .bind(account_ids)
+        .bind(journal_id)
+        .fetch_all(op.into_executor())
+        .await?;
+        let mut result = HashMap::<_, Vec<_>>::new();
+        for (account, set) in rows {
+            result.entry(account).or_default().push(set);
+        }
+        Ok(result)
+    }
+
     pub fn new(pool: &PgPool, publisher: &OutboxPublisher) -> Self {
         Self {
             pool: pool.clone(),
