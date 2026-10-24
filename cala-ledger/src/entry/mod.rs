@@ -121,6 +121,11 @@ impl Entries {
             .await
     }
 
+    /// List a transaction's entries in `(created_at, id)` order.
+    ///
+    /// Follow the returned continuation to read further pages. Callers that
+    /// need transaction sequence order can sort the collected entries by
+    /// `entry.values().sequence`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.entries.list_for_transaction_id",
@@ -129,31 +134,12 @@ impl Entries {
     pub async fn list_for_transaction_id(
         &self,
         transaction_id: TransactionId,
-    ) -> Result<Vec<Entry>, CalaFault> {
-        let mut query = es_entity::PaginatedQueryArgs::default();
-        let mut entries = Vec::new();
-        loop {
-            let page = self
-                .repo
-                .list_for_transaction_id_by_created_at(transaction_id, query, Default::default())
-                .await?;
-            match page.into_page() {
-                es_entity::Page::Last { entities } => {
-                    entries.extend(entities);
-                    break;
-                }
-                es_entity::Page::HasNext { entities, next } => {
-                    entries.extend(entities);
-                    query = next.into();
-                }
-            }
-        }
-        entries.sort_by(|a, b| {
-            let a_sequence = a.values().sequence;
-            let b_sequence = b.values().sequence;
-            a_sequence.cmp(&b_sequence)
-        });
-        Ok(entries)
+        query: es_entity::PaginatedQueryArgs<EntryByCreatedAtCursor>,
+        direction: es_entity::ListDirection,
+    ) -> Result<es_entity::PaginatedQueryRet<Entry, EntryByCreatedAtCursor>, CalaFault> {
+        self.repo
+            .list_for_transaction_id_by_created_at(transaction_id, query, direction)
+            .await
     }
 }
 

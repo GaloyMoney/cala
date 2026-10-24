@@ -3,7 +3,7 @@ mod helpers;
 use cala_ledger::{tx_template::*, *};
 
 #[tokio::test]
-async fn list_for_transaction_id_returns_entries_beyond_the_default_page() -> anyhow::Result<()> {
+async fn list_for_transaction_id_exposes_complete_bidirectional_pagination() -> anyhow::Result<()> {
     let pool = helpers::init_isolated_pool().await?;
     let mut jobs = helpers::init_jobs(pool.clone()).await?;
     let config = CalaLedgerConfig::builder()
@@ -50,21 +50,59 @@ async fn list_for_transaction_id_returns_entries_beyond_the_default_page() -> an
             .await?;
         let stored = cala.entries().find_all(&tx.values().entry_ids).await?;
         assert_eq!(stored.len(), count, "all posted entries must exist");
-        let listed = cala.entries().list_for_transaction_id(tx.id()).await?;
-        println!(
-            "posted={count}, stored={}, listed={}",
-            stored.len(),
-            listed.len()
-        );
-        assert_eq!(
-            listed.len(),
-            count,
-            "transaction entry listing must not truncate"
-        );
-        for (index, entry) in listed.iter().enumerate() {
-            assert_eq!(entry.values().sequence as usize, index + 1);
-            assert!(stored.contains_key(&entry.id()));
+        for direction in [
+            es_entity::ListDirection::Ascending,
+            es_entity::ListDirection::Descending,
+        ] {
+            let mut expected: Vec<_> = stored
+                .values()
+                .map(|entry| (entry.created_at(), entry.id()))
+                .collect();
+            expected.sort();
+            if matches!(direction, es_entity::ListDirection::Descending) {
+                expected.reverse();
+            }
+            for first in [17, 100] {
+                let mut query = es_entity::PaginatedQueryArgs { first, after: None };
+                let mut listed = Vec::new();
+                loop {
+                    let page = cala
+                        .entries()
+                        .list_for_transaction_id(tx.id(), query, direction)
+                        .await?;
+                    assert_eq!(page.requested_size(), first);
+                    assert!(page.entities().len() <= first);
+                    match page.into_page() {
+                        es_entity::Page::Last { entities } => {
+                            listed.extend(entities);
+                            break;
+                        }
+                        es_entity::Page::HasNext { entities, next } => {
+                            assert_eq!(entities.len(), first);
+                            assert_eq!(next.first, first);
+                            assert_eq!(entities.last().unwrap().id(), next.after.id);
+                            listed.extend(entities);
+                            query = next.into();
+                        }
+                    }
+                }
+                let actual: Vec<_> = listed
+                    .iter()
+                    .map(|entry| (entry.created_at(), entry.id()))
+                    .collect();
+                assert_eq!(
+                    actual, expected,
+                    "pages must preserve order without skips or duplicates"
+                );
+            }
         }
     }
+    let missing = cala
+        .entries()
+        .list_for_transaction_id(TransactionId::new(), Default::default(), Default::default())
+        .await?;
+    assert!(
+        matches!(missing.into_page(), es_entity::Page::Last { entities } if entities.is_empty())
+    );
     Ok(())
 }
