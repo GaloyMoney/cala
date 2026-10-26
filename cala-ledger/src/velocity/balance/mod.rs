@@ -615,6 +615,7 @@ mod tests {
                 limit: AccountLimit {
                     timestamp_source: None,
                     balance: vec![AccountBalanceLimit {
+                        limit_type: Default::default(),
                         layer: Layer::Settled,
                         amount: Decimal::from(100),
                         enforcement_direction: DebitOrCredit::Debit,
