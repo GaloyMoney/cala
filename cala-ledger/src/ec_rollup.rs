@@ -54,7 +54,7 @@ use job::{JobType, Jobs};
 use obix::{
     out::{
         EventCtx, EventDelivery, FlushOp, Handled, InsertOrder, OutboxEventJobConfig,
-        PersistentOutboxEvent, SingletonSubscriber, StreamSelection, Subscription,
+        PersistentOutboxEvent, SingletonSubscriber, Subscription,
     },
     EventSequence,
 };
@@ -237,8 +237,6 @@ struct EcBalanceRollupHandler {
 }
 
 impl SingletonSubscriber<OutboxEventPayload> for EcBalanceRollupHandler {
-    const SUBSCRIPTION: StreamSelection = StreamSelection::PersistentOnly;
-
     type Batch = EcRollupBatch;
 
     async fn handle_persistent<'inv>(
