@@ -1,3 +1,11 @@
+# [cala release v0.33.2](https://github.com/GaloyMoney/cala/releases/tag/0.33.2)
+
+
+
+### Miscellaneous Tasks
+
+- Obix 0.16.0, job 0.19.0 (#918)
+
 # [cala release v0.33.1](https://github.com/GaloyMoney/cala/releases/tag/0.33.1)
 
 
