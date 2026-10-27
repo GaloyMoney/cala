@@ -1424,9 +1424,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.18.5"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfc1bda5a3afb3e01efdcd260ebb82990ecfb8176244f15b03c4176bba34801c"
+checksum = "6f61714a013797bc4563bbf247b664caa2a5d677332b3279a1193156a8f66d25"
 dependencies = [
  "async-trait",
  "bon",
@@ -1630,9 +1630,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69a179fb88849453c776a108424aeca96c66d84677f9898673234e80870489b3"
+checksum = "8b0859b093069827068a3f2eeffbf70a50dc913be9c6593766b06b55192a20e7"
 dependencies = [
  "async-trait",
  "bon",
@@ -1652,9 +1652,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.15.0"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e948b04490f3bc5f27bbb5fbd74fd1170400a465a1f31072d70fa0610a37d85"
+checksum = "a8cf845b88e4b01a9ec31ac721e93eace9843ff9bdd45c054537e3dcfd7b94c4"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
