@@ -1,3 +1,11 @@
+# [cala release v0.33.3](https://github.com/GaloyMoney/cala/releases/tag/0.33.3)
+
+
+
+### Features
+
+- EffectiveBalances::find_cumulative_in_op (#919)
+
 # [cala release v0.33.2](https://github.com/GaloyMoney/cala/releases/tag/0.33.2)
 
 
