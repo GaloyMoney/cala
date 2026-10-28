@@ -59,6 +59,24 @@ impl EffectiveBalances {
 
     #[es_entity::errlanes::instrument(
         level = "debug",
+        name = "cala_ledger.balance.effective.find_cumulative_in_op",
+        skip(self, op)
+    )]
+    pub async fn find_cumulative_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        currency: Currency,
+        date: NaiveDate,
+    ) -> Result<AccountBalance, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
+        self.repo
+            .find_in_op(op, journal_id, account_id.into(), currency, date)
+            .await
+    }
+
+    #[es_entity::errlanes::instrument(
+        level = "debug",
         name = "cala_ledger.balance.effective.find_in_range",
         skip(self)
     )]

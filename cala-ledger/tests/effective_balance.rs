@@ -1870,3 +1870,63 @@ async fn backdate_onto_an_existing_date() -> anyhow::Result<()> {
     assert_eq!(on_3rd.version, 1);
     Ok(())
 }
+
+#[tokio::test]
+async fn find_cumulative_in_op_sees_uncommitted_entries() -> anyhow::Result<()> {
+    let pool = helpers::init_pool().await?;
+    let mut jobs = helpers::init_jobs(pool.clone()).await?;
+    let cala_config = CalaLedgerConfig::builder()
+        .pool(pool)
+        .exec_migrations(false)
+        .build()?;
+    let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+
+    let journal = cala
+        .journals()
+        .create(helpers::test_journal_with_effective_balances())
+        .await?;
+    let (sender, receiver) = helpers::test_accounts();
+    let sender_account = cala.accounts().create(sender).await?;
+    let recipient_account = cala.accounts().create(receiver).await?;
+
+    let tx_code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    cala.tx_templates()
+        .create(helpers::currency_conversion_template(&tx_code))
+        .await?;
+
+    let date = NaiveDate::from_ymd_opt(2025, 5, 5).unwrap();
+    let mut op = cala.begin_operation().await?;
+    for _ in 0..2 {
+        let mut params = Params::new();
+        params.insert("journal_id", journal.id().to_string());
+        params.insert("sender", sender_account.id());
+        params.insert("recipient", recipient_account.id());
+        params.insert("effective", date);
+        cala.post_transaction_in_op(&mut op, TransactionId::new(), &tx_code, params)
+            .await?;
+    }
+
+    let in_op = cala
+        .balances()
+        .effective()
+        .find_cumulative_in_op(
+            &mut op,
+            journal.id(),
+            recipient_account.id(),
+            Currency::BTC,
+            date,
+        )
+        .await?;
+    assert_eq!(in_op.settled(), dec!(2580));
+
+    // Not visible outside the open operation.
+    assert!(cala
+        .balances()
+        .effective()
+        .find_cumulative(journal.id(), recipient_account.id(), Currency::BTC, date)
+        .await
+        .is_err());
+
+    op.commit().await?;
+    Ok(())
+}
