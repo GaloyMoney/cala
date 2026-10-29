@@ -60,7 +60,9 @@
     "BalanceLimitType": {
       "type": "string",
       "enum": [
-        "available"
+        "available",
+        "debit_gross",
+        "credit_gross"
       ]
     },
     "CelExpression": {

@@ -48,4 +48,6 @@ pub struct BalanceLimit {
 pub enum BalanceLimitType {
     #[default]
     Available,
+    DebitGross,
+    CreditGross,
 }

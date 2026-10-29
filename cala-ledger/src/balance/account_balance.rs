@@ -111,6 +111,28 @@ impl<'a> BalanceWithDirection<'a> {
             Layer::Encumbrance => self.encumbrance() + self.pending() + self.settled(),
         }
     }
+
+    pub fn debit_gross(&self, layer: Layer) -> Decimal {
+        let settled = self.details.settled.dr_balance;
+        let pending = self.details.pending.dr_balance;
+        let encumbrance = self.details.encumbrance.dr_balance;
+        match layer {
+            Layer::Settled => settled,
+            Layer::Pending => pending + settled,
+            Layer::Encumbrance => encumbrance + pending + settled,
+        }
+    }
+
+    pub fn credit_gross(&self, layer: Layer) -> Decimal {
+        let settled = self.details.settled.cr_balance;
+        let pending = self.details.pending.cr_balance;
+        let encumbrance = self.details.encumbrance.cr_balance;
+        match layer {
+            Layer::Settled => settled,
+            Layer::Pending => pending + settled,
+            Layer::Encumbrance => encumbrance + pending + settled,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -157,6 +179,49 @@ mod tests {
     fn from_bounds_without_close_is_none() {
         assert!(BalanceRange::from_bounds(Some(account_balance()), 3, None, 10).is_none());
         assert!(BalanceRange::from_bounds(None, 0, None, 0).is_none());
+    }
+
+    #[test]
+    fn gross_accessors_sum_debit_and_credit_totals_per_layer() {
+        let entry_id = EntryId::new();
+        let time = Utc::now();
+        let settled = BalanceAmount {
+            dr_balance: Decimal::from(10),
+            cr_balance: Decimal::from(20),
+            entry_id,
+            modified_at: time,
+        };
+        let pending = BalanceAmount {
+            dr_balance: Decimal::from(3),
+            cr_balance: Decimal::from(4),
+            entry_id,
+            modified_at: time,
+        };
+        let encumbrance = BalanceAmount {
+            dr_balance: Decimal::from(1),
+            cr_balance: Decimal::from(2),
+            entry_id,
+            modified_at: time,
+        };
+        let snapshot = BalanceSnapshot {
+            journal_id: JournalId::new(),
+            account_id: AccountId::new(),
+            entry_id,
+            currency: Currency::USD,
+            settled: settled.clone(),
+            pending: pending.clone(),
+            encumbrance: encumbrance.clone(),
+            version: 0,
+            modified_at: time,
+            created_at: time,
+        };
+        let balance = BalanceWithDirection::new(DebitOrCredit::Credit, &snapshot);
+        assert_eq!(balance.debit_gross(Layer::Settled), Decimal::from(10));
+        assert_eq!(balance.credit_gross(Layer::Settled), Decimal::from(20));
+        assert_eq!(balance.debit_gross(Layer::Pending), Decimal::from(13));
+        assert_eq!(balance.credit_gross(Layer::Pending), Decimal::from(24));
+        assert_eq!(balance.debit_gross(Layer::Encumbrance), Decimal::from(14));
+        assert_eq!(balance.credit_gross(Layer::Encumbrance), Decimal::from(26));
     }
 }
 
