@@ -645,10 +645,12 @@ mod tests {
                 current_balances,
                 &entries_to_add,
             );
-            assert!(matches!(
-                result,
-                Err(EnforceVelocityRejection::LimitExceeded(_))
-            ));
+            let Err(EnforceVelocityRejection::LimitExceeded(err)) = result else {
+                panic!("expected limit exceeded rejection");
+            };
+            let message = err.to_string();
+            assert!(message.contains(&key.limit_id.to_string()));
+            assert!(message.contains(&key.account_id.to_string()));
         }
     }
 }
