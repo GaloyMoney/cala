@@ -143,6 +143,7 @@ mod param;
 pub mod account;
 pub mod account_set;
 pub mod balance;
+pub mod calculation;
 pub mod entry;
 pub mod journal;
 pub mod migrate;

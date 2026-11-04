@@ -4,6 +4,7 @@
 pub mod account;
 pub mod account_set;
 pub mod balance;
+pub mod calculation;
 pub mod dimension;
 pub mod entry;
 pub mod journal;

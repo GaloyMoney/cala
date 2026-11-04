@@ -15,6 +15,7 @@ use crate::{
     account_set::AccountSets,
     account_set_member::AccountSetMembers,
     balance::Balances,
+    calculation::Calculations,
     entry::Entries,
     journal::Journals,
     outbox::OutboxPublisher,
@@ -37,6 +38,7 @@ pub struct CalaLedger {
     entries: Entries,
     velocities: Velocities,
     balances: Balances,
+    calculations: Calculations,
     postings: Postings,
     publisher: OutboxPublisher,
     ec_rollup: obix::out::Subscription<
@@ -90,6 +92,7 @@ impl CalaLedger {
         let entries = Entries::new(&pool);
         let balances = Balances::new(&pool, &journals);
         let velocities = Velocities::new(&pool, &clock);
+        let calculations = Calculations::new(&pool, &publisher, &clock);
         let account_sets = AccountSets::new(
             &pool,
             &publisher,
@@ -125,6 +128,7 @@ impl CalaLedger {
             transactions,
             entries,
             balances,
+            calculations,
             velocities,
             pool,
             clock,
@@ -168,6 +172,10 @@ impl CalaLedger {
 
     pub fn balances(&self) -> &Balances {
         &self.balances
+    }
+
+    pub fn calculations(&self) -> &Calculations {
+        &self.calculations
     }
 
     pub fn entries(&self) -> &Entries {

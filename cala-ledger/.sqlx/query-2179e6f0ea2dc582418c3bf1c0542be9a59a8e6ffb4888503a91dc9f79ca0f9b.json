@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH d AS (\n              SELECT DISTINCT calculation_id, account_id, currency, dimensions, effective\n              FROM UNNEST($2::uuid[], $3::uuid[], $4::text[], $5::jsonb[], $6::date[])\n                AS d(calculation_id, account_id, currency, dimensions, effective)\n            )\n            INSERT INTO cala_calculation_effective_balances (\n              journal_id, calculation_id, account_id, currency, dimensions, effective,\n              version, all_time_version, latest_entry_id,\n              settled_dr_balance, settled_cr_balance, settled_entry_id, settled_modified_at,\n              pending_dr_balance, pending_cr_balance, pending_entry_id, pending_modified_at,\n              encumbrance_dr_balance, encumbrance_cr_balance, encumbrance_entry_id,\n              encumbrance_modified_at,\n              updated_at, created_at\n            )\n            SELECT\n              $1::uuid, d.calculation_id, d.account_id, d.currency, d.dimensions, d.effective, 0,\n              COALESCE(p.all_time_version, 0),\n              COALESCE(p.latest_entry_id, $7::uuid),\n              COALESCE(p.settled_dr_balance, 0), COALESCE(p.settled_cr_balance, 0),\n              COALESCE(p.settled_entry_id, $7::uuid), COALESCE(p.settled_modified_at, $8),\n              COALESCE(p.pending_dr_balance, 0), COALESCE(p.pending_cr_balance, 0),\n              COALESCE(p.pending_entry_id, $7::uuid), COALESCE(p.pending_modified_at, $8),\n              COALESCE(p.encumbrance_dr_balance, 0), COALESCE(p.encumbrance_cr_balance, 0),\n              COALESCE(p.encumbrance_entry_id, $7::uuid), COALESCE(p.encumbrance_modified_at, $8),\n              $8, COALESCE(p.created_at, $8)\n            FROM d\n            LEFT JOIN LATERAL (\n              SELECT *\n              FROM cala_calculation_effective_balances c\n              WHERE c.journal_id = $1\n                AND c.calculation_id = d.calculation_id\n                AND c.account_id = d.account_id\n                AND c.currency = d.currency\n                AND c.dimensions = d.dimensions\n                AND c.effective < d.effective\n              ORDER BY c.effective DESC\n              LIMIT 1\n            ) p ON TRUE\n            ON CONFLICT (journal_id, calculation_id, account_id, currency, dimensions, effective)\n              DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "JsonbArray",
+        "DateArray",
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2179e6f0ea2dc582418c3bf1c0542be9a59a8e6ffb4888503a91dc9f79ca0f9b"
+}

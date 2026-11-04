@@ -1,6 +1,6 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
-mod delta;
+pub(crate) mod delta;
 #[cfg(test)]
 mod differential_tests;
 #[cfg(any(test, feature = "fuzz"))]

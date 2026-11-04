@@ -184,15 +184,45 @@ mod sql_contract_tests {
             Err(Fail::Fatal(_))
         ));
     }
+
+    #[tokio::test]
+    async fn calculation_attachment_recognizes_only_its_unique_key() {
+        use crate::calculation::error::{
+            AttachCalculationRejection, AttachWrite, CalculationAlreadyAttached,
+        };
+        let lifted: Result<
+            (),
+            Fail<AttachCalculationRejection, es_entity::errlanes::lanes!(Transient, Fatal)>,
+        > = Err::<(), _>(
+            violation(
+                "cala_calculation_attachments_calculation_id_account_id_key",
+                "23505",
+            )
+            .await,
+        )
+        .classify::<AttachWrite>()
+        .lift::<CalculationAlreadyAttached>()
+        .lift();
+        assert!(matches!(
+            lifted,
+            Err(Fail::Rejected(AttachCalculationRejection::AlreadyAttached))
+        ));
+        assert!(matches!(
+            Err::<(), _>(violation("cala_calculation_attachments_account_id_fkey", "23503").await)
+                .classify::<AttachWrite>()
+                .lift::<CalculationAlreadyAttached>(),
+            Err(Fail::Fatal(_))
+        ));
+    }
 }
 
 #[cfg(test)]
 mod rejection_code_contracts {
     use crate::param::ParamDefaultRejectionCode;
     use crate::{
-        account::error::*, account_set::error::*, balance::error::*, journal::error::*,
-        ledger::error::*, posting::error::*, transaction::error::*, tx_template::error::*,
-        velocity::error::*,
+        account::error::*, account_set::error::*, balance::error::*, calculation::error::*,
+        journal::error::*, ledger::error::*, posting::error::*, transaction::error::*,
+        tx_template::error::*, velocity::error::*,
     };
     use cala_types::{param::*, primitives::*};
     use cel_interpreter::*;
@@ -315,6 +345,12 @@ mod rejection_code_contracts {
             CreateVelocityLimitRejectionCode,
             LimitAlreadyAddedToControlCode,
             AttachVelocityControlRejectionCode,
+            CreateCalculationRejectionCode,
+            CalculationNotFoundCode,
+            CalculationCodeNotFoundCode,
+            AttachCalculationRejectionCode,
+            CalculationBalanceNotFoundCode,
+            CalculationAlreadyAttachedCode,
         ];
         let mut owners = std::collections::HashMap::new();
         for (owner, codes) in catalogs {

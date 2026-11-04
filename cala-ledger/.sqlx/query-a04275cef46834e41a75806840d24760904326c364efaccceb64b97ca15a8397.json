@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT t.id AS \"account_id!: AccountId\",\n                   (a.id IS NOT NULL) AS \"exists!\",\n                   s.journal_id AS \"set_journal_id?: JournalId\"\n            FROM UNNEST($1::uuid[]) AS t(id)\n            LEFT JOIN cala_accounts a ON a.id = t.id\n            LEFT JOIN cala_account_sets s ON s.id = t.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id!: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "exists!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "set_journal_id?: JournalId",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      true
+    ]
+  },
+  "hash": "a04275cef46834e41a75806840d24760904326c364efaccceb64b97ca15a8397"
+}
