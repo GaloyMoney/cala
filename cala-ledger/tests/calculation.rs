@@ -85,7 +85,7 @@ async fn create_and_find() -> anyhow::Result<()> {
             .build();
         assert!(
             built.is_err(),
-            "unparseable expressions must reject at build"
+            "unparsable expressions must reject at build"
         );
     }
     assert!(NewPartitionKey::builder()
