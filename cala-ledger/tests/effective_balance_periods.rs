@@ -487,8 +487,10 @@ async fn ec_set_series_after_rollup() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Counts `tracing` spans by exact name and every `sqlx::query` event (one
-/// per statement the pool executes). Registered process-global; see
+/// Counts `tracing` spans by exact name and the `sqlx::query` events (one per
+/// executed statement) of statements that touch the cumulative effective
+/// balance table; unrelated background statements are ignored. Registered
+/// process-global; see
 /// `velocity.rs`'s `SpanCallCounter` for why that is sound under nextest.
 struct StatementCounter {
     span_name: &'static str,
@@ -513,8 +515,23 @@ impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for StatementCounter {
         event: &tracing::Event<'_>,
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
-        if event.metadata().target() == "sqlx::query" {
+        if event.metadata().target() != "sqlx::query" {
+            return;
+        }
+        let mut statement = StatementText(String::new());
+        event.record(&mut statement);
+        if statement.0.contains("cala_cumulative_effective_balances") {
             self.statements.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+}
+
+struct StatementText(String);
+
+impl tracing::field::Visit for StatementText {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "db.statement" {
+            self.0 = format!("{value:?}");
         }
     }
 }
