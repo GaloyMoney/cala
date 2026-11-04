@@ -44,6 +44,22 @@ pub async fn init_journal(cala: &CalaLedger, effective_balances: bool) -> anyhow
     Ok(journal)
 }
 
+/// A `Global` calculation without condition or dimensions on `journal`.
+pub async fn init_global_calculation(
+    cala: &CalaLedger,
+    journal: &Journal,
+) -> anyhow::Result<calculation::Calculation> {
+    let code = Alphanumeric.sample_string(&mut rand::rng(), 32);
+    let new_calculation = calculation::NewCalculation::builder()
+        .id(CalculationId::new())
+        .journal_id(journal.id())
+        .code(code)
+        .name("perf global calculation")
+        .scope(calculation::CalculationScope::Global)
+        .build()?;
+    Ok(cala.calculations().create(new_calculation).await?)
+}
+
 pub async fn init_accounts(
     cala: &CalaLedger,
     check_velocity: bool,

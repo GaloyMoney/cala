@@ -4,6 +4,7 @@ mod attachment;
 pub mod effective;
 mod entity;
 pub mod error;
+mod fold;
 mod repo;
 
 use es_entity::{
@@ -24,6 +25,7 @@ pub use attachment::{AttachmentByAccountIdCursor, CalculationAttachment};
 pub use effective::{CalculationEffectiveBalances, CalculationSeriesCursor};
 pub use entity::*;
 use error::*;
+pub(crate) use fold::CalculationRollupTxn;
 use repo::*;
 
 /// Service for working with `Calculation` entities and their series.

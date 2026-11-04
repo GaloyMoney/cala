@@ -1,6 +1,9 @@
 use crate::error::CalaFault;
-use es_entity::*;
+use es_entity::{errlanes::ResultExt, *};
 use sqlx::PgPool;
+use std::collections::HashMap;
+
+use cala_types::velocity::VelocityContextAccountValues;
 
 use crate::outbox::OutboxPublisher;
 
@@ -84,6 +87,107 @@ impl CalculationRepo {
         .fetch_one(op.as_executor())
         .await?;
         Ok(exists)
+    }
+
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation.any_exist_in_op",
+        skip_all
+    )]
+    pub async fn any_exist_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<bool, CalaFault> {
+        let exists =
+            sqlx::query_scalar!(r#"SELECT EXISTS (SELECT 1 FROM cala_calculations) AS "exists!""#)
+                .fetch_one(op.as_executor())
+                .await?;
+        Ok(exists)
+    }
+
+    /// Every account set in `journal_id` reachable from each of
+    /// `account_ids` through set membership, synchronous and eventually
+    /// consistent alike.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation.fetch_ancestors_in_op",
+        skip_all,
+        fields(accounts = account_ids.len())
+    )]
+    pub async fn fetch_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountId>>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE seed AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                WHERE m.member_account_id = ANY($2)
+            ),
+            ancestors AS (
+                SELECT account_id, account_set_id FROM seed
+                UNION
+                SELECT a.account_id, e.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets e
+                  ON e.member_account_set_id = a.account_set_id
+            )
+            SELECT
+                a.account_set_id AS "account_set_id!: AccountId",
+                a.account_id AS "member_account_id!: AccountId"
+            FROM ancestors a
+            JOIN cala_account_sets s
+              ON s.id = a.account_set_id AND s.journal_id = $1
+            "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result: HashMap<AccountId, Vec<AccountId>> = HashMap::new();
+        for row in rows {
+            result
+                .entry(row.member_account_id)
+                .or_default()
+                .push(row.account_set_id);
+        }
+        Ok(result)
+    }
+
+    /// The cached CEL `account` values of each of `account_ids`.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation.account_context_values_in_op",
+        skip_all,
+        fields(accounts = account_ids.len())
+    )]
+    pub async fn account_context_values_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, VelocityContextAccountValues>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!: AccountId", velocity_context_values
+            FROM cala_accounts
+            WHERE id = ANY($1)
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        let mut result = HashMap::with_capacity(rows.len());
+        for row in rows {
+            let values: VelocityContextAccountValues =
+                serde_json::from_value(row.velocity_context_values)
+                    .classify::<crate::error::CouldNotDecodeStored>()?;
+            result.insert(row.id, values);
+        }
+        Ok(result)
     }
 
     async fn publish(

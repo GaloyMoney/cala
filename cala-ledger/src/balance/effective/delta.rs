@@ -58,7 +58,6 @@ impl LayerDelta {
 /// Everything one batch adds to one pair on one effective date.
 #[derive(Debug, Clone)]
 pub(crate) struct DateDelta<K = ()> {
-    #[allow(dead_code)]
     pub key: K,
     pub account_id: AccountId,
     pub currency: Currency,

@@ -5,7 +5,7 @@ use std::hint::black_box;
 
 use cala_perf::{
     attach_velocity_to_account, init_accounts, init_accounts_with_account_sets_depth, init_cala,
-    init_journal,
+    init_global_calculation, init_journal,
     templates::{multi_layer_template, simple_transfer},
 };
 
@@ -308,6 +308,35 @@ fn post_simple_transaction_with_ec_account_set(c: &mut Criterion) {
     });
 }
 
+fn post_simple_transaction_with_one_global_calculation(c: &mut Criterion) {
+    let rt = create_single_worker_runtime();
+
+    let (cala, journal, sender, recipient) = rt.block_on(async {
+        let cala = init_cala().await.unwrap();
+        simple_transfer::init(&cala).await.unwrap();
+        let journal = init_journal(&cala, true).await.unwrap();
+        init_global_calculation(&cala, &journal).await.unwrap();
+        let (sender, recipient) = init_accounts(&cala, false).await.unwrap();
+        (cala, journal, sender, recipient)
+    });
+
+    c.bench_function(
+        "11. post_simple_transaction_with_one_global_calculation",
+        |b| {
+            b.to_async(&rt).iter(|| async {
+                simple_transfer::execute(
+                    black_box(&cala),
+                    black_box(journal.id()),
+                    black_box(sender.id()),
+                    black_box(recipient.id()),
+                )
+                .await
+                .unwrap()
+            })
+        },
+    );
+}
+
 criterion_group!(
     benches,
     post_simple_transaction,
@@ -320,5 +349,6 @@ criterion_group!(
     post_simple_transaction_with_skipped_velocity,
     post_simple_transaction_with_hit_velocity,
     post_simple_transaction_with_ec_account_set,
+    post_simple_transaction_with_one_global_calculation,
 );
 criterion_main!(benches);

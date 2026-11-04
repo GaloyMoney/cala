@@ -134,6 +134,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod account_set_member;
+mod calculation_rollup;
 mod cel_context;
 mod dimension;
 mod ec_rollup;
@@ -163,6 +164,7 @@ pub use job;
 mod ledger;
 pub mod outbox;
 
+pub use calculation_rollup::CalculationRollupStatus;
 pub use ec_rollup::EcRollupStatus;
 pub use ledger::error::EcCaughtUpTimeout;
 pub use ledger::*;

@@ -5,6 +5,7 @@ use es_entity::{
 };
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::collections::HashMap;
 
 use crate::{error::CalaFault, primitives::*};
 
@@ -205,5 +206,47 @@ impl AttachmentRepo {
             end_cursor,
             first,
         ))
+    }
+
+    /// Every attachment of `calculation_ids` to one of `account_ids`, as
+    /// `(calculation, target) -> activation_sequence`.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_attachment.find_for_accounts",
+        skip_all,
+        fields(calculations = calculation_ids.len(), accounts = account_ids.len())
+    )]
+    pub async fn find_for_accounts(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        calculation_ids: &[CalculationId],
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<(CalculationId, AccountId), u64>, CalaFault> {
+        if calculation_ids.is_empty() || account_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let rows = sqlx::query!(
+            r#"
+            SELECT calculation_id AS "calculation_id: CalculationId",
+                   account_id AS "account_id: AccountId",
+                   activation_sequence
+            FROM cala_calculation_attachments
+            WHERE calculation_id = ANY($1)
+              AND account_id = ANY($2)
+            "#,
+            calculation_ids as &[CalculationId],
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                (
+                    (row.calculation_id, row.account_id),
+                    row.activation_sequence as u64,
+                )
+            })
+            .collect())
     }
 }

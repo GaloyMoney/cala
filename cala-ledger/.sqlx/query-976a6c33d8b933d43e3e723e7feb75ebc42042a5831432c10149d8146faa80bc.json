@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT calculation_id AS \"calculation_id: CalculationId\",\n                   account_id AS \"account_id: AccountId\",\n                   activation_sequence\n            FROM cala_calculation_attachments\n            WHERE calculation_id = ANY($1)\n              AND account_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "calculation_id: CalculationId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "account_id: AccountId",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "activation_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "976a6c33d8b933d43e3e723e7feb75ebc42042a5831432c10149d8146faa80bc"
+}

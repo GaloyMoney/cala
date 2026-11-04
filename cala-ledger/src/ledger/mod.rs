@@ -46,6 +46,11 @@ pub struct CalaLedger {
         obix::out::InsertOrder,
         crate::outbox::CalaMailboxTables,
     >,
+    calculation_rollup: obix::out::Subscription<
+        crate::outbox::OutboxEventPayload,
+        obix::out::InsertOrder,
+        crate::outbox::CalaMailboxTables,
+    >,
 }
 
 impl CalaLedger {
@@ -116,9 +121,17 @@ impl CalaLedger {
             &entries,
         )
         .await?;
+        let calculation_rollup = crate::calculation_rollup::register_calculation_rollup(
+            jobs,
+            publisher.inner(),
+            &calculations,
+            &entries,
+        )
+        .await?;
 
         Ok(Self {
             ec_rollup,
+            calculation_rollup,
             accounts,
             account_sets,
             postings,
@@ -343,6 +356,48 @@ impl CalaLedger {
         timeout: std::time::Duration,
     ) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
         await_rollup(&self.ec_rollup, frontier, timeout).await?;
+        Ok(())
+    }
+
+    /// Snapshot the calculation rollup's position, pinning the outbox
+    /// frontier as a fence. Independent of [`Self::ec_rollup_status`]:
+    /// fencing one says nothing about the other.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.calculation_rollup_status",
+        skip_all,
+        fields(applied, frontier, lag)
+    )]
+    pub async fn calculation_rollup_status(
+        &self,
+    ) -> Result<crate::CalculationRollupStatus, CalaFault> {
+        let snapshot = self.calculation_rollup.load().await.narrow_rejected()?;
+        let status = crate::CalculationRollupStatus::new(
+            snapshot.checkpoint(),
+            snapshot.frontier(),
+            self.calculation_rollup.clone(),
+        );
+
+        let span = tracing::Span::current();
+        span.record("applied", u64::from(status.applied));
+        span.record("frontier", u64::from(status.frontier));
+        span.record("lag", status.lag());
+
+        Ok(status)
+    }
+
+    /// Await the calculation rollup applying through `frontier`, an outbox
+    /// sequence obtained elsewhere (see [`Self::await_frontier`]).
+    ///
+    /// `timeout` is mandatory: a wedged rollup surfaces as
+    /// [`EcCaughtUpTimeout`], never a silent hang.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.await_calculation_frontier", skip(self), fields(timeout = ?timeout))]
+    pub async fn await_calculation_frontier(
+        &self,
+        frontier: obix::EventSequence,
+        timeout: std::time::Duration,
+    ) -> Result<(), Fail<EcCaughtUpTimeout, lanes!(Transient, Fatal)>> {
+        await_rollup(&self.calculation_rollup, frontier, timeout).await?;
         Ok(())
     }
 

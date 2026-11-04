@@ -9,7 +9,7 @@
 //! are not in its series.
 mod repo;
 
-use chrono::NaiveDate;
+use chrono::{DateTime, NaiveDate, Utc};
 use es_entity::errlanes::{lanes, Fail};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
@@ -21,7 +21,7 @@ use cala_types::{
 };
 
 use crate::{
-    balance::{AccountBalance, BalanceRange},
+    balance::{effective::delta::DateDelta, AccountBalance, BalanceRange},
     error::CalaFault,
 };
 
@@ -174,6 +174,18 @@ impl CalculationEffectiveBalances {
     > {
         self.repo
             .list_for_account(journal_id, calculation_id, account_id.into(), date, args)
+            .await
+    }
+
+    pub(crate) async fn apply_deltas_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        deltas: &[DateDelta<(CalculationId, Window)>],
+        modified_at: DateTime<Utc>,
+    ) -> Result<(), CalaFault> {
+        self.repo
+            .apply_deltas_in_op(op, journal_id, deltas, modified_at)
             .await
     }
 }
