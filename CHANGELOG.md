@@ -1,3 +1,19 @@
+# [cala release v0.33.4](https://github.com/GaloyMoney/cala/releases/tag/0.33.4)
+
+
+
+### Features
+
+- EffectiveBalances::find_periods / find_all_periods (#922)
+
+### Miscellaneous Tasks
+
+- Bump the all-dependencies group across 1 directory with 4 updates (#920)
+
+### Performance
+
+- Index balance history for account-set entry pages (#921)
+
 # [cala release v0.33.3](https://github.com/GaloyMoney/cala/releases/tag/0.33.3)
 
 
