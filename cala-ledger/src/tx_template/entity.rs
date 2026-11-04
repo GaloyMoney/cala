@@ -125,6 +125,7 @@ pub struct NewTxTemplateEntry {
     currency: String,
     description: Option<String>,
     metadata: Option<String>,
+    condition: Option<String>,
 }
 
 #[bon::bon]
@@ -140,6 +141,7 @@ impl NewTxTemplateEntry {
         #[builder(into)] currency: String,
         #[builder(into)] description: Option<String>,
         #[builder(into)] metadata: Option<String>,
+        #[builder(into)] condition: Option<String>,
     ) -> Result<Self, CelParseRejection> {
         let entry = Self {
             entry_type,
@@ -150,6 +152,7 @@ impl NewTxTemplateEntry {
             currency,
             description,
             metadata,
+            condition,
         };
         entry.validate()?;
         Ok(entry)
@@ -164,7 +167,8 @@ impl NewTxTemplateEntry {
         validate_expression(&self.units)?;
         validate_expression(&self.currency)?;
         validate_optional_expression(&self.description)?;
-        validate_optional_expression(&self.metadata)
+        validate_optional_expression(&self.metadata)?;
+        validate_optional_expression(&self.condition)
     }
 }
 
@@ -185,6 +189,9 @@ impl From<NewTxTemplateEntry> for cala_types::tx_template::TxTemplateEntry {
             metadata: input
                 .metadata
                 .map(|m| CelExpression::try_from(m).expect("always a valid metadata")),
+            condition: input
+                .condition
+                .map(|c| CelExpression::try_from(c).expect("always a valid condition")),
         }
     }
 }

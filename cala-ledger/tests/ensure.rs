@@ -1354,3 +1354,34 @@ async fn ensure_member_sets_concurrent_is_found_not_a_fault() -> anyhow::Result<
     assert!(!b.is_created());
     Ok(())
 }
+
+#[tokio::test]
+async fn tx_template_ensure_round_trips_entry_condition() -> anyhow::Result<()> {
+    let (cala, _) = init().await?;
+    let code = random("ensure-cond");
+    let conditions = [
+        Some("params.flag"),
+        None,
+        Some("!params.flag"),
+        Some("params.flag && true"),
+    ];
+
+    let mut op = cala.begin_operation().await?;
+    let created = cala
+        .tx_templates()
+        .ensure_in_op(&mut op, helpers::conditional_template(&code, conditions))
+        .await?;
+    op.commit().await?;
+    let id = created.into_inner().id();
+
+    let found = cala.tx_templates().find_by_code(&code).await?;
+    assert_eq!(found.id(), id);
+    let stored: Vec<Option<String>> = found
+        .values()
+        .entries
+        .iter()
+        .map(|e| e.condition.as_ref().map(|c| c.to_string()))
+        .collect();
+    assert_eq!(stored, conditions.map(|c| c.map(str::to_string)).to_vec());
+    Ok(())
+}

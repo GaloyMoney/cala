@@ -416,3 +416,68 @@ pub fn velocity_template(code: &str) -> NewTxTemplate {
         .entries(entries)
         .build()
 }
+
+pub fn conditional_template(code: &str, conditions: [Option<&str>; 4]) -> NewTxTemplate {
+    let params = vec![
+        NewParamDefinition::builder()
+            .name("journal_id")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("sender")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("recipient")
+            .r#type(ParamDataType::Uuid)
+            .build()
+            .unwrap(),
+        NewParamDefinition::builder()
+            .name("flag")
+            .r#type(ParamDataType::Boolean)
+            .build()
+            .unwrap(),
+    ];
+    let shapes = [
+        ("'SHAPE_A_DR'", "params.sender", "DEBIT", "decimal('10')"),
+        (
+            "'SHAPE_A_CR'",
+            "params.recipient",
+            "CREDIT",
+            "decimal('10')",
+        ),
+        ("'SHAPE_B_DR'", "params.sender", "DEBIT", "decimal('7')"),
+        ("'SHAPE_B_CR'", "params.recipient", "CREDIT", "decimal('7')"),
+    ];
+    let entries = shapes
+        .into_iter()
+        .zip(conditions)
+        .map(|((entry_type, account_id, direction, units), condition)| {
+            NewTxTemplateEntry::builder()
+                .entry_type(entry_type)
+                .account_id(account_id)
+                .layer("SETTLED")
+                .direction(direction)
+                .units(units)
+                .currency("'BTC'")
+                .maybe_condition(condition)
+                .build()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    NewTxTemplate::builder()
+        .id(uuid::Uuid::now_v7())
+        .code(code)
+        .params(params)
+        .transaction(
+            NewTxTemplateTransaction::builder()
+                .effective("date()")
+                .journal_id("params.journal_id")
+                .build()
+                .unwrap(),
+        )
+        .entries(entries)
+        .build()
+}

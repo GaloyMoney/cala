@@ -70,6 +70,10 @@
 //!             .direction("DEBIT")
 //!             .units("params.units")
 //!             .currency("'BTC'")
+//!             // Optional CEL `condition`: the entry is written only when it evaluates to `true`.
+//!             // Skipped entries consume no sequence number, so keep both sides of a pair
+//!             // on the same condition or the transaction is rejected as unbalanced.
+//!             .condition("params.units != decimal('0')")
 //!             .build()?,
 //!         NewTxTemplateEntry::builder()
 //!             .entry_type("'INCOME_CR'")
@@ -78,6 +82,7 @@
 //!             .direction("CREDIT")
 //!             .units("params.units")
 //!             .currency("'BTC'")
+//!             .condition("params.units != decimal('0')")
 //!             .build()?,
 //!     ];
 //!
