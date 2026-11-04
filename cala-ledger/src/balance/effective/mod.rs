@@ -1,5 +1,6 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
+pub(crate) mod cumulative;
 pub(crate) mod delta;
 #[cfg(test)]
 mod differential_tests;
@@ -25,6 +26,9 @@ use super::{
     EcRollupTxn,
 };
 
+pub use cumulative::{
+    CumulativeBalances, EffectiveDates, InvalidEffectiveDates, MAX_EFFECTIVE_DATES,
+};
 use delta::DeltaAccumulator;
 pub use periods::{
     EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods, PeriodBalance,
@@ -258,13 +262,109 @@ impl EffectiveBalances {
         ids: &[BalanceId],
         periods: &EffectivePeriods,
     ) -> Result<HashMap<BalanceId, EffectiveBalanceSeries>, CalaFault> {
-        let checkpoints = self
-            .repo
-            .find_checkpoints(op, ids, periods.cutoffs())
-            .await?;
+        Ok(self
+            .find_cumulative_at_unchecked(op, ids, periods.dates())
+            .await?
+            .into_iter()
+            .map(|(id, cumulative)| (id, periods::project_series(periods, &cumulative)))
+            .collect())
+    }
+
+    /// The cumulative balances of one balance at every date in `dates`. See
+    /// [`Self::find_all_cumulative_at_in_op`] for the semantics. A balance
+    /// with no row at or before the last date (including an unknown account)
+    /// is [`BalanceNotFound`].
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.find_cumulative_at",
+        skip(self)
+    )]
+    pub async fn find_cumulative_at(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        currency: Currency,
+        dates: &EffectiveDates,
+    ) -> Result<CumulativeBalances, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
+        let account_id = account_id.into();
+        let id = (journal_id, account_id, currency);
+        self.find_cumulative_at_unchecked(&self.pool, &[id], dates)
+            .await?
+            .remove(&id)
+            .ok_or_else(|| BalanceNotFound(journal_id, account_id, currency).into())
+    }
+
+    /// [`Self::find_all_cumulative_at_in_op`] on the ledger's pool.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_cumulative_at", skip(self, ids), fields(ids_count = ids.len(), dates = dates.len()))]
+    pub async fn find_all_cumulative_at(
+        &self,
+        ids: &[BalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<
+        HashMap<BalanceId, CumulativeBalances>,
+        Fail<InvalidEffectiveDates, lanes!(Transient, Fatal)>,
+    > {
+        self.find_all_cumulative_at_in_op(&self.pool, ids, dates)
+            .await
+    }
+
+    /// The cumulative balance of every id in `ids` at every date in `dates`
+    /// (Twisp's `effective.cumulative`, for many balances and dates at once),
+    /// served by one statement. [`CumulativeBalances::at`] is the balance as
+    /// of one date and [`CumulativeBalances::range`] the range between two.
+    ///
+    /// * **Explicit dates.** Every date comes from `dates`; the database
+    ///   clock is never consulted. A caller wanting "up to today" passes
+    ///   today.
+    /// * **Absent ids.** An id whose account does not exist, or whose pair
+    ///   has no row at or before the last date, is absent from the map (as
+    ///   in [`Self::find_all_in_range`]). A currency the account never used
+    ///   is absent too.
+    /// * **Zero fill and carry forward.** A date before the pair's first row
+    ///   holds a zero balance; a date after its last row carries the latest
+    ///   cumulative balance forward.
+    /// * **Ranges.** For a present id, `range(from, until)` with `from - 1`
+    ///   and `until` among `dates` equals
+    ///   `find_all_in_range(&[id], from, Some(until))[id]`, including the
+    ///   zero `open` when the pair had no row before `from`.
+    /// * **Work limit.** `ids.len() * dates.len()` above
+    ///   [`MAX_EFFECTIVE_PERIODS_WORK`] is rejected with
+    ///   [`InvalidEffectiveDates`] before any statement runs.
+    /// * **Consistency.** The read sees what is materialised. Synchronous
+    ///   accounts and sets are current as of commit; eventually-consistent
+    ///   accounts and sets lag the streaming rollup, so a caller wanting a
+    ///   complete picture fences first with
+    ///   [`CalaLedger::ec_rollup_status`](crate::CalaLedger::ec_rollup_status)
+    ///   `.await_completion(..)`. Running on a repeatable-read transaction
+    ///   lets several reads share one snapshot.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_cumulative_at_in_op", skip(self, op, ids), fields(ids_count = ids.len(), dates = dates.len()))]
+    pub async fn find_all_cumulative_at_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<
+        HashMap<BalanceId, CumulativeBalances>,
+        Fail<InvalidEffectiveDates, lanes!(Transient, Fatal)>,
+    > {
+        if ids.len().saturating_mul(dates.len()) > MAX_EFFECTIVE_PERIODS_WORK {
+            return Err(InvalidEffectiveDates.into());
+        }
+        Ok(self.find_cumulative_at_unchecked(op, ids, dates).await?)
+    }
+
+    async fn find_cumulative_at_unchecked(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<HashMap<BalanceId, CumulativeBalances>, CalaFault> {
+        let checkpoints = self.repo.find_checkpoints(op, ids, dates.dates()).await?;
         Ok(ids
             .iter()
-            .filter_map(|id| periods::fold_series(*id, periods, &checkpoints).map(|s| (*id, s)))
+            .filter_map(|id| {
+                cumulative::fold_cumulative(*id, dates, &checkpoints).map(|c| (*id, c))
+            })
             .collect())
     }
 

@@ -22,9 +22,10 @@ use cala_types::{
 
 use crate::{
     balance::{
-        effective::{delta::DateDelta, periods::fold_series},
-        AccountBalance, BalanceRange, EffectiveBalanceSeries, EffectivePeriods,
-        InvalidEffectivePeriods, MAX_EFFECTIVE_PERIODS_WORK,
+        effective::{cumulative::fold_cumulative, delta::DateDelta, periods::project_series},
+        AccountBalance, BalanceRange, CumulativeBalances, EffectiveBalanceSeries, EffectiveDates,
+        EffectivePeriods, InvalidEffectiveDates, InvalidEffectivePeriods,
+        MAX_EFFECTIVE_PERIODS_WORK,
     },
     error::CalaFault,
 };
@@ -246,15 +247,94 @@ impl CalculationEffectiveBalances {
         ids: &[CalculationBalanceId],
         periods: &EffectivePeriods,
     ) -> Result<HashMap<CalculationBalanceId, EffectiveBalanceSeries>, CalaFault> {
-        let checkpoints = self
-            .repo
-            .find_checkpoints(op, ids, periods.cutoffs())
-            .await?;
+        Ok(self
+            .find_cumulative_at_unchecked(op, ids, periods.dates())
+            .await?
+            .into_iter()
+            .map(|(id, cumulative)| (id, project_series(periods, &cumulative)))
+            .collect())
+    }
+
+    /// The cumulative balances of one calculation series at every date in
+    /// `dates`. See [`Self::find_all_cumulative_at_in_op`]; a series with no
+    /// row at or before the last date is [`CalculationBalanceNotFound`].
+    /// Reads what is materialised; fence on the calculation rollup for
+    /// completeness (see the module docs).
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.calculation.effective.find_cumulative_at",
+        skip(self)
+    )]
+    pub async fn find_cumulative_at(
+        &self,
+        id: &CalculationBalanceId,
+        dates: &EffectiveDates,
+    ) -> Result<CumulativeBalances, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>>
+    {
+        Ok(self
+            .find_cumulative_at_unchecked(self.repo.pool(), std::slice::from_ref(id), dates)
+            .await?
+            .remove(id)
+            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+    }
+
+    /// [`Self::find_all_cumulative_at_in_op`] on the ledger's pool.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at", skip(self, ids), fields(ids_count = ids.len(), dates = dates.len()))]
+    pub async fn find_all_cumulative_at(
+        &self,
+        ids: &[CalculationBalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<
+        HashMap<CalculationBalanceId, CumulativeBalances>,
+        Fail<InvalidEffectiveDates, lanes!(Transient, Fatal)>,
+    > {
+        self.find_all_cumulative_at_in_op(self.repo.pool(), ids, dates)
+            .await
+    }
+
+    /// The cumulative balance of every calculation series in `ids` at every
+    /// date in `dates` (Twisp's `effective.cumulative` on a calculation, for
+    /// many series and dates at once), in one statement, with the semantics
+    /// of `balances().effective().find_all_cumulative_at_in_op`: explicit
+    /// dates (the database clock is never consulted), absent ids omitted,
+    /// zero balances before a series' first row, the latest balance carried
+    /// forward after its last, and the same work limit
+    /// (`ids.len() * dates.len()` above [`MAX_EFFECTIVE_PERIODS_WORK`] is
+    /// [`InvalidEffectiveDates`] before any statement runs). For a present
+    /// id, `range(from, until)` equals
+    /// [`Self::find_all_in_range_in_op`]`(&[id], from, Some(until))[id]`.
+    /// Reads what is materialised; fence with
+    /// `CalaLedger::calculation_rollup_status().await_completion(..)` or
+    /// `CalaLedger::await_calculation_frontier(..)` for completeness (see the
+    /// module docs).
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at_in_op", skip(self, op, ids), fields(ids_count = ids.len(), dates = dates.len()))]
+    pub async fn find_all_cumulative_at_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[CalculationBalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<
+        HashMap<CalculationBalanceId, CumulativeBalances>,
+        Fail<InvalidEffectiveDates, lanes!(Transient, Fatal)>,
+    > {
+        if ids.len().saturating_mul(dates.len()) > MAX_EFFECTIVE_PERIODS_WORK {
+            return Err(InvalidEffectiveDates.into());
+        }
+        Ok(self.find_cumulative_at_unchecked(op, ids, dates).await?)
+    }
+
+    async fn find_cumulative_at_unchecked(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[CalculationBalanceId],
+        dates: &EffectiveDates,
+    ) -> Result<HashMap<CalculationBalanceId, CumulativeBalances>, CalaFault> {
+        let checkpoints = self.repo.find_checkpoints(op, ids, dates.dates()).await?;
         Ok(checkpoints
             .into_iter()
             .filter_map(|(id, checkpoints)| {
                 let base = (id.journal_id, id.account_id, id.currency);
-                fold_series(base, periods, &checkpoints).map(|series| (id, series))
+                fold_cumulative(base, dates, &checkpoints).map(|cumulative| (id, cumulative))
             })
             .collect())
     }

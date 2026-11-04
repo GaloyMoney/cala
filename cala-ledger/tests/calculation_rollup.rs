@@ -18,7 +18,8 @@ use cala_ledger::{
     account::NewAccount,
     account_set::NewAccountSet,
     balance::{
-        AccountBalance, EffectivePeriods, InvalidEffectivePeriods, PeriodGranularity,
+        error::BalanceNotFound, AccountBalance, BalanceRange, EffectiveDates, EffectivePeriods,
+        InvalidEffectiveDates, InvalidEffectivePeriods, PeriodGranularity,
         MAX_EFFECTIVE_PERIODS_WORK,
     },
     calculation::{error::CalculationBalanceNotFound, *},
@@ -995,5 +996,171 @@ async fn periods_match_range_and_cumulative() -> anyhow::Result<()> {
         calc.find_all_periods(&too_many, &periods).await,
         Err(Fail::Rejected(InvalidEffectivePeriods))
     ));
+    Ok(())
+}
+
+/// The postings of `periods_match_range_and_cumulative` under one Global
+/// calculation, rolled up. Returns the calculation series ids and the base
+/// ids of `[sender, recipient, set]`.
+async fn cumulative_fixture() -> anyhow::Result<(Fixture, Vec<CalculationBalanceId>, Vec<BalanceId>)>
+{
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let calculation = create_calculation(&f, CalculationScope::Global, Config::default()).await?;
+    let recipient = create_account(&f.cala).await?;
+    let set = create_set(&f.cala, f.journal_id, BalanceRollup::Synchronous).await?;
+    f.cala.account_sets().add_member(set, recipient).await?;
+    f.jobs.start_poll().await?;
+
+    let s = f.sender;
+    for p in [
+        Post::new(&template, s, recipient, 10, day(2024, 1, 10)),
+        Post::new(&template, s, recipient, 20, day(2024, 3, 20)),
+        Post {
+            layer: "PENDING",
+            ..Post::new(&template, s, recipient, 7, day(2024, 2, 5))
+        },
+        Post::new(&template, recipient, s, 4, day(2024, 1, 25)),
+        Post::new(&template, s, recipient, 1, day(2024, 3, 31)),
+    ] {
+        post(&f, p).await?;
+    }
+    wait_for_calculations(&f.cala).await?;
+
+    let usd: Currency = "USD".parse()?;
+    let targets: [AccountId; 3] = [s, recipient, set.into()];
+    let ids = targets
+        .iter()
+        .map(|t| id(&f, calculation, *t, json!({})))
+        .collect();
+    let base_ids = targets.iter().map(|t| (f.journal_id, *t, usd)).collect();
+    Ok((f, ids, base_ids))
+}
+
+fn assert_range_amounts_eq(actual: &BalanceRange, expected: &BalanceRange, what: &str) {
+    assert_amounts_eq(&actual.open, &expected.open, &format!("{what} open"));
+    assert_amounts_eq(&actual.period, &expected.period, &format!("{what} period"));
+    assert_amounts_eq(&actual.close, &expected.close, &format!("{what} close"));
+    assert_eq!(
+        actual.period.details.version, expected.period.details.version,
+        "{what} version"
+    );
+}
+
+#[tokio::test]
+async fn cumulative_at_matches_base_and_own_reads() -> anyhow::Result<()> {
+    let (f, ids, base_ids) = cumulative_fixture().await?;
+    let dates = EffectiveDates::try_new([
+        day(2023, 12, 31),
+        day(2024, 1, 17),
+        day(2024, 2, 29),
+        day(2024, 3, 17),
+        day(2024, 3, 31),
+    ])
+    .unwrap();
+    let ranges = [
+        (day(2024, 1, 1), day(2024, 3, 17)),
+        (day(2024, 1, 18), day(2024, 2, 29)),
+        (day(2024, 3, 1), day(2024, 3, 17)),
+        (day(2024, 1, 1), day(2024, 3, 31)),
+    ];
+
+    let calc = f.cala.calculations().effective();
+    let cumulative = calc.find_all_cumulative_at(&ids, &dates).await?;
+    let base_cumulative = f
+        .cala
+        .balances()
+        .effective()
+        .find_all_cumulative_at(&base_ids, &dates)
+        .await?;
+    assert_eq!(cumulative.len(), 3);
+
+    for (id, base_id) in ids.iter().zip(&base_ids) {
+        let cumulative = &cumulative[id];
+        let base = &base_cumulative[base_id];
+        let single = calc.find_cumulative_at(id, &dates).await?;
+        assert_eq!(cumulative.iter().count(), dates.len());
+        for &d in dates.dates() {
+            let what = format!("{} at {d}", id.account_id);
+            let at = cumulative.at(d).expect("requested date");
+            assert_amounts_eq(at, base.at(d).unwrap(), &what);
+            assert_eq!(at.details.version, base.at(d).unwrap().details.version);
+            assert_eq!(at.details, single.at(d).unwrap().details, "{what} single");
+            match calc.find_cumulative(id, d).await {
+                Ok(own) => {
+                    assert_amounts_eq(at, &own, &what);
+                    assert_eq!(at.details.version, own.details.version, "{what}");
+                }
+                Err(Fail::Rejected(CalculationBalanceNotFound(_))) => {
+                    assert_eq!(at.settled(), Decimal::ZERO, "{what}");
+                    assert_eq!(at.details.version, 0, "{what}");
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        for (from, until) in ranges {
+            let what = format!("{} {from}..{until}", id.account_id);
+            let range = cumulative.range(from, until).expect("requested bounds");
+            assert_range_amounts_eq(&range, &base.range(from, until).unwrap(), &what);
+            let own = calc.find_in_range(id, from, Some(until)).await?;
+            assert_range_amounts_eq(&range, &own, &what);
+        }
+    }
+
+    let absent = CalculationBalanceId {
+        account_id: AccountId::new(),
+        ..ids[0].clone()
+    };
+    let with_absent = [ids[0].clone(), absent.clone()];
+    let partial = calc.find_all_cumulative_at(&with_absent, &dates).await?;
+    assert_eq!(partial.len(), 1);
+    assert!(matches!(
+        calc.find_cumulative_at(&absent, &dates).await,
+        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+    ));
+    assert!(matches!(
+        f.cala
+            .balances()
+            .effective()
+            .find_cumulative_at(f.journal_id, absent.account_id, absent.currency, &dates)
+            .await,
+        Err(Fail::Rejected(BalanceNotFound(..)))
+    ));
+
+    let too_many = vec![ids[0].clone(); MAX_EFFECTIVE_PERIODS_WORK / dates.len() + 1];
+    assert!(matches!(
+        calc.find_all_cumulative_at(&too_many, &dates).await,
+        Err(Fail::Rejected(InvalidEffectiveDates))
+    ));
+    Ok(())
+}
+
+#[tokio::test]
+async fn calculation_periods_equals_cumulative_projection() -> anyhow::Result<()> {
+    let (f, ids, _) = cumulative_fixture().await?;
+    let periods =
+        EffectivePeriods::try_from_count(PeriodGranularity::Month, day(2023, 12, 1), 5).unwrap();
+    let dates = EffectiveDates::try_new(
+        std::iter::once(day(2023, 11, 30)).chain(periods.bounds().map(|(_, end)| end)),
+    )
+    .unwrap();
+
+    let calc = f.cala.calculations().effective();
+    let series = calc.find_all_periods(&ids, &periods).await?;
+    let cumulative = calc.find_all_cumulative_at(&ids, &dates).await?;
+    assert_eq!(series.len(), 3);
+    assert_eq!(cumulative.len(), 3);
+    for id in &ids {
+        let series = &series[id];
+        let cumulative = &cumulative[id];
+        assert_eq!(series.periods.len(), periods.len());
+        for (period, (start, end)) in series.periods.iter().zip(periods.bounds()) {
+            assert_eq!((period.start, period.end), (start, end));
+            let projected = cumulative.range(start, end).expect("period bounds");
+            assert_eq!(period.range.open.details, projected.open.details);
+            assert_eq!(period.range.period.details, projected.period.details);
+            assert_eq!(period.range.close.details, projected.close.details);
+        }
+    }
     Ok(())
 }

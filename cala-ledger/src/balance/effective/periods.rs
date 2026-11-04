@@ -1,10 +1,13 @@
 use chrono::{Datelike, Months, NaiveDate};
 use es_entity::errlanes;
-use std::collections::HashMap;
-
-use cala_types::primitives::BalanceId;
 
 use crate::balance::account_balance::{AccountBalance, BalanceRange};
+
+#[cfg(test)]
+use super::cumulative::{fold_cumulative, Checkpoints};
+use super::cumulative::{CumulativeBalances, EffectiveDates};
+#[cfg(test)]
+use cala_types::primitives::BalanceId;
 
 /// Bounds on one request. Day granularity over a year is 366 periods.
 pub const MAX_EFFECTIVE_PERIODS: usize = 400;
@@ -55,7 +58,7 @@ pub struct EffectivePeriods {
     starts: Vec<NaiveDate>,
     /// `starts[0] - 1 day`, then the last day of each period.
     /// Length = `starts.len() + 1`.
-    cutoffs: Vec<NaiveDate>,
+    dates: EffectiveDates,
 }
 
 impl EffectivePeriods {
@@ -85,7 +88,7 @@ impl EffectivePeriods {
         Ok(Self {
             granularity,
             starts,
-            cutoffs,
+            dates: EffectiveDates::try_new(cutoffs).map_err(|_| InvalidEffectivePeriods)?,
         })
     }
 
@@ -123,11 +126,12 @@ impl EffectivePeriods {
         self.starts
             .iter()
             .copied()
-            .zip(self.cutoffs.iter().skip(1).copied())
+            .zip(self.dates.dates().iter().skip(1).copied())
     }
 
-    pub(crate) fn cutoffs(&self) -> &[NaiveDate] {
-        &self.cutoffs
+    /// `gte - 1 day`, then the last day of each period.
+    pub(crate) fn dates(&self) -> &EffectiveDates {
+        &self.dates
     }
 }
 
@@ -174,62 +178,42 @@ impl EffectiveBalanceSeries {
     }
 }
 
-/// A stored cumulative balance together with its `all_time_version`.
-pub(super) type Checkpoint = (AccountBalance, u32);
+/// Projects cumulative balances read at `periods.dates()` onto the periods:
+/// each period is `cumulative.range(start, end)`.
+pub(crate) fn project_series(
+    periods: &EffectivePeriods,
+    cumulative: &CumulativeBalances,
+) -> EffectiveBalanceSeries {
+    EffectiveBalanceSeries {
+        periods: periods
+            .bounds()
+            .map(|(start, end)| PeriodBalance {
+                start,
+                end,
+                range: cumulative
+                    .range(start, end)
+                    .expect("period bounds come from the periods' dates"),
+            })
+            .collect(),
+    }
+}
 
-pub(crate) type Checkpoints = HashMap<(NaiveDate, BalanceId), Checkpoint>;
-
-/// Folds the checkpoints fetched at `periods.cutoffs()` into one series.
+/// Folds the checkpoints fetched at `periods.dates()` into one series.
 /// Returns `None` when the pair has no checkpoint at all, i.e. no row at or
 /// before the last cutoff.
+#[cfg(test)]
 pub(crate) fn fold_series(
     id: BalanceId,
     periods: &EffectivePeriods,
     checkpoints: &Checkpoints,
 ) -> Option<EffectiveBalanceSeries> {
-    let checkpoint_at = |cutoff: &NaiveDate| checkpoints.get(&(*cutoff, id));
-    let balance_type = periods
-        .cutoffs()
-        .iter()
-        .find_map(checkpoint_at)
-        .map(|(balance, _)| balance.balance_type)?;
-
-    let mut current: Option<Checkpoint> =
-        periods.cutoffs().first().and_then(checkpoint_at).cloned();
-    let mut series = Vec::with_capacity(periods.len());
-    for ((start, end), cutoff) in periods.bounds().zip(periods.cutoffs().iter().skip(1)) {
-        let open = current.take();
-        let close = checkpoint_at(cutoff).cloned().or_else(|| open.clone());
-        let range = match close.clone() {
-            Some((close_balance, close_version)) => {
-                let (open_balance, open_version) = match open {
-                    Some((balance, version)) => (Some(balance), version),
-                    None => (None, 0),
-                };
-                BalanceRange::new(
-                    open_balance,
-                    close_balance,
-                    close_version.saturating_sub(open_version),
-                )
-            }
-            None => {
-                let (journal_id, account_id, currency) = id;
-                let zero = AccountBalance::zero(journal_id, account_id, currency, balance_type);
-                BalanceRange {
-                    open: zero.clone(),
-                    period: zero.clone(),
-                    close: zero,
-                }
-            }
-        };
-        series.push(PeriodBalance { start, end, range });
-        current = close;
-    }
-    Some(EffectiveBalanceSeries { periods: series })
+    fold_cumulative(id, periods.dates(), checkpoints)
+        .map(|cumulative| project_series(periods, &cumulative))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::super::cumulative::Checkpoint;
     use super::*;
     use crate::balance::snapshot::UNASSIGNED_ENTRY_ID;
     use cala_types::{
@@ -238,6 +222,7 @@ mod tests {
     };
     use chrono::Utc;
     use rust_decimal::Decimal;
+    use std::collections::HashMap;
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()
@@ -256,7 +241,7 @@ mod tests {
             vec![date(2024, 1, 1), date(2024, 2, 1), date(2024, 3, 1)],
         );
         assert_eq!(
-            periods.cutoffs(),
+            periods.dates().dates(),
             &[
                 date(2023, 12, 31),
                 date(2024, 1, 31),
@@ -271,12 +256,15 @@ mod tests {
         let year =
             EffectivePeriods::try_new(PeriodGranularity::Year, date(2024, 1, 1), date(2025, 1, 1))
                 .unwrap();
-        assert_eq!(year.cutoffs(), &[date(2023, 12, 31), date(2024, 12, 31)]);
+        assert_eq!(
+            year.dates().dates(),
+            &[date(2023, 12, 31), date(2024, 12, 31)]
+        );
 
         let days =
             EffectivePeriods::try_from_count(PeriodGranularity::Day, date(2024, 2, 28), 3).unwrap();
         assert_eq!(
-            days.cutoffs(),
+            days.dates().dates(),
             &[
                 date(2024, 2, 27),
                 date(2024, 2, 28),

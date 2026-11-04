@@ -18,7 +18,7 @@ use cala_types::{
     primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
-use super::{delta::DateDelta, periods::Checkpoints};
+use super::{cumulative::Checkpoints, delta::DateDelta};
 
 type BalanceRangeResult =
     HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;

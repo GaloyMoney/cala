@@ -218,6 +218,7 @@ mod sql_contract_tests {
 
 #[cfg(test)]
 mod rejection_code_contracts {
+    use crate::balance::effective::cumulative::InvalidEffectiveDatesCode;
     use crate::param::ParamDefaultRejectionCode;
     use crate::{
         account::error::*, account_set::error::*, balance::error::*, calculation::error::*,
@@ -351,6 +352,7 @@ mod rejection_code_contracts {
             AttachCalculationRejectionCode,
             CalculationBalanceNotFoundCode,
             CalculationAlreadyAttachedCode,
+            InvalidEffectiveDatesCode,
         ];
         let mut owners = std::collections::HashMap::new();
         for (owner, codes) in catalogs {

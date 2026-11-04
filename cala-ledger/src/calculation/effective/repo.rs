@@ -12,8 +12,8 @@ use cala_types::{
 use crate::{
     balance::{
         effective::{
+            cumulative::Checkpoints,
             delta::DateDelta,
-            periods::Checkpoints,
             repo::{effective_columns, AccountEffectiveRow},
         },
         AccountBalance,

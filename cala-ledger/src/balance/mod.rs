@@ -61,8 +61,9 @@ pub use cursor::*;
 pub use effective::fuzz_recalculate;
 use effective::*;
 pub use effective::{
-    EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods, PeriodBalance,
-    PeriodGranularity, MAX_EFFECTIVE_PERIODS, MAX_EFFECTIVE_PERIODS_WORK,
+    CumulativeBalances, EffectiveBalanceSeries, EffectiveDates, EffectivePeriods,
+    InvalidEffectiveDates, InvalidEffectivePeriods, PeriodBalance, PeriodGranularity,
+    MAX_EFFECTIVE_DATES, MAX_EFFECTIVE_PERIODS, MAX_EFFECTIVE_PERIODS_WORK,
 };
 use error::BalanceNotFound;
 use repo::*;
