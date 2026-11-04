@@ -18,6 +18,38 @@ impl AccountBalance {
         }
     }
 
+    pub(crate) fn zero(
+        journal_id: JournalId,
+        account_id: AccountId,
+        currency: Currency,
+        balance_type: DebitOrCredit,
+    ) -> Self {
+        use chrono::{TimeZone, Utc};
+        let zero_time = Utc.timestamp_opt(0, 0).single().expect("0 timestamp");
+        let zero_entry = EntryId::from(super::snapshot::UNASSIGNED_ENTRY_ID);
+        let zero_amount = BalanceAmount {
+            dr_balance: Decimal::ZERO,
+            cr_balance: Decimal::ZERO,
+            entry_id: zero_entry,
+            modified_at: zero_time,
+        };
+        Self {
+            balance_type,
+            details: BalanceSnapshot {
+                journal_id,
+                account_id,
+                currency,
+                version: 0,
+                created_at: zero_time,
+                modified_at: zero_time,
+                entry_id: zero_entry,
+                settled: zero_amount.clone(),
+                pending: zero_amount.clone(),
+                encumbrance: zero_amount,
+            },
+        }
+    }
+
     pub(super) fn derive_diff(mut self, since: &Self) -> Self {
         self.details.settled = BalanceAmount {
             dr_balance: self.details.settled.dr_balance - since.details.settled.dr_balance,
@@ -181,33 +213,18 @@ impl BalanceRange {
                 }
             }
             None => {
-                use chrono::{TimeZone, Utc};
-                let zero_time = Utc.timestamp_opt(0, 0).single().expect("0 timestamp");
-                let zero_entry = EntryId::from(super::snapshot::UNASSIGNED_ENTRY_ID);
-                let zero_amount = BalanceAmount {
-                    dr_balance: Decimal::ZERO,
-                    cr_balance: Decimal::ZERO,
-                    entry_id: zero_entry,
-                    modified_at: zero_time,
-                };
+                let open = AccountBalance::zero(
+                    end.details.journal_id,
+                    end.details.account_id,
+                    end.details.currency,
+                    end.balance_type,
+                );
                 let mut range = end.clone();
                 range.details.version = version_diff;
                 Self {
                     period: range,
-                    close: end.clone(),
-                    open: AccountBalance {
-                        balance_type: end.balance_type,
-                        details: BalanceSnapshot {
-                            version: 0,
-                            created_at: zero_time,
-                            modified_at: zero_time,
-                            entry_id: zero_entry,
-                            settled: zero_amount.clone(),
-                            pending: zero_amount.clone(),
-                            encumbrance: zero_amount,
-                            ..end.details
-                        },
-                    },
+                    close: end,
+                    open,
                 }
             }
         }
