@@ -1,17 +1,23 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use es_entity::errlanes::{lanes, Fault, ResultExt};
+use es_entity::errlanes::{lanes, Fault};
 use rust_decimal::Decimal;
 use sqlx::PgPool;
 use std::collections::HashMap;
 
 use cala_types::{
-    balance::{BalanceAmount, BalanceSnapshot},
     calculation::{CalculationBalanceId, Window},
-    primitives::{AccountId, CalculationId, Currency, DebitOrCredit, EntryId, JournalId},
+    primitives::{AccountId, BalanceId, CalculationId, EntryId, JournalId},
 };
 
 use crate::{
-    balance::{effective::delta::DateDelta, AccountBalance},
+    balance::{
+        effective::{
+            delta::DateDelta,
+            periods::Checkpoints,
+            repo::{effective_columns, AccountEffectiveRow},
+        },
+        AccountBalance,
+    },
     error::CalaFault,
 };
 
@@ -21,16 +27,11 @@ use super::CalculationSeriesCursor;
 pub(super) type RangeEnds =
     HashMap<CalculationBalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
 
-/// The columns of one `cala_calculation_effective_balances` row, qualified
+/// The base effective columns plus the two series key columns, qualified
 /// with the table alias `c`.
 macro_rules! calculation_effective_columns {
     () => {
-        "c.journal_id, c.calculation_id, c.account_id, c.currency, c.dimensions, c.effective, \
-         c.version, c.all_time_version, c.latest_entry_id, \
-         c.settled_dr_balance, c.settled_cr_balance, c.settled_entry_id, c.settled_modified_at, \
-         c.pending_dr_balance, c.pending_cr_balance, c.pending_entry_id, c.pending_modified_at, \
-         c.encumbrance_dr_balance, c.encumbrance_cr_balance, c.encumbrance_entry_id, \
-         c.encumbrance_modified_at, c.updated_at, c.created_at"
+        concat!(effective_columns!(), ", c.calculation_id, c.dimensions")
     };
 }
 
@@ -38,72 +39,28 @@ macro_rules! calculation_effective_columns {
 /// balance of a series as of the end of one effective date.
 #[derive(Debug, sqlx::FromRow)]
 struct CalculationEffectiveRow {
-    journal_id: JournalId,
     calculation_id: CalculationId,
-    account_id: AccountId,
-    currency: String,
     dimensions: Window,
-    version: i32,
-    all_time_version: i32,
-    latest_entry_id: EntryId,
-    settled_dr_balance: Decimal,
-    settled_cr_balance: Decimal,
-    settled_entry_id: EntryId,
-    settled_modified_at: DateTime<Utc>,
-    pending_dr_balance: Decimal,
-    pending_cr_balance: Decimal,
-    pending_entry_id: EntryId,
-    pending_modified_at: DateTime<Utc>,
-    encumbrance_dr_balance: Decimal,
-    encumbrance_cr_balance: Decimal,
-    encumbrance_entry_id: EntryId,
-    encumbrance_modified_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-    created_at: DateTime<Utc>,
-    normal_balance_type: DebitOrCredit,
+    #[sqlx(flatten)]
+    account_row: AccountEffectiveRow,
 }
 
 impl CalculationEffectiveRow {
+    fn all_time_version(&self) -> u32 {
+        self.account_row.row.all_time_version as u32
+    }
+
     fn into_series(self) -> Result<(CalculationBalanceId, AccountBalance), Fault<lanes!(Fatal)>> {
-        let currency: Currency = self
-            .currency
-            .parse()
-            .classify::<crate::error::CouldNotDecodeCurrency>()?;
+        let balance = self.account_row.into_account_balance()?;
+        let details = &balance.details;
         let id = CalculationBalanceId {
-            journal_id: self.journal_id,
+            journal_id: details.journal_id,
             calculation_id: self.calculation_id,
-            account_id: self.account_id,
-            currency,
+            account_id: details.account_id,
+            currency: details.currency,
             dimensions: self.dimensions,
         };
-        let snapshot = BalanceSnapshot {
-            journal_id: self.journal_id,
-            account_id: self.account_id,
-            currency,
-            version: self.version as u32,
-            created_at: self.created_at,
-            modified_at: self.updated_at,
-            entry_id: self.latest_entry_id,
-            settled: BalanceAmount {
-                dr_balance: self.settled_dr_balance,
-                cr_balance: self.settled_cr_balance,
-                entry_id: self.settled_entry_id,
-                modified_at: self.settled_modified_at,
-            },
-            pending: BalanceAmount {
-                dr_balance: self.pending_dr_balance,
-                cr_balance: self.pending_cr_balance,
-                entry_id: self.pending_entry_id,
-                modified_at: self.pending_modified_at,
-            },
-            encumbrance: BalanceAmount {
-                dr_balance: self.encumbrance_dr_balance,
-                cr_balance: self.encumbrance_cr_balance,
-                entry_id: self.encumbrance_entry_id,
-                modified_at: self.encumbrance_modified_at,
-            },
-        };
-        Ok((id, AccountBalance::new(self.normal_balance_type, snapshot)))
+        Ok((id, balance))
     }
 }
 
@@ -112,6 +69,14 @@ impl CalculationEffectiveRow {
 #[derive(Debug, sqlx::FromRow)]
 struct RangeEndRow {
     first: bool,
+    #[sqlx(flatten)]
+    row: CalculationEffectiveRow,
+}
+
+/// The latest stored row of a series at or before `cutoff`.
+#[derive(Debug, sqlx::FromRow)]
+struct CheckpointRow {
+    cutoff: NaiveDate,
     #[sqlx(flatten)]
     row: CalculationEffectiveRow,
 }
@@ -333,7 +298,7 @@ impl CalculationEffectiveBalanceRepo {
 
         let mut ret: RangeEnds = HashMap::new();
         for RangeEndRow { first, row } in rows {
-            let all_time_version = row.all_time_version as u32;
+            let all_time_version = row.all_time_version();
             let (id, balance) = row.into_series()?;
             let entry = ret.entry(id).or_insert((None, 0, None, 0));
             if first {
@@ -343,6 +308,72 @@ impl CalculationEffectiveBalanceRepo {
                 entry.2 = Some(balance);
                 entry.3 = all_time_version;
             }
+        }
+        Ok(ret)
+    }
+
+    /// The latest row of each series at or before each of `cutoffs`, in one
+    /// statement, as one [`Checkpoints`] map per series keyed by the
+    /// series' base balance id.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_effective_balance.find_checkpoints",
+        skip_all,
+        fields(ids_count = ids.len(), cutoffs = cutoffs.len())
+    )]
+    pub async fn find_checkpoints(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[CalculationBalanceId],
+        cutoffs: &[NaiveDate],
+    ) -> Result<HashMap<CalculationBalanceId, Checkpoints>, CalaFault> {
+        let mut seen = std::collections::HashSet::with_capacity(ids.len());
+        let unique: Vec<CalculationBalanceId> =
+            ids.iter().filter(|id| seen.insert(*id)).cloned().collect();
+        let keys = KeyArrays::new(&unique);
+        let rows = sqlx::query_as::<_, CheckpointRow>(concat!(
+            "WITH ids AS (
+              SELECT v.journal_id, v.calculation_id, v.account_id, v.currency, v.dimensions,
+                     a.normal_balance_type
+              FROM UNNEST($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::jsonb[])
+                AS v(journal_id, calculation_id, account_id, currency, dimensions)
+              JOIN cala_accounts a ON a.id = v.account_id
+            )
+            SELECT d.cutoff, ",
+            calculation_effective_columns!(),
+            ", ids.normal_balance_type
+            FROM ids
+            CROSS JOIN UNNEST($6::date[]) AS d(cutoff)
+            JOIN LATERAL (
+              SELECT *
+              FROM cala_calculation_effective_balances
+              WHERE journal_id = ids.journal_id
+                AND calculation_id = ids.calculation_id
+                AND account_id = ids.account_id
+                AND currency = ids.currency
+                AND dimensions = ids.dimensions
+                AND effective <= d.cutoff
+              ORDER BY effective DESC
+              LIMIT 1
+            ) c ON TRUE"
+        ))
+        .bind(&keys.journal_ids[..])
+        .bind(&keys.calculation_ids[..])
+        .bind(&keys.account_ids[..])
+        .bind(&keys.currencies[..])
+        .bind(&keys.dimensions[..])
+        .bind(cutoffs)
+        .fetch_all(op.into_executor())
+        .await?;
+
+        let mut ret: HashMap<CalculationBalanceId, Checkpoints> = HashMap::new();
+        for CheckpointRow { cutoff, row } in rows {
+            let all_time_version = row.all_time_version();
+            let (id, balance) = row.into_series()?;
+            let base: BalanceId = (id.journal_id, id.account_id, id.currency);
+            ret.entry(id)
+                .or_default()
+                .insert((cutoff, base), (balance, all_time_version));
         }
         Ok(ret)
     }

@@ -5,8 +5,8 @@ pub(crate) mod delta;
 mod differential_tests;
 #[cfg(any(test, feature = "fuzz"))]
 mod fold_oracle;
-mod periods;
-mod repo;
+pub(crate) mod periods;
+pub(crate) mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;

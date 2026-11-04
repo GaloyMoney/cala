@@ -21,7 +21,11 @@ use cala_types::{
 };
 
 use crate::{
-    balance::{effective::delta::DateDelta, AccountBalance, BalanceRange},
+    balance::{
+        effective::{delta::DateDelta, periods::fold_series},
+        AccountBalance, BalanceRange, EffectiveBalanceSeries, EffectivePeriods,
+        InvalidEffectivePeriods, MAX_EFFECTIVE_PERIODS_WORK,
+    },
     error::CalaFault,
 };
 
@@ -175,6 +179,84 @@ impl CalculationEffectiveBalances {
         self.repo
             .list_for_account(journal_id, calculation_id, account_id.into(), date, args)
             .await
+    }
+
+    /// The series of whole `periods` for one calculation series. See
+    /// [`Self::find_all_periods_in_op`]; a series with no row at or before
+    /// the last period's end is [`CalculationBalanceNotFound`].
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.calculation.effective.find_periods",
+        skip(self)
+    )]
+    pub async fn find_periods(
+        &self,
+        id: &CalculationBalanceId,
+        periods: &EffectivePeriods,
+    ) -> Result<EffectiveBalanceSeries, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>>
+    {
+        Ok(self
+            .find_series_in_op(self.repo.pool(), std::slice::from_ref(id), periods)
+            .await?
+            .remove(id)
+            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+    }
+
+    /// [`Self::find_all_periods_in_op`] on the ledger's pool.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods", skip(self, ids), fields(ids_count = ids.len(), periods = periods.len()))]
+    pub async fn find_all_periods(
+        &self,
+        ids: &[CalculationBalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<
+        HashMap<CalculationBalanceId, EffectiveBalanceSeries>,
+        Fail<InvalidEffectivePeriods, lanes!(Transient, Fatal)>,
+    > {
+        self.find_all_periods_in_op(self.repo.pool(), ids, periods)
+            .await
+    }
+
+    /// The series of whole `periods` for every calculation series in `ids`,
+    /// in one statement, with the semantics of
+    /// `balances().effective().find_all_periods_in_op`:
+    /// explicit cutoffs, absent ids omitted, zero periods before a series'
+    /// first row, carried periods after its last, and the same work limit.
+    /// Reads what is materialised; fence on the calculation rollup for
+    /// completeness (see the module docs).
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods_in_op", skip(self, op, ids), fields(ids_count = ids.len(), periods = periods.len()))]
+    pub async fn find_all_periods_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[CalculationBalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<
+        HashMap<CalculationBalanceId, EffectiveBalanceSeries>,
+        Fail<InvalidEffectivePeriods, lanes!(Transient, Fatal)>,
+    > {
+        let probes = ids.len().saturating_mul(periods.len() + 1);
+        if probes > MAX_EFFECTIVE_PERIODS_WORK {
+            return Err(InvalidEffectivePeriods.into());
+        }
+        Ok(self.find_series_in_op(op, ids, periods).await?)
+    }
+
+    async fn find_series_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[CalculationBalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<HashMap<CalculationBalanceId, EffectiveBalanceSeries>, CalaFault> {
+        let checkpoints = self
+            .repo
+            .find_checkpoints(op, ids, periods.cutoffs())
+            .await?;
+        Ok(checkpoints
+            .into_iter()
+            .filter_map(|(id, checkpoints)| {
+                let base = (id.journal_id, id.account_id, id.currency);
+                fold_series(base, periods, &checkpoints).map(|series| (id, series))
+            })
+            .collect())
     }
 
     pub(crate) async fn apply_deltas_in_op(

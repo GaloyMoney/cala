@@ -126,7 +126,7 @@ impl EffectivePeriods {
             .zip(self.cutoffs.iter().skip(1).copied())
     }
 
-    pub(super) fn cutoffs(&self) -> &[NaiveDate] {
+    pub(crate) fn cutoffs(&self) -> &[NaiveDate] {
         &self.cutoffs
     }
 }
@@ -177,12 +177,12 @@ impl EffectiveBalanceSeries {
 /// A stored cumulative balance together with its `all_time_version`.
 pub(super) type Checkpoint = (AccountBalance, u32);
 
-pub(super) type Checkpoints = HashMap<(NaiveDate, BalanceId), Checkpoint>;
+pub(crate) type Checkpoints = HashMap<(NaiveDate, BalanceId), Checkpoint>;
 
 /// Folds the checkpoints fetched at `periods.cutoffs()` into one series.
 /// Returns `None` when the pair has no checkpoint at all, i.e. no row at or
 /// before the last cutoff.
-pub(super) fn fold_series(
+pub(crate) fn fold_series(
     id: BalanceId,
     periods: &EffectivePeriods,
     checkpoints: &Checkpoints,

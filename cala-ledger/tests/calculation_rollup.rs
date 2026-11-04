@@ -15,8 +15,18 @@ use std::{
 };
 
 use cala_ledger::{
-    account::NewAccount, account_set::NewAccountSet, calculation::*, errlanes::Fail, job::Jobs,
-    journal::NewJournal, tx_template::*, *,
+    account::NewAccount,
+    account_set::NewAccountSet,
+    balance::{
+        AccountBalance, EffectivePeriods, InvalidEffectivePeriods, PeriodGranularity,
+        MAX_EFFECTIVE_PERIODS_WORK,
+    },
+    calculation::{error::CalculationBalanceNotFound, *},
+    errlanes::Fail,
+    job::Jobs,
+    journal::NewJournal,
+    tx_template::*,
+    *,
 };
 
 struct Fixture {
@@ -871,5 +881,119 @@ async fn status_and_fence() -> anyhow::Result<()> {
     f.cala
         .await_calculation_frontier(frontier, Duration::from_secs(10))
         .await?;
+    Ok(())
+}
+
+fn assert_amounts_eq(actual: &AccountBalance, expected: &AccountBalance, what: &str) {
+    assert_eq!(actual.settled(), expected.settled(), "{what} settled");
+    assert_eq!(actual.pending(), expected.pending(), "{what} pending");
+    assert_eq!(
+        actual.encumbrance(),
+        expected.encumbrance(),
+        "{what} encumbrance"
+    );
+}
+
+#[tokio::test]
+async fn periods_match_range_and_cumulative() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let calculation = create_calculation(&f, CalculationScope::Global, Config::default()).await?;
+    let recipient = create_account(&f.cala).await?;
+    let set = create_set(&f.cala, f.journal_id, BalanceRollup::Synchronous).await?;
+    f.cala.account_sets().add_member(set, recipient).await?;
+    f.jobs.start_poll().await?;
+
+    let s = f.sender;
+    for p in [
+        Post::new(&template, s, recipient, 10, day(2024, 1, 10)),
+        Post::new(&template, s, recipient, 20, day(2024, 3, 20)),
+        Post {
+            layer: "PENDING",
+            ..Post::new(&template, s, recipient, 7, day(2024, 2, 5))
+        },
+        Post::new(&template, recipient, s, 4, day(2024, 1, 25)),
+        Post::new(&template, s, recipient, 1, day(2024, 3, 31)),
+    ] {
+        post(&f, p).await?;
+    }
+    wait_for_calculations(&f.cala).await?;
+
+    let periods =
+        EffectivePeriods::try_from_count(PeriodGranularity::Month, day(2023, 12, 1), 5).unwrap();
+    let usd: Currency = "USD".parse()?;
+    let targets: [AccountId; 3] = [s, recipient, set.into()];
+    let ids: Vec<CalculationBalanceId> = targets
+        .iter()
+        .map(|t| id(&f, calculation, *t, json!({})))
+        .collect();
+    let calc = f.cala.calculations().effective();
+    let series = calc.find_all_periods(&ids, &periods).await?;
+    let base_ids: Vec<BalanceId> = targets.iter().map(|t| (f.journal_id, *t, usd)).collect();
+    let base_series = f
+        .cala
+        .balances()
+        .effective()
+        .find_all_periods(&base_ids, &periods)
+        .await?;
+    assert_eq!(series.len(), 3);
+
+    for (id, base_id) in ids.iter().zip(&base_ids) {
+        let series = &series[id];
+        let base = &base_series[base_id];
+        assert_eq!(series.periods.len(), periods.len());
+        assert_eq!(
+            calc.find_periods(id, &periods).await?.periods.len(),
+            periods.len()
+        );
+        for ((period, base), (start, end)) in series
+            .periods
+            .iter()
+            .zip(&base.periods)
+            .zip(periods.bounds())
+        {
+            assert_eq!((period.start, period.end), (start, end));
+            let what = format!("{} {start}..{end}", id.account_id);
+            assert_amounts_eq(&period.range.open, &base.range.open, &what);
+            assert_amounts_eq(&period.range.period, &base.range.period, &what);
+            assert_amounts_eq(&period.range.close, &base.range.close, &what);
+            assert_eq!(
+                period.range.period.details.version, base.range.period.details.version,
+                "{what} version vs base"
+            );
+
+            if start < day(2024, 1, 1) {
+                assert_eq!(period.range.close.settled(), Decimal::ZERO);
+                continue;
+            }
+            let cumulative = calc.find_cumulative(id, end).await?;
+            assert_amounts_eq(&period.range.close, &cumulative, &what);
+            let range = calc.find_in_range(id, start, Some(end)).await?;
+            assert_amounts_eq(&period.range.open, &range.open, &what);
+            assert_amounts_eq(&period.range.period, &range.period, &what);
+            assert_eq!(
+                period.range.period.details.version, range.period.details.version,
+                "{what} version vs range"
+            );
+        }
+    }
+
+    let absent = CalculationBalanceId {
+        account_id: AccountId::new(),
+        ..ids[0].clone()
+    };
+    let with_absent = [ids[0].clone(), absent.clone()];
+    let partial = calc.find_all_periods(&with_absent, &periods).await?;
+    assert_eq!(partial.len(), 1);
+    assert!(matches!(
+        calc.find_periods(&absent, &periods).await,
+        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+    ));
+
+    let too_many = vec![ids[0].clone(); MAX_EFFECTIVE_PERIODS_WORK / (periods.len() + 1) + 1];
+    assert!(matches!(
+        calc.find_all_periods(&too_many, &periods).await,
+        Err(Fail::Rejected(InvalidEffectivePeriods))
+    ));
     Ok(())
 }

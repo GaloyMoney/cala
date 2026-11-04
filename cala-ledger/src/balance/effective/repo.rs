@@ -36,17 +36,18 @@ macro_rules! effective_columns {
          c.encumbrance_modified_at, c.updated_at, c.created_at"
     };
 }
+pub(crate) use effective_columns;
 
 /// One stored row: the cumulative balance of a pair as of the end of one
 /// effective date.
 #[derive(Debug, sqlx::FromRow)]
-struct EffectiveRow {
+pub(crate) struct EffectiveRow {
     journal_id: JournalId,
     account_id: AccountId,
     currency: String,
     effective: NaiveDate,
     version: i32,
-    all_time_version: i32,
+    pub(crate) all_time_version: i32,
     latest_entry_id: EntryId,
     settled_dr_balance: Decimal,
     settled_cr_balance: Decimal,
@@ -132,14 +133,14 @@ impl EffectiveRow {
 
 /// A stored row together with the owning account's normal balance type.
 #[derive(Debug, sqlx::FromRow)]
-struct AccountEffectiveRow {
+pub(crate) struct AccountEffectiveRow {
     #[sqlx(flatten)]
-    row: EffectiveRow,
+    pub(crate) row: EffectiveRow,
     normal_balance_type: DebitOrCredit,
 }
 
 impl AccountEffectiveRow {
-    fn into_account_balance(self) -> Result<AccountBalance, Fault<lanes!(Fatal)>> {
+    pub(crate) fn into_account_balance(self) -> Result<AccountBalance, Fault<lanes!(Fatal)>> {
         Ok(AccountBalance::new(
             self.normal_balance_type,
             self.row.into_balance_snapshot()?,
