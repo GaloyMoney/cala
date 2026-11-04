@@ -1,6 +1,7 @@
 use cel_interpreter::CelExpression;
 use serde::{Deserialize, Serialize};
 
+pub use crate::dimension::PartitionKey;
 pub use crate::param::*;
 use crate::primitives::*;
 
@@ -15,13 +16,6 @@ pub struct VelocityLimitValues {
     pub currency: Option<Currency>,
     pub params: Option<Vec<ParamDefinition>>,
     pub limit: Limit,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
-pub struct PartitionKey {
-    pub alias: String,
-    pub value: CelExpression,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

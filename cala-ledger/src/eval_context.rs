@@ -12,7 +12,7 @@ use crate::{
     primitives::{AccountId, EntryId},
 };
 
-pub struct EvalContext {
+pub(crate) struct EvalContext {
     clock: ClockHandle,
     transaction: CelValue,
     entry_values: HashMap<EntryId, CelValue>,
@@ -70,7 +70,7 @@ mod tests {
 
     use cel_interpreter::CelExpression;
 
-    use crate::{primitives::*, velocity::context::EvalContext};
+    use crate::{eval_context::EvalContext, primitives::*};
 
     use super::*;
 

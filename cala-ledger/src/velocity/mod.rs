@@ -2,7 +2,6 @@ use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 mod account_control;
 mod balance;
-mod context;
 mod control;
 pub mod error;
 mod limit;
@@ -370,7 +369,7 @@ mod __fuzz {
     //! Harness for the out-of-tree `velocity_enforce` fuzz target. Lives in
     //! this module so it can reach the `pub(super)` enforcement types.
     use super::account_control::AccountVelocityControl;
-    use super::context::EvalContext;
+    use crate::eval_context::EvalContext;
     use cala_types::{
         balance::BalanceSnapshot, entry::EntryValues, transaction::TransactionValues,
         velocity::VelocityContextAccountValues,

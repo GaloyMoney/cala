@@ -9,7 +9,7 @@
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use cala_types::{
     entry::EntryValues,
@@ -25,7 +25,7 @@ type EntryPosition = (usize, u32);
 
 /// Summed amounts and last entry of one layer within a [`DateDelta`].
 #[derive(Debug, Clone)]
-pub(super) struct LayerDelta {
+pub(crate) struct LayerDelta {
     pub dr_balance: Decimal,
     pub cr_balance: Decimal,
     /// Last entry of this layer; the nil UUID when no entry touched it.
@@ -57,7 +57,9 @@ impl LayerDelta {
 
 /// Everything one batch adds to one pair on one effective date.
 #[derive(Debug, Clone)]
-pub(super) struct DateDelta {
+pub(crate) struct DateDelta<K = ()> {
+    #[allow(dead_code)]
+    pub key: K,
     pub account_id: AccountId,
     pub currency: Currency,
     pub effective: NaiveDate,
@@ -71,17 +73,22 @@ pub(super) struct DateDelta {
     pub encumbrance: LayerDelta,
 }
 
-/// Accumulates a batch's entries into [`DateDelta`]s.
-#[derive(Debug, Default)]
-pub(super) struct DeltaAccumulator {
-    deltas: HashMap<(AccountId, Currency, NaiveDate), DateDelta>,
+/// Accumulates a batch's entries into [`DateDelta`]s, one per
+/// `(series key, account, currency, effective date)`.
+#[derive(Debug)]
+pub(crate) struct DeltaAccumulator<K = ()> {
+    deltas: HashMap<(K, AccountId, Currency, NaiveDate), DateDelta<K>>,
 }
 
-impl DeltaAccumulator {
-    pub fn new() -> Self {
-        Self::default()
+impl<K> Default for DeltaAccumulator<K> {
+    fn default() -> Self {
+        Self {
+            deltas: HashMap::new(),
+        }
     }
+}
 
+impl DeltaAccumulator<()> {
     /// Fold `entry`, belonging to the `tx_index`-th transaction of the batch
     /// and dated `effective`, into the delta of `account_id` (the entry's own
     /// account or one of its ancestor sets).
@@ -92,11 +99,30 @@ impl DeltaAccumulator {
         tx_index: usize,
         entry: &EntryValues,
     ) {
+        self.push_keyed((), account_id, effective, tx_index, entry)
+    }
+}
+
+impl<K: Clone + Eq + Hash> DeltaAccumulator<K> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Like `push`, within the series identified by `key`.
+    pub fn push_keyed(
+        &mut self,
+        key: K,
+        account_id: AccountId,
+        effective: NaiveDate,
+        tx_index: usize,
+        entry: &EntryValues,
+    ) {
         let position = (tx_index, entry.sequence);
         let delta = self
             .deltas
-            .entry((account_id, entry.currency, effective))
+            .entry((key.clone(), account_id, entry.currency, effective))
             .or_insert_with(|| DateDelta {
+                key,
                 account_id,
                 currency: entry.currency,
                 effective,
@@ -123,7 +149,69 @@ impl DeltaAccumulator {
         self.deltas.is_empty()
     }
 
-    pub fn into_deltas(self) -> Vec<DateDelta> {
+    pub fn into_deltas(self) -> Vec<DateDelta<K>> {
         self.deltas.into_values().collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use rust_decimal::Decimal;
+
+    use super::*;
+
+    fn entry(account_id: AccountId, sequence: u32, units: i64) -> EntryValues {
+        EntryValues {
+            id: EntryId::new(),
+            version: 1,
+            transaction_id: cala_types::primitives::TransactionId::new(),
+            journal_id: cala_types::primitives::JournalId::new(),
+            account_id,
+            entry_type: "TEST".to_string(),
+            sequence,
+            layer: Layer::Settled,
+            currency: "USD".parse().unwrap(),
+            direction: DebitOrCredit::Credit,
+            units: Decimal::from(units),
+            description: None,
+            metadata: None,
+        }
+    }
+
+    #[test]
+    fn push_keyed_with_distinct_keys_yields_two_deltas() {
+        let account_id = AccountId::new();
+        let date = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let mut deltas = DeltaAccumulator::<&str>::new();
+        deltas.push_keyed("a", account_id, date, 0, &entry(account_id, 1, 10));
+        deltas.push_keyed("b", account_id, date, 0, &entry(account_id, 2, 5));
+        deltas.push_keyed("a", account_id, date, 0, &entry(account_id, 3, 7));
+
+        let mut deltas = deltas.into_deltas();
+        deltas.sort_by_key(|d| d.key);
+        assert_eq!(deltas.len(), 2);
+        assert_eq!(deltas[0].key, "a");
+        assert_eq!(deltas[0].entries, 2);
+        assert_eq!(deltas[0].settled.cr_balance, Decimal::from(17));
+        assert_eq!(deltas[1].key, "b");
+        assert_eq!(deltas[1].entries, 1);
+        assert_eq!(deltas[1].settled.cr_balance, Decimal::from(5));
+    }
+
+    #[test]
+    fn push_on_unkeyed_accumulator_folds_into_one_delta() {
+        let account_id = AccountId::new();
+        let date = NaiveDate::from_ymd_opt(2026, 1, 15).unwrap();
+        let first = entry(account_id, 1, 10);
+        let second = entry(account_id, 2, 5);
+        let mut deltas = DeltaAccumulator::new();
+        deltas.push(account_id, date, 0, &first);
+        deltas.push(account_id, date, 0, &second);
+
+        let deltas = deltas.into_deltas();
+        assert_eq!(deltas.len(), 1);
+        assert_eq!(deltas[0].entries, 2);
+        assert_eq!(deltas[0].settled.cr_balance, Decimal::from(15));
+        assert_eq!(deltas[0].last_entry_id, second.id);
     }
 }

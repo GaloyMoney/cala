@@ -135,7 +135,9 @@
 
 mod account_set_member;
 mod cel_context;
+mod dimension;
 mod ec_rollup;
+mod eval_context;
 mod param;
 
 pub mod account;
