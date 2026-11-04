@@ -18,7 +18,7 @@ use cala_types::{
     primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
 };
 
-use super::delta::DateDelta;
+use super::{delta::DateDelta, periods::Checkpoints};
 
 type BalanceRangeResult =
     HashMap<BalanceId, (Option<AccountBalance>, u32, Option<AccountBalance>, u32)>;
@@ -152,6 +152,14 @@ impl AccountEffectiveRow {
 #[derive(Debug, sqlx::FromRow)]
 struct RangeEndRow {
     first: bool,
+    #[sqlx(flatten)]
+    account_row: AccountEffectiveRow,
+}
+
+/// The latest stored row of a pair at or before `cutoff`.
+#[derive(Debug, sqlx::FromRow)]
+struct CheckpointRow {
+    cutoff: NaiveDate,
     #[sqlx(flatten)]
     account_row: AccountEffectiveRow,
 }
@@ -670,6 +678,77 @@ impl EffectiveBalanceRepo {
         .await?;
 
         Self::collect_range_ends(rows)
+    }
+
+    /// Fetches, in one statement, the latest row at or before each cutoff for
+    /// every id. Pairs without a row at or before a cutoff have no entry for
+    /// it. Duplicate ids are probed once.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.balances.effective.find_checkpoints",
+        skip_all,
+        fields(ids_count = ids.len(), cutoffs_count = cutoffs.len())
+    )]
+    pub(super) async fn find_checkpoints(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+        cutoffs: &[NaiveDate],
+    ) -> Result<Checkpoints, CalaFault> {
+        let mut seen = std::collections::HashSet::with_capacity(ids.len());
+        let mut journal_ids = Vec::with_capacity(ids.len());
+        let mut account_ids = Vec::with_capacity(ids.len());
+        let mut currencies = Vec::with_capacity(ids.len());
+        for id in ids.iter().filter(|id| seen.insert(**id)) {
+            let (journal_id, account_id, currency) = id;
+            journal_ids.push(uuid::Uuid::from(journal_id));
+            account_ids.push(uuid::Uuid::from(account_id));
+            currencies.push(currency.code().to_string());
+        }
+
+        let rows = sqlx::query_as::<_, CheckpointRow>(concat!(
+            "WITH ids AS (
+              SELECT v.journal_id, v.account_id, v.currency, a.normal_balance_type
+              FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
+                AS v(journal_id, account_id, currency)
+              JOIN cala_accounts a ON a.id = v.account_id
+            )
+            SELECT d.cutoff, ",
+            effective_columns!(),
+            ", ids.normal_balance_type
+            FROM ids
+            CROSS JOIN UNNEST($4::date[]) AS d(cutoff)
+            JOIN LATERAL (
+              SELECT *
+              FROM cala_cumulative_effective_balances
+              WHERE journal_id = ids.journal_id
+                AND account_id = ids.account_id
+                AND currency = ids.currency
+                AND effective <= d.cutoff
+              ORDER BY effective DESC
+              LIMIT 1
+            ) c ON TRUE"
+        ))
+        .bind(&journal_ids[..])
+        .bind(&account_ids[..])
+        .bind(&currencies[..])
+        .bind(cutoffs)
+        .fetch_all(op.into_executor())
+        .await?;
+
+        let mut checkpoints = HashMap::with_capacity(rows.len());
+        for CheckpointRow {
+            cutoff,
+            account_row,
+        } in rows
+        {
+            let all_time_version = account_row.row.all_time_version as u32;
+            let balance = account_row.into_account_balance()?;
+            let details = &balance.details;
+            let id = (details.journal_id, details.account_id, details.currency);
+            checkpoints.insert((cutoff, id), (balance, all_time_version));
+        }
+        Ok(checkpoints)
     }
 
     #[es_entity::errlanes::instrument(

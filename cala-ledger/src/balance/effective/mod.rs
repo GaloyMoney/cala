@@ -5,6 +5,7 @@ mod delta;
 mod differential_tests;
 #[cfg(any(test, feature = "fuzz"))]
 mod fold_oracle;
+mod periods;
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -25,18 +26,22 @@ use super::{
 };
 
 use delta::DeltaAccumulator;
+pub use periods::{
+    EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods, PeriodBalance,
+    PeriodGranularity, MAX_EFFECTIVE_PERIODS, MAX_EFFECTIVE_PERIODS_WORK,
+};
 use repo::*;
 
 #[derive(Clone)]
 pub struct EffectiveBalances {
     repo: EffectiveBalanceRepo,
-    _pool: PgPool,
+    pool: PgPool,
 }
 impl EffectiveBalances {
     pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
             repo: EffectiveBalanceRepo::new(pool),
-            _pool: pool.clone(),
+            pool: pool.clone(),
         }
     }
 
@@ -159,6 +164,107 @@ impl EffectiveBalances {
                 BalanceRange::from_bounds(start, start_version, end, end_version)
                     .map(|range| (id, range))
             })
+            .collect())
+    }
+
+    /// The series of whole `periods` for one balance: per period the opening
+    /// cumulative balance, the activity inside it and the closing cumulative
+    /// balance, served by one statement.
+    ///
+    /// See [`Self::find_all_periods_in_op`] for the semantics shared by the
+    /// period reads. A balance with no row at or before the last period's end
+    /// (including an unknown account) is [`BalanceNotFound`].
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.balance.effective.find_periods",
+        skip(self)
+    )]
+    pub async fn find_periods(
+        &self,
+        journal_id: JournalId,
+        account_id: impl Into<AccountId> + std::fmt::Debug,
+        currency: Currency,
+        periods: &EffectivePeriods,
+    ) -> Result<EffectiveBalanceSeries, Fail<BalanceNotFound, lanes!(Transient, Fatal)>> {
+        let account_id = account_id.into();
+        let id = (journal_id, account_id, currency);
+        self.find_series_in_op(&self.pool, &[id], periods)
+            .await?
+            .remove(&id)
+            .ok_or_else(|| BalanceNotFound(journal_id, account_id, currency).into())
+    }
+
+    /// [`Self::find_all_periods_in_op`] on the ledger's pool.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_periods", skip(self, ids), fields(ids_count = ids.len(), periods = periods.len()))]
+    pub async fn find_all_periods(
+        &self,
+        ids: &[BalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<
+        HashMap<BalanceId, EffectiveBalanceSeries>,
+        Fail<InvalidEffectivePeriods, lanes!(Transient, Fatal)>,
+    > {
+        self.find_all_periods_in_op(&self.pool, ids, periods).await
+    }
+
+    /// The series of whole `periods` for every id in `ids`, served by one
+    /// statement however many ids or periods are requested. Each series has
+    /// exactly `periods.len()` entries; per period `range.open` is the
+    /// cumulative balance at the end of the previous period, `range.period`
+    /// the activity inside it (`details.version` counts its entries) and
+    /// `range.close` the cumulative balance at its end.
+    ///
+    /// * **Explicit dates.** Every cutoff comes from `periods`; the database
+    ///   clock is never consulted. A caller wanting "up to today" builds the
+    ///   periods from today's date.
+    /// * **Absent ids.** An id whose account does not exist, or whose pair
+    ///   has no row at or before the last period's end, is absent from the
+    ///   map (as in [`Self::find_all_in_range`]). A currency the account
+    ///   never used is absent too.
+    /// * **Zero and carried periods.** Periods before the pair's first row
+    ///   are all-zero; periods after its last row carry the last cumulative
+    ///   balance forward with zero activity and `version == 0`.
+    /// * **Work limit.** `ids.len() * (periods.len() + 1)` above
+    ///   [`MAX_EFFECTIVE_PERIODS_WORK`] is rejected with
+    ///   [`InvalidEffectivePeriods`] before any statement runs.
+    /// * **Consistency.** The read sees what is materialised. Synchronous
+    ///   accounts and sets are current as of commit; eventually-consistent
+    ///   accounts and sets lag the streaming rollup, so a caller wanting a
+    ///   complete picture fences first with
+    ///   [`CalaLedger::ec_rollup_status`](crate::CalaLedger::ec_rollup_status)
+    ///   `.await_completion(..)` (see [`Self::list_modified_since`]). Running
+    ///   on a repeatable-read transaction lets several reads share one
+    ///   snapshot.
+    #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.balance.effective.find_all_periods_in_op", skip(self, op, ids), fields(ids_count = ids.len(), periods = periods.len()))]
+    pub async fn find_all_periods_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<
+        HashMap<BalanceId, EffectiveBalanceSeries>,
+        Fail<InvalidEffectivePeriods, lanes!(Transient, Fatal)>,
+    > {
+        let probes = ids.len().saturating_mul(periods.len() + 1);
+        if probes > MAX_EFFECTIVE_PERIODS_WORK {
+            return Err(InvalidEffectivePeriods.into());
+        }
+        Ok(self.find_series_in_op(op, ids, periods).await?)
+    }
+
+    async fn find_series_in_op(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        ids: &[BalanceId],
+        periods: &EffectivePeriods,
+    ) -> Result<HashMap<BalanceId, EffectiveBalanceSeries>, CalaFault> {
+        let checkpoints = self
+            .repo
+            .find_checkpoints(op, ids, periods.cutoffs())
+            .await?;
+        Ok(ids
+            .iter()
+            .filter_map(|id| periods::fold_series(*id, periods, &checkpoints).map(|s| (*id, s)))
             .collect())
     }
 

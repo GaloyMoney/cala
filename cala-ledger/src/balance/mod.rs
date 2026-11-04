@@ -60,6 +60,10 @@ pub use cursor::*;
 #[cfg(feature = "fuzz")]
 pub use effective::fuzz_recalculate;
 use effective::*;
+pub use effective::{
+    EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods, PeriodBalance,
+    PeriodGranularity, MAX_EFFECTIVE_PERIODS, MAX_EFFECTIVE_PERIODS_WORK,
+};
 use error::BalanceNotFound;
 use repo::*;
 pub(crate) use snapshot::*;
