@@ -43,7 +43,8 @@ impl Entries {
         name = "cala_ledger.entries.find_all_in_op",
         skip_all
     )]
-    pub(crate) async fn find_all_in_op(
+    /// Loads the complete set of identified entries on the caller's snapshot.
+    pub async fn find_all_in_op(
         &self,
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         entry_ids: &[EntryId],

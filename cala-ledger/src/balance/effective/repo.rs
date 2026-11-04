@@ -156,6 +156,13 @@ struct RangeEndRow {
     account_row: AccountEffectiveRow,
 }
 
+#[derive(Debug, sqlx::FromRow)]
+struct GridRow {
+    cutoff: NaiveDate,
+    #[sqlx(flatten)]
+    account_row: AccountEffectiveRow,
+}
+
 #[derive(Debug, Clone)]
 pub(super) struct EffectiveBalanceRepo {
     pool: PgPool,
@@ -164,6 +171,78 @@ pub(super) struct EffectiveBalanceRepo {
 impl EffectiveBalanceRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
+    }
+
+    pub(super) async fn find_grid(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+        grid: &super::EffectiveBalanceGrid,
+    ) -> Result<Vec<HashMap<BalanceId, BalanceRange>>, CalaFault> {
+        if grid.ids.is_empty() || grid.ranges.is_empty() {
+            return Ok(grid.ranges.iter().map(|_| HashMap::new()).collect());
+        }
+        let journals: Vec<_> = grid.ids.iter().map(|id| uuid::Uuid::from(id.0)).collect();
+        let accounts: Vec<_> = grid.ids.iter().map(|id| uuid::Uuid::from(id.1)).collect();
+        let currencies: Vec<_> = grid.ids.iter().map(|id| id.2.code().to_string()).collect();
+        let rows = sqlx::query_as::<_, GridRow>(concat!(
+            "WITH ids AS (
+                SELECT v.*, a.normal_balance_type
+                FROM UNNEST($1::uuid[], $2::uuid[], $3::text[])
+                    AS v(journal_id, account_id, currency)
+                JOIN cala_accounts a ON a.id = v.account_id
+            )
+            SELECT d.cutoff, ",
+            effective_columns!(),
+            ", ids.normal_balance_type
+            FROM ids CROSS JOIN UNNEST($4::date[]) AS d(cutoff)
+            JOIN LATERAL (
+                SELECT * FROM cala_cumulative_effective_balances
+                WHERE journal_id = ids.journal_id AND account_id = ids.account_id
+                    AND currency = ids.currency AND effective <= d.cutoff
+                ORDER BY effective DESC LIMIT 1
+            ) c ON TRUE"
+        ))
+        .bind(journals)
+        .bind(accounts)
+        .bind(currencies)
+        .bind(&grid.boundaries)
+        .fetch_all(op.into_executor())
+        .await?;
+        let mut snapshots = HashMap::new();
+        for GridRow {
+            cutoff,
+            account_row,
+        } in rows
+        {
+            let version = account_row.row.all_time_version as u32;
+            let balance = account_row.into_account_balance()?;
+            let key = (
+                balance.details.journal_id,
+                balance.details.account_id,
+                balance.details.currency,
+            );
+            snapshots.insert((cutoff, key), (balance, version));
+        }
+        Ok(grid
+            .ranges
+            .iter()
+            .map(|(from, until)| {
+                grid.ids
+                    .iter()
+                    .filter_map(|id| {
+                        let open = from.pred_opt().and_then(|date| snapshots.get(&(date, *id)));
+                        let close = snapshots.get(&(*until, *id));
+                        BalanceRange::from_bounds(
+                            open.map(|(balance, _)| balance.clone()),
+                            open.map_or(0, |(_, version)| *version),
+                            close.map(|(balance, _)| balance.clone()),
+                            close.map_or(0, |(_, version)| *version),
+                        )
+                        .map(|range| (*id, range))
+                    })
+                    .collect()
+            })
+            .collect())
     }
 
     pub async fn find(
