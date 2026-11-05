@@ -1,3 +1,12 @@
+# [cala release v0.34.0](https://github.com/GaloyMoney/cala/releases/tag/0.34.0)
+
+
+
+### Features
+
+- Per-entry CEL condition (#924)
+- [**breaking**] Calculations with condition- and dimension-scoped effective series (#923)
+
 # [cala release v0.33.4](https://github.com/GaloyMoney/cala/releases/tag/0.33.4)
 
 
