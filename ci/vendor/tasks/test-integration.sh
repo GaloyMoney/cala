@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 #! Auto synced from Shared CI Resources repository
-#! Don't change this file, instead change it in github.com/GaloyMoney/concourse-shared
+#! Don't change this file, instead change it in github.com/GaloyMoney/galoy-concourse-shared
 
 set -euo pipefail
 
