@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use cala_types::primitives::BalanceId;
 
-use crate::balance::account_balance::{AccountBalance, BalanceRange};
+use crate::balance::{AccountBalance, BalanceRange};
 
 /// Bounds the dates in one request. Equals `MAX_EFFECTIVE_PERIODS + 1` so a
 /// period run of `MAX_EFFECTIVE_PERIODS` fits as a date set.
@@ -170,7 +170,7 @@ pub(crate) fn fold_cumulative(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::balance::snapshot::UNASSIGNED_ENTRY_ID;
+    use crate::balance::UNASSIGNED_ENTRY_ID;
     use cala_types::{
         balance::{BalanceAmount, BalanceSnapshot},
         primitives::{AccountId, Currency, DebitOrCredit, EntryId, JournalId},

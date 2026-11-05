@@ -10,13 +10,11 @@ use cala_types::{
 };
 
 use crate::{
-    balance::{
-        effective::{
-            cumulative::Checkpoints,
-            delta::DateDelta,
-            repo::{effective_columns, AccountEffectiveRow},
-        },
-        AccountBalance,
+    balance::AccountBalance,
+    effective::{
+        cumulative::Checkpoints,
+        delta::DateDelta,
+        row::{effective_columns, AccountEffectiveRow},
     },
     error::CalaFault,
 };
@@ -47,7 +45,7 @@ struct CalculationEffectiveRow {
 
 impl CalculationEffectiveRow {
     fn all_time_version(&self) -> u32 {
-        self.account_row.row.all_time_version as u32
+        self.account_row.all_time_version()
     }
 
     fn into_series(self) -> Result<(CalculationBalanceId, AccountBalance), Fault<lanes!(Fatal)>> {
@@ -495,11 +493,11 @@ impl CalculationEffectiveBalanceRepo {
         }
         let unassigned = EntryId::from(uuid::Uuid::nil());
 
-        let calculation_ids: Vec<CalculationId> = deltas.iter().map(|d| d.key.0).collect();
+        let calculation_ids: Vec<CalculationId> = deltas.iter().map(|d| d.series.0).collect();
         let account_ids: Vec<AccountId> = deltas.iter().map(|d| d.account_id).collect();
         let currencies: Vec<&str> = deltas.iter().map(|d| d.currency.code()).collect();
         let dimensions: Vec<serde_json::Value> =
-            deltas.iter().map(|d| d.key.1.inner().clone()).collect();
+            deltas.iter().map(|d| d.series.1.inner().clone()).collect();
         let effectives: Vec<NaiveDate> = deltas.iter().map(|d| d.effective).collect();
 
         sqlx::query!(
@@ -705,8 +703,8 @@ mod tests {
     use super::CalculationEffectiveBalanceRepo;
     use crate::{
         account::NewAccount,
-        balance::effective::delta::DeltaAccumulator,
         calculation::{error::CalculationBalanceNotFound, NewCalculation},
+        effective::delta::DeltaAccumulator,
         journal::NewJournal,
         CalaLedger, CalaLedgerConfig,
     };

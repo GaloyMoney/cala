@@ -1,10 +1,10 @@
-//! Per-`(pair, effective date)` deltas.
+//! Per-`(series, effective date)` deltas.
 //!
 //! A batch of entries is folded in the application into one [`DateDelta`]
-//! per `(account, currency, effective date)`. Only these deltas — never any
-//! stored balance row — cross the wire to Postgres, which adds them to the
-//! affected rows in a single set-based statement
-//! (`EffectiveBalanceRepo::apply_deltas_in_op`).
+//! per `(series, effective date)`. Only these deltas — never any stored
+//! balance row — cross the wire to Postgres, which adds them to the
+//! affected rows in a single set-based statement (each table's
+//! `apply_deltas_in_op`).
 
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
@@ -16,7 +16,7 @@ use cala_types::{
     primitives::{AccountId, Currency, DebitOrCredit, EntryId, Layer},
 };
 
-use crate::balance::snapshot::UNASSIGNED_ENTRY_ID;
+use crate::balance::UNASSIGNED_ENTRY_ID;
 
 /// Position of an entry in the batch: transaction landing order, then the
 /// entry's sequence within its transaction. The greatest position is the
@@ -55,10 +55,15 @@ impl LayerDelta {
     }
 }
 
-/// Everything one batch adds to one pair on one effective date.
+/// Everything one batch adds to one series on one effective date.
+///
+/// A series is identified by `(series, account_id, currency)`. `series` is
+/// the part of that key beyond the account and currency: `()` for the
+/// account table, which has exactly one series per pair, and
+/// `(CalculationId, Window)` for the calculation table.
 #[derive(Debug, Clone)]
 pub(crate) struct DateDelta<K = ()> {
-    pub key: K,
+    pub series: K,
     pub account_id: AccountId,
     pub currency: Currency,
     pub effective: NaiveDate,
@@ -73,7 +78,7 @@ pub(crate) struct DateDelta<K = ()> {
 }
 
 /// Accumulates a batch's entries into [`DateDelta`]s, one per
-/// `(series key, account, currency, effective date)`.
+/// `(series, account, currency, effective date)`.
 #[derive(Debug)]
 pub(crate) struct DeltaAccumulator<K = ()> {
     deltas: HashMap<(K, AccountId, Currency, NaiveDate), DateDelta<K>>,
@@ -107,10 +112,10 @@ impl<K: Clone + Eq + Hash> DeltaAccumulator<K> {
         Self::default()
     }
 
-    /// Like `push`, within the series identified by `key`.
+    /// Like `push`, within the `series` of `account_id`.
     pub fn push_keyed(
         &mut self,
-        key: K,
+        series: K,
         account_id: AccountId,
         effective: NaiveDate,
         tx_index: usize,
@@ -119,9 +124,9 @@ impl<K: Clone + Eq + Hash> DeltaAccumulator<K> {
         let position = (tx_index, entry.sequence);
         let delta = self
             .deltas
-            .entry((key.clone(), account_id, entry.currency, effective))
+            .entry((series.clone(), account_id, entry.currency, effective))
             .or_insert_with(|| DateDelta {
-                key,
+                series,
                 account_id,
                 currency: entry.currency,
                 effective,
@@ -187,12 +192,12 @@ mod tests {
         deltas.push_keyed("a", account_id, date, 0, &entry(account_id, 3, 7));
 
         let mut deltas = deltas.into_deltas();
-        deltas.sort_by_key(|d| d.key);
+        deltas.sort_by_key(|d| d.series);
         assert_eq!(deltas.len(), 2);
-        assert_eq!(deltas[0].key, "a");
+        assert_eq!(deltas[0].series, "a");
         assert_eq!(deltas[0].entries, 2);
         assert_eq!(deltas[0].settled.cr_balance, Decimal::from(17));
-        assert_eq!(deltas[1].key, "b");
+        assert_eq!(deltas[1].series, "b");
         assert_eq!(deltas[1].entries, 1);
         assert_eq!(deltas[1].settled.cr_balance, Decimal::from(5));
     }

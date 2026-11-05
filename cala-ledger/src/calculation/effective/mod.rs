@@ -22,11 +22,11 @@ use cala_types::{
 
 use crate::{
     balance::{
-        effective::{cumulative::fold_cumulative, delta::DateDelta, periods::project_series},
         AccountBalance, BalanceRange, CumulativeBalances, EffectiveBalanceSeries, EffectiveDates,
         EffectivePeriods, InvalidEffectiveDates, InvalidEffectivePeriods,
         MAX_EFFECTIVE_PERIODS_WORK,
     },
+    effective::{cumulative::fold_cumulative, delta::DateDelta, periods::project_series},
     error::CalaFault,
 };
 

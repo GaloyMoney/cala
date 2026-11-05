@@ -1,13 +1,9 @@
 use chrono::{Datelike, Months, NaiveDate};
 use es_entity::errlanes;
 
-use crate::balance::account_balance::{AccountBalance, BalanceRange};
+use crate::balance::{AccountBalance, BalanceRange};
 
-#[cfg(test)]
-use super::cumulative::{fold_cumulative, Checkpoints};
 use super::cumulative::{CumulativeBalances, EffectiveDates};
-#[cfg(test)]
-use cala_types::primitives::BalanceId;
 
 /// Bounds on one request. Day granularity over a year is 366 periods.
 pub const MAX_EFFECTIVE_PERIODS: usize = 400;
@@ -198,31 +194,29 @@ pub(crate) fn project_series(
     }
 }
 
-/// Folds the checkpoints fetched at `periods.dates()` into one series.
-/// Returns `None` when the pair has no checkpoint at all, i.e. no row at or
-/// before the last cutoff.
-#[cfg(test)]
-pub(crate) fn fold_series(
-    id: BalanceId,
-    periods: &EffectivePeriods,
-    checkpoints: &Checkpoints,
-) -> Option<EffectiveBalanceSeries> {
-    fold_cumulative(id, periods.dates(), checkpoints)
-        .map(|cumulative| project_series(periods, &cumulative))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::cumulative::Checkpoint;
+    use super::super::cumulative::{fold_cumulative, Checkpoint, Checkpoints};
     use super::*;
-    use crate::balance::snapshot::UNASSIGNED_ENTRY_ID;
+    use crate::balance::UNASSIGNED_ENTRY_ID;
     use cala_types::{
         balance::{BalanceAmount, BalanceSnapshot},
-        primitives::{AccountId, Currency, DebitOrCredit, EntryId, JournalId},
+        primitives::{AccountId, BalanceId, Currency, DebitOrCredit, EntryId, JournalId},
     };
     use chrono::Utc;
     use rust_decimal::Decimal;
     use std::collections::HashMap;
+
+    /// The checkpoints fetched at `periods.dates()`, folded and projected
+    /// onto the periods; `None` when the pair has no checkpoint at all.
+    fn fold_series(
+        id: BalanceId,
+        periods: &EffectivePeriods,
+        checkpoints: &Checkpoints,
+    ) -> Option<EffectiveBalanceSeries> {
+        fold_cumulative(id, periods.dates(), checkpoints)
+            .map(|cumulative| project_series(periods, &cumulative))
+    }
 
     fn date(y: i32, m: u32, d: u32) -> NaiveDate {
         NaiveDate::from_ymd_opt(y, m, d).unwrap()

@@ -218,7 +218,7 @@ mod sql_contract_tests {
 
 #[cfg(test)]
 mod rejection_code_contracts {
-    use crate::balance::effective::cumulative::InvalidEffectiveDatesCode;
+    use crate::effective::cumulative::InvalidEffectiveDatesCode;
     use crate::param::ParamDefaultRejectionCode;
     use crate::{
         account::error::*, account_set::error::*, balance::error::*, calculation::error::*,

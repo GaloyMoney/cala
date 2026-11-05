@@ -138,6 +138,7 @@ mod calculation_rollup;
 mod cel_context;
 mod dimension;
 mod ec_rollup;
+mod effective;
 mod eval_context;
 mod param;
 

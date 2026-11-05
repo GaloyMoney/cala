@@ -28,11 +28,11 @@ use cala_types::{
 };
 
 use super::{
-    delta::DeltaAccumulator,
     fold_oracle::{EffectiveBalanceData, SnapshotOrEntry},
     repo::EffectiveBalanceRepo,
 };
 use crate::balance::cursor::EffectiveBalancesModifiedCursor;
+use crate::effective::delta::DeltaAccumulator;
 
 type Pair = (AccountId, Currency);
 

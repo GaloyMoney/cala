@@ -1,13 +1,10 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail};
-pub(crate) mod cumulative;
-pub(crate) mod delta;
 #[cfg(test)]
 mod differential_tests;
 #[cfg(any(test, feature = "fuzz"))]
 mod fold_oracle;
-pub(crate) mod periods;
-pub(crate) mod repo;
+mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
 use sqlx::PgPool;
@@ -26,13 +23,13 @@ use super::{
     EcRollupTxn,
 };
 
-pub use cumulative::{
-    CumulativeBalances, EffectiveDates, InvalidEffectiveDates, MAX_EFFECTIVE_DATES,
-};
-use delta::DeltaAccumulator;
-pub use periods::{
-    EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods, PeriodBalance,
-    PeriodGranularity, MAX_EFFECTIVE_PERIODS, MAX_EFFECTIVE_PERIODS_WORK,
+use crate::effective::{
+    cumulative::{fold_cumulative, CumulativeBalances, EffectiveDates, InvalidEffectiveDates},
+    delta::DeltaAccumulator,
+    periods::{
+        project_series, EffectiveBalanceSeries, EffectivePeriods, InvalidEffectivePeriods,
+        MAX_EFFECTIVE_PERIODS_WORK,
+    },
 };
 use repo::*;
 
@@ -266,7 +263,7 @@ impl EffectiveBalances {
             .find_cumulative_at_unchecked(op, ids, periods.dates())
             .await?
             .into_iter()
-            .map(|(id, cumulative)| (id, periods::project_series(periods, &cumulative)))
+            .map(|(id, cumulative)| (id, project_series(periods, &cumulative)))
             .collect())
     }
 
@@ -362,9 +359,7 @@ impl EffectiveBalances {
         let checkpoints = self.repo.find_checkpoints(op, ids, dates.dates()).await?;
         Ok(ids
             .iter()
-            .filter_map(|id| {
-                cumulative::fold_cumulative(*id, dates, &checkpoints).map(|c| (*id, c))
-            })
+            .filter_map(|id| fold_cumulative(*id, dates, &checkpoints).map(|c| (*id, c)))
             .collect())
     }
 
