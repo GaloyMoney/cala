@@ -175,6 +175,14 @@ CREATE TABLE cala_entries (
 CREATE INDEX idx_cala_entries_transaction_id ON cala_entries (transaction_id);
 CREATE INDEX idx_cala_entries_account_id ON cala_entries (account_id, created_at DESC, id DESC);
 CREATE INDEX idx_cala_entries_journal_id_created_at ON cala_entries (journal_id, created_at DESC, id DESC);
+-- "Entries for account (set)" pagination (entry repo's
+-- list_for_account_{set_}id_by_created_at) joins balance rows to entries by
+-- latest_entry_id and orders pages by entry created_at. Together with
+-- idx_cala_balance_history_account_id_latest_entry_id this lets the planner
+-- walk entries newest-first (index-only, no sort) probing the balance index
+-- per entry, so a page costs O(page) however much balance history the
+-- account carries.
+CREATE INDEX idx_cala_entries_created_at_id ON cala_entries (created_at DESC, id DESC);
 
 CREATE TABLE cala_entry_events (
   id UUID NOT NULL REFERENCES cala_entries(id),
@@ -210,6 +218,9 @@ CREATE TABLE cala_balance_history (
   UNIQUE(account_id, journal_id, currency, version),
   FOREIGN KEY (account_id, journal_id, currency) REFERENCES cala_current_balances(account_id, journal_id, currency)
 );
+-- Probed per entry by the "entries for account (set)" pages; see
+-- idx_cala_entries_created_at_id.
+CREATE INDEX idx_cala_balance_history_account_id_latest_entry_id ON cala_balance_history (account_id, latest_entry_id);
 
 CREATE TABLE cala_cumulative_effective_balances (
   journal_id UUID NOT NULL,
@@ -244,6 +255,69 @@ CREATE TABLE cala_cumulative_effective_balances (
 -- `(journal_id, updated_at)` index is sufficient for the row filter.
 CREATE INDEX idx_cala_cumulative_effective_balances_journal_updated_at
     ON cala_cumulative_effective_balances (journal_id, updated_at);
+
+CREATE TABLE cala_calculations (
+  id UUID PRIMARY KEY,
+  journal_id UUID NOT NULL REFERENCES cala_journals(id),
+  code VARCHAR NOT NULL UNIQUE,
+  name VARCHAR NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_cala_calculations_journal_id ON cala_calculations (journal_id);
+
+CREATE TABLE cala_calculation_events (
+  id UUID NOT NULL REFERENCES cala_calculations(id),
+  sequence INT NOT NULL,
+  event_type VARCHAR NOT NULL,
+  event JSONB NOT NULL,
+  context JSONB DEFAULT NULL,
+  recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(id, sequence)
+);
+
+CREATE TABLE cala_calculation_attachments (
+  calculation_id UUID NOT NULL REFERENCES cala_calculations(id),
+  account_id UUID NOT NULL REFERENCES cala_accounts(id),
+  activation_sequence BIGINT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(calculation_id, account_id)
+);
+CREATE INDEX idx_cala_calculation_attachments_account_id
+  ON cala_calculation_attachments (account_id);
+
+-- Same columns as cala_cumulative_effective_balances plus the two series key
+-- columns. One row per (series, effective date) holding the cumulative
+-- balance at the end of that date.
+CREATE TABLE cala_calculation_effective_balances (
+  journal_id UUID NOT NULL,
+  calculation_id UUID NOT NULL REFERENCES cala_calculations(id),
+  account_id UUID NOT NULL,
+  currency VARCHAR NOT NULL,
+  dimensions JSONB NOT NULL,
+  effective DATE NOT NULL,
+  version INT NOT NULL,
+  all_time_version INT NOT NULL,
+  latest_entry_id UUID NOT NULL,
+  settled_dr_balance NUMERIC NOT NULL,
+  settled_cr_balance NUMERIC NOT NULL,
+  settled_entry_id UUID NOT NULL,
+  settled_modified_at TIMESTAMPTZ NOT NULL,
+  pending_dr_balance NUMERIC NOT NULL,
+  pending_cr_balance NUMERIC NOT NULL,
+  pending_entry_id UUID NOT NULL,
+  pending_modified_at TIMESTAMPTZ NOT NULL,
+  encumbrance_dr_balance NUMERIC NOT NULL,
+  encumbrance_cr_balance NUMERIC NOT NULL,
+  encumbrance_entry_id UUID NOT NULL,
+  encumbrance_modified_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (journal_id, calculation_id, account_id, currency, dimensions, effective)
+);
+-- Modified-since reads over narrow daily windows, same reasoning as
+-- idx_cala_cumulative_effective_balances_journal_updated_at.
+CREATE INDEX idx_cala_calculation_effective_balances_updated_at
+  ON cala_calculation_effective_balances (journal_id, calculation_id, updated_at);
 
 CREATE TABLE cala_velocity_limits (
   id UUID PRIMARY KEY,
