@@ -850,9 +850,9 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "errlanes"
-version = "0.20.0"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f2d5680bfa2d1007b8023dae0d14b821bfd2edba0164b7dbddf209c984365cc"
+checksum = "58ae66a9f5fed89cbd89631469fdff2410013dfdc0fe22ea6197080c2ddd99b5"
 dependencies = [
  "errlanes-derive",
  "serde_json",
@@ -862,9 +862,9 @@ dependencies = [
 
 [[package]]
 name = "errlanes-derive"
-version = "0.20.0"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34a2bd7dc97d0b8f78bdf6e27dfd38eb7f222ead4109ee0ac2171d9f5bcacd01"
+checksum = "31d98c72ae472a49b605915a8c8172e435cda4be5aa9ae5a5b7f3bdaf0b3302d"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -876,9 +876,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity"
-version = "0.20.0"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ad45d42c5bfc77b1e22f995b2cbd931bcfdc07e77008f55923978f6c79df94e"
+checksum = "d20561c4d03cbe79ca95938e4b5860b35fca30eef5d3c43d356a8ae443902bce"
 dependencies = [
  "async-stream",
  "chrono",
@@ -903,9 +903,9 @@ dependencies = [
 
 [[package]]
 name = "es-entity-macros"
-version = "0.20.0"
+version = "0.20.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3233edc9906cbeecadaed6f0c5bde2be46f57010af00ea005142da37b8bb57dd"
+checksum = "1d6a2538c8f33779cc3cc82e1ea25fe5cb479326b180ad288faef7485d02c825"
 dependencies = [
  "convert_case",
  "darling 0.24.0",
@@ -1424,9 +1424,9 @@ checksum = "92ecc6618181def0457392ccd0ee51198e065e016d1d527a7ac1b6dc7c1f09d2"
 
 [[package]]
 name = "job"
-version = "0.19.0"
+version = "0.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f61714a013797bc4563bbf247b664caa2a5d677332b3279a1193156a8f66d25"
+checksum = "4b0d7feaff084fc7d1165e6e09adec9b38e0c717d750ee9d30ad2ec10ec58622"
 dependencies = [
  "async-trait",
  "bon",
@@ -1630,9 +1630,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b0859b093069827068a3f2eeffbf70a50dc913be9c6593766b06b55192a20e7"
+checksum = "1a8bca08035725b59f2e33dcbe781a6016ef1b7ed7894e0952dc529ef192b3e7"
 dependencies = [
  "async-trait",
  "bon",
@@ -1652,9 +1652,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8cf845b88e4b01a9ec31ac721e93eace9843ff9bdd45c054537e3dcfd7b94c4"
+checksum = "82b42a8538f44b0d605fc42ee6d074fccaba26af6bdebe70cdab337fe9b5aca5"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
@@ -3312,7 +3312,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
