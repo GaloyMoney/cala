@@ -5,6 +5,7 @@ use std::{env, fs, path::PathBuf};
 use cala_ledger::{
     account::AccountEvent,
     account_set::AccountSetEvent,
+    calculation::CalculationEvent,
     entry::EntryEvent,
     journal::JournalEvent,
     transaction::TransactionEvent,
@@ -63,6 +64,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             name: "VelocityControlEvent",
             filename: "velocity_control_event_schema.json",
             generate: || schema_for!(VelocityControlEvent),
+        },
+        SchemaInfo {
+            name: "CalculationEvent",
+            filename: "calculation_event_schema.json",
+            generate: || schema_for!(CalculationEvent),
         },
     ];
 

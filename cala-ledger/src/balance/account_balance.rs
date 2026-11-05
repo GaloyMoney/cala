@@ -50,7 +50,7 @@ impl AccountBalance {
         }
     }
 
-    pub(super) fn derive_diff(mut self, since: &Self) -> Self {
+    pub(crate) fn derive_diff(mut self, since: &Self) -> Self {
         self.details.settled = BalanceAmount {
             dr_balance: self.details.settled.dr_balance - since.details.settled.dr_balance,
             cr_balance: self.details.settled.cr_balance - since.details.settled.cr_balance,

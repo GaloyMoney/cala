@@ -4,6 +4,7 @@ use tracing::instrument;
 
 use es_entity::*;
 
+pub use crate::dimension::NewPartitionKey;
 pub use crate::param::definition::*;
 pub use cala_types::{primitives::*, velocity::*};
 
@@ -153,24 +154,6 @@ impl IntoEvents<VelocityLimitEvent> for NewVelocityLimit {
                 },
             }],
         )
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct NewPartitionKey {
-    alias: String,
-    value: String,
-}
-
-#[bon::bon]
-impl NewPartitionKey {
-    #[builder]
-    pub fn new(
-        #[builder(into)] alias: String,
-        #[builder(into)] value: String,
-    ) -> Result<Self, CelParseRejection> {
-        validate_expression(&value)?;
-        Ok(Self { alias, value })
     }
 }
 

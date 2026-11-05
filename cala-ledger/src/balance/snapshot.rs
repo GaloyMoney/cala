@@ -12,7 +12,7 @@ use tracing::instrument;
 use crate::primitives::{AccountId, AccountSetId, Currency, EntryId};
 use std::collections::{HashMap, HashSet};
 
-pub(super) const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
+pub(crate) const UNASSIGNED_ENTRY_ID: uuid::Uuid = uuid::Uuid::nil();
 
 pub(crate) struct Snapshots;
 

@@ -41,6 +41,12 @@ impl From<EntryId> for cel_interpreter::CelValue {
         cel_interpreter::CelValue::Uuid(id.0)
     }
 }
+es_entity::entity_id! { CalculationId }
+impl From<CalculationId> for cel_interpreter::CelValue {
+    fn from(id: CalculationId) -> Self {
+        cel_interpreter::CelValue::Uuid(id.0)
+    }
+}
 es_entity::entity_id! { VelocityLimitId }
 es_entity::entity_id! { VelocityControlId }
 

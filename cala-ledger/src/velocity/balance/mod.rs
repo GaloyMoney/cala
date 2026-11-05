@@ -14,7 +14,10 @@ use cala_types::{
     velocity::VelocityContextAccountValues,
 };
 
-use crate::primitives::{AccountId, AccountSetId, TransactionId};
+use crate::{
+    eval_context::EvalContext,
+    primitives::{AccountId, AccountSetId, TransactionId},
+};
 
 use super::account_control::*;
 
@@ -65,12 +68,12 @@ impl VelocityBalances {
         // One evaluation context per posting: the context carries that
         // posting's `TransactionValues`, which limit conditions and window
         // expressions can reference.
-        let mut contexts: HashMap<TransactionId, super::context::EvalContext> = postings
+        let mut contexts: HashMap<TransactionId, EvalContext> = postings
             .iter()
             .map(|(transaction, _)| {
                 (
                     transaction.id,
-                    super::context::EvalContext::new(
+                    EvalContext::new(
                         self.clock.clone(),
                         transaction,
                         controls.values().map(|v| &v.0),
@@ -129,7 +132,7 @@ impl VelocityBalances {
     /// `balances_to_check`, which the caller shares across the batch.
     #[allow(clippy::type_complexity)]
     fn collect_balances_to_check<'a>(
-        context: &mut super::context::EvalContext,
+        context: &mut EvalContext,
         entries: &'a [EntryValues],
         controls: &'a HashMap<
             AccountId,
@@ -188,7 +191,7 @@ impl VelocityBalances {
     /// balance key can come from different postings, and a limit condition is
     /// evaluated against the posting that produced the entry.
     fn new_snapshots_with_limit_enforcement<'a>(
-        contexts: &mut HashMap<TransactionId, super::context::EvalContext>,
+        contexts: &mut HashMap<TransactionId, EvalContext>,
         time: DateTime<Utc>,
         mut current_balances: HashMap<VelocityBalanceKey, Option<BalanceSnapshot>>,
         entries_to_add: &'a HashMap<VelocityBalanceKey, Vec<(&AccountVelocityLimit, &EntryValues)>>,
@@ -249,10 +252,7 @@ mod tests {
                 Currency, DebitOrCredit, EntryId, JournalId, Layer, TransactionId, TxTemplateId,
                 VelocityControlId, VelocityLimitId,
             },
-            velocity::{
-                account_control::{AccountBalanceLimit, AccountLimit, AccountVelocityLimit},
-                context::EvalContext,
-            },
+            velocity::account_control::{AccountBalanceLimit, AccountLimit, AccountVelocityLimit},
         };
 
         fn create_test_entry(

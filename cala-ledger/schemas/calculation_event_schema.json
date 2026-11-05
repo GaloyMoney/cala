@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CalculationEvent",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "initialized"
+        },
+        "values": {
+          "$ref": "#/$defs/CalculationValues"
+        }
+      },
+      "required": [
+        "type",
+        "values"
+      ]
+    }
+  ],
+  "$defs": {
+    "CalculationConfig": {
+      "type": "object",
+      "properties": {
+        "effective_date_source": {
+          "description": "CEL resolving to a date; the effective date the entry's delta lands on.\n`None` = the transaction's `effective`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "CalculationScope": {
+      "description": "Which accounts and sets of the journal a calculation maintains series for.",
+      "oneOf": [
+        {
+          "description": "Every account and account set in the journal.",
+          "type": "string",
+          "const": "global"
+        },
+        {
+          "description": "Only the accounts and sets explicitly attached to the calculation.",
+          "type": "string",
+          "const": "attached"
+        }
+      ]
+    },
+    "CalculationValues": {
+      "type": "object",
+      "properties": {
+        "activation_sequence": {
+          "description": "Outbox sequence at creation; the subscriber applies this calculation to\nevents with a greater sequence only.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "code": {
+          "type": "string"
+        },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "$ref": "#/$defs/CalculationConfig"
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dimensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PartitionKey"
+          }
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "journal_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "name": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/CalculationScope"
+        },
+        "version": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "journal_id",
+        "code",
+        "name",
+        "scope",
+        "dimensions",
+        "config",
+        "activation_sequence"
+      ]
+    },
+    "CelExpression": {
+      "type": "string"
+    },
+    "PartitionKey": {
+      "type": "object",
+      "properties": {
+        "alias": {
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/CelExpression"
+        }
+      },
+      "required": [
+        "alias",
+        "value"
+      ]
+    }
+  }
+}
