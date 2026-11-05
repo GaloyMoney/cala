@@ -134,6 +134,7 @@ impl AccountControls {
                     None
                 };
                 limits.push(AccountBalanceLimit {
+                    limit_type: limit.limit_type,
                     layer,
                     amount,
                     enforcement_direction,
@@ -222,6 +223,12 @@ mod tests {
         with_default.params.as_mut().unwrap()[0].default = Some("'1.25'".parse().unwrap());
         let evaluated = evaluate(with_default.clone(), Params::new()).unwrap();
         assert_eq!(evaluated[0].limit.balance[0].amount, Decimal::new(125, 2));
+        with_default.limit.balance[0].limit_type = cala_types::velocity::BalanceLimitType::CreditGross;
+        let gross = evaluate(with_default, Params::new()).unwrap();
+        assert_eq!(
+            gross[0].limit.balance[0].limit_type,
+            cala_types::velocity::BalanceLimitType::CreditGross
+        );
         with_default.params.as_mut().unwrap()[0].default = Some("'invalid'".parse().unwrap());
         assert!(matches!(
             evaluate(with_default, Params::new()),

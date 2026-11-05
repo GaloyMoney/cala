@@ -7,7 +7,7 @@ use tracing::{field, Span};
 use cala_types::{
     balance::BalanceSnapshot,
     entry::EntryValues,
-    velocity::{PartitionKey, VelocityEnforcement, Window},
+    velocity::{BalanceLimitType, PartitionKey, VelocityEnforcement, Window},
 };
 
 use crate::{
@@ -101,7 +101,11 @@ impl AccountVelocityLimit {
             }
             let balance =
                 crate::balance::BalanceWithDirection::new(limit.enforcement_direction, snapshot);
-            let requested = balance.available(limit.layer);
+            let requested = match limit.limit_type {
+                BalanceLimitType::Available => balance.available(limit.layer),
+                BalanceLimitType::DebitGross => balance.debit_gross(limit.layer),
+                BalanceLimitType::CreditGross => balance.credit_gross(limit.layer),
+            };
 
             if requested > limit.amount {
                 let err = LimitExceededError {
@@ -133,6 +137,8 @@ pub struct AccountLimit {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AccountBalanceLimit {
+    #[serde(default)]
+    pub limit_type: BalanceLimitType,
     pub layer: Layer,
     pub amount: Decimal,
     pub enforcement_direction: DebitOrCredit,
@@ -172,6 +178,39 @@ mod tests {
         assert!(control.needs_enforcement(&ctx).unwrap());
         control.condition = Some("1 == 2".parse().unwrap());
         assert!(!control.needs_enforcement(&ctx).unwrap());
+    }
+
+    fn snapshot_with_settled(dr: Decimal, cr: Decimal) -> BalanceSnapshot {
+        let time = Utc::now();
+        let entry_id = EntryId::new();
+        let amount = cala_types::balance::BalanceAmount {
+            dr_balance: dr,
+            cr_balance: cr,
+            entry_id,
+            modified_at: time,
+        };
+        BalanceSnapshot {
+            journal_id: JournalId::new(),
+            account_id: AccountId::new(),
+            currency: "USD".parse().unwrap(),
+            version: 1,
+            created_at: time,
+            modified_at: time,
+            entry_id,
+            settled: amount.clone(),
+            pending: cala_types::balance::BalanceAmount {
+                dr_balance: Decimal::ZERO,
+                cr_balance: Decimal::ZERO,
+                entry_id,
+                modified_at: time,
+            },
+            encumbrance: cala_types::balance::BalanceAmount {
+                dr_balance: Decimal::ZERO,
+                cr_balance: Decimal::ZERO,
+                entry_id,
+                modified_at: time,
+            },
+        }
     }
 
     fn entry() -> EntryValues {
@@ -309,6 +348,7 @@ mod tests {
             limit: AccountLimit {
                 timestamp_source: None,
                 balance: vec![AccountBalanceLimit {
+                    limit_type: Default::default(),
                     layer: Layer::Settled,
                     amount: Decimal::ONE,
                     enforcement_direction: DebitOrCredit::Debit,
@@ -343,6 +383,7 @@ mod tests {
             limit: AccountLimit {
                 timestamp_source: None,
                 balance: vec![AccountBalanceLimit {
+                    limit_type: Default::default(),
                     layer: Layer::Settled,
                     amount: Decimal::ONE,
                     enforcement_direction: DebitOrCredit::Debit,
@@ -370,6 +411,7 @@ mod tests {
             limit: AccountLimit {
                 timestamp_source: None,
                 balance: vec![AccountBalanceLimit {
+                    limit_type: Default::default(),
                     layer: Layer::Pending,
                     amount: Decimal::ONE,
                     enforcement_direction: DebitOrCredit::Debit,
@@ -407,6 +449,7 @@ mod tests {
             limit: AccountLimit {
                 timestamp_source: Some("time".parse().unwrap()),
                 balance: vec![AccountBalanceLimit {
+                    limit_type: Default::default(),
                     layer: Layer::Settled,
                     amount: Decimal::ONE,
                     enforcement_direction: DebitOrCredit::Debit,
@@ -441,6 +484,7 @@ mod tests {
             limit: AccountLimit {
                 timestamp_source: None,
                 balance: vec![AccountBalanceLimit {
+                    limit_type: Default::default(),
                     layer: Layer::Settled,
                     amount: Decimal::ONE,
                     enforcement_direction: DebitOrCredit::Credit,
@@ -458,5 +502,80 @@ mod tests {
         let new_snapshot = crate::balance::Snapshots::new_snapshot(time, entry.account_id, &entry);
         let res = limit.enforce(&ctx, time, &new_snapshot);
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn enforce_net_credit_limit_allows_gross_inbound_beyond_cap_when_debits_offset() {
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    limit_type: BalanceLimitType::Available,
+                    layer: Layer::Settled,
+                    amount: Decimal::from(50),
+                    enforcement_direction: DebitOrCredit::Credit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let snapshot = snapshot_with_settled(Decimal::from(30), Decimal::from(60));
+        assert!(limit.enforce(&ctx, time, &snapshot).is_ok());
+    }
+
+    #[test]
+    fn enforce_credit_gross_limit_rejects_gross_inbound_beyond_cap() {
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    limit_type: BalanceLimitType::CreditGross,
+                    layer: Layer::Settled,
+                    amount: Decimal::from(50),
+                    enforcement_direction: DebitOrCredit::Credit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let snapshot = snapshot_with_settled(Decimal::from(30), Decimal::from(60));
+        assert!(limit.enforce(&ctx, time, &snapshot).is_err());
+    }
+
+    #[test]
+    fn enforce_debit_gross_limit_rejects_gross_outbound_beyond_cap() {
+        let ctx = crate::cel_context::initialize(es_entity::clock::Clock::handle().clone());
+        let time = Utc::now();
+        let limit = AccountVelocityLimit {
+            limit_id: VelocityLimitId::new(),
+            window: vec![],
+            currency: None,
+            condition: None,
+            limit: AccountLimit {
+                timestamp_source: None,
+                balance: vec![AccountBalanceLimit {
+                    limit_type: BalanceLimitType::DebitGross,
+                    layer: Layer::Settled,
+                    amount: Decimal::from(50),
+                    enforcement_direction: DebitOrCredit::Debit,
+                    start: time,
+                    end: None,
+                }],
+            },
+        };
+        let snapshot = snapshot_with_settled(Decimal::from(60), Decimal::from(30));
+        assert!(limit.enforce(&ctx, time, &snapshot).is_err());
     }
 }
