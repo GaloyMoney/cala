@@ -289,7 +289,22 @@ impl TxTemplates {
         let transaction_id = posting.tx_id;
         let mut new_entries = Vec::with_capacity(tmpl.entries.len());
         let mut totals = HashMap::new();
-        for (zero_based_sequence, entry) in tmpl.entries.iter().enumerate() {
+        let mut sequence = 0u32;
+        for entry in tmpl.entries.iter() {
+            if let Some(condition) = entry.condition.as_ref() {
+                let keep: bool =
+                    condition
+                        .try_evaluate(ctx)
+                        .map_err(|source| PreparePostingRejection::Cel {
+                            posting,
+                            source: Box::new(source),
+                        })?;
+                if !keep {
+                    continue;
+                }
+            }
+            sequence += 1;
+
             let account_id: Uuid = entry.account_id.try_evaluate(ctx).map_err(|source| {
                 PreparePostingRejection::Cel {
                     posting,
@@ -364,7 +379,7 @@ impl TxTemplates {
                     .id(EntryId::new())
                     .transaction_id(transaction_id)
                     .journal_id(journal_id)
-                    .sequence(zero_based_sequence as u32 + 1)
+                    .sequence(sequence)
                     .account_id(account_id)
                     .entry_type(entry_type)
                     .layer(layer)

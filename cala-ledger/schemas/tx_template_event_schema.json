@@ -73,6 +73,16 @@
         "account_id": {
           "$ref": "#/$defs/CelExpression"
         },
+        "condition": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CelExpression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "currency": {
           "$ref": "#/$defs/CelExpression"
         },

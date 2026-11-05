@@ -28,6 +28,7 @@ pub struct TxTemplateEntry {
     pub currency: CelExpression,
     pub description: Option<CelExpression>,
     pub metadata: Option<CelExpression>,
+    pub condition: Option<CelExpression>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
