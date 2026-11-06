@@ -28,6 +28,7 @@ use cala_ledger::{
         *,
     },
     errlanes::Fail,
+    es_entity::AtomicOperation,
     job::Jobs,
     journal::NewJournal,
     outbox::OutboxEventPayload,
@@ -215,11 +216,11 @@ async fn wait_for_calculations(cala: &CalaLedger) -> anyhow::Result<()> {
     wait_for_tip(cala).await?;
     tokio::time::timeout(Duration::from_secs(30), async {
         loop {
-            let open: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM cala_calculation_backfills WHERE completed_at IS NULL",
-            )
-            .fetch_one(cala.pool())
-            .await?;
+            let open: i64 =
+                sqlx::query_scalar("SELECT COUNT(*) FROM job_executions WHERE job_type = $1")
+                    .bind(BACKFILL_JOB_TYPE)
+                    .fetch_one(cala.pool())
+                    .await?;
             if open == 0 {
                 return anyhow::Ok(());
             }
@@ -1301,12 +1302,7 @@ async fn from_now_matches_previous_behaviour() -> anyhow::Result<()> {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].3, Decimal::from(1000), "only D's credit");
     assert_eq!(rows[0].9, 1);
-    assert!(f
-        .cala
-        .calculations()
-        .list_open_backfills(attached)
-        .await?
-        .is_empty());
+    assert!(open_backfills(&f.pool, attached).await?.is_empty());
     Ok(())
 }
 
@@ -1315,19 +1311,36 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
     let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
     let template = create_template(&f.cala, "TEST").await?;
     let recipient = create_account(&f.cala).await?;
-    let calculation =
-        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
-    let open = f
+    f.jobs.start_poll().await?;
+    wait_for_tip(&f.cala).await?;
+
+    let mut op = f.cala.begin_operation().await?;
+    let calculation = f
         .cala
         .calculations()
-        .list_open_backfills(calculation)
-        .await?;
+        .create_in_op(
+            &mut op,
+            NewCalculation::builder()
+                .id(CalculationId::new())
+                .journal_id(f.journal_id)
+                .code(random_code())
+                .name("history test")
+                .scope(CalculationScope::Global)
+                .history(History::Backfill)
+                .build()?,
+        )
+        .await?
+        .id();
+    let jobs = backfill_job_ids(op.as_executor(), calculation).await?;
+    assert_eq!(jobs.len(), 1);
+    let stall = stall_backfill_job(&f.pool, jobs[0]).await?;
+    op.commit().await?;
+    let open = open_backfills(&f.pool, calculation).await?;
     assert_eq!(open.len(), 1);
+    assert_eq!(open[0].job_id, jobs[0]);
     assert_eq!(open[0].account_ids, None);
     assert_eq!(open[0].cursor, 0);
 
-    let stall = stall_backfill_jobs(&f.pool).await?;
-    f.jobs.start_poll().await?;
     let today = f.cala.clock().now().date_naive();
     post(&f, Post::new(&template, f.sender, recipient, 5, today)).await?;
     wait_for_tip(&f.cala).await?;
@@ -1363,15 +1376,79 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Parks every backfill job at its first statement until the returned
-/// transaction ends. The tip never reads this table, so it runs freely.
-async fn stall_backfill_jobs(
+const BACKFILL_JOB_TYPE: &str = "cala.calculation_backfill";
+
+/// A backfill job that has not completed: its unit and its committed cursor.
+struct OpenBackfill {
+    job_id: uuid::Uuid,
+    account_ids: Option<Vec<AccountId>>,
+    cursor: u64,
+}
+
+async fn open_backfills(
+    executor: impl sqlx::PgExecutor<'_>,
+    calculation_id: CalculationId,
+) -> anyhow::Result<Vec<OpenBackfill>> {
+    let rows: Vec<(uuid::Uuid, serde_json::Value, i64)> = sqlx::query_as(
+        "SELECT ex.id,
+                ev.event -> 'config' -> 'account_ids',
+                COALESCE((st.execution_state_json ->> 'cursor')::bigint, 0)
+         FROM job_executions ex
+         JOIN job_events ev ON ev.id = ex.id AND ev.sequence = 1
+         LEFT JOIN job_execution_states st ON st.id = ex.id
+         WHERE ex.job_type = $1
+           AND ev.event -> 'config' ->> 'calculation_id' = $2
+         ORDER BY ex.created_at, ex.id",
+    )
+    .bind(BACKFILL_JOB_TYPE)
+    .bind(calculation_id.to_string())
+    .fetch_all(executor)
+    .await?;
+    rows.into_iter()
+        .map(|(job_id, account_ids, cursor)| {
+            Ok(OpenBackfill {
+                job_id,
+                account_ids: serde_json::from_value(account_ids)?,
+                cursor: cursor as u64,
+            })
+        })
+        .collect()
+}
+
+/// Every backfill job spawned for `calculation_id`, completed or not. The
+/// `jobs` row is written inline by the spawn, so this sees an uncommitted
+/// spawn through the spawning operation.
+async fn backfill_job_ids(
+    executor: impl sqlx::PgExecutor<'_>,
+    calculation_id: CalculationId,
+) -> anyhow::Result<Vec<uuid::Uuid>> {
+    Ok(sqlx::query_scalar(
+        "SELECT j.id FROM jobs j
+         JOIN job_events ev ON ev.id = j.id AND ev.sequence = 1
+         WHERE j.job_type = $1 AND ev.event -> 'config' ->> 'calculation_id' = $2
+         ORDER BY j.created_at, j.id",
+    )
+    .bind(BACKFILL_JOB_TYPE)
+    .bind(calculation_id.to_string())
+    .fetch_all(executor)
+    .await?)
+}
+
+/// Parks one backfill job at its first cursor write, inside its first
+/// chunk's uncommitted operation, until the returned transaction ends.
+/// Only that job's state row is held, so the tip runs freely.
+async fn stall_backfill_job(
     pool: &sqlx::PgPool,
+    job_id: uuid::Uuid,
 ) -> anyhow::Result<sqlx::Transaction<'static, sqlx::Postgres>> {
     let mut tx = pool.begin().await?;
-    sqlx::query("LOCK TABLE cala_calculation_backfills IN ACCESS EXCLUSIVE MODE")
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "INSERT INTO job_execution_states (id, execution_state_json)
+         VALUES ($1, '{\"cursor\": 0}'::jsonb)",
+    )
+    .bind(job_id)
+    .execute(&mut *tx)
+    .await?;
     Ok(tx)
 }
 
@@ -1401,12 +1478,8 @@ async fn attach_partition() -> anyhow::Result<()> {
     assert!(attachment_backfill_complete(&f, calculation, fresh).await?);
     assert!(!attachment_backfill_complete(&f, calculation, with_entry).await?);
     assert!(!attachment_backfill_complete(&f, calculation, set).await?);
-    let open = f
-        .cala
-        .calculations()
-        .list_open_backfills(calculation)
-        .await?;
-    assert_eq!(open.len(), 1, "one backfill row for the whole call");
+    let open = open_backfills(&f.pool, calculation).await?;
+    assert_eq!(open.len(), 1, "one backfill job for the whole call");
     let ids: std::collections::HashSet<AccountId> =
         open[0].account_ids.clone().unwrap().into_iter().collect();
     assert_eq!(ids, [with_entry, set].into_iter().collect());
@@ -1554,12 +1627,7 @@ async fn activation_sequence(f: &Fixture, id: CalculationId) -> anyhow::Result<u
 }
 
 async fn open_cursor(f: &Fixture, id: CalculationId) -> anyhow::Result<Option<u64>> {
-    Ok(f.cala
-        .calculations()
-        .list_open_backfills(id)
-        .await?
-        .first()
-        .map(|b| b.cursor))
+    Ok(open_backfills(&f.pool, id).await?.first().map(|b| b.cursor))
 }
 
 /// Poll until the open backfill of `id` has `cursor == target`.
@@ -1723,12 +1791,7 @@ async fn backfilled_global_equals_preexisting_global() -> anyhow::Result<()> {
         create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
     wait_for_backfill(&f.cala, b, None).await?;
     assert_eq!(backfill_status(&f, b).await?, BackfillStatus::Complete);
-    assert!(f
-        .cala
-        .calculations()
-        .list_open_backfills(b)
-        .await?
-        .is_empty());
+    assert!(open_backfills(&f.pool, b).await?.is_empty());
     assert_same_series(&f, a, b, &targets).await?;
 
     post_history(&f, &template, &h, 1).await?;
@@ -1757,12 +1820,7 @@ async fn backfilled_attachment_equals_preexisting() -> anyhow::Result<()> {
     f.cala.calculations().attach(b, h.r1).await?;
     wait_for_backfill(&f.cala, b, Some(h.r1)).await?;
     assert!(attachment_backfill_complete(&f, b, h.r1).await?);
-    assert!(f
-        .cala
-        .calculations()
-        .list_open_backfills(b)
-        .await?
-        .is_empty());
+    assert!(open_backfills(&f.pool, b).await?.is_empty());
     assert_same_series(&f, a, b, &[h.r1]).await?;
 
     post_history(&f, &template, &h, 1).await?;
@@ -1914,14 +1972,14 @@ async fn attach_many_one_job() -> anyhow::Result<()> {
         .attach_many_in_op(&mut op, b, &accounts)
         .await?;
     op.commit().await?;
-    let open = f.cala.calculations().list_open_backfills(b).await?;
-    assert_eq!(open.len(), 1, "one backfill row for the call");
+    let open = open_backfills(&f.pool, b).await?;
+    assert_eq!(open.len(), 1, "one open backfill job for the call");
     assert_eq!(open[0].account_ids.as_ref().map(Vec::len), Some(50));
-    let jobs: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM jobs WHERE id = $1")
-        .bind(uuid::Uuid::from(open[0].id))
-        .fetch_one(&f.pool)
-        .await?;
-    assert_eq!(jobs, 1, "one job, keyed by the backfill id");
+    assert_eq!(
+        backfill_job_ids(&f.pool, b).await?,
+        vec![open[0].job_id],
+        "one job for the call"
+    );
 
     wait_for_backfill(&f.cala, b, Some(accounts[0])).await?;
     for account in accounts.iter() {

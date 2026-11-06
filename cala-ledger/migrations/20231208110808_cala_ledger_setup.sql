@@ -286,23 +286,6 @@ CREATE TABLE cala_calculation_attachments (
 CREATE INDEX idx_cala_calculation_attachments_account_id
   ON cala_calculation_attachments (account_id);
 
--- One row per open or finished backfill unit. `account_ids IS NULL` = a Global calculation.
--- `id` is also the job id. `cursor` is the last outbox sequence folded and committed.
-CREATE TABLE cala_calculation_backfills (
-  id UUID PRIMARY KEY,
-  calculation_id UUID NOT NULL REFERENCES cala_calculations(id),
-  account_ids UUID[],
-  cursor BIGINT NOT NULL DEFAULT 0,
-  completed_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX idx_cala_calculation_backfills_calculation_id
-  ON cala_calculation_backfills (calculation_id);
--- The tip's per-flush probe: "is any backfill open?"
-CREATE INDEX idx_cala_calculation_backfills_open
-  ON cala_calculation_backfills (id) WHERE completed_at IS NULL;
-
 -- Same columns as cala_cumulative_effective_balances plus the two series key
 -- columns. One row per (series, effective date) holding the cumulative
 -- balance at the end of that date.

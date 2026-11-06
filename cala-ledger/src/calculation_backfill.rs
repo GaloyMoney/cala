@@ -1,8 +1,8 @@
 //! One-off replay of history into a new calculation or attachment batch.
 //!
-//! A `History::Backfill` unit starts `InProgress` with one
-//! `cala_calculation_backfills` row and one job per row. The job replays
-//! the persisted outbox from the row's `cursor` in chunks of
+//! A `History::Backfill` unit starts `InProgress` with one job whose config
+//! names the unit. The job replays the persisted outbox from the `cursor`
+//! in its execution state, in chunks of
 //! [`CHUNK_EVENTS`], folding each chunk with `RollupScope::Backfill` so
 //! only that unit is written, and chases the tip's checkpoint until the
 //! remaining distance is at most [`HANDOFF_THRESHOLD`] or
@@ -14,7 +14,7 @@
 //! tip's next flush covers the unit from `C + 1` on, so every transaction
 //! lands in the unit exactly once (§2.2 of the handoff).
 //!
-//! The replay reads the persisted outbox from the row's cursor, so it
+//! The replay reads the persisted outbox from the job's cursor, so it
 //! relies on the outbox never being pruned: obix's partition maintainer
 //! only creates partitions. PR #795 (outbox archiving) contradicts that
 //! assumption for history older than its retention window.
@@ -36,12 +36,12 @@ use obix::{
 };
 
 use crate::{
-    calculation::{CalculationBackfill, Calculations, RollupScope},
+    calculation::{Calculations, RollupScope},
     calculation_rollup::{CalculationRollupBatch, PendingTx},
     entry::Entries,
     error::{CalaFault, CouldNotDecodeOutboxEvent},
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
-    primitives::CalculationBackfillId,
+    primitives::{AccountId, CalculationId},
 };
 
 const CALCULATION_BACKFILL_JOB: JobType = JobType::new("cala.calculation_backfill");
@@ -56,9 +56,18 @@ const IDLE_ROUND_PAUSE: Duration = Duration::from_millis(250);
 
 type TipHandle = Subscription<OutboxEventPayload, InsertOrder, CalaMailboxTables>;
 
+/// The unit: a Global calculation (`account_ids == None`) or the
+/// attachments created together by one `attach*` call.
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct BackfillJobConfig {
-    pub backfill_id: CalculationBackfillId,
+    pub calculation_id: CalculationId,
+    pub account_ids: Option<Vec<AccountId>>,
+}
+
+/// The last outbox sequence folded and committed.
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct BackfillJobState {
+    cursor: u64,
 }
 
 pub(crate) struct CalculationBackfillInitializer {
@@ -136,8 +145,8 @@ impl JobRunner for CalculationBackfillRunner {
         name = "cala_ledger.calculation_backfill.run",
         skip_all,
         fields(
-            backfill_id = %self.config.backfill_id,
-            calculation_id,
+            job_id = %current_job.id(),
+            calculation_id = %self.config.calculation_id,
             rounds,
             chunks,
             deltas,
@@ -150,26 +159,15 @@ impl JobRunner for CalculationBackfillRunner {
         &self,
         mut current_job: CurrentJob,
     ) -> Result<JobCompletion, Box<dyn std::error::Error + Send + Sync>> {
-        let Some(backfill) = self
-            .calculations
-            .find_open_backfill(self.config.backfill_id)
-            .await?
-        else {
-            return Ok(JobCompletion::Complete);
-        };
-        let span = tracing::Span::current();
-        span.record(
-            "calculation_id",
-            tracing::field::display(backfill.calculation_id),
-        );
-
+        let state = current_job
+            .execution_state::<BackfillJobState>()?
+            .unwrap_or_default();
         let mut progress = Progress {
-            cursor: backfill.cursor,
+            cursor: state.cursor,
             ..Progress::default()
         };
-        let result = self
-            .execute(&mut current_job, &backfill, &mut progress)
-            .await;
+        let result = self.execute(&mut current_job, &mut progress).await;
+        let span = tracing::Span::current();
         span.record("rounds", progress.rounds);
         span.record("chunks", progress.chunks);
         span.record("deltas", progress.deltas);
@@ -177,8 +175,8 @@ impl JobRunner for CalculationBackfillRunner {
         span.record("handoff_span", progress.handoff_span);
         if result.is_err() {
             tracing::error!(
-                backfill_id = %backfill.id,
-                calculation_id = %backfill.calculation_id,
+                job_id = %current_job.id(),
+                calculation_id = %self.config.calculation_id,
                 cursor = progress.cursor,
                 bound = progress.bound,
                 "calculation backfill run failed; the job retries from the persisted cursor"
@@ -194,12 +192,12 @@ impl CalculationBackfillRunner {
     async fn execute(
         &self,
         current_job: &mut CurrentJob,
-        backfill: &CalculationBackfill,
         progress: &mut Progress,
     ) -> Result<JobCompletion, CalaFault> {
-        let targets = backfill.account_ids.as_deref();
+        let calculation_id = self.config.calculation_id;
+        let targets = self.config.account_ids.as_deref();
         let scope = RollupScope::Backfill {
-            calculation_id: backfill.calculation_id,
+            calculation_id,
             targets,
         };
         let mut replay = Replay::new(
@@ -221,8 +219,8 @@ impl CalculationBackfillRunner {
             while let Some(chunk) = replay.next_chunk(bound).await? {
                 let mut op = current_job.begin_op().await?;
                 self.fold_chunk(&mut op, &chunk, scope, progress).await?;
-                self.calculations
-                    .advance_backfill_cursor_in_op(&mut op, backfill.id, chunk.end)
+                current_job
+                    .update_execution_state_in_op(&mut op, &BackfillJobState { cursor: chunk.end })
                     .await?;
                 op.commit().await?;
                 progress.cursor = chunk.end;
@@ -250,7 +248,7 @@ impl CalculationBackfillRunner {
             progress.cursor = chunk.end;
         }
         self.calculations
-            .complete_backfill_in_op(&mut op, backfill, bound)
+            .complete_backfill_in_op(&mut op, calculation_id, targets, bound)
             .await?;
         progress.cursor = bound;
         Ok(JobCompletion::CompleteWithOp(op))
