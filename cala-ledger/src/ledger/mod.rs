@@ -97,7 +97,7 @@ impl CalaLedger {
         let entries = Entries::new(&pool);
         let balances = Balances::new(&pool, &journals);
         let velocities = Velocities::new(&pool, &clock);
-        let calculations = Calculations::new(&pool, &publisher, &clock);
+        let calculations = Calculations::new(&pool, &publisher, &balances, &clock);
         let account_sets = AccountSets::new(
             &pool,
             &publisher,

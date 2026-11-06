@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use cala_types::velocity::VelocityContextAccountValues;
 
-use crate::outbox::OutboxPublisher;
+use crate::outbox::{OutboxEventPayload, OutboxPublisher};
 
 use super::entity::*;
 
@@ -196,9 +196,20 @@ impl CalculationRepo {
         entity: &Calculation,
         new_events: es_entity::LastPersisted<'_, CalculationEvent>,
     ) -> Result<(), CalaFault> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
+        let calculation_id = entity.id;
+        let payloads = new_events.map(|persisted| match &persisted.event {
+            CalculationEvent::Initialized { values } => OutboxEventPayload::CalculationCreated {
+                calculation: values.clone(),
+            },
+            CalculationEvent::BackfillCompleted {
+                activation_sequence,
+            } => OutboxEventPayload::CalculationBackfillCompleted {
+                calculation_id,
+                account_ids: None,
+                activation_sequence: *activation_sequence,
+            },
+        });
+        self.publisher.publish_all(op, payloads).await?;
         Ok(())
     }
 }

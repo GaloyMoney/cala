@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_calculation_attachments\n              (calculation_id, account_id, activation_sequence, backfill_complete)\n            SELECT $1, account_id, $3, backfill_complete\n            FROM UNNEST($2::uuid[], $4::bool[]) AS t(account_id, backfill_complete)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8",
+        "BoolArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c86de0c44737ddddedd7eae3fb92cf22a8caf88c8b100a24722fc2075a8a8b1f"
+}

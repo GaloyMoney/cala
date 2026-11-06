@@ -47,6 +47,7 @@ impl From<CalculationId> for cel_interpreter::CelValue {
         cel_interpreter::CelValue::Uuid(id.0)
     }
 }
+es_entity::entity_id! { CalculationBackfillId }
 es_entity::entity_id! { VelocityLimitId }
 es_entity::entity_id! { VelocityControlId }
 

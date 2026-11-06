@@ -311,6 +311,7 @@ struct Counter {
     span: &'static str,
     flushes: Arc<AtomicUsize>,
     statements: Arc<AtomicUsize>,
+    shared_locks: Arc<AtomicUsize>,
     errors: Arc<AtomicUsize>,
 }
 
@@ -320,8 +321,20 @@ impl Counter {
             span,
             flushes: Arc::default(),
             statements: Arc::default(),
+            shared_locks: Arc::default(),
             errors: Arc::default(),
         }
+    }
+}
+
+/// Whether any recorded field of an event mentions `needle`.
+struct Mentions(&'static str, bool);
+impl tracing::field::Visit for Mentions {
+    fn record_str(&mut self, _: &tracing::field::Field, value: &str) {
+        self.1 |= value.contains(self.0);
+    }
+    fn record_debug(&mut self, _: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.1 |= format!("{value:?}").contains(self.0);
     }
 }
 
@@ -358,6 +371,11 @@ where
         }
         if event.metadata().target() == "sqlx::query" {
             self.statements.fetch_add(1, Ordering::SeqCst);
+            let mut visitor = Mentions("pg_advisory_xact_lock_shared", false);
+            event.record(&mut visitor);
+            if visitor.1 {
+                self.shared_locks.fetch_add(1, Ordering::SeqCst);
+            }
         }
         if *event.metadata().level() == tracing::Level::ERROR {
             let mut visitor = HasField("calculation_id", false);
@@ -772,7 +790,7 @@ async fn evaluation_error_is_skipped_not_fatal() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn no_calculations_costs_one_statement() -> anyhow::Result<()> {
+async fn no_calculations_costs_two_statements() -> anyhow::Result<()> {
     use tracing_subscriber::prelude::*;
 
     let calculation = Counter::new("cala_ledger.calculation_rollup.flush");
@@ -803,8 +821,9 @@ async fn no_calculations_costs_one_statement() -> anyhow::Result<()> {
     let statements = calculation.statements.load(Ordering::SeqCst);
     assert!(flushes >= 1, "the calculation rollup flushed");
     assert_eq!(
-        statements, flushes,
-        "one EXISTS probe per flush without calculations"
+        statements,
+        2 * flushes,
+        "one shared handoff lock and one EXISTS probe per flush without calculations"
     );
     assert!(
         ec.statements.load(Ordering::SeqCst) > ec.flushes.load(Ordering::SeqCst),
@@ -1162,5 +1181,235 @@ async fn calculation_periods_equals_cumulative_projection() -> anyhow::Result<()
             assert_eq!(period.range.close.details, projected.close.details);
         }
     }
+    Ok(())
+}
+
+async fn create_calculation_with_history(
+    f: &Fixture,
+    scope: CalculationScope,
+    history: History,
+) -> anyhow::Result<CalculationId> {
+    let new = NewCalculation::builder()
+        .id(CalculationId::new())
+        .journal_id(f.journal_id)
+        .code(random_code())
+        .name("history test")
+        .scope(scope)
+        .history(history)
+        .build()?;
+    Ok(f.cala.calculations().create(new).await?.id())
+}
+
+async fn attach_many_with_history(
+    f: &Fixture,
+    calculation_id: CalculationId,
+    targets: &[AccountId],
+    history: History,
+) -> anyhow::Result<()> {
+    let mut op = f.cala.begin_operation().await?;
+    f.cala
+        .calculations()
+        .attach_many_with_history_in_op(&mut op, calculation_id, targets, history)
+        .await?;
+    op.commit().await?;
+    Ok(())
+}
+
+async fn attachment_backfill_complete(
+    f: &Fixture,
+    calculation_id: CalculationId,
+    account_id: AccountId,
+) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar(
+        "SELECT backfill_complete FROM cala_calculation_attachments
+         WHERE calculation_id = $1 AND account_id = $2",
+    )
+    .bind(calculation_id)
+    .bind(account_id)
+    .fetch_one(&f.pool)
+    .await?)
+}
+
+#[tokio::test]
+async fn from_now_matches_previous_behaviour() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let r1 = create_account(&f.cala).await?;
+    let r2 = create_account(&f.cala).await?;
+    let attached =
+        create_calculation_with_history(&f, CalculationScope::Attached, History::FromNow).await?;
+    f.jobs.start_poll().await?;
+    let today = f.cala.clock().now().date_naive();
+
+    post(&f, Post::new(&template, f.sender, r1, 1, today)).await?;
+    let global =
+        create_calculation_with_history(&f, CalculationScope::Global, History::FromNow).await?;
+    assert_eq!(
+        f.cala
+            .calculations()
+            .find_by_id(global)
+            .await?
+            .values()
+            .backfill_status,
+        BackfillStatus::Complete
+    );
+    post(&f, Post::new(&template, f.sender, r1, 10, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+    let rows = calculation_rows(&f, global, r1, json!({})).await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].3, Decimal::from(10), "only B's credit");
+    assert_eq!(rows[0].9, 1, "all_time_version counts B's entry only");
+
+    post(&f, Post::new(&template, f.sender, r2, 100, today)).await?;
+    attach_many_with_history(&f, attached, &[r2], History::FromNow).await?;
+    assert!(attachment_backfill_complete(&f, attached, r2).await?);
+    post(&f, Post::new(&template, f.sender, r2, 1000, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+    let rows = calculation_rows(&f, attached, r2, json!({})).await?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].3, Decimal::from(1000), "only D's credit");
+    assert_eq!(rows[0].9, 1);
+    assert!(f
+        .cala
+        .calculations()
+        .list_open_backfills(attached)
+        .await?
+        .is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let recipient = create_account(&f.cala).await?;
+    let calculation =
+        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
+    f.jobs.start_poll().await?;
+    let today = f.cala.clock().now().date_naive();
+
+    post(&f, Post::new(&template, f.sender, recipient, 5, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+
+    assert_eq!(
+        f.cala
+            .calculations()
+            .find_by_id(calculation)
+            .await?
+            .values()
+            .backfill_status,
+        BackfillStatus::InProgress
+    );
+    for account in [recipient, f.sender] {
+        assert!(calculation_rows(&f, calculation, account, json!({}))
+            .await?
+            .is_empty());
+    }
+    assert!(matches!(
+        f.cala
+            .calculations()
+            .effective()
+            .find_cumulative(&id(&f, calculation, recipient, json!({})), today)
+            .await,
+        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+    ));
+    let open = f
+        .cala
+        .calculations()
+        .list_open_backfills(calculation)
+        .await?;
+    assert_eq!(open.len(), 1);
+    assert_eq!(open[0].account_ids, None);
+    assert_eq!(open[0].cursor, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn attach_partition() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let fresh = create_account(&f.cala).await?;
+    let with_entry = create_account(&f.cala).await?;
+    let set: AccountId = create_set(&f.cala, f.journal_id, BalanceRollup::Synchronous)
+        .await?
+        .into();
+    f.jobs.start_poll().await?;
+    let today = f.cala.clock().now().date_naive();
+    post(&f, Post::new(&template, f.sender, with_entry, 1, today)).await?;
+
+    let calculation =
+        create_calculation_with_history(&f, CalculationScope::Attached, History::Backfill).await?;
+    attach_many_with_history(
+        &f,
+        calculation,
+        &[fresh, with_entry, set],
+        History::Backfill,
+    )
+    .await?;
+
+    assert!(attachment_backfill_complete(&f, calculation, fresh).await?);
+    assert!(!attachment_backfill_complete(&f, calculation, with_entry).await?);
+    assert!(!attachment_backfill_complete(&f, calculation, set).await?);
+    let open = f
+        .cala
+        .calculations()
+        .list_open_backfills(calculation)
+        .await?;
+    assert_eq!(open.len(), 1, "one backfill row for the whole call");
+    let ids: std::collections::HashSet<AccountId> =
+        open[0].account_ids.clone().unwrap().into_iter().collect();
+    assert_eq!(ids, [with_entry, set].into_iter().collect());
+    Ok(())
+}
+
+#[tokio::test]
+async fn tip_takes_shared_lock_on_every_flush() -> anyhow::Result<()> {
+    use tracing_subscriber::prelude::*;
+
+    let calculation = Counter::new("cala_ledger.calculation_rollup.flush");
+    tracing::subscriber::set_global_default(
+        tracing_subscriber::registry().with(calculation.clone()),
+    )
+    .expect("no other global tracing subscriber should be set in this test process");
+
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let recipient = create_account(&f.cala).await?;
+    f.jobs.start_poll().await?;
+    let today = f.cala.clock().now().date_naive();
+
+    post(&f, Post::new(&template, f.sender, recipient, 1, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+    let flushes = calculation.flushes.load(Ordering::SeqCst);
+    assert!(flushes >= 1, "the calculation rollup flushed");
+    assert_eq!(
+        calculation.shared_locks.load(Ordering::SeqCst),
+        flushes,
+        "one shared handoff lock per flush before any calculation exists"
+    );
+    assert!(
+        calculation.statements.load(Ordering::SeqCst) > flushes,
+        "positive control: statements are observed inside a flush span"
+    );
+
+    create_calculation_with_history(&f, CalculationScope::Global, History::FromNow).await?;
+    post(&f, Post::new(&template, f.sender, recipient, 2, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+    let flushes = calculation.flushes.load(Ordering::SeqCst);
+    assert_eq!(
+        calculation.shared_locks.load(Ordering::SeqCst),
+        flushes,
+        "one shared handoff lock per flush with a Complete unit"
+    );
+
+    create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
+    post(&f, Post::new(&template, f.sender, recipient, 3, today)).await?;
+    wait_for_calculations(&f.cala).await?;
+    let flushes = calculation.flushes.load(Ordering::SeqCst);
+    assert_eq!(
+        calculation.shared_locks.load(Ordering::SeqCst),
+        flushes,
+        "one shared handoff lock per flush with a backfill open"
+    );
     Ok(())
 }

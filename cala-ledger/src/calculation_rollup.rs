@@ -18,7 +18,11 @@
 //! straight from the stream when a transaction's whole event group landed
 //! in the batch, with a DB read through the flush op as the fallback.
 //!
-//! A ledger without calculations costs one `EXISTS` probe per landing.
+//! Every flush opens by taking the SHARED side of the calculation handoff
+//! lock, before it reads anything; a backfill's handoff takes the
+//! EXCLUSIVE side, so it waits for in-flight flushes and later flushes see
+//! the unit `Complete`. A ledger without calculations costs that lock and
+//! one `EXISTS` probe per landing.
 //!
 //! ## Coverage
 //!
@@ -46,7 +50,7 @@ use obix::{
 use cala_types::{entry::EntryValues, transaction::TransactionValues};
 
 use crate::{
-    calculation::{CalculationRollupTxn, Calculations},
+    calculation::{CalculationRollupTxn, Calculations, RollupScope},
     entry::{Entries, Entry},
     ledger::error::EcCaughtUpTimeout,
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
@@ -232,6 +236,7 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
         op: &mut FlushOp<'_>,
         batch: Self::Batch,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.calculations.lock_handoff_shared_in_op(op).await?;
         if !self.calculations.any_exist_in_op(op).await? {
             return Ok(());
         }
@@ -245,7 +250,7 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
         let rollup_txns = batch.rollup_txns(&fetched);
         let stats = self
             .calculations
-            .apply_rollup_in_op(op, rollup_txns)
+            .apply_rollup_in_op(op, rollup_txns, RollupScope::Tip)
             .await?;
         let span = tracing::Span::current();
         span.record("deltas_count", stats.deltas);
@@ -260,6 +265,9 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
 /// `frontier` is pinned at construction. [`refresh`](Self::refresh) advances
 /// `applied` against that same fence, so [`lag`](Self::lag) drains toward it.
 /// The calculation rollup's lag is independent of the EC rollup's.
+///
+/// This fences the tip only: a unit in `BackfillStatus::InProgress` is not
+/// covered until its own fence, `Calculations::await_backfill`, passes.
 #[derive(Debug, Clone)]
 pub struct CalculationRollupStatus {
     /// The calculation rollup's committed checkpoint.

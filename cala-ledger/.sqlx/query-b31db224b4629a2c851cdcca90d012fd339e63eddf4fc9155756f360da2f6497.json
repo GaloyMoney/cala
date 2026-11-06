@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_calculation_attachments\n              (calculation_id, account_id, activation_sequence, backfill_complete)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (calculation_id, account_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b31db224b4629a2c851cdcca90d012fd339e63eddf4fc9155756f360da2f6497"
+}
