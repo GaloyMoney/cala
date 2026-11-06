@@ -22,18 +22,16 @@ pub struct CalculationValues {
     pub activation_sequence: u64,
     /// Only meaningful for `Global` scope; `Attached` calculations are always `Complete`
     /// here and carry status per attachment.
-    #[serde(default)]
     pub backfill_status: BackfillStatus,
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BackfillStatus {
     /// History before `activation_sequence` is being folded in; the tip ignores this unit.
     InProgress,
     /// Every entry is in the series (or the unit was created `FromNow`).
-    #[default]
     Complete,
 }
 
@@ -72,7 +70,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn serde_default_backfill_status() {
+    fn backfill_status_is_required() {
         let stored = serde_json::json!({
             "id": uuid::Uuid::nil(),
             "version": 1,
@@ -86,7 +84,7 @@ mod tests {
             "config": { "effective_date_source": null },
             "activation_sequence": 7,
         });
-        let values: CalculationValues = serde_json::from_value(stored).unwrap();
-        assert_eq!(values.backfill_status, BackfillStatus::Complete);
+        let err = serde_json::from_value::<CalculationValues>(stored).unwrap_err();
+        assert!(err.to_string().contains("backfill_status"), "{err}");
     }
 }

@@ -95,8 +95,7 @@
         },
         "backfill_status": {
           "description": "Only meaningful for `Global` scope; `Attached` calculations are always `Complete`\nhere and carry status per attachment.",
-          "$ref": "#/$defs/BackfillStatus",
-          "default": "complete"
+          "$ref": "#/$defs/BackfillStatus"
         },
         "code": {
           "type": "string"
@@ -155,7 +154,8 @@
         "scope",
         "dimensions",
         "config",
-        "activation_sequence"
+        "activation_sequence",
+        "backfill_status"
       ]
     },
     "CelExpression": {
