@@ -88,6 +88,110 @@ impl BackfillRepo {
             .collect())
     }
 
+    /// The open backfill `id`, `None` once its handoff committed.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_backfill.find_open_by_id",
+        skip_all
+    )]
+    pub async fn find_open_by_id(
+        &self,
+        id: CalculationBackfillId,
+    ) -> Result<Option<CalculationBackfill>, CalaFault> {
+        let row = sqlx::query!(
+            r#"
+            SELECT id AS "id: CalculationBackfillId",
+                   calculation_id AS "calculation_id: CalculationId",
+                   account_ids AS "account_ids: Vec<AccountId>",
+                   cursor,
+                   created_at
+            FROM cala_calculation_backfills
+            WHERE id = $1 AND completed_at IS NULL
+            "#,
+            id as CalculationBackfillId,
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(|row| CalculationBackfill {
+            id: row.id,
+            calculation_id: row.calculation_id,
+            account_ids: row.account_ids,
+            cursor: row.cursor as u64,
+            created_at: row.created_at,
+        }))
+    }
+
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_backfill.advance_cursor_in_op",
+        skip_all,
+        fields(cursor)
+    )]
+    pub async fn advance_cursor_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        id: CalculationBackfillId,
+        cursor: u64,
+    ) -> Result<(), CalaFault> {
+        sqlx::query!(
+            r#"
+            UPDATE cala_calculation_backfills
+            SET cursor = $2, updated_at = NOW()
+            WHERE id = $1
+            "#,
+            id as CalculationBackfillId,
+            cursor as i64,
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_backfill.complete_in_op",
+        skip_all,
+        fields(cursor)
+    )]
+    pub async fn complete_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        id: CalculationBackfillId,
+        cursor: u64,
+    ) -> Result<(), CalaFault> {
+        sqlx::query!(
+            r#"
+            UPDATE cala_calculation_backfills
+            SET cursor = $2, completed_at = NOW(), updated_at = NOW()
+            WHERE id = $1
+            "#,
+            id as CalculationBackfillId,
+            cursor as i64,
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
+    /// EXCLUSIVE side of the handoff lock, held to the end of the
+    /// operation. Waits for every in-flight tip flush and keeps the next
+    /// one from starting until the handoff commits.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_backfill.lock_handoff_exclusive_in_op",
+        skip_all
+    )]
+    pub async fn lock_handoff_exclusive_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<(), CalaFault> {
+        sqlx::query("SELECT pg_advisory_xact_lock($1::int4, 0)")
+            .bind(super::CALCULATION_HANDOFF_LOCK_CLASS)
+            .execute(op.as_executor())
+            .await?;
+        Ok(())
+    }
+
     /// SHARED side of the handoff lock, held to the end of the operation.
     /// The tip takes it as the first statement of every flush.
     #[es_entity::errlanes::instrument(

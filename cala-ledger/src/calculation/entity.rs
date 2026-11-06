@@ -42,7 +42,6 @@ impl Calculation {
     }
 
     /// Idempotent: `AlreadyApplied` when already `Complete`.
-    #[allow(dead_code)]
     pub(crate) fn complete_backfill(&mut self, activation_sequence: u64) -> Idempotent<()> {
         if self.values.backfill_status == BackfillStatus::Complete {
             return Idempotent::AlreadyApplied;
@@ -104,9 +103,9 @@ pub struct NewCalculation {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum History {
     /// Replay history asynchronously; the unit starts `InProgress`.
-    Backfill,
-    /// Today's behaviour: the unit is `Complete` at once and covers only later entries.
     #[default]
+    Backfill,
+    /// The unit is `Complete` at once and covers only later entries.
     FromNow,
 }
 

@@ -51,6 +51,7 @@ tracing = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 futures = { workspace = true }
+async-trait = { workspace = true }
 rust_decimal = { workspace = true }
 schemars = { workspace = true, optional = true }
 

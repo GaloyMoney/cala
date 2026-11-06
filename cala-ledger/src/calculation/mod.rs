@@ -13,14 +13,17 @@ use es_entity::{
     errlanes::{lanes, Fail, ResultExt},
     Ensured,
 };
+use job::{JobId, JobSpawner};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use crate::{
     balance::Balances,
+    calculation_backfill::BackfillJobConfig,
     error::CalaFault,
-    outbox::{ObixOutbox, OutboxPublisher},
+    outbox::{ObixOutbox, OutboxEventPayload, OutboxPublisher},
 };
 
 use attachment::*;
@@ -48,6 +51,7 @@ pub struct Calculations {
     outbox: ObixOutbox,
     clock: ClockHandle,
     pool: PgPool,
+    backfill_spawner: Arc<OnceLock<JobSpawner<BackfillJobConfig>>>,
 }
 
 /// The targets of an attach call, validated.
@@ -74,7 +78,16 @@ impl Calculations {
             outbox: publisher.inner().clone(),
             clock: clock.clone(),
             pool: pool.clone(),
+            backfill_spawner: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Set once in `CalaLedger::init`, after the backfill job is registered.
+    pub(crate) fn set_backfill_spawner(&self, spawner: JobSpawner<BackfillJobConfig>) {
+        assert!(
+            self.backfill_spawner.set(spawner).is_ok(),
+            "backfill spawner is set once in CalaLedger::init"
+        );
     }
 
     /// Creates the calculation. Its `activation_sequence` is the outbox
@@ -432,20 +445,107 @@ impl Calculations {
         }
     }
 
+    /// One backfill row and one job, committed with the unit.
     async fn start_backfill_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         calculation_id: CalculationId,
         account_ids: Option<&[AccountId]>,
     ) -> Result<(), CalaFault> {
+        let backfill_id = CalculationBackfillId::new();
         self.backfills
-            .create_in_op(
+            .create_in_op(op, backfill_id, calculation_id, account_ids)
+            .await?;
+        self.backfill_spawner
+            .get()
+            .expect("backfill spawner is set in CalaLedger::init")
+            .spawn_in_op(
                 op,
-                CalculationBackfillId::new(),
-                calculation_id,
-                account_ids,
+                JobId::from(uuid::Uuid::from(backfill_id)),
+                BackfillJobConfig { backfill_id },
             )
             .await
+            .narrow_rejected()?;
+        Ok(())
+    }
+
+    pub(crate) async fn find_open_backfill(
+        &self,
+        id: CalculationBackfillId,
+    ) -> Result<Option<CalculationBackfill>, CalaFault> {
+        self.backfills.find_open_by_id(id).await
+    }
+
+    pub(crate) async fn advance_backfill_cursor_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        id: CalculationBackfillId,
+        cursor: u64,
+    ) -> Result<(), CalaFault> {
+        self.backfills.advance_cursor_in_op(op, id, cursor).await
+    }
+
+    /// The handoff's writes, under the EXCLUSIVE lock the caller holds:
+    /// the unit becomes `Complete` at `activation_sequence`, the row is
+    /// closed and `CalculationBackfillCompleted` is published. A Global
+    /// calculation publishes through its entity event; an attachment batch
+    /// publishes directly.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.calculation.complete_backfill_in_op",
+        skip_all,
+        fields(backfill_id = %backfill.id, calculation_id = %backfill.calculation_id, activation_sequence)
+    )]
+    pub(crate) async fn complete_backfill_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        backfill: &CalculationBackfill,
+        activation_sequence: u64,
+    ) -> Result<(), CalaFault> {
+        match &backfill.account_ids {
+            None => {
+                let mut calculation = self
+                    .repo
+                    .find_by_id_in_op(&mut *op, backfill.calculation_id)
+                    .await?;
+                if calculation
+                    .complete_backfill(activation_sequence)
+                    .did_execute()
+                {
+                    self.repo.update_in_op(op, &mut calculation).await?;
+                }
+            }
+            Some(account_ids) => {
+                self.attachments
+                    .complete_backfill_in_op(
+                        op,
+                        backfill.calculation_id,
+                        account_ids,
+                        activation_sequence,
+                    )
+                    .await?;
+                self.outbox
+                    .publish_all_persisted(
+                        op,
+                        std::iter::once(OutboxEventPayload::CalculationBackfillCompleted {
+                            calculation_id: backfill.calculation_id,
+                            account_ids: Some(account_ids.clone()),
+                            activation_sequence,
+                        }),
+                    )
+                    .await?;
+            }
+        }
+        self.backfills
+            .complete_in_op(op, backfill.id, activation_sequence)
+            .await
+    }
+
+    pub(crate) async fn lock_handoff_exclusive_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<(), CalaFault> {
+        self.backfills.lock_handoff_exclusive_in_op(op).await
     }
 
     pub(crate) async fn lock_handoff_shared_in_op(

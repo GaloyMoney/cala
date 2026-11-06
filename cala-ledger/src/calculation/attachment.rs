@@ -252,6 +252,36 @@ impl AttachmentRepo {
         Ok(complete)
     }
 
+    /// Handoff of an attachment batch: every target becomes `Complete`
+    /// with `activation_sequence` set to the checkpoint read under the lock.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_attachment.complete_backfill_in_op",
+        skip_all,
+        fields(count = account_ids.len(), activation_sequence)
+    )]
+    pub async fn complete_backfill_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        calculation_id: CalculationId,
+        account_ids: &[AccountId],
+        activation_sequence: u64,
+    ) -> Result<(), CalaFault> {
+        sqlx::query!(
+            r#"
+            UPDATE cala_calculation_attachments
+            SET backfill_complete = TRUE, activation_sequence = $3
+            WHERE calculation_id = $1 AND account_id = ANY($2)
+            "#,
+            calculation_id as CalculationId,
+            account_ids as &[AccountId],
+            activation_sequence as i64,
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
     /// Every attachment of `calculation_ids` to one of `account_ids`, as
     /// `(calculation, target) -> coverage`.
     #[es_entity::errlanes::instrument(

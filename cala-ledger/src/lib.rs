@@ -139,6 +139,7 @@
 #![cfg_attr(feature = "fail-on-warnings", deny(clippy::all))]
 
 mod account_set_member;
+mod calculation_backfill;
 mod calculation_rollup;
 mod cel_context;
 mod dimension;

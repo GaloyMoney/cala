@@ -90,10 +90,10 @@ pub(crate) async fn register_calculation_rollup(
 /// A transaction pulled from a `TransactionCreated` event, with its outbox
 /// sequence. The values are read back through `event`, the shared event the
 /// outbox decoded once.
-struct PendingTx {
-    id: TransactionId,
-    sequence: EventSequence,
-    event: Arc<PersistentOutboxEvent<OutboxEventPayload>>,
+pub(crate) struct PendingTx {
+    pub(crate) id: TransactionId,
+    pub(crate) sequence: EventSequence,
+    pub(crate) event: Arc<PersistentOutboxEvent<OutboxEventPayload>>,
 }
 
 impl PendingTx {
@@ -125,17 +125,17 @@ fn entry_of(event: &PersistentOutboxEvent<OutboxEventPayload>) -> &EntryValues {
 /// transaction's event group may straddle landings and how incomplete
 /// groups fall back to a DB read.
 #[derive(Default)]
-struct CalculationRollupBatch {
+pub(crate) struct CalculationRollupBatch {
     txns: Vec<PendingTx>,
     entries: HashMap<TransactionId, Vec<Arc<PersistentOutboxEvent<OutboxEventPayload>>>>,
 }
 
 impl CalculationRollupBatch {
-    fn push_tx(&mut self, tx: PendingTx) {
+    pub(crate) fn push_tx(&mut self, tx: PendingTx) {
         self.txns.push(tx);
     }
 
-    fn push_entry(&mut self, event: Arc<PersistentOutboxEvent<OutboxEventPayload>>) {
+    pub(crate) fn push_entry(&mut self, event: Arc<PersistentOutboxEvent<OutboxEventPayload>>) {
         self.entries
             .entry(entry_of(&event).transaction_id)
             .or_default()
@@ -143,7 +143,7 @@ impl CalculationRollupBatch {
     }
 
     /// Entry ids that were *not* collected from the stream in this landing.
-    fn missing_entry_ids(&self) -> Vec<EntryId> {
+    pub(crate) fn missing_entry_ids(&self) -> Vec<EntryId> {
         self.txns
             .iter()
             .flat_map(|tx| {
@@ -162,7 +162,7 @@ impl CalculationRollupBatch {
 
     /// The applier's input in landing order, each transaction's entries
     /// topped up from `fetched` and sorted by entry sequence.
-    fn rollup_txns<'a>(
+    pub(crate) fn rollup_txns<'a>(
         &'a self,
         fetched: &'a HashMap<EntryId, Entry>,
     ) -> Vec<CalculationRollupTxn<'a>> {
