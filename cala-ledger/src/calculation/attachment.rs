@@ -43,6 +43,13 @@ impl From<&CalculationAttachment> for AttachmentByAccountIdCursor {
     }
 }
 
+/// One row for [`AttachmentRepo::create_all_in_op`].
+#[derive(Debug, Clone, Copy)]
+pub(super) struct NewAttachment {
+    pub account_id: AccountId,
+    pub backfill_complete: bool,
+}
+
 /// What an attach target resolves to: whether its account row exists and,
 /// when it is an account set, the set's journal.
 pub(super) struct AttachTarget {
@@ -95,9 +102,8 @@ impl AttachmentRepo {
             .collect())
     }
 
-    /// One multi-row `INSERT` for every `(target, backfill_complete)`, sorted
-    /// by account id so that concurrent callers insert overlapping rows in
-    /// the same order.
+    /// One multi-row `INSERT` for every target, sorted by account id so
+    /// that concurrent callers insert overlapping rows in the same order.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "calculation_attachment.create_all_in_op",
@@ -108,15 +114,18 @@ impl AttachmentRepo {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         calculation_id: CalculationId,
-        targets: &[(AccountId, bool)],
+        targets: &[NewAttachment],
         activation_sequence: u64,
     ) -> Result<(), Fail<CalculationAlreadyAttached, lanes!(Transient, Fatal)>> {
         if targets.is_empty() {
             return Ok(());
         }
         let mut targets = targets.to_vec();
-        targets.sort_unstable_by_key(|(account_id, _)| *account_id);
-        let (account_ids, complete): (Vec<AccountId>, Vec<bool>) = targets.into_iter().unzip();
+        targets.sort_unstable_by_key(|t| t.account_id);
+        let (account_ids, complete): (Vec<AccountId>, Vec<bool>) = targets
+            .into_iter()
+            .map(|t| (t.account_id, t.backfill_complete))
+            .unzip();
 
         sqlx::query!(
             r#"

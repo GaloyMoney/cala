@@ -299,12 +299,15 @@ impl Calculations {
             } else {
                 HashSet::new()
             };
-        let rows: Vec<(AccountId, bool)> = targets
+        let rows: Vec<NewAttachment> = targets
             .iter()
             .map(|target| {
                 let needs_backfill = history == History::Backfill
                     && (validated.sets.contains(target) || with_history.contains(target));
-                (*target, !needs_backfill)
+                NewAttachment {
+                    account_id: *target,
+                    backfill_complete: !needs_backfill,
+                }
             })
             .collect();
         self.attachments
@@ -313,8 +316,8 @@ impl Calculations {
             .lift()?;
         let backfill_targets: Vec<AccountId> = rows
             .iter()
-            .filter(|(_, complete)| !complete)
-            .map(|(target, _)| *target)
+            .filter(|row| !row.backfill_complete)
+            .map(|row| row.account_id)
             .collect();
         if !backfill_targets.is_empty() {
             self.start_backfill_in_op(op, id, Some(&backfill_targets))
