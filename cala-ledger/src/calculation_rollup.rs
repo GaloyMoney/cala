@@ -142,6 +142,10 @@ impl CalculationRollupBatch {
             .push(event);
     }
 
+    pub(crate) fn txns_count(&self) -> usize {
+        self.txns.len()
+    }
+
     /// Entry ids that were *not* collected from the stream in this landing.
     pub(crate) fn missing_entry_ids(&self) -> Vec<EntryId> {
         self.txns
@@ -228,7 +232,7 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
     #[tracing::instrument(
         name = "cala_ledger.calculation_rollup.flush",
         skip_all,
-        fields(txns_count = batch.txns.len(), deltas_count, evaluation_errors),
+        fields(txns_count = batch.txns_count(), deltas_count, evaluation_errors),
         err(level = "warn")
     )]
     async fn flush(

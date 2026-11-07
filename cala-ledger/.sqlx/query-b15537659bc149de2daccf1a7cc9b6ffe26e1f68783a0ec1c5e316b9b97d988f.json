@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT 1 AS \"locked!\"\n            FROM cala_subscriptions\n            WHERE subscriber_type = $1 AND key = $2\n            FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "locked!",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b15537659bc149de2daccf1a7cc9b6ffe26e1f68783a0ec1c5e316b9b97d988f"
+}

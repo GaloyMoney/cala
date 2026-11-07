@@ -12,7 +12,7 @@ use es_entity::{
     errlanes::{lanes, Fail, ResultExt},
     Ensured,
 };
-use job::{JobId, JobSpawner};
+use obix::{out::WakeKey, EventSequence};
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, OnceLock};
@@ -20,7 +20,9 @@ use std::time::Duration;
 
 use crate::{
     balance::Balances,
-    calculation_backfill::BackfillJobConfig,
+    calculation_backfill::{
+        BackfillSubscriptions, BackfillUnit, CalculationBackfillId, BACKFILL_WAKE_KEY,
+    },
     error::CalaFault,
     outbox::{ObixOutbox, OutboxEventPayload, OutboxPublisher},
 };
@@ -47,7 +49,7 @@ pub struct Calculations {
     outbox: ObixOutbox,
     clock: ClockHandle,
     pool: PgPool,
-    backfill_spawner: Arc<OnceLock<JobSpawner<BackfillJobConfig>>>,
+    backfills: Arc<OnceLock<BackfillSubscriptions>>,
 }
 
 /// The targets of an attach call, validated.
@@ -73,15 +75,16 @@ impl Calculations {
             outbox: publisher.inner().clone(),
             clock: clock.clone(),
             pool: pool.clone(),
-            backfill_spawner: Arc::new(OnceLock::new()),
+            backfills: Arc::new(OnceLock::new()),
         }
     }
 
-    /// Set once in `CalaLedger::init`, after the backfill job is registered.
-    pub(crate) fn set_backfill_spawner(&self, spawner: JobSpawner<BackfillJobConfig>) {
+    /// Set once in `CalaLedger::init`, after the backfill subscriber type
+    /// is registered.
+    pub(crate) fn set_backfill_subscriptions(&self, backfills: BackfillSubscriptions) {
         assert!(
-            self.backfill_spawner.set(spawner).is_ok(),
-            "backfill spawner is set once in CalaLedger::init"
+            self.backfills.set(backfills).is_ok(),
+            "backfill subscriptions are set once in CalaLedger::init"
         );
     }
 
@@ -429,23 +432,26 @@ impl Calculations {
         }
     }
 
-    /// One backfill job, committed with the unit.
+    /// One backfill member, born at the start of the stream and committed
+    /// with the unit.
     async fn start_backfill_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
         calculation_id: CalculationId,
         account_ids: Option<&[AccountId]>,
     ) -> Result<(), CalaFault> {
-        self.backfill_spawner
+        self.backfills
             .get()
-            .expect("backfill spawner is set in CalaLedger::init")
-            .spawn_in_op(
+            .expect("backfill subscriptions are set in CalaLedger::init")
+            .subscribe_from_in_op(
                 op,
-                JobId::new(),
-                BackfillJobConfig {
+                CalculationBackfillId::new(),
+                BackfillUnit {
                     calculation_id,
                     account_ids: account_ids.map(<[AccountId]>::to_vec),
                 },
+                WakeKey::from(BACKFILL_WAKE_KEY),
+                EventSequence::BEGIN,
             )
             .await
             .narrow_rejected()?;

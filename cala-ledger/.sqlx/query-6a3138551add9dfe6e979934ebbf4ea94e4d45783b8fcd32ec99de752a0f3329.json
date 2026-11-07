@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT subscriber_type, key\n            FROM cala_subscriptions\n            WHERE subscriber_type = ANY($1::varchar[]) AND checkpoint < $2\n            ORDER BY checkpoint ASC\n            LIMIT $3",
+  "query": "\n            SELECT subscriber_type, key\n            FROM cala_subscriptions\n            WHERE subscriber_type = ANY($1::varchar[]) AND checkpoint < $2 AND dormant\n            ORDER BY checkpoint ASC\n            LIMIT $3",
   "describe": {
     "columns": [
       {
@@ -26,5 +26,5 @@
       false
     ]
   },
-  "hash": "ec47a02cdf419e38e4fc4893b027cbd14df1a48d7db49d4f5562e5f8dc1fc8cd"
+  "hash": "6a3138551add9dfe6e979934ebbf4ea94e4d45783b8fcd32ec99de752a0f3329"
 }

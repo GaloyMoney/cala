@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH retired AS (\n                DELETE FROM cala_subscriptions\n                WHERE subscriber_type = $1 AND key = $2\n                RETURNING subscriber_type, key\n            )\n            INSERT INTO cala_retired_subscriptions (subscriber_type, key, retired_at)\n            SELECT subscriber_type, key, COALESCE($3::timestamptz, NOW()) FROM retired\n            ON CONFLICT (subscriber_type, key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "10df7c727135da64c725302d7cd175614bf5306881fc77aab6657f0bf9c420be"
+}

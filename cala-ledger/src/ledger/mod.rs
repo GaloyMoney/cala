@@ -128,15 +128,15 @@ impl CalaLedger {
             &entries,
         )
         .await?;
-        let backfill_spawner = jobs.add_initializer(
-            crate::calculation_backfill::CalculationBackfillInitializer::new(
-                &calculations,
-                &entries,
-                publisher.inner(),
-                &calculation_rollup,
-            ),
-        );
-        calculations.set_backfill_spawner(backfill_spawner);
+        let backfills = crate::calculation_backfill::register_calculation_backfill(
+            jobs,
+            publisher.inner(),
+            &calculations,
+            &entries,
+            &calculation_rollup,
+        )
+        .await?;
+        calculations.set_backfill_subscriptions(backfills);
 
         Ok(Self {
             ec_rollup,
