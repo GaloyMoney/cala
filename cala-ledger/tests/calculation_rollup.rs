@@ -1370,7 +1370,7 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
         Err(Fail::Rejected(CalculationBalanceNotFound(_)))
     ));
 
-    release_backfill(&f.pool, &key).await?;
+    release_backfill(&f, &key).await?;
     wait_for_backfill(&f.cala, calculation, None).await?;
     assert!(!calculation_rows(&f, calculation, recipient, json!({}))
         .await?
@@ -1429,15 +1429,22 @@ async fn defer_backfill(executor: impl sqlx::PgExecutor<'_>, key: &str) -> anyho
     Ok(())
 }
 
-async fn release_backfill(pool: &sqlx::PgPool, key: &str) -> anyhow::Result<()> {
-    sqlx::query(
-        "UPDATE job_executions SET execute_at = NOW()
-         WHERE job_type = $1 AND unique_key = $2",
-    )
-    .bind(BACKFILL_JOB_TYPE)
-    .bind(key)
-    .execute(pool)
-    .await?;
+/// Pulls the deferred member's job back to now through the job crate, which
+/// also tells the poller about it.
+async fn release_backfill(f: &Fixture, key: &str) -> anyhow::Result<()> {
+    let id: uuid::Uuid =
+        sqlx::query_scalar("SELECT id FROM job_executions WHERE job_type = $1 AND unique_key = $2")
+            .bind(BACKFILL_JOB_TYPE)
+            .bind(key)
+            .fetch_one(&f.pool)
+            .await?;
+    let mut op = f.cala.begin_operation().await?;
+    let moved = f
+        .jobs
+        .pull_forward_in_op(&mut op, job::JobId::from(id), f.cala.clock().now())
+        .await?;
+    op.commit().await?;
+    anyhow::ensure!(moved, "the deferred backfill job was pulled forward");
     Ok(())
 }
 

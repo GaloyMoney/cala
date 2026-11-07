@@ -20,7 +20,7 @@ use std::time::Duration;
 
 use crate::{
     balance::Balances,
-    calculation_backfill::{
+    calculation_rollup::{
         BackfillSubscriptions, BackfillUnit, CalculationBackfillId, BACKFILL_WAKE_KEY,
     },
     error::CalaFault,
@@ -32,7 +32,7 @@ pub use attachment::{AttachmentByAccountIdCursor, CalculationAttachment};
 pub use effective::{CalculationEffectiveBalances, CalculationSeriesCursor};
 pub use entity::*;
 use error::*;
-pub(crate) use fold::{CalculationRollupTxn, RollupScope};
+pub(crate) use fold::{CalculationRollupStats, CalculationRollupTxn, RollupScope};
 use repo::*;
 
 /// Advisory lock class that orders the tip's flush against a backfill handoff.

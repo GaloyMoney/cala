@@ -128,7 +128,7 @@ impl CalaLedger {
             &entries,
         )
         .await?;
-        let backfills = crate::calculation_backfill::register_calculation_backfill(
+        let backfills = crate::calculation_rollup::register_calculation_backfill(
             jobs,
             publisher.inner(),
             &calculations,

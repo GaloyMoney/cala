@@ -7,11 +7,12 @@
 //! compares the member's position `P` with the tip's checkpoint `C`. Once
 //! `P >= C` it takes the EXCLUSIVE side of the calculation handoff lock,
 //! which waits for every in-flight tip flush (each holds the SHARED side),
-//! re-reads `C`, and if still `P >= C` flips the unit to `Complete` with
-//! `activation_sequence = P` and finishes: the fold, the flip, the
+//! re-reads `C`, folds the gap `(P, C]` from the outbox if the tip moved
+//! meanwhile, flips the unit to `Complete` with
+//! `activation_sequence = max(P, C)` and finishes: the fold, the flip, the
 //! checkpoint and the member's retirement commit in one transaction. The
-//! tip covers the unit from `P + 1` on, so every transaction lands in the
-//! unit exactly once (§2.2 of the handoff).
+//! tip covers the unit from the activation on, so every transaction lands
+//! in the unit exactly once (§2.2 of the handoff).
 //!
 //! The member collects every event, not only the ones it folds: a landing
 //! is the only place a handoff can be decided, and the tip's checkpoint
@@ -22,24 +23,27 @@
 //! partitions. PR #795 (outbox archiving) contradicts that assumption for
 //! history older than its retention window.
 
-use es_entity::errlanes::ResultExt;
+use es_entity::errlanes::{Fatal, FatalKind, ResultExt};
+use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
-use std::collections::HashMap;
 use std::time::Duration;
 
 use job::{JobType, Jobs};
-use obix::out::{
-    EventDelivery, FlushOp, FlushOutcome, Handled, InsertOrder, KeyedEventCtx, KeyedSubscriber,
-    KeyedSubscriberConfig, PersistentOutboxEvent, Subscription, SubscriptionDef, Subscriptions,
-    WakeKey,
+use obix::{
+    out::{
+        EventDelivery, FlushOp, FlushOutcome, Handled, InsertOrder, KeyedEventCtx, KeyedSubscriber,
+        KeyedSubscriberConfig, PersistentOutboxEvent, Subscription, SubscriptionDef, Subscriptions,
+        WakeKey,
+    },
+    EventSequence,
 };
 
+use super::batch::{CalculationRollupBatch, Collected};
 use crate::{
     calculation::{Calculations, RollupScope},
-    calculation_rollup::{CalculationRollupBatch, PendingTx},
     entry::Entries,
-    error::CalaFault,
+    error::{CalaFault, CouldNotDecodeOutboxEvent},
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
     primitives::{AccountId, CalculationId},
 };
@@ -83,6 +87,7 @@ pub(crate) async fn register_calculation_backfill(
                 .with_max_batch_size(MAX_EVENTS_PER_BATCH)
                 .with_max_concurrent_per_process(MAX_CONCURRENT_PER_PROCESS),
             CalculationBackfillDef {
+                outbox: outbox.clone(),
                 calculations: calculations.clone(),
                 entries: entries.clone(),
                 tip: tip.clone(),
@@ -92,6 +97,7 @@ pub(crate) async fn register_calculation_backfill(
 }
 
 pub(crate) struct CalculationBackfillDef {
+    outbox: ObixOutbox,
     calculations: Calculations,
     entries: Entries,
     tip: TipHandle,
@@ -112,6 +118,7 @@ impl SubscriptionDef<OutboxEventPayload> for CalculationBackfillDef {
     fn instantiate(&self, _key: Self::Key, unit: Self::InstanceConfig) -> Self::Subscriber {
         CalculationBackfillSubscriber {
             unit,
+            outbox: self.outbox.clone(),
             calculations: self.calculations.clone(),
             entries: self.entries.clone(),
             tip: self.tip.clone(),
@@ -121,6 +128,7 @@ impl SubscriptionDef<OutboxEventPayload> for CalculationBackfillDef {
 
 pub(crate) struct CalculationBackfillSubscriber {
     unit: BackfillUnit,
+    outbox: ObixOutbox,
     calculations: Calculations,
     entries: Entries,
     tip: TipHandle,
@@ -132,6 +140,43 @@ impl CalculationBackfillSubscriber {
             self.tip.load().await.narrow_rejected()?.checkpoint(),
         ))
     }
+
+    /// The events in `(after, through]`, read from the persisted outbox.
+    /// `through` is a committed tip checkpoint, so every one of them exists.
+    async fn gap(&self, after: u64, through: u64) -> Result<CalculationRollupBatch, CalaFault> {
+        let mut listener = Box::pin(
+            self.outbox
+                .listen_persisted(Some(EventSequence::from(after))),
+        );
+        let mut batch = CalculationRollupBatch::default();
+        let mut last = after;
+        while last < through {
+            let event = match listener.next().await {
+                Some(Ok(delivery)) => delivery,
+                Some(Err(undecodable)) => {
+                    return Err(CouldNotDecodeOutboxEvent {
+                        sequence: undecodable.sequence,
+                    }
+                    .into())
+                }
+                None => {
+                    return Err(Fatal::new(FatalKind::Invariant)
+                        .with_context(
+                            "the persisted outbox listener ended below a committed checkpoint",
+                        )
+                        .into())
+                }
+            };
+            last = u64::from(event.sequence);
+            if last > through {
+                break;
+            }
+            if let Some(collected) = Collected::from_event(&event) {
+                batch.push(collected);
+            }
+        }
+        Ok(batch)
+    }
 }
 
 impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
@@ -142,21 +187,12 @@ impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
         ctx: KeyedEventCtx<'inv, Self::Batch>,
         event: &EventDelivery<OutboxEventPayload>,
     ) -> Result<Handled<'inv>, Box<dyn std::error::Error + Send + Sync>> {
-        match &event.payload {
-            Some(OutboxEventPayload::TransactionCreated { transaction }) => {
-                let tx = PendingTx {
-                    id: transaction.id,
-                    sequence: event.sequence,
-                    event: event.inner().clone(),
-                };
-                Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
+        let collected = Collected::from_event(event);
+        Ok(ctx.collect_with(|batch| {
+            if let Some(collected) = collected {
+                batch.push(collected);
             }
-            Some(OutboxEventPayload::EntryCreated { .. }) => {
-                let event = event.inner().clone();
-                Ok(ctx.collect_with(|batch| batch.push_entry(event)))
-            }
-            _ => Ok(ctx.collect_with(|_| {})),
-        }
+        }))
     }
 
     #[tracing::instrument(
@@ -168,7 +204,8 @@ impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
             deltas_count,
             evaluation_errors,
             position,
-            checkpoint
+            checkpoint,
+            gap_txns_count
         ),
         err(level = "warn")
     )]
@@ -179,17 +216,11 @@ impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
     ) -> Result<FlushOutcome, Box<dyn std::error::Error + Send + Sync>> {
         let calculation_id = self.unit.calculation_id;
         let targets = self.unit.account_ids.as_deref();
-        let missing_ids = batch.missing_entry_ids();
-        let fetched = if missing_ids.is_empty() {
-            HashMap::new()
-        } else {
-            self.entries.find_all_in_op(&mut *op, &missing_ids).await?
-        };
-        let stats = self
-            .calculations
-            .apply_rollup_in_op(
+        let stats = batch
+            .fold_in_op(
                 op,
-                batch.rollup_txns(&fetched),
+                &self.entries,
+                &self.calculations,
                 RollupScope::Backfill {
                     calculation_id,
                     targets,
@@ -209,10 +240,21 @@ impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
         let checkpoint = self.tip_checkpoint().await?;
         span.record("checkpoint", checkpoint);
         if position < checkpoint {
-            return Ok(FlushOutcome::Continue);
+            let gap = self.gap(position, checkpoint).await?;
+            span.record("gap_txns_count", gap.txns_count());
+            gap.fold_in_op(
+                op,
+                &self.entries,
+                &self.calculations,
+                RollupScope::Backfill {
+                    calculation_id,
+                    targets,
+                },
+            )
+            .await?;
         }
         self.calculations
-            .complete_backfill_in_op(op, calculation_id, targets, position)
+            .complete_backfill_in_op(op, calculation_id, targets, position.max(checkpoint))
             .await?;
         Ok(FlushOutcome::Finish)
     }

@@ -35,26 +35,21 @@
 use crate::error::CalaFault;
 use es_entity::errlanes::{lanes, Fail, ResultExt};
 
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
-
 use job::{JobType, Jobs};
 use obix::{
     out::{
         EventCtx, EventDelivery, FlushOp, Handled, InsertOrder, OutboxEventJobConfig,
-        PersistentOutboxEvent, SingletonSubscriber, Subscription,
+        SingletonSubscriber, Subscription,
     },
     EventSequence,
 };
 
-use cala_types::{entry::EntryValues, transaction::TransactionValues};
-
+use super::batch::{CalculationRollupBatch, Collected};
 use crate::{
-    calculation::{CalculationRollupTxn, Calculations, RollupScope},
-    entry::{Entries, Entry},
+    calculation::{Calculations, RollupScope},
+    entry::Entries,
     ledger::error::EcCaughtUpTimeout,
     outbox::{CalaMailboxTables, ObixOutbox, OutboxEventPayload},
-    primitives::{EntryId, TransactionId},
 };
 
 const CALCULATION_ROLLUP_JOB: JobType = JobType::new("cala.calculation_rollup");
@@ -87,118 +82,6 @@ pub(crate) async fn register_calculation_rollup(
         .narrow_rejected()
 }
 
-/// A transaction pulled from a `TransactionCreated` event, with its outbox
-/// sequence. The values are read back through `event`, the shared event the
-/// outbox decoded once.
-pub(crate) struct PendingTx {
-    pub(crate) id: TransactionId,
-    pub(crate) sequence: EventSequence,
-    pub(crate) event: Arc<PersistentOutboxEvent<OutboxEventPayload>>,
-}
-
-impl PendingTx {
-    fn transaction(&self) -> &TransactionValues {
-        match &self.event.payload {
-            Some(OutboxEventPayload::TransactionCreated { transaction }) => transaction,
-            _ => unreachable!(
-                "PendingTx is only built from a TransactionCreated event in handle_persistent"
-            ),
-        }
-    }
-
-    fn entry_ids(&self) -> &[EntryId] {
-        &self.transaction().entry_ids
-    }
-}
-
-/// The entry carried by a collected `EntryCreated` event.
-fn entry_of(event: &PersistentOutboxEvent<OutboxEventPayload>) -> &EntryValues {
-    match &event.payload {
-        Some(OutboxEventPayload::EntryCreated { entry }) => entry,
-        _ => unreachable!(
-            "CalculationRollupBatch::entries only ever holds EntryCreated events, pushed in handle_persistent"
-        ),
-    }
-}
-
-/// One batch landing's accumulator; see [`crate::ec_rollup`] for why a
-/// transaction's event group may straddle landings and how incomplete
-/// groups fall back to a DB read.
-#[derive(Default)]
-pub(crate) struct CalculationRollupBatch {
-    txns: Vec<PendingTx>,
-    entries: HashMap<TransactionId, Vec<Arc<PersistentOutboxEvent<OutboxEventPayload>>>>,
-}
-
-impl CalculationRollupBatch {
-    pub(crate) fn push_tx(&mut self, tx: PendingTx) {
-        self.txns.push(tx);
-    }
-
-    pub(crate) fn push_entry(&mut self, event: Arc<PersistentOutboxEvent<OutboxEventPayload>>) {
-        self.entries
-            .entry(entry_of(&event).transaction_id)
-            .or_default()
-            .push(event);
-    }
-
-    pub(crate) fn txns_count(&self) -> usize {
-        self.txns.len()
-    }
-
-    /// Entry ids that were *not* collected from the stream in this landing.
-    pub(crate) fn missing_entry_ids(&self) -> Vec<EntryId> {
-        self.txns
-            .iter()
-            .flat_map(|tx| {
-                let collected: HashSet<EntryId> = self
-                    .entries
-                    .get(&tx.id)
-                    .map(|events| events.iter().map(|e| entry_of(e).id).collect())
-                    .unwrap_or_default();
-                tx.entry_ids()
-                    .iter()
-                    .copied()
-                    .filter(move |id| !collected.contains(id))
-            })
-            .collect()
-    }
-
-    /// The applier's input in landing order, each transaction's entries
-    /// topped up from `fetched` and sorted by entry sequence.
-    pub(crate) fn rollup_txns<'a>(
-        &'a self,
-        fetched: &'a HashMap<EntryId, Entry>,
-    ) -> Vec<CalculationRollupTxn<'a>> {
-        self.txns
-            .iter()
-            .map(|tx| {
-                let entry_ids = tx.entry_ids();
-                let mut entry_values: Vec<&EntryValues> = self
-                    .entries
-                    .get(&tx.id)
-                    .map(|events| events.iter().map(|e| entry_of(e)).collect())
-                    .unwrap_or_default();
-                if entry_values.len() != entry_ids.len() {
-                    entry_values.extend(
-                        entry_ids
-                            .iter()
-                            .filter_map(|id| fetched.get(id))
-                            .map(Entry::values),
-                    );
-                }
-                entry_values.sort_by_key(|e| e.sequence);
-
-                CalculationRollupTxn {
-                    sequence: u64::from(tx.sequence),
-                    transaction: tx.transaction(),
-                    entries: entry_values,
-                }
-            })
-            .collect()
-    }
-}
-
 struct CalculationRollupHandler {
     calculations: Calculations,
     entries: Entries,
@@ -212,20 +95,9 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
         ctx: EventCtx<'inv, Self::Batch>,
         event: &EventDelivery<OutboxEventPayload>,
     ) -> Result<Handled<'inv>, Box<dyn std::error::Error + Send + Sync>> {
-        match &event.payload {
-            Some(OutboxEventPayload::TransactionCreated { transaction }) => {
-                let tx = PendingTx {
-                    id: transaction.id,
-                    sequence: event.sequence,
-                    event: event.inner().clone(),
-                };
-                Ok(ctx.collect_with(|batch| batch.push_tx(tx)))
-            }
-            Some(OutboxEventPayload::EntryCreated { .. }) => {
-                let event = event.inner().clone();
-                Ok(ctx.collect_with(|batch| batch.push_entry(event)))
-            }
-            _ => Ok(ctx.skip()),
+        match Collected::from_event(event) {
+            Some(collected) => Ok(ctx.collect_with(|batch| batch.push(collected))),
+            None => Ok(ctx.skip()),
         }
     }
 
@@ -244,17 +116,8 @@ impl SingletonSubscriber<OutboxEventPayload> for CalculationRollupHandler {
         if !self.calculations.any_exist_in_op(op).await? {
             return Ok(());
         }
-        let missing_ids = batch.missing_entry_ids();
-        let fetched = if missing_ids.is_empty() {
-            HashMap::new()
-        } else {
-            self.entries.find_all_in_op(&mut *op, &missing_ids).await?
-        };
-
-        let rollup_txns = batch.rollup_txns(&fetched);
-        let stats = self
-            .calculations
-            .apply_rollup_in_op(op, rollup_txns, RollupScope::Tip)
+        let stats = batch
+            .fold_in_op(op, &self.entries, &self.calculations, RollupScope::Tip)
             .await?;
         let span = tracing::Span::current();
         span.record("deltas_count", stats.deltas);
