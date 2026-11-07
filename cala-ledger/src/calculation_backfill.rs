@@ -75,7 +75,7 @@ pub(crate) async fn register_calculation_backfill(
     entries: &Entries,
     tip: &TipHandle,
 ) -> Result<BackfillSubscriptions, CalaFault> {
-    Ok(outbox
+    outbox
         .register_keyed_subscriber(
             jobs,
             KeyedSubscriberConfig::new(CALCULATION_BACKFILL_JOB)
@@ -88,7 +88,7 @@ pub(crate) async fn register_calculation_backfill(
                 tip: tip.clone(),
             },
         )
-        .await?)
+        .await
 }
 
 pub(crate) struct CalculationBackfillDef {
