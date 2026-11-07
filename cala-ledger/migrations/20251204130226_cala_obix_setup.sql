@@ -3,6 +3,7 @@ CREATE TABLE cala_persistent_outbox_events (
   sequence BIGSERIAL,
   payload JSONB,
   tracing_context JSONB,
+  event_context JSONB,
   recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   commit_xid BIGINT NOT NULL DEFAULT pg_current_xact_id()::text::bigint,
   PRIMARY KEY (sequence)
@@ -75,8 +76,16 @@ CREATE TABLE cala_subscriptions (
   instance_config  JSONB NOT NULL,
   start_after      BIGINT NOT NULL,
   checkpoint       BIGINT NOT NULL,
+  dormant          BOOLEAN NOT NULL DEFAULT FALSE,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (subscriber_type, key)
 );
 CREATE INDEX cala_idx_subscriptions_checkpoint ON cala_subscriptions (checkpoint);
 CREATE INDEX cala_idx_subscriptions_wake_keys ON cala_subscriptions USING GIN (wake_keys);
+
+CREATE TABLE cala_retired_subscriptions (
+  subscriber_type  VARCHAR NOT NULL,
+  key              VARCHAR NOT NULL,
+  retired_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (subscriber_type, key)
+);

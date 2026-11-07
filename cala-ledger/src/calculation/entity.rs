@@ -12,7 +12,13 @@ pub use cala_types::{calculation::*, primitives::*};
 #[serde(tag = "type", rename_all = "snake_case")]
 #[es_event(id = "CalculationId", event_context = false)]
 pub enum CalculationEvent {
-    Initialized { values: CalculationValues },
+    Initialized {
+        values: CalculationValues,
+    },
+    /// Global only. Rewrites `activation_sequence` to the tip checkpoint at handoff.
+    BackfillCompleted {
+        activation_sequence: u64,
+    },
 }
 
 #[derive(EsEntity)]
@@ -34,6 +40,19 @@ impl Calculation {
     pub fn into_values(self) -> CalculationValues {
         self.values
     }
+
+    /// Idempotent: `AlreadyApplied` when already `Complete`.
+    pub(crate) fn complete_backfill(&mut self, activation_sequence: u64) -> Idempotent<()> {
+        if self.values.backfill_status == BackfillStatus::Complete {
+            return Idempotent::AlreadyApplied;
+        }
+        self.values.backfill_status = BackfillStatus::Complete;
+        self.values.activation_sequence = activation_sequence;
+        self.events.push(CalculationEvent::BackfillCompleted {
+            activation_sequence,
+        });
+        Idempotent::Executed(())
+    }
 }
 
 impl TryFromEvents<CalculationEvent> for Calculation {
@@ -41,12 +60,24 @@ impl TryFromEvents<CalculationEvent> for Calculation {
         events: EntityEvents<CalculationEvent>,
     ) -> Result<Self, EntityHydrationError> {
         let mut hydrator = Calculation::hydrator();
+        let mut current: Option<CalculationValues> = None;
         for event in events.iter_all() {
             match event {
                 CalculationEvent::Initialized { values } => {
-                    hydrator.id(values.id).values(values.clone());
+                    current = Some(values.clone());
+                }
+                CalculationEvent::BackfillCompleted {
+                    activation_sequence,
+                } => {
+                    if let Some(values) = current.as_mut() {
+                        values.backfill_status = BackfillStatus::Complete;
+                        values.activation_sequence = *activation_sequence;
+                    }
                 }
             }
+        }
+        if let Some(values) = current {
+            hydrator.id(values.id).values(values);
         }
         hydrator.build(events)
     }
@@ -64,7 +95,18 @@ pub struct NewCalculation {
     condition: Option<String>,
     dimensions: Vec<NewPartitionKey>,
     effective_date_source: Option<String>,
+    history: History,
     activation_sequence: u64,
+}
+
+/// Whether a new calculation or attachment folds in the entries that precede it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum History {
+    /// Replay history asynchronously; the unit starts `InProgress`.
+    #[default]
+    Backfill,
+    /// The unit is `Complete` at once and covers only later entries.
+    FromNow,
 }
 
 #[bon::bon]
@@ -81,6 +123,7 @@ impl NewCalculation {
         #[builder(into)] condition: Option<String>,
         #[builder(default)] dimensions: Vec<NewPartitionKey>,
         #[builder(into)] effective_date_source: Option<String>,
+        #[builder(default)] history: History,
     ) -> Result<Self, CelParseRejection> {
         validate_optional_expression(&condition)?;
         validate_optional_expression(&effective_date_source)?;
@@ -94,12 +137,17 @@ impl NewCalculation {
             condition,
             dimensions,
             effective_date_source,
+            history,
             activation_sequence: 0,
         })
     }
 }
 
 impl NewCalculation {
+    pub(super) fn starts_backfill(&self) -> bool {
+        self.scope == CalculationScope::Global && self.history == History::Backfill
+    }
+
     pub(super) fn with_activation_sequence(self, activation_sequence: u64) -> Self {
         Self {
             activation_sequence,
@@ -115,6 +163,11 @@ impl IntoEvents<CalculationEvent> for NewCalculation {
         self,
         builder: EntityEventsBuilder<CalculationEvent, FromCaller>,
     ) -> EntityEvents<CalculationEvent> {
+        let backfill_status = if self.starts_backfill() {
+            BackfillStatus::InProgress
+        } else {
+            BackfillStatus::Complete
+        };
         builder.initial_events(
             self.id,
             [CalculationEvent::Initialized {
@@ -143,6 +196,7 @@ impl IntoEvents<CalculationEvent> for NewCalculation {
                             .map(|expr| CelExpression::try_from(expr).expect("already validated")),
                     },
                     activation_sequence: self.activation_sequence,
+                    backfill_status,
                 },
             }],
         )

@@ -97,7 +97,7 @@ impl CalaLedger {
         let entries = Entries::new(&pool);
         let balances = Balances::new(&pool, &journals);
         let velocities = Velocities::new(&pool, &clock);
-        let calculations = Calculations::new(&pool, &publisher, &clock);
+        let calculations = Calculations::new(&pool, &publisher, &balances, &clock);
         let account_sets = AccountSets::new(
             &pool,
             &publisher,
@@ -128,6 +128,15 @@ impl CalaLedger {
             &entries,
         )
         .await?;
+        let backfills = crate::calculation_rollup::register_calculation_backfill(
+            jobs,
+            publisher.inner(),
+            &calculations,
+            &entries,
+            &calculation_rollup,
+        )
+        .await?;
+        calculations.set_backfill_subscriptions(backfills);
 
         Ok(Self {
             ec_rollup,

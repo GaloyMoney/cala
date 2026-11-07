@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use cala_types::velocity::VelocityContextAccountValues;
 
-use crate::outbox::OutboxPublisher;
+use crate::outbox::{OutboxEventPayload, OutboxPublisher};
 
 use super::entity::*;
 
@@ -105,6 +105,43 @@ impl CalculationRepo {
         Ok(exists)
     }
 
+    /// EXCLUSIVE side of the handoff lock, held to the end of the
+    /// operation. Waits for every in-flight tip flush and keeps the next
+    /// one from starting until the handoff commits.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation.lock_handoff_exclusive_in_op",
+        skip_all
+    )]
+    pub async fn lock_handoff_exclusive_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<(), CalaFault> {
+        sqlx::query("SELECT pg_advisory_xact_lock($1::int4, 0)")
+            .bind(super::CALCULATION_HANDOFF_LOCK_CLASS)
+            .execute(op.as_executor())
+            .await?;
+        Ok(())
+    }
+
+    /// SHARED side of the handoff lock, held to the end of the operation.
+    /// The tip takes it as the first statement of every flush.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation.lock_handoff_shared_in_op",
+        skip_all
+    )]
+    pub async fn lock_handoff_shared_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<(), CalaFault> {
+        sqlx::query("SELECT pg_advisory_xact_lock_shared($1::int4, 0)")
+            .bind(super::CALCULATION_HANDOFF_LOCK_CLASS)
+            .execute(op.as_executor())
+            .await?;
+        Ok(())
+    }
+
     /// Every account set in `journal_id` reachable from each of
     /// `account_ids` through set membership, synchronous and eventually
     /// consistent alike.
@@ -196,9 +233,20 @@ impl CalculationRepo {
         entity: &Calculation,
         new_events: es_entity::LastPersisted<'_, CalculationEvent>,
     ) -> Result<(), CalaFault> {
-        self.publisher
-            .publish_entity_events(op, entity, new_events)
-            .await?;
+        let calculation_id = entity.id;
+        let payloads = new_events.map(|persisted| match &persisted.event {
+            CalculationEvent::Initialized { values } => OutboxEventPayload::CalculationCreated {
+                calculation: values.clone(),
+            },
+            CalculationEvent::BackfillCompleted {
+                activation_sequence,
+            } => OutboxEventPayload::CalculationBackfillCompleted {
+                calculation_id,
+                account_ids: None,
+                activation_sequence: *activation_sequence,
+            },
+        });
+        self.publisher.publish_all(op, payloads).await?;
         Ok(())
     }
 }

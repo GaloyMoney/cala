@@ -26,6 +26,15 @@ pub(crate) struct CouldNotDecodeCurrency(#[source] crate::primitives::ParseCurre
 #[error("could not serialize a ledger value")]
 pub(crate) struct CouldNotSerialize(#[source] serde_json::Error);
 
+/// A stored outbox event the handoff's gap read could not decode. Carries
+/// the position only: the raw payload stays out of the error chain.
+#[derive(Debug, errlanes::Classify)]
+#[classify(fatal(CorruptState))]
+#[error("could not decode stored outbox event {sequence}")]
+pub(crate) struct CouldNotDecodeOutboxEvent {
+    pub sequence: obix::EventSequence,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

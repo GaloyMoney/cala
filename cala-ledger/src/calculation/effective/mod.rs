@@ -56,6 +56,8 @@ impl CalculationEffectiveBalances {
     /// The series' cumulative balance at the end of `date`: its latest row
     /// with `effective <= date`. Reads what is materialised; fence on the
     /// calculation rollup for completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative",
@@ -70,6 +72,8 @@ impl CalculationEffectiveBalances {
     }
 
     /// [`Self::find_cumulative`] within a caller-supplied executor.
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative_in_op",
@@ -91,6 +95,8 @@ impl CalculationEffectiveBalances {
     /// [`Self::find_cumulative`] for many series; absent series are
     /// omitted. Reads what is materialised; fence on the calculation rollup
     /// for completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_cumulative(
         &self,
@@ -104,6 +110,8 @@ impl CalculationEffectiveBalances {
     /// of `until`, default today) and their difference. Reads what is
     /// materialised; fence on the calculation rollup for completeness (see
     /// the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_in_range",
@@ -126,6 +134,8 @@ impl CalculationEffectiveBalances {
     /// [`Self::find_in_range`] for many series; series without a closing
     /// row are omitted. Reads what is materialised; fence on the
     /// calculation rollup for completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range(
         &self,
@@ -138,6 +148,8 @@ impl CalculationEffectiveBalances {
     }
 
     /// [`Self::find_all_in_range`] within a caller-supplied executor.
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_in_range_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range_in_op(
         &self,
@@ -161,6 +173,8 @@ impl CalculationEffectiveBalances {
     /// dimensions. This is how a dimensioned caller discovers its tuples.
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.list_cumulative_for_account",
@@ -185,6 +199,8 @@ impl CalculationEffectiveBalances {
     /// The series of whole `periods` for one calculation series. See
     /// [`Self::find_all_periods_in_op`]; a series with no row at or before
     /// the last period's end is [`CalculationBalanceNotFound`].
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_periods",
@@ -204,6 +220,8 @@ impl CalculationEffectiveBalances {
     }
 
     /// [`Self::find_all_periods_in_op`] on the ledger's pool.
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods", skip(self, ids), fields(ids_count = ids.len(), periods = periods.len()))]
     pub async fn find_all_periods(
         &self,
@@ -224,6 +242,8 @@ impl CalculationEffectiveBalances {
     /// first row, carried periods after its last, and the same work limit.
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods_in_op", skip(self, op, ids), fields(ids_count = ids.len(), periods = periods.len()))]
     pub async fn find_all_periods_in_op(
         &self,
@@ -260,6 +280,8 @@ impl CalculationEffectiveBalances {
     /// row at or before the last date is [`CalculationBalanceNotFound`].
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative_at",
@@ -279,6 +301,8 @@ impl CalculationEffectiveBalances {
     }
 
     /// [`Self::find_all_cumulative_at_in_op`] on the ledger's pool.
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at", skip(self, ids), fields(ids_count = ids.len(), dates = dates.len()))]
     pub async fn find_all_cumulative_at(
         &self,
@@ -307,6 +331,8 @@ impl CalculationEffectiveBalances {
     /// `CalaLedger::calculation_rollup_status().await_completion(..)` or
     /// `CalaLedger::await_calculation_frontier(..)` for completeness (see the
     /// module docs).
+    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
+    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at_in_op", skip(self, op, ids), fields(ids_count = ids.len(), dates = dates.len()))]
     pub async fn find_all_cumulative_at_in_op(
         &self,

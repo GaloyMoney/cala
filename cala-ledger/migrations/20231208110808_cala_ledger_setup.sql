@@ -279,6 +279,7 @@ CREATE TABLE cala_calculation_attachments (
   calculation_id UUID NOT NULL REFERENCES cala_calculations(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   activation_sequence BIGINT NOT NULL,
+  backfill_complete BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(calculation_id, account_id)
 );

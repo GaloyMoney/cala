@@ -311,6 +311,7 @@ mod __fuzz {
             sequence: obix::EventSequence::from(0u64),
             payload: Some(payload),
             tracing_context: None,
+            event_context: None,
             recorded_at: Utc::now(),
             commit_group: obix::CommitGroupId::from(0i64),
         })

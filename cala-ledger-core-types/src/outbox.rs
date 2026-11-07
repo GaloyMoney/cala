@@ -55,4 +55,10 @@ pub enum OutboxEventPayload {
     CalculationCreated {
         calculation: CalculationValues,
     },
+    CalculationBackfillCompleted {
+        calculation_id: CalculationId,
+        /// `None` for a Global calculation; the attachment batch's targets otherwise.
+        account_ids: Option<Vec<AccountId>>,
+        activation_sequence: u64,
+    },
 }

@@ -86,3 +86,12 @@ impl From<sqlx::Error> for AttachWrite {
         }
     }
 }
+
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_CALCULATION_BACKFILL_TIMEOUT")]
+#[error("Calculation {calculation_id} backfill not complete after {elapsed:?}")]
+pub struct CalculationBackfillTimeout {
+    pub calculation_id: CalculationId,
+    pub target: Option<AccountId>,
+    pub elapsed: std::time::Duration,
+}
