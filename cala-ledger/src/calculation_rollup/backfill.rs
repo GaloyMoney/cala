@@ -23,20 +23,20 @@
 //! partitions. PR #795 (outbox archiving) contradicts that assumption for
 //! history older than its retention window.
 
-use es_entity::errlanes::{Fatal, FatalKind, ResultExt};
-use futures::StreamExt;
+use es_entity::errlanes::ResultExt;
 use serde::{Deserialize, Serialize};
 
+use std::sync::Arc;
 use std::time::Duration;
 
 use job::{JobType, Jobs};
 use obix::{
     out::{
         EventDelivery, FlushOp, FlushOutcome, Handled, InsertOrder, KeyedEventCtx, KeyedSubscriber,
-        KeyedSubscriberConfig, PersistentOutboxEvent, Subscription, SubscriptionDef, Subscriptions,
-        WakeKey,
+        KeyedSubscriberConfig, OutboxEventId, PersistentOutboxEvent, Subscription, SubscriptionDef,
+        Subscriptions, WakeKey,
     },
-    EventSequence,
+    CommitGroupId, EventSequence,
 };
 
 use super::batch::{CalculationRollupBatch, Collected};
@@ -87,7 +87,6 @@ pub(crate) async fn register_calculation_backfill(
                 .with_max_batch_size(MAX_EVENTS_PER_BATCH)
                 .with_max_concurrent_per_process(MAX_CONCURRENT_PER_PROCESS),
             CalculationBackfillDef {
-                outbox: outbox.clone(),
                 calculations: calculations.clone(),
                 entries: entries.clone(),
                 tip: tip.clone(),
@@ -97,7 +96,6 @@ pub(crate) async fn register_calculation_backfill(
 }
 
 pub(crate) struct CalculationBackfillDef {
-    outbox: ObixOutbox,
     calculations: Calculations,
     entries: Entries,
     tip: TipHandle,
@@ -118,7 +116,6 @@ impl SubscriptionDef<OutboxEventPayload> for CalculationBackfillDef {
     fn instantiate(&self, _key: Self::Key, unit: Self::InstanceConfig) -> Self::Subscriber {
         CalculationBackfillSubscriber {
             unit,
-            outbox: self.outbox.clone(),
             calculations: self.calculations.clone(),
             entries: self.entries.clone(),
             tip: self.tip.clone(),
@@ -128,7 +125,6 @@ impl SubscriptionDef<OutboxEventPayload> for CalculationBackfillDef {
 
 pub(crate) struct CalculationBackfillSubscriber {
     unit: BackfillUnit,
-    outbox: ObixOutbox,
     calculations: Calculations,
     entries: Entries,
     tip: TipHandle,
@@ -141,37 +137,47 @@ impl CalculationBackfillSubscriber {
         ))
     }
 
-    /// The events in `(after, through]`, read from the persisted outbox.
-    /// `through` is a committed tip checkpoint, so every one of them exists.
-    async fn gap(&self, after: u64, through: u64) -> Result<CalculationRollupBatch, CalaFault> {
-        let mut listener = Box::pin(
-            self.outbox
-                .listen_persisted(Some(EventSequence::from(after))),
-        );
+    /// The events in `(after, through]`, read from the persisted outbox on
+    /// `op` so the handoff touches no other connection while it holds the
+    /// lock. `through` is a committed tip checkpoint, so every one of them
+    /// is visible. Only the payload is read: the envelope's tracing and
+    /// event contexts are not carried.
+    async fn gap_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        after: u64,
+        through: u64,
+    ) -> Result<CalculationRollupBatch, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id, sequence, payload, recorded_at, commit_xid
+            FROM cala_persistent_outbox_events
+            WHERE sequence > $1 AND sequence <= $2
+            ORDER BY sequence
+            "#,
+            after as i64,
+            through as i64,
+        )
+        .fetch_all(op.as_executor())
+        .await?;
         let mut batch = CalculationRollupBatch::default();
-        let mut last = after;
-        while last < through {
-            let event = match listener.next().await {
-                Some(Ok(delivery)) => delivery,
-                Some(Err(undecodable)) => {
-                    return Err(CouldNotDecodeOutboxEvent {
-                        sequence: undecodable.sequence,
-                    }
-                    .into())
-                }
-                None => {
-                    return Err(Fatal::new(FatalKind::Invariant)
-                        .with_context(
-                            "the persisted outbox listener ended below a committed checkpoint",
-                        )
-                        .into())
-                }
-            };
-            last = u64::from(event.sequence);
-            if last > through {
-                break;
-            }
-            if let Some(collected) = Collected::from_event(&event) {
+        for row in rows {
+            let sequence = EventSequence::from(row.sequence as u64);
+            let payload = row
+                .payload
+                .map(serde_json::from_value::<OutboxEventPayload>)
+                .transpose()
+                .map_err(|_| CouldNotDecodeOutboxEvent { sequence })?;
+            let event = Arc::new(PersistentOutboxEvent {
+                id: OutboxEventId::from(row.id),
+                sequence,
+                payload,
+                tracing_context: None,
+                event_context: None,
+                recorded_at: row.recorded_at,
+                commit_group: CommitGroupId::from(row.commit_xid),
+            });
+            if let Some(collected) = Collected::from_persisted(&event) {
                 batch.push(collected);
             }
         }
@@ -240,7 +246,7 @@ impl KeyedSubscriber<OutboxEventPayload> for CalculationBackfillSubscriber {
         let checkpoint = self.tip_checkpoint().await?;
         span.record("checkpoint", checkpoint);
         if position < checkpoint {
-            let gap = self.gap(position, checkpoint).await?;
+            let gap = self.gap_in_op(op, position, checkpoint).await?;
             span.record("gap_txns_count", gap.txns_count());
             gap.fold_in_op(
                 op,

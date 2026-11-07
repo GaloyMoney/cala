@@ -30,17 +30,21 @@ pub(super) enum Collected {
 impl Collected {
     /// `None` for an event the rollup does not fold.
     pub(super) fn from_event(event: &EventDelivery<OutboxEventPayload>) -> Option<Self> {
+        Self::from_persisted(event.inner())
+    }
+
+    pub(super) fn from_persisted(
+        event: &Arc<PersistentOutboxEvent<OutboxEventPayload>>,
+    ) -> Option<Self> {
         match &event.payload {
             Some(OutboxEventPayload::TransactionCreated { transaction }) => {
                 Some(Self::Tx(PendingTx {
                     id: transaction.id,
                     sequence: event.sequence,
-                    event: event.inner().clone(),
+                    event: event.clone(),
                 }))
             }
-            Some(OutboxEventPayload::EntryCreated { .. }) => {
-                Some(Self::Entry(event.inner().clone()))
-            }
+            Some(OutboxEventPayload::EntryCreated { .. }) => Some(Self::Entry(event.clone())),
             _ => None,
         }
     }
