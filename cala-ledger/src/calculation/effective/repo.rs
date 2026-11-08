@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use es_entity::errlanes::{lanes, Fault};
+use es_entity::errlanes::{lanes, Fail, Fault};
 use rust_decimal::Decimal;
 use sqlx::{FromRow, PgPool, Row};
 use std::collections::HashMap;
@@ -20,6 +20,9 @@ use crate::{
 };
 
 use super::CalculationSeriesCursor;
+use crate::calculation::error::{
+    CalculationBackfillInProgress, CalculationBalanceNotFound, CalculationBalanceRejection,
+};
 
 /// `(open, open all_time_version, close, close all_time_version)` per series.
 pub(super) type RangeEnds =
@@ -45,13 +48,37 @@ macro_rules! complete_units {
     };
 }
 
-/// What one series read finds.
-pub(super) enum Materialised {
-    /// The unit is still being backfilled; its rows are a prefix of history.
-    InProgress,
-    /// No row at or before the date (or no such calculation).
-    Absent,
-    Present(Box<AccountBalance>),
+/// One series read: the unit's status, and the series' row when the unit
+/// is complete and has one at or before the date.
+struct SeriesRead {
+    in_progress: bool,
+    row: Option<CalculationEffectiveRow>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for SeriesRead {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        let in_progress = row.try_get("in_progress")?;
+        let present = row
+            .try_get::<Option<uuid::Uuid>, _>("calculation_id")?
+            .is_some();
+        Ok(Self {
+            in_progress,
+            row: present
+                .then(|| CalculationEffectiveRow::from_row(row))
+                .transpose()?,
+        })
+    }
+}
+
+pub(super) fn not_found(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::NotFound(CalculationBalanceNotFound(id.clone()))
+}
+
+pub(super) fn in_progress(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::BackfillInProgress(CalculationBackfillInProgress {
+        calculation_id: id.calculation_id,
+        account_id: id.account_id,
+    })
 }
 
 /// One stored row with the target's normal balance type: the cumulative
@@ -153,8 +180,8 @@ impl CalculationEffectiveBalanceRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: &CalculationBalanceId,
         date: NaiveDate,
-    ) -> Result<Materialised, CalaFault> {
-        let row = sqlx::query(concat!(
+    ) -> Result<AccountBalance, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
+        let read = sqlx::query_as::<_, SeriesRead>(concat!(
             "WITH unit AS (
               SELECT NOT (k.backfill_complete AND COALESCE(t.backfill_complete, TRUE)) AS in_progress
               FROM cala_calculations k
@@ -191,20 +218,13 @@ impl CalculationEffectiveBalanceRepo {
         .fetch_optional(op.into_executor())
         .await?;
 
-        let Some(row) = row else {
-            return Ok(Materialised::Absent);
-        };
-        if row.try_get::<bool, _>("in_progress")? {
-            return Ok(Materialised::InProgress);
+        match read {
+            Some(SeriesRead {
+                in_progress: true, ..
+            }) => Err(in_progress(id).into()),
+            Some(SeriesRead { row: Some(row), .. }) => Ok(row.into_series()?.1),
+            _ => Err(not_found(id).into()),
         }
-        if row
-            .try_get::<Option<uuid::Uuid>, _>("calculation_id")?
-            .is_none()
-        {
-            return Ok(Materialised::Absent);
-        }
-        let (_, balance) = CalculationEffectiveRow::from_row(&row)?.into_series()?;
-        Ok(Materialised::Present(Box::new(balance)))
     }
 
     /// Whether the unit of `(calculation_id, account_id)` — the Global

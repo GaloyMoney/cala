@@ -36,9 +36,7 @@ use crate::{
     error::CalaFault,
 };
 
-use super::error::{
-    CalculationBackfillInProgress, CalculationBalanceNotFound, CalculationBalanceRejection,
-};
+use super::error::{CalculationBackfillInProgress, CalculationBalanceRejection};
 use repo::*;
 
 /// Keyset cursor for
@@ -52,17 +50,6 @@ pub struct CalculationSeriesCursor {
 #[derive(Clone)]
 pub struct CalculationEffectiveBalances {
     repo: CalculationEffectiveBalanceRepo,
-}
-
-fn not_found(id: &CalculationBalanceId) -> CalculationBalanceRejection {
-    CalculationBalanceRejection::NotFound(CalculationBalanceNotFound(id.clone()))
-}
-
-fn in_progress(id: &CalculationBalanceId) -> CalculationBalanceRejection {
-    CalculationBalanceRejection::BackfillInProgress(CalculationBackfillInProgress {
-        calculation_id: id.calculation_id,
-        account_id: id.account_id,
-    })
 }
 
 impl CalculationEffectiveBalances {
@@ -100,11 +87,7 @@ impl CalculationEffectiveBalances {
         id: &CalculationBalanceId,
         date: NaiveDate,
     ) -> Result<AccountBalance, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
-        match self.repo.find_in_op(op, id, date).await? {
-            Materialised::Present(balance) => Ok(*balance),
-            Materialised::Absent => Err(not_found(id).into()),
-            Materialised::InProgress => Err(in_progress(id).into()),
-        }
+        self.repo.find_in_op(op, id, date).await
     }
 
     /// [`Self::find_cumulative`] for many series; absent series and series
@@ -216,7 +199,7 @@ impl CalculationEffectiveBalances {
 
     /// The series of whole `periods` for one calculation series. See
     /// [`Self::find_all_periods_in_op`]; a series with no row at or before
-    /// the last period's end is [`CalculationBalanceNotFound`].
+    /// the last period's end is [`CalculationBalanceRejection::NotFound`].
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_periods",
@@ -290,7 +273,7 @@ impl CalculationEffectiveBalances {
 
     /// The cumulative balances of one calculation series at every date in
     /// `dates`. See [`Self::find_all_cumulative_at_in_op`]; a series with no
-    /// row at or before the last date is [`CalculationBalanceNotFound`].
+    /// row at or before the last date is [`CalculationBalanceRejection::NotFound`].
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
     #[es_entity::errlanes::instrument(
