@@ -42,6 +42,10 @@ impl Calculation {
         self.values
     }
 
+    pub(super) fn backfill_complete(&self) -> bool {
+        self.values.backfill_status == BackfillStatus::Complete
+    }
+
     /// Idempotent: `AlreadyApplied` when already `Complete`.
     pub(crate) fn complete_backfill(&mut self, activation_sequence: u64) -> Idempotent<()> {
         if self.values.backfill_status == BackfillStatus::Complete {
@@ -147,6 +151,10 @@ impl NewCalculation {
 impl NewCalculation {
     pub(super) fn starts_backfill(&self) -> bool {
         self.scope == CalculationScope::Global && self.history == History::Backfill
+    }
+
+    pub(super) fn backfill_complete(&self) -> bool {
+        !self.starts_backfill()
     }
 
     pub(super) fn with_activation_sequence(self, activation_sequence: u64) -> Self {

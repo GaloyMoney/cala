@@ -21,6 +21,12 @@ use super::entity::*;
             update(accessor = "values().name", persist = false),
             find_by = false
         ),
+        backfill_complete(
+            ty = "bool",
+            create(accessor = "backfill_complete()"),
+            update(accessor = "backfill_complete()"),
+            find_by = false
+        ),
     ),
     tbl_prefix = "cala",
     post_persist_hook = "publish",

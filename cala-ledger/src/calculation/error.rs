@@ -57,6 +57,27 @@ pub enum AttachCalculationRejection {
 #[error("Calculation balance not found")]
 pub struct CalculationBalanceNotFound(pub CalculationBalanceId);
 
+/// The unit — the Global calculation, or the attachment of `account_id` —
+/// is still being backfilled: its series hold a prefix of their history.
+#[derive(Debug, errlanes::Rejection)]
+#[rejection(code = "CALA_CALCULATION_BACKFILL_IN_PROGRESS")]
+#[error("Calculation {calculation_id} backfill in progress for {account_id}")]
+pub struct CalculationBackfillInProgress {
+    pub calculation_id: CalculationId,
+    pub account_id: AccountId,
+}
+
+/// A read of one calculation series.
+#[derive(Debug, errlanes::Rejection)]
+pub enum CalculationBalanceRejection {
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    NotFound(CalculationBalanceNotFound),
+    #[rejection(delegate, from)]
+    #[error("{0}")]
+    BackfillInProgress(CalculationBackfillInProgress),
+}
+
 #[derive(Debug, errlanes::Rejection)]
 #[rejection(code = "CALA_CALCULATION_ALREADY_ATTACHED")]
 #[error("Calculation target already attached")]

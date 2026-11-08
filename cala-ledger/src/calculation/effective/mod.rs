@@ -7,6 +7,12 @@
 //! EC rollup says nothing about calculations. Entries whose outbox sequence
 //! is at or below a calculation's (or attachment's) `activation_sequence`
 //! are not in its series.
+//!
+//! A series whose unit (its Global calculation, or its attachment) is in
+//! `BackfillStatus::InProgress` holds a prefix of its history. A read of
+//! one such series is [`CalculationBackfillInProgress`]; the `find_all*`
+//! reads omit such series, as they omit absent ones. Fence with
+//! `Calculations::await_backfill` to wait for the unit.
 mod repo;
 
 use chrono::{DateTime, NaiveDate, Utc};
@@ -30,7 +36,9 @@ use crate::{
     error::CalaFault,
 };
 
-use super::error::CalculationBalanceNotFound;
+use super::error::{
+    CalculationBackfillInProgress, CalculationBalanceNotFound, CalculationBalanceRejection,
+};
 use repo::*;
 
 /// Keyset cursor for
@@ -46,6 +54,17 @@ pub struct CalculationEffectiveBalances {
     repo: CalculationEffectiveBalanceRepo,
 }
 
+fn not_found(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::NotFound(CalculationBalanceNotFound(id.clone()))
+}
+
+fn in_progress(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::BackfillInProgress(CalculationBackfillInProgress {
+        calculation_id: id.calculation_id,
+        account_id: id.account_id,
+    })
+}
+
 impl CalculationEffectiveBalances {
     pub(crate) fn new(pool: &PgPool) -> Self {
         Self {
@@ -56,8 +75,6 @@ impl CalculationEffectiveBalances {
     /// The series' cumulative balance at the end of `date`: its latest row
     /// with `effective <= date`. Reads what is materialised; fence on the
     /// calculation rollup for completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative",
@@ -67,13 +84,11 @@ impl CalculationEffectiveBalances {
         &self,
         id: &CalculationBalanceId,
         date: NaiveDate,
-    ) -> Result<AccountBalance, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>> {
+    ) -> Result<AccountBalance, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
         self.find_cumulative_in_op(self.repo.pool(), id, date).await
     }
 
     /// [`Self::find_cumulative`] within a caller-supplied executor.
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative_in_op",
@@ -84,19 +99,17 @@ impl CalculationEffectiveBalances {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: &CalculationBalanceId,
         date: NaiveDate,
-    ) -> Result<AccountBalance, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>> {
-        Ok(self
-            .repo
-            .find_in_op(op, id, date)
-            .await?
-            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+    ) -> Result<AccountBalance, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
+        match self.repo.find_in_op(op, id, date).await? {
+            Materialised::Present(balance) => Ok(*balance),
+            Materialised::Absent => Err(not_found(id).into()),
+            Materialised::InProgress => Err(in_progress(id).into()),
+        }
     }
 
-    /// [`Self::find_cumulative`] for many series; absent series are
-    /// omitted. Reads what is materialised; fence on the calculation rollup
-    /// for completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
+    /// [`Self::find_cumulative`] for many series; absent series and series
+    /// of a backfilling unit are omitted. Reads what is materialised; fence
+    /// on the calculation rollup for completeness (see the module docs).
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_cumulative(
         &self,
@@ -110,8 +123,6 @@ impl CalculationEffectiveBalances {
     /// of `until`, default today) and their difference. Reads what is
     /// materialised; fence on the calculation rollup for completeness (see
     /// the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_in_range",
@@ -122,20 +133,18 @@ impl CalculationEffectiveBalances {
         id: &CalculationBalanceId,
         from: NaiveDate,
         until: Option<NaiveDate>,
-    ) -> Result<BalanceRange, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>> {
+    ) -> Result<BalanceRange, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
+        self.reject_in_progress(id).await?;
         let mut ranges = self
             .find_all_in_range(std::slice::from_ref(id), from, until)
             .await?;
-        Ok(ranges
-            .remove(id)
-            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+        Ok(ranges.remove(id).ok_or_else(|| not_found(id))?)
     }
 
     /// [`Self::find_in_range`] for many series; series without a closing
-    /// row are omitted. Reads what is materialised; fence on the
-    /// calculation rollup for completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
+    /// row and series of a backfilling unit are omitted. Reads what is
+    /// materialised; fence on the calculation rollup for completeness (see
+    /// the module docs).
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_in_range", skip(self, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range(
         &self,
@@ -148,8 +157,6 @@ impl CalculationEffectiveBalances {
     }
 
     /// [`Self::find_all_in_range`] within a caller-supplied executor.
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_in_range_in_op", skip(self, op, ids), fields(ids_count = ids.len()))]
     pub async fn find_all_in_range_in_op(
         &self,
@@ -173,8 +180,6 @@ impl CalculationEffectiveBalances {
     /// dimensions. This is how a dimensioned caller discovers its tuples.
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.list_cumulative_for_account",
@@ -189,18 +194,29 @@ impl CalculationEffectiveBalances {
         args: es_entity::PaginatedQueryArgs<CalculationSeriesCursor>,
     ) -> Result<
         es_entity::PaginatedQueryRet<(Window, AccountBalance), CalculationSeriesCursor>,
-        CalaFault,
+        Fail<CalculationBackfillInProgress, lanes!(Transient, Fatal)>,
     > {
-        self.repo
-            .list_for_account(journal_id, calculation_id, account_id.into(), date, args)
-            .await
+        let account_id = account_id.into();
+        if self
+            .repo
+            .backfill_in_progress(calculation_id, account_id)
+            .await?
+        {
+            return Err(CalculationBackfillInProgress {
+                calculation_id,
+                account_id,
+            }
+            .into());
+        }
+        Ok(self
+            .repo
+            .list_for_account(journal_id, calculation_id, account_id, date, args)
+            .await?)
     }
 
     /// The series of whole `periods` for one calculation series. See
     /// [`Self::find_all_periods_in_op`]; a series with no row at or before
     /// the last period's end is [`CalculationBalanceNotFound`].
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_periods",
@@ -210,18 +226,17 @@ impl CalculationEffectiveBalances {
         &self,
         id: &CalculationBalanceId,
         periods: &EffectivePeriods,
-    ) -> Result<EffectiveBalanceSeries, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>>
+    ) -> Result<EffectiveBalanceSeries, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>>
     {
+        self.reject_in_progress(id).await?;
         Ok(self
             .find_series_in_op(self.repo.pool(), std::slice::from_ref(id), periods)
             .await?
             .remove(id)
-            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+            .ok_or_else(|| not_found(id))?)
     }
 
     /// [`Self::find_all_periods_in_op`] on the ledger's pool.
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods", skip(self, ids), fields(ids_count = ids.len(), periods = periods.len()))]
     pub async fn find_all_periods(
         &self,
@@ -238,12 +253,10 @@ impl CalculationEffectiveBalances {
     /// The series of whole `periods` for every calculation series in `ids`,
     /// in one statement, with the semantics of
     /// `balances().effective().find_all_periods_in_op`:
-    /// explicit cutoffs, absent ids omitted, zero periods before a series'
-    /// first row, carried periods after its last, and the same work limit.
-    /// Reads what is materialised; fence on the calculation rollup for
-    /// completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
+    /// explicit cutoffs, absent ids and backfilling units omitted, zero
+    /// periods before a series' first row, carried periods after its last,
+    /// and the same work limit. Reads what is materialised; fence on the
+    /// calculation rollup for completeness (see the module docs).
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_periods_in_op", skip(self, op, ids), fields(ids_count = ids.len(), periods = periods.len()))]
     pub async fn find_all_periods_in_op(
         &self,
@@ -280,8 +293,6 @@ impl CalculationEffectiveBalances {
     /// row at or before the last date is [`CalculationBalanceNotFound`].
     /// Reads what is materialised; fence on the calculation rollup for
     /// completeness (see the module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.effective.find_cumulative_at",
@@ -291,18 +302,17 @@ impl CalculationEffectiveBalances {
         &self,
         id: &CalculationBalanceId,
         dates: &EffectiveDates,
-    ) -> Result<CumulativeBalances, Fail<CalculationBalanceNotFound, lanes!(Transient, Fatal)>>
+    ) -> Result<CumulativeBalances, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>>
     {
+        self.reject_in_progress(id).await?;
         Ok(self
             .find_cumulative_at_unchecked(self.repo.pool(), std::slice::from_ref(id), dates)
             .await?
             .remove(id)
-            .ok_or_else(|| CalculationBalanceNotFound(id.clone()))?)
+            .ok_or_else(|| not_found(id))?)
     }
 
     /// [`Self::find_all_cumulative_at_in_op`] on the ledger's pool.
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at", skip(self, ids), fields(ids_count = ids.len(), dates = dates.len()))]
     pub async fn find_all_cumulative_at(
         &self,
@@ -320,19 +330,17 @@ impl CalculationEffectiveBalances {
     /// date in `dates` (Twisp's `effective.cumulative` on a calculation, for
     /// many series and dates at once), in one statement, with the semantics
     /// of `balances().effective().find_all_cumulative_at_in_op`: explicit
-    /// dates (the database clock is never consulted), absent ids omitted,
-    /// zero balances before a series' first row, the latest balance carried
-    /// forward after its last, and the same work limit
-    /// (`ids.len() * dates.len()` above [`MAX_EFFECTIVE_PERIODS_WORK`] is
-    /// [`InvalidEffectiveDates`] before any statement runs). For a present
-    /// id, `range(from, until)` equals
+    /// dates (the database clock is never consulted), absent ids and
+    /// backfilling units omitted, zero balances before a series' first row,
+    /// the latest balance carried forward after its last, and the same work
+    /// limit (`ids.len() * dates.len()` above [`MAX_EFFECTIVE_PERIODS_WORK`]
+    /// is [`InvalidEffectiveDates`] before any statement runs). For a
+    /// present id, `range(from, until)` equals
     /// [`Self::find_all_in_range_in_op`]`(&[id], from, Some(until))[id]`.
     /// Reads what is materialised; fence with
     /// `CalaLedger::calculation_rollup_status().await_completion(..)` or
     /// `CalaLedger::await_calculation_frontier(..)` for completeness (see the
     /// module docs).
-    /// A unit in `BackfillStatus::InProgress` is incomplete; fence with
-    /// `Calculations::await_backfill`.
     #[es_entity::errlanes::instrument(level = "debug", name = "cala_ledger.calculation.effective.find_all_cumulative_at_in_op", skip(self, op, ids), fields(ids_count = ids.len(), dates = dates.len()))]
     pub async fn find_all_cumulative_at_in_op(
         &self,
@@ -347,6 +355,21 @@ impl CalculationEffectiveBalances {
             return Err(InvalidEffectiveDates.into());
         }
         Ok(self.find_cumulative_at_unchecked(op, ids, dates).await?)
+    }
+
+    /// A single-series read's first statement: the unit's status.
+    async fn reject_in_progress(
+        &self,
+        id: &CalculationBalanceId,
+    ) -> Result<(), Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
+        if self
+            .repo
+            .backfill_in_progress(id.calculation_id, id.account_id)
+            .await?
+        {
+            return Err(in_progress(id).into());
+        }
+        Ok(())
     }
 
     async fn find_cumulative_at_unchecked(

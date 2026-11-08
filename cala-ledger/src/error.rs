@@ -351,6 +351,8 @@ mod rejection_code_contracts {
             CalculationCodeNotFoundCode,
             AttachCalculationRejectionCode,
             CalculationBalanceNotFoundCode,
+            CalculationBackfillInProgressCode,
+            CalculationBalanceRejectionCode,
             CalculationAlreadyAttachedCode,
             InvalidEffectiveDatesCode,
         ];

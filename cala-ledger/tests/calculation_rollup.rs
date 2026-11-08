@@ -24,7 +24,9 @@ use cala_ledger::{
         MAX_EFFECTIVE_PERIODS_WORK,
     },
     calculation::{
-        error::{CalculationBackfillTimeout, CalculationBalanceNotFound},
+        error::{
+            CalculationBackfillInProgress, CalculationBackfillTimeout, CalculationBalanceRejection,
+        },
         *,
     },
     errlanes::Fail,
@@ -1022,7 +1024,7 @@ async fn periods_match_range_and_cumulative() -> anyhow::Result<()> {
     assert_eq!(partial.len(), 1);
     assert!(matches!(
         calc.find_periods(&absent, &periods).await,
-        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+        Err(Fail::Rejected(CalculationBalanceRejection::NotFound(_)))
     ));
 
     let too_many = vec![ids[0].clone(); MAX_EFFECTIVE_PERIODS_WORK / (periods.len() + 1) + 1];
@@ -1125,7 +1127,7 @@ async fn cumulative_at_matches_base_and_own_reads() -> anyhow::Result<()> {
                     assert_amounts_eq(at, &own, &what);
                     assert_eq!(at.details.version, own.details.version, "{what}");
                 }
-                Err(Fail::Rejected(CalculationBalanceNotFound(_))) => {
+                Err(Fail::Rejected(CalculationBalanceRejection::NotFound(_))) => {
                     assert_eq!(at.settled(), Decimal::ZERO, "{what}");
                     assert_eq!(at.details.version, 0, "{what}");
                 }
@@ -1150,7 +1152,7 @@ async fn cumulative_at_matches_base_and_own_reads() -> anyhow::Result<()> {
     assert_eq!(partial.len(), 1);
     assert!(matches!(
         calc.find_cumulative_at(&absent, &dates).await,
-        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+        Err(Fail::Rejected(CalculationBalanceRejection::NotFound(_)))
     ));
     assert!(matches!(
         f.cala
@@ -1321,13 +1323,35 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
             .await?
             .is_empty());
     }
+    let effective = f.cala.calculations().effective().clone();
+    let series = id(&f, calculation, recipient, json!({}));
     assert!(matches!(
-        f.cala
-            .calculations()
-            .effective()
-            .find_cumulative(&id(&f, calculation, recipient, json!({})), today)
+        effective.find_cumulative(&series, today).await,
+        Err(Fail::Rejected(
+            CalculationBalanceRejection::BackfillInProgress(_)
+        ))
+    ));
+    assert!(matches!(
+        effective.find_in_range(&series, today, Some(today)).await,
+        Err(Fail::Rejected(
+            CalculationBalanceRejection::BackfillInProgress(_)
+        ))
+    ));
+    assert!(effective
+        .find_all_cumulative(std::slice::from_ref(&series), today)
+        .await?
+        .is_empty());
+    assert!(matches!(
+        effective
+            .list_cumulative_for_account(
+                f.journal_id,
+                calculation,
+                recipient,
+                today,
+                Default::default()
+            )
             .await,
-        Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+        Err(Fail::Rejected(CalculationBackfillInProgress { .. }))
     ));
 
     release_backfill(&f, &key).await?;
@@ -1335,6 +1359,70 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
     assert!(!calculation_rows(&f, calculation, recipient, json!({}))
         .await?
         .is_empty());
+    effective.find_cumulative(&series, today).await?;
+    assert_eq!(
+        effective
+            .find_all_cumulative(std::slice::from_ref(&series), today)
+            .await?
+            .len(),
+        1
+    );
+    Ok(())
+}
+
+/// The attachment branch of the same contract: a target whose attachment
+/// is backfilling rejects single reads and is omitted from bulk ones; a
+/// target attached `Complete` with no rows is simply not found.
+#[tokio::test]
+async fn in_progress_attachment_rejects_single_reads() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let fresh = create_account(&f.cala).await?;
+    let with_entry = create_account(&f.cala).await?;
+    f.jobs.start_poll().await?;
+    let today = f.cala.clock().now().date_naive();
+    post(&f, Post::new(&template, f.sender, with_entry, 1, today)).await?;
+    wait_for_tip(&f.cala).await?;
+
+    let calculation =
+        create_calculation_with_history(&f, CalculationScope::Attached, History::Backfill).await?;
+    let mut op = f.cala.begin_operation().await?;
+    f.cala
+        .calculations()
+        .attach_many_with_history_in_op(
+            &mut op,
+            calculation,
+            &[fresh, with_entry],
+            History::Backfill,
+        )
+        .await?;
+    let open = open_backfills(op.as_executor(), calculation).await?;
+    assert_eq!(open.len(), 1);
+    let key = open[0].key.clone();
+    defer_backfill(op.as_executor(), &key).await?;
+    op.commit().await?;
+
+    let effective = f.cala.calculations().effective().clone();
+    let backfilling = id(&f, calculation, with_entry, json!({}));
+    let complete = id(&f, calculation, fresh, json!({}));
+    assert!(matches!(
+        effective.find_cumulative(&backfilling, today).await,
+        Err(Fail::Rejected(
+            CalculationBalanceRejection::BackfillInProgress(_)
+        ))
+    ));
+    assert!(matches!(
+        effective.find_cumulative(&complete, today).await,
+        Err(Fail::Rejected(CalculationBalanceRejection::NotFound(_)))
+    ));
+    assert!(effective
+        .find_all_cumulative(&[backfilling.clone(), complete], today)
+        .await?
+        .is_empty());
+
+    release_backfill(&f, &key).await?;
+    wait_for_backfill(&f.cala, calculation, Some(with_entry)).await?;
+    effective.find_cumulative(&backfilling, today).await?;
     Ok(())
 }
 
