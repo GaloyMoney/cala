@@ -14,9 +14,6 @@ pub enum CreateCalculationRejection {
     #[rejection(code = "CALA_CALCULATION_CODE_ALREADY_EXISTS")]
     #[lift(CalculationConstraintViolation::CodeKey, field = attempted)]
     CodeAlreadyExists(Option<String>),
-    #[error("Calculation journal not found: {0}")]
-    #[rejection(code = "CALA_CALCULATION_JOURNAL_NOT_FOUND")]
-    JournalNotFound(JournalId),
 }
 
 #[derive(Debug, errlanes::Rejection)]

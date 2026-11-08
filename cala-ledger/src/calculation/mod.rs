@@ -41,7 +41,6 @@ pub struct Calculations {
     balances: Balances,
     outbox: ObixOutbox,
     clock: ClockHandle,
-    pool: PgPool,
     backfills: BackfillCatchUps,
 }
 
@@ -68,7 +67,6 @@ impl Calculations {
             balances: balances.clone(),
             outbox: publisher.inner().clone(),
             clock: clock.clone(),
-            pool: pool.clone(),
             backfills: publisher.inner().joinable(CALCULATION_ROLLUP_JOB),
         }
     }
@@ -94,15 +92,6 @@ impl Calculations {
         op: &mut impl es_entity::AtomicOperation,
         new_calculation: NewCalculation,
     ) -> Result<Calculation, Fail<CreateCalculationRejection, lanes!(Transient, Fatal)>> {
-        if !self
-            .repo
-            .journal_exists(op, new_calculation.journal_id)
-            .await?
-        {
-            return Err(
-                CreateCalculationRejection::JournalNotFound(new_calculation.journal_id).into(),
-            );
-        }
         let activation_sequence = self.activation_sequence().await?;
         let starts_backfill = new_calculation.starts_backfill();
         let new_calculation = new_calculation.with_activation_sequence(activation_sequence);
@@ -190,7 +179,14 @@ impl Calculations {
         &self,
         journal_id: JournalId,
     ) -> Result<Vec<Calculation>, CalaFault> {
-        self.repo.list_for_journal(&self.pool, journal_id).await
+        let mut by_journal = self
+            .repo
+            .find_all_for_journal_ids::<Calculation>(
+                &[journal_id],
+                es_entity::ListDirection::Ascending,
+            )
+            .await?;
+        Ok(by_journal.remove(&journal_id).unwrap_or_default())
     }
 
     /// Attach the calculation to an account or account set. Rejected for a

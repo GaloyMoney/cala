@@ -168,12 +168,14 @@ async fn create_and_find() -> anyhow::Result<()> {
     ));
 
     let unknown_journal = JournalId::new();
-    assert!(matches!(
-        cala.calculations()
-            .create(new_calculation(unknown_journal, CalculationScope::Attached))
-            .await,
-        Err(Fail::Rejected(CreateCalculationRejection::JournalNotFound(j))) if j == unknown_journal
-    ));
+    let Err(err) = cala
+        .calculations()
+        .create(new_calculation(unknown_journal, CalculationScope::Attached))
+        .await
+    else {
+        panic!("an unknown journal is not a valid calculation")
+    };
+    assert!(matches!(err, Fail::Fatal(_)), "{err:?}");
 
     let ensured_id = CalculationId::new();
     let ensured_code = random_code();

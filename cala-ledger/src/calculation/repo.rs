@@ -14,7 +14,11 @@ use super::entity::*;
     entity = "Calculation",
     id(source = caller),
     columns(
-        journal_id(ty = "JournalId", update(persist = false)),
+        journal_id(
+            ty = "JournalId",
+            list_for(by(created_at), find_all_for),
+            update(persist = false, accessor = "values().journal_id")
+        ),
         code(ty = "String", update(accessor = "values().code", persist = false)),
         name(
             ty = "String",
@@ -43,56 +47,6 @@ impl CalculationRepo {
             pool: pool.clone(),
             publisher: publisher.clone(),
         }
-    }
-
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "calculation.list_for_journal",
-        skip_all
-    )]
-    pub async fn list_for_journal(
-        &self,
-        op: impl es_entity::IntoOneTimeExecutor<'_>,
-        journal_id: JournalId,
-    ) -> Result<Vec<Calculation>, CalaFault> {
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query_as!(
-                GenericEvent,
-                r#"WITH calculations AS (
-              SELECT id, created_at AS entity_created_at
-              FROM cala_calculations
-              WHERE journal_id = $1
-            )
-            SELECT c.id as entity_id, e.sequence, e.event, NULL as "context: es_entity::ContextData", e.recorded_at, NULL::jsonb as "forgettable_payload?"
-            FROM calculations c
-            JOIN cala_calculation_events e ON c.id = e.id
-            ORDER BY c.id, e.sequence"#,
-                journal_id as JournalId,
-            ))
-            .await?;
-        let n = rows.len();
-        let ret = EntityEvents::load_n::<Calculation>(rows, n)?.0;
-        Ok(ret)
-    }
-
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "calculation.journal_exists",
-        skip_all
-    )]
-    pub async fn journal_exists(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-    ) -> Result<bool, CalaFault> {
-        let exists = sqlx::query_scalar!(
-            r#"SELECT EXISTS (SELECT 1 FROM cala_journals WHERE id = $1) AS "exists!""#,
-            journal_id as JournalId,
-        )
-        .fetch_one(op.as_executor())
-        .await?;
-        Ok(exists)
     }
 
     #[es_entity::errlanes::instrument(

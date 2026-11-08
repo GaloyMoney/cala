@@ -13,7 +13,7 @@ use crate::{
     effective::delta::DeltaAccumulator, error::CalaFault, eval_context::EvalContext, primitives::*,
 };
 
-use super::Calculations;
+use super::{Calculation, Calculations};
 
 /// One committed transaction of a calculation-rollup batch, with its
 /// outbox sequence and its entries in `sequence` order.
@@ -118,8 +118,14 @@ impl Calculations {
     ) -> Result<(), CalaFault> {
         let calculations: Vec<CalculationValues> = self
             .repo
-            .list_for_journal(&mut *op, journal_id)
+            .find_all_for_journal_ids_in_op::<Calculation>(
+                &mut *op,
+                &[journal_id],
+                es_entity::ListDirection::Ascending,
+            )
             .await?
+            .remove(&journal_id)
+            .unwrap_or_default()
             .into_iter()
             .map(|c| c.into_values())
             .filter(|c| match scope {
