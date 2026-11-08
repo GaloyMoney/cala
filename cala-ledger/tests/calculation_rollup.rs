@@ -210,8 +210,8 @@ async fn post(f: &Fixture, p: Post<'_>) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The tip caught up to the frontier and no backfill left open; the tip is
-/// re-fenced afterwards because a handoff moves the frontier.
+/// The tip caught up to the frontier and no catch-up left open; the tip is
+/// re-fenced afterwards because a join moves the frontier.
 async fn wait_for_calculations(cala: &CalaLedger) -> anyhow::Result<()> {
     wait_for_tip(cala).await?;
     tokio::time::timeout(Duration::from_secs(30), async {
@@ -219,7 +219,7 @@ async fn wait_for_calculations(cala: &CalaLedger) -> anyhow::Result<()> {
             let open: i64 = sqlx::query_scalar(
                 "SELECT COUNT(*) FROM cala_subscriptions WHERE subscriber_type = $1",
             )
-            .bind(BACKFILL_JOB_TYPE)
+            .bind(CATCH_UP_JOB_TYPE)
             .fetch_one(cala.pool())
             .await?;
             if open == 0 {
@@ -342,7 +342,6 @@ struct Counter {
     span: &'static str,
     flushes: Arc<AtomicUsize>,
     statements: Arc<AtomicUsize>,
-    shared_locks: Arc<AtomicUsize>,
     errors: Arc<AtomicUsize>,
 }
 
@@ -352,20 +351,8 @@ impl Counter {
             span,
             flushes: Arc::default(),
             statements: Arc::default(),
-            shared_locks: Arc::default(),
             errors: Arc::default(),
         }
-    }
-}
-
-/// Whether any recorded field of an event mentions `needle`.
-struct Mentions(&'static str, bool);
-impl tracing::field::Visit for Mentions {
-    fn record_str(&mut self, _: &tracing::field::Field, value: &str) {
-        self.1 |= value.contains(self.0);
-    }
-    fn record_debug(&mut self, _: &tracing::field::Field, value: &dyn std::fmt::Debug) {
-        self.1 |= format!("{value:?}").contains(self.0);
     }
 }
 
@@ -402,11 +389,6 @@ where
         }
         if event.metadata().target() == "sqlx::query" {
             self.statements.fetch_add(1, Ordering::SeqCst);
-            let mut visitor = Mentions("pg_advisory_xact_lock_shared", false);
-            event.record(&mut visitor);
-            if visitor.1 {
-                self.shared_locks.fetch_add(1, Ordering::SeqCst);
-            }
         }
         if *event.metadata().level() == tracing::Level::ERROR {
             let mut visitor = HasField("calculation_id", false);
@@ -824,7 +806,7 @@ async fn evaluation_error_is_skipped_not_fatal() -> anyhow::Result<()> {
 }
 
 #[tokio::test]
-async fn no_calculations_costs_two_statements() -> anyhow::Result<()> {
+async fn no_calculations_costs_one_statement() -> anyhow::Result<()> {
     use tracing_subscriber::prelude::*;
 
     let calculation = Counter::new("cala_ledger.calculation_rollup.flush");
@@ -855,9 +837,8 @@ async fn no_calculations_costs_two_statements() -> anyhow::Result<()> {
     let statements = calculation.statements.load(Ordering::SeqCst);
     assert!(flushes >= 1, "the calculation rollup flushed");
     assert_eq!(
-        statements,
-        2 * flushes,
-        "one shared handoff lock and one EXISTS probe per flush without calculations"
+        statements, flushes,
+        "one EXISTS probe per flush without calculations"
     );
     assert!(
         ec.statements.load(Ordering::SeqCst) > ec.flushes.load(Ordering::SeqCst),
@@ -1315,28 +1296,7 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
     f.jobs.start_poll().await?;
     wait_for_tip(&f.cala).await?;
 
-    let mut op = f.cala.begin_operation().await?;
-    let calculation = f
-        .cala
-        .calculations()
-        .create_in_op(
-            &mut op,
-            NewCalculation::builder()
-                .id(CalculationId::new())
-                .journal_id(f.journal_id)
-                .code(random_code())
-                .name("history test")
-                .scope(CalculationScope::Global)
-                .history(History::Backfill)
-                .build()?,
-        )
-        .await?
-        .id();
-    let open = open_backfills(op.as_executor(), calculation).await?;
-    assert_eq!(open.len(), 1);
-    let key = open[0].key.clone();
-    defer_backfill(op.as_executor(), &key).await?;
-    op.commit().await?;
+    let (calculation, key) = create_deferred_backfill(&f).await?;
     let open = open_backfills(&f.pool, calculation).await?;
     assert_eq!(open.len(), 1);
     assert_eq!(open[0].key, key);
@@ -1378,10 +1338,11 @@ async fn in_progress_unit_is_invisible_to_tip() -> anyhow::Result<()> {
     Ok(())
 }
 
-const BACKFILL_JOB_TYPE: &str = "cala.calculation_backfill";
+const TIP_JOB_TYPE: &str = "cala.calculation_rollup";
+const CATCH_UP_JOB_TYPE: &str = "cala.calculation_rollup.catch_up";
 
-/// A backfill member that has not finished: its key, its unit and its
-/// mirrored checkpoint. The row is written inline by the subscribe, so
+/// A catch-up that has not joined: its key, its unit and its mirrored
+/// checkpoint. The row is written inline when the catch-up is started, so
 /// this sees an uncommitted unit through the creating operation.
 struct OpenBackfill {
     key: String,
@@ -1400,7 +1361,7 @@ async fn open_backfills(
            AND instance_config ->> 'calculation_id' = $2
          ORDER BY created_at, key",
     )
-    .bind(BACKFILL_JOB_TYPE)
+    .bind(CATCH_UP_JOB_TYPE)
     .bind(calculation_id.to_string())
     .fetch_all(executor)
     .await?;
@@ -1415,26 +1376,55 @@ async fn open_backfills(
         .collect()
 }
 
-/// Keeps the member's job from being claimed until
+/// Keeps the catch-up's job from being claimed until
 /// [`release_backfill`]: nothing is held, so the tip runs freely.
 async fn defer_backfill(executor: impl sqlx::PgExecutor<'_>, key: &str) -> anyhow::Result<()> {
     sqlx::query(
         "UPDATE job_executions SET execute_at = NOW() + INTERVAL '1 hour'
          WHERE job_type = $1 AND unique_key = $2",
     )
-    .bind(BACKFILL_JOB_TYPE)
+    .bind(CATCH_UP_JOB_TYPE)
     .bind(key)
     .execute(executor)
     .await?;
     Ok(())
 }
 
-/// Pulls the deferred member's job back to now through the job crate, which
-/// also tells the poller about it.
+/// A Global calculation with history whose catch-up is deferred in the
+/// creating operation: the unit is `InProgress` and the tip runs freely
+/// until [`release_backfill`] is called with the returned key.
+async fn create_deferred_backfill(f: &Fixture) -> anyhow::Result<(CalculationId, String)> {
+    let mut op = f.cala.begin_operation().await?;
+    let calculation = f
+        .cala
+        .calculations()
+        .create_in_op(
+            &mut op,
+            NewCalculation::builder()
+                .id(CalculationId::new())
+                .journal_id(f.journal_id)
+                .code(random_code())
+                .name("history test")
+                .scope(CalculationScope::Global)
+                .history(History::Backfill)
+                .build()?,
+        )
+        .await?
+        .id();
+    let open = open_backfills(op.as_executor(), calculation).await?;
+    assert_eq!(open.len(), 1);
+    let key = open[0].key.clone();
+    defer_backfill(op.as_executor(), &key).await?;
+    op.commit().await?;
+    Ok((calculation, key))
+}
+
+/// Pulls the deferred catch-up's job back to now through the job crate,
+/// which also tells the poller about it.
 async fn release_backfill(f: &Fixture, key: &str) -> anyhow::Result<()> {
     let id: uuid::Uuid =
         sqlx::query_scalar("SELECT id FROM job_executions WHERE job_type = $1 AND unique_key = $2")
-            .bind(BACKFILL_JOB_TYPE)
+            .bind(CATCH_UP_JOB_TYPE)
             .bind(key)
             .fetch_one(&f.pool)
             .await?;
@@ -1482,61 +1472,56 @@ async fn attach_partition() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The rollup is registered as obix's joinable tip: its row carries the
+/// tip's checkpoint, and a joined catch-up's record carries the sequence
+/// the unit was activated at.
 #[tokio::test]
-async fn tip_takes_shared_lock_on_every_flush() -> anyhow::Result<()> {
-    use tracing_subscriber::prelude::*;
-
-    let calculation = Counter::new("cala_ledger.calculation_rollup.flush");
-    tracing::subscriber::set_global_default(
-        tracing_subscriber::registry().with(calculation.clone()),
-    )
-    .expect("no other global tracing subscriber should be set in this test process");
-
+async fn tip_row_mirrors_the_checkpoint_and_joins_are_recorded() -> anyhow::Result<()> {
     let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
     let template = create_template(&f.cala, "TEST").await?;
     let recipient = create_account(&f.cala).await?;
     f.jobs.start_poll().await?;
-    let today = f.cala.clock().now().date_naive();
-
-    post(&f, Post::new(&template, f.sender, recipient, 1, today)).await?;
+    post_many(&f, &template, recipient, 3).await?;
     wait_for_calculations(&f.cala).await?;
-    let flushes = calculation.flushes.load(Ordering::SeqCst);
-    assert!(flushes >= 1, "the calculation rollup flushed");
-    assert_eq!(
-        calculation.shared_locks.load(Ordering::SeqCst),
-        flushes,
-        "one shared handoff lock per flush before any calculation exists"
-    );
-    assert!(
-        calculation.statements.load(Ordering::SeqCst) > flushes,
-        "positive control: statements are observed inside a flush span"
-    );
+    assert_eq!(tip_row_checkpoint(&f).await?, Some(checkpoint(&f).await?));
 
-    create_calculation_with_history(&f, CalculationScope::Global, History::FromNow).await?;
-    post(&f, Post::new(&template, f.sender, recipient, 2, today)).await?;
-    wait_for_calculations(&f.cala).await?;
-    let flushes = calculation.flushes.load(Ordering::SeqCst);
+    let b =
+        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
+    assert_eq!(joined_at(&f, b).await?, None, "not joined before the join");
+    wait_for_backfill(&f.cala, b, None).await?;
     assert_eq!(
-        calculation.shared_locks.load(Ordering::SeqCst),
-        flushes,
-        "one shared handoff lock per flush with a Complete unit"
-    );
-
-    create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
-    post(&f, Post::new(&template, f.sender, recipient, 3, today)).await?;
-    wait_for_calculations(&f.cala).await?;
-    let flushes = calculation.flushes.load(Ordering::SeqCst);
-    assert_eq!(
-        calculation.shared_locks.load(Ordering::SeqCst),
-        flushes,
-        "one shared handoff lock per flush with a backfill open"
+        joined_at(&f, b).await?,
+        Some(activation_sequence(&f, b).await?),
+        "the join record and the activation sequence agree"
     );
     Ok(())
 }
 
 // ---- Backfill (handoff §10.B) ----
 
-const HANDOFF_LOCK_CLASS: i32 = 6;
+/// The tip row's mirrored checkpoint, `None` until the tip first reports.
+async fn tip_row_checkpoint(f: &Fixture) -> anyhow::Result<Option<u64>> {
+    let checkpoint: Option<i64> =
+        sqlx::query_scalar("SELECT checkpoint FROM cala_joinable_tips WHERE subscriber_type = $1")
+            .bind(TIP_JOB_TYPE)
+            .fetch_one(&f.pool)
+            .await?;
+    Ok(checkpoint.map(|c| c as u64))
+}
+
+/// The sequence the unit's catch-up joined the tip at, `None` while it
+/// has not.
+async fn joined_at(f: &Fixture, calculation_id: CalculationId) -> anyhow::Result<Option<u64>> {
+    let joined: Option<Option<i64>> = sqlx::query_scalar(
+        "SELECT joined_at_sequence FROM cala_joinable_catch_ups
+         WHERE subscriber_type = $1 AND instance_config ->> 'calculation_id' = $2",
+    )
+    .bind(TIP_JOB_TYPE)
+    .bind(calculation_id.to_string())
+    .fetch_optional(&f.pool)
+    .await?;
+    Ok(joined.flatten().map(|s| s as u64))
+}
 
 async fn wait_for_backfill(
     cala: &CalaLedger,
@@ -1549,16 +1534,15 @@ async fn wait_for_backfill(
     Ok(())
 }
 
-/// Holds the EXCLUSIVE side of the calculation handoff lock until the
-/// returned transaction ends: every tip flush blocks at its first
-/// statement and no handoff can commit, while posting, creating units and
-/// the job's chase proceed.
-async fn hold_handoff_lock(
+/// Holds the tip's row until the returned transaction ends: every tip
+/// landing blocks at its first statement and no catch-up can join or be
+/// started, while posting and the catch-ups' ordinary landings proceed.
+async fn hold_tip_lock(
     pool: &sqlx::PgPool,
 ) -> anyhow::Result<sqlx::Transaction<'static, sqlx::Postgres>> {
     let mut tx = pool.begin().await?;
-    sqlx::query("SELECT pg_advisory_xact_lock($1::int4, 0)")
-        .bind(HANDOFF_LOCK_CLASS)
+    sqlx::query("SELECT checkpoint FROM cala_joinable_tips WHERE subscriber_type = $1 FOR UPDATE")
+        .bind(TIP_JOB_TYPE)
         .execute(&mut *tx)
         .await?;
     Ok(tx)
@@ -1626,20 +1610,21 @@ async fn open_cursor(f: &Fixture, id: CalculationId) -> anyhow::Result<Option<u6
     Ok(open_backfills(&f.pool, id).await?.first().map(|b| b.cursor))
 }
 
-/// Poll until a handoff is waiting for the EXCLUSIVE side of the handoff
-/// lock.
-async fn wait_for_handoff_waiting(f: &Fixture) -> anyhow::Result<()> {
+/// Poll until `n` backends wait inside the tip row's `SELECT .. FOR
+/// UPDATE`: a tip landing at its entry, a catch-up at its join.
+async fn wait_for_tip_row_waiters(f: &Fixture, n: i64) -> anyhow::Result<()> {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let waiting: i64 = sqlx::query_scalar(
-                "SELECT COUNT(*) FROM pg_locks
-                 WHERE locktype = 'advisory' AND classid = $1::oid
-                   AND mode = 'ExclusiveLock' AND NOT granted",
+                "SELECT COUNT(*) FROM pg_stat_activity
+                 WHERE datname = current_database()
+                   AND wait_event_type = 'Lock'
+                   AND query LIKE '%cala_joinable_tips%'
+                   AND query ILIKE '%for update%'",
             )
-            .bind(HANDOFF_LOCK_CLASS)
             .fetch_one(&f.pool)
             .await?;
-            if waiting > 0 {
+            if waiting >= n {
                 return anyhow::Ok(());
             }
             tokio::time::sleep(Duration::from_millis(10)).await;
@@ -1651,6 +1636,12 @@ async fn wait_for_handoff_waiting(f: &Fixture) -> anyhow::Result<()> {
 
 async fn checkpoint(f: &Fixture) -> anyhow::Result<u64> {
     Ok(u64::from(f.cala.calculation_rollup_status().await?.applied))
+}
+
+async fn frontier(f: &Fixture) -> anyhow::Result<u64> {
+    Ok(u64::from(
+        f.cala.calculation_rollup_status().await?.frontier,
+    ))
 }
 
 async fn wait_for_ec(f: &Fixture) -> anyhow::Result<()> {
@@ -1835,8 +1826,10 @@ async fn backfilled_attachment_equals_preexisting() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// The catch-up is started before the tip is stalled: starting one takes
+/// the tip's lock, so a stalled tip would block the creating operation.
 #[tokio::test]
-async fn handoff_waits_for_the_stalled_tip_and_lands_entries_exactly_once() -> anyhow::Result<()> {
+async fn join_waits_for_the_stalled_tip_and_lands_entries_exactly_once() -> anyhow::Result<()> {
     let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
     let template = create_template(&f.cala, "TEST").await?;
     let a = create_calculation_with_history(&f, CalculationScope::Global, History::FromNow).await?;
@@ -1847,17 +1840,17 @@ async fn handoff_waits_for_the_stalled_tip_and_lands_entries_exactly_once() -> a
     wait_for_ec(&f).await?;
     wait_for_calculations(&f.cala).await?;
 
-    let stall = hold_handoff_lock(&f.pool).await?;
+    let (b, key) = create_deferred_backfill(&f).await?;
+    let stall = hold_tip_lock(&f.pool).await?;
     let c0 = checkpoint(&f).await?;
     post_many(&f, &template, h.r1, 10).await?;
-    let b =
-        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
+    release_backfill(&f, &key).await?;
 
-    wait_for_handoff_waiting(&f).await?;
+    wait_for_tip_row_waiters(&f, 2).await?;
     assert_eq!(
         backfill_status(&f, b).await?,
         BackfillStatus::InProgress,
-        "the handoff waits for the stalled tip"
+        "the join waits for the stalled tip"
     );
     assert_eq!(checkpoint(&f).await?, c0, "the tip is still stalled");
     post_many(&f, &template, h.r2, 5).await?;
@@ -1867,10 +1860,7 @@ async fn handoff_waits_for_the_stalled_tip_and_lands_entries_exactly_once() -> a
     wait_for_ec(&f).await?;
     wait_for_calculations(&f.cala).await?;
     let activation = activation_sequence(&f, b).await?;
-    assert!(
-        activation >= c0,
-        "handoff at or above the stalled checkpoint"
-    );
+    assert!(activation >= c0, "join at or above the stalled checkpoint");
     assert!(activation <= checkpoint(&f).await?);
     assert_same_series(&f, a, b, &targets).await?;
     Ok(())
@@ -1889,14 +1879,14 @@ async fn large_backlog_lands_exactly_once_after_release() -> anyhow::Result<()> 
     wait_for_ec(&f).await?;
     wait_for_calculations(&f.cala).await?;
 
-    let stall = hold_handoff_lock(&f.pool).await?;
+    let (b, key) = create_deferred_backfill(&f).await?;
+    let stall = hold_tip_lock(&f.pool).await?;
     let c0 = checkpoint(&f).await?;
     // 700 two-entry postings: 2,100 outbox events above the stalled
     // checkpoint, more than one landing.
     post_many(&f, &template, h.r1, 700).await?;
-    let b =
-        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
-    wait_for_handoff_waiting(&f).await?;
+    release_backfill(&f, &key).await?;
+    wait_for_tip_row_waiters(&f, 2).await?;
     assert_eq!(backfill_status(&f, b).await?, BackfillStatus::InProgress);
 
     stall.rollback().await?;
@@ -1909,6 +1899,59 @@ async fn large_backlog_lands_exactly_once_after_release() -> anyhow::Result<()> 
         "large_backlog_lands_exactly_once_after_release: {:?}",
         started.elapsed()
     );
+    Ok(())
+}
+
+/// The tip lands a batch above the catch-up's position while the catch-up
+/// waits for the lock: the join landing drains the catch-up to the tip's
+/// new checkpoint and joins there, and nothing is applied twice.
+#[tokio::test]
+async fn join_drains_to_the_tip_when_the_tip_lands_first() -> anyhow::Result<()> {
+    let mut f = setup(helpers::test_journal_with_effective_balances()).await?;
+    let template = create_template(&f.cala, "TEST").await?;
+    let a = create_calculation_with_history(&f, CalculationScope::Global, History::FromNow).await?;
+    let h = history_accounts(&f).await?;
+    let targets = h.targets(f.sender);
+    f.jobs.start_poll().await?;
+    post_history(&f, &template, &h, 0).await?;
+    // History just short of the catch-up's batch size (1,000 events): its
+    // first landing closes at the batch size, a few events into the tip's
+    // blocked batch rather than at a boundary the tip shares.
+    while frontier(&f).await? < 975 {
+        post_many(&f, &template, h.r1, 1).await?;
+    }
+    wait_for_ec(&f).await?;
+    wait_for_calculations(&f.cala).await?;
+    let (b, key) = create_deferred_backfill(&f).await?;
+    wait_for_tip(&f.cala).await?;
+    let f0 = frontier(&f).await?;
+    assert!(f0 < 1_000, "frontier {f0} before the stall");
+
+    let stall = hold_tip_lock(&f.pool).await?;
+    let today = f.cala.clock().now().date_naive();
+    let inputs: Vec<_> = (0..250)
+        .map(|i| posting_input(&f, &template, f.sender, h.r2, i + 1, today))
+        .collect();
+    f.cala.post_transactions(inputs).await?;
+    let f1 = frontier(&f).await?;
+    // The tip's landing queues for the lock before the catch-up runs, so
+    // it lands first on release.
+    wait_for_tip_row_waiters(&f, 1).await?;
+    release_backfill(&f, &key).await?;
+    wait_for_tip_row_waiters(&f, 2).await?;
+    assert_eq!(checkpoint(&f).await?, f0, "the tip is still stalled");
+
+    stall.rollback().await?;
+    wait_for_backfill(&f.cala, b, None).await?;
+    wait_for_ec(&f).await?;
+    wait_for_calculations(&f.cala).await?;
+    let activation = activation_sequence(&f, b).await?;
+    assert!(
+        activation > f0 && activation <= f1,
+        "activation {activation} is a checkpoint the tip reached first ({f0}, {f1}]"
+    );
+    assert_eq!(joined_at(&f, b).await?, Some(activation));
+    assert_same_series(&f, a, b, &targets).await?;
     Ok(())
 }
 
@@ -1998,9 +2041,7 @@ async fn fence_times_out_honestly() -> anyhow::Result<()> {
     post_many(&f, &template, recipient, 20).await?;
     wait_for_calculations(&f.cala).await?;
 
-    let stall = hold_handoff_lock(&f.pool).await?;
-    let b =
-        create_calculation_with_history(&f, CalculationScope::Global, History::Backfill).await?;
+    let (b, key) = create_deferred_backfill(&f).await?;
     assert!(matches!(
         f.cala
             .calculations()
@@ -2009,7 +2050,7 @@ async fn fence_times_out_honestly() -> anyhow::Result<()> {
         Err(Fail::Rejected(CalculationBackfillTimeout { .. }))
     ));
 
-    stall.rollback().await?;
+    release_backfill(&f, &key).await?;
     wait_for_backfill(&f.cala, b, None).await?;
     Ok(())
 }

@@ -12,17 +12,14 @@ use es_entity::{
     errlanes::{lanes, Fail, ResultExt},
     Ensured,
 };
-use obix::{out::WakeKey, EventSequence};
+use obix::EventSequence;
 use sqlx::PgPool;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use crate::{
     balance::Balances,
-    calculation_rollup::{
-        BackfillSubscriptions, BackfillUnit, CalculationBackfillId, BACKFILL_WAKE_KEY,
-    },
+    calculation_rollup::{BackfillCatchUps, BackfillUnit, CALCULATION_ROLLUP_JOB},
     error::CalaFault,
     outbox::{ObixOutbox, OutboxEventPayload, OutboxPublisher},
 };
@@ -35,10 +32,6 @@ use error::*;
 pub(crate) use fold::{CalculationRollupStats, CalculationRollupTxn, RollupScope};
 use repo::*;
 
-/// Advisory lock class that orders the tip's flush against a backfill handoff.
-/// Existing classes are 1..=5 (balance, member, graph, id, external id).
-pub(crate) const CALCULATION_HANDOFF_LOCK_CLASS: i32 = 6;
-
 /// Service for working with `Calculation` entities and their series.
 #[derive(Clone)]
 pub struct Calculations {
@@ -49,12 +42,13 @@ pub struct Calculations {
     outbox: ObixOutbox,
     clock: ClockHandle,
     pool: PgPool,
-    backfills: Arc<OnceLock<BackfillSubscriptions>>,
+    backfills: BackfillCatchUps,
 }
 
 /// The targets of an attach call, validated.
 struct ValidatedAttach {
     activation_sequence: u64,
+    calculation: CalculationValues,
     journal_id: JournalId,
     accounts: Vec<AccountId>,
     sets: HashSet<AccountId>,
@@ -75,17 +69,8 @@ impl Calculations {
             outbox: publisher.inner().clone(),
             clock: clock.clone(),
             pool: pool.clone(),
-            backfills: Arc::new(OnceLock::new()),
+            backfills: publisher.inner().joinable(CALCULATION_ROLLUP_JOB),
         }
-    }
-
-    /// Set once in `CalaLedger::init`, after the backfill subscriber type
-    /// is registered.
-    pub(crate) fn set_backfill_subscriptions(&self, backfills: BackfillSubscriptions) {
-        assert!(
-            self.backfills.set(backfills).is_ok(),
-            "backfill subscriptions are set once in CalaLedger::init"
-        );
     }
 
     /// Creates the calculation. Its `activation_sequence` is the outbox
@@ -123,7 +108,7 @@ impl Calculations {
         let new_calculation = new_calculation.with_activation_sequence(activation_sequence);
         let calculation: Calculation = self.repo.create_in_op(op, new_calculation).await.lift()?;
         if starts_backfill {
-            self.start_backfill_in_op(op, calculation.id(), None)
+            self.start_backfill_in_op(op, calculation.values(), None)
                 .await?;
         }
         Ok(calculation)
@@ -150,7 +135,7 @@ impl Calculations {
             .await
             .narrow_rejected()?;
         if let (Ensured::Created(calculation), true) = (&ensured, starts_backfill) {
-            self.start_backfill_in_op(op, calculation.id(), None)
+            self.start_backfill_in_op(op, calculation.values(), None)
                 .await?;
         }
         Ok(ensured)
@@ -323,7 +308,7 @@ impl Calculations {
             .map(|row| row.account_id)
             .collect();
         if !backfill_targets.is_empty() {
-            self.start_backfill_in_op(op, id, Some(&backfill_targets))
+            self.start_backfill_in_op(op, &validated.calculation, Some(&backfill_targets))
                 .await?;
         }
         Ok(())
@@ -381,7 +366,8 @@ impl Calculations {
             )
             .await?;
         if needs_backfill && matches!(ensured, Ensured::Created(())) {
-            self.start_backfill_in_op(op, id, Some(&[target])).await?;
+            self.start_backfill_in_op(op, &validated.calculation, Some(&[target]))
+                .await?;
         }
         Ok(ensured)
     }
@@ -432,25 +418,22 @@ impl Calculations {
         }
     }
 
-    /// One backfill member, born at the start of the stream and committed
-    /// with the unit.
+    /// One catch-up of the calculation rollup for the unit, born at the
+    /// start of the stream and committed with the unit.
     async fn start_backfill_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,
-        calculation_id: CalculationId,
+        calculation: &CalculationValues,
         account_ids: Option<&[AccountId]>,
     ) -> Result<(), CalaFault> {
         self.backfills
-            .get()
-            .expect("backfill subscriptions are set in CalaLedger::init")
-            .subscribe_from_in_op(
+            .start_catch_up_in_op(
                 op,
-                CalculationBackfillId::new(),
                 BackfillUnit {
-                    calculation_id,
+                    calculation_id: calculation.id,
+                    journal_id: calculation.journal_id,
                     account_ids: account_ids.map(<[AccountId]>::to_vec),
                 },
-                WakeKey::from(BACKFILL_WAKE_KEY),
                 EventSequence::BEGIN,
             )
             .await
@@ -458,11 +441,10 @@ impl Calculations {
         Ok(())
     }
 
-    /// The handoff's writes, under the EXCLUSIVE lock the caller holds:
-    /// the unit becomes `Complete` at `activation_sequence` and
-    /// `CalculationBackfillCompleted` is published. A Global calculation
-    /// publishes through its entity event; an attachment batch publishes
-    /// directly.
+    /// A catch-up's join: the unit becomes `Complete` at
+    /// `activation_sequence` and `CalculationBackfillCompleted` is
+    /// published. A Global calculation publishes through its entity event;
+    /// an attachment batch publishes directly.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.calculation.complete_backfill_in_op",
@@ -503,20 +485,6 @@ impl Calculations {
             }
         }
         Ok(())
-    }
-
-    pub(crate) async fn lock_handoff_exclusive_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), CalaFault> {
-        self.repo.lock_handoff_exclusive_in_op(op).await
-    }
-
-    pub(crate) async fn lock_handoff_shared_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), CalaFault> {
-        self.repo.lock_handoff_shared_in_op(op).await
     }
 
     #[es_entity::errlanes::instrument(
@@ -580,6 +548,7 @@ impl Calculations {
         }
         Ok(ValidatedAttach {
             activation_sequence: self.activation_sequence().await?,
+            calculation: calculation.into_values(),
             journal_id,
             accounts,
             sets,

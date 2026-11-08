@@ -29,9 +29,11 @@ pub struct CalculationValues {
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum BackfillStatus {
-    /// History before `activation_sequence` is being folded in; the tip ignores this unit.
+    /// History is being folded in by the unit's catch-up; the tip ignores
+    /// this unit.
     InProgress,
-    /// Every entry is in the series (or the unit was created `FromNow`).
+    /// Every entry at or below `activation_sequence` is in the series (or
+    /// the unit was created `FromNow`); the tip covers the unit past it.
     Complete,
 }
 

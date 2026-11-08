@@ -89,3 +89,18 @@ CREATE TABLE cala_retired_subscriptions (
   retired_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   PRIMARY KEY (subscriber_type, key)
 );
+
+CREATE TABLE cala_joinable_tips (
+  subscriber_type  VARCHAR PRIMARY KEY,
+  checkpoint       BIGINT,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE cala_joinable_catch_ups (
+  subscriber_type     VARCHAR NOT NULL,
+  key                 VARCHAR NOT NULL,
+  instance_config     JSONB NOT NULL,
+  joined_at_sequence  BIGINT,
+  ended_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (subscriber_type, key)
+);

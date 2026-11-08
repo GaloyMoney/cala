@@ -261,8 +261,8 @@ impl AttachmentRepo {
         Ok(complete)
     }
 
-    /// Handoff of an attachment batch: every target becomes `Complete`
-    /// with `activation_sequence` set to the checkpoint read under the lock.
+    /// A catch-up's join: every target becomes `Complete` with
+    /// `activation_sequence` set to the sequence it joined the tip at.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "calculation_attachment.complete_backfill_in_op",

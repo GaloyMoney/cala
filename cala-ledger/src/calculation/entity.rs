@@ -15,7 +15,8 @@ pub enum CalculationEvent {
     Initialized {
         values: CalculationValues,
     },
-    /// Global only. Rewrites `activation_sequence` to the tip checkpoint at handoff.
+    /// Global only. Rewrites `activation_sequence` to the sequence the
+    /// catch-up joined the tip at.
     BackfillCompleted {
         activation_sequence: u64,
     },

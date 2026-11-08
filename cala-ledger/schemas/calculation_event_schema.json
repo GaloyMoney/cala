@@ -19,7 +19,7 @@
       ]
     },
     {
-      "description": "Global only. Rewrites `activation_sequence` to the tip checkpoint at handoff.",
+      "description": "Global only. Rewrites `activation_sequence` to the sequence the\ncatch-up joined the tip at.",
       "type": "object",
       "properties": {
         "activation_sequence": {
@@ -42,12 +42,12 @@
     "BackfillStatus": {
       "oneOf": [
         {
-          "description": "History before `activation_sequence` is being folded in; the tip ignores this unit.",
+          "description": "History is being folded in by the unit's catch-up; the tip ignores\nthis unit.",
           "type": "string",
           "const": "in_progress"
         },
         {
-          "description": "Every entry is in the series (or the unit was created `FromNow`).",
+          "description": "Every entry at or below `activation_sequence` is in the series (or\nthe unit was created `FromNow`); the tip covers the unit past it.",
           "type": "string",
           "const": "complete"
         }

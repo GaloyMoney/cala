@@ -28,7 +28,7 @@ pub(crate) struct CalculationRollupTxn<'a> {
 pub(crate) enum RollupScope<'a> {
     /// Every `Complete` unit, `tx.sequence > activation_sequence`.
     Tip,
-    /// Exactly this unit, every transaction in the batch (the caller bounded the range).
+    /// Exactly this unit, every transaction in the batch.
     Backfill {
         calculation_id: CalculationId,
         targets: Option<&'a [AccountId]>,

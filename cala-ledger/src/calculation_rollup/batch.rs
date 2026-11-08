@@ -1,4 +1,4 @@
-//! The accumulator both rollup subscribers land. A transaction's event
+//! The accumulator the tip and the catch-ups land. A transaction's event
 //! group may straddle landings (see [`crate::ec_rollup`]); entries are
 //! applied straight from the stream when the whole group landed in the
 //! batch, and read back through the flush op otherwise.
@@ -18,7 +18,7 @@ use crate::{
     entry::{Entries, Entry},
     error::CalaFault,
     outbox::OutboxEventPayload,
-    primitives::{EntryId, TransactionId},
+    primitives::{EntryId, JournalId, TransactionId},
 };
 
 /// What the rollup folds from one outbox event.
@@ -30,22 +30,25 @@ pub(super) enum Collected {
 impl Collected {
     /// `None` for an event the rollup does not fold.
     pub(super) fn from_event(event: &EventDelivery<OutboxEventPayload>) -> Option<Self> {
-        Self::from_persisted(event.inner())
-    }
-
-    pub(super) fn from_persisted(
-        event: &Arc<PersistentOutboxEvent<OutboxEventPayload>>,
-    ) -> Option<Self> {
         match &event.payload {
             Some(OutboxEventPayload::TransactionCreated { transaction }) => {
                 Some(Self::Tx(PendingTx {
                     id: transaction.id,
                     sequence: event.sequence,
-                    event: event.clone(),
+                    event: event.inner().clone(),
                 }))
             }
-            Some(OutboxEventPayload::EntryCreated { .. }) => Some(Self::Entry(event.clone())),
+            Some(OutboxEventPayload::EntryCreated { .. }) => {
+                Some(Self::Entry(event.inner().clone()))
+            }
             _ => None,
+        }
+    }
+
+    pub(super) fn journal_id(&self) -> JournalId {
+        match self {
+            Self::Tx(tx) => tx.transaction().journal_id,
+            Self::Entry(event) => entry_of(event).journal_id,
         }
     }
 }

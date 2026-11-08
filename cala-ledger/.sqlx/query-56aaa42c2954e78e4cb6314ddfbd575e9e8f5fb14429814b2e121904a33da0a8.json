@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_joinable_tips (subscriber_type)\n            VALUES ($1)\n            ON CONFLICT (subscriber_type) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56aaa42c2954e78e4cb6314ddfbd575e9e8f5fb14429814b2e121904a33da0a8"
+}

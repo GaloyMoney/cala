@@ -105,43 +105,6 @@ impl CalculationRepo {
         Ok(exists)
     }
 
-    /// EXCLUSIVE side of the handoff lock, held to the end of the
-    /// operation. Waits for every in-flight tip flush and keeps the next
-    /// one from starting until the handoff commits.
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "calculation.lock_handoff_exclusive_in_op",
-        skip_all
-    )]
-    pub async fn lock_handoff_exclusive_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), CalaFault> {
-        sqlx::query("SELECT pg_advisory_xact_lock($1::int4, 0)")
-            .bind(super::CALCULATION_HANDOFF_LOCK_CLASS)
-            .execute(op.as_executor())
-            .await?;
-        Ok(())
-    }
-
-    /// SHARED side of the handoff lock, held to the end of the operation.
-    /// The tip takes it as the first statement of every flush.
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "calculation.lock_handoff_shared_in_op",
-        skip_all
-    )]
-    pub async fn lock_handoff_shared_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-    ) -> Result<(), CalaFault> {
-        sqlx::query("SELECT pg_advisory_xact_lock_shared($1::int4, 0)")
-            .bind(super::CALCULATION_HANDOFF_LOCK_CLASS)
-            .execute(op.as_executor())
-            .await?;
-        Ok(())
-    }
-
     /// Every account set in `journal_id` reachable from each of
     /// `account_ids` through set membership, synchronous and eventually
     /// consistent alike.

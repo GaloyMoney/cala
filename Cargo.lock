@@ -1640,9 +1640,9 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "27d531c062bd2edd1c86be509e77258f145c9fb1bbf72efd1c495f239b43e0ac"
+checksum = "622da1675851da7117e0c5f18b53150a4871bea4e3c5cf74698101d34bb7598c"
 dependencies = [
  "async-trait",
  "bon",
@@ -1662,9 +1662,9 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.17.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9fdd6cb5aa835a6812efe60aac17c9c93156088e0ab98b5c97c917ca06005ea8"
+checksum = "4f414b25509ca0b1ade8128f6721be2125d333d9871d6a5a02ba9d9c7495ef4c"
 dependencies = [
  "darling 0.24.0",
  "proc-macro2",
