@@ -21,6 +21,14 @@ use error::*;
 pub use repo::account_cursor::*;
 use repo::*;
 
+/// What an account row is: a plain account, or the backing account of an
+/// account set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AccountKind {
+    Account,
+    AccountSet,
+}
+
 /// Service for working with `Account` entities.
 #[derive(Clone)]
 pub struct Accounts {
@@ -344,6 +352,34 @@ impl Accounts {
         self.repo
             .update_velocity_context_values_in_op(db, values.into())
             .await
+    }
+
+    /// What each of `account_ids` is; ids with no account are absent.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.find_kinds_in_op",
+        skip_all
+    )]
+    pub(crate) async fn find_kinds_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, AccountKind>, CalaFault> {
+        self.repo.find_kinds_in_op(db, account_ids).await
+    }
+
+    /// The CEL `account` values of each of `account_ids`, as stored.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.accounts.find_context_values_in_op",
+        skip_all
+    )]
+    pub(crate) async fn find_context_values_in_op(
+        &self,
+        db: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, VelocityContextAccountValues>, CalaFault> {
+        self.repo.find_context_values_in_op(db, account_ids).await
     }
 }
 

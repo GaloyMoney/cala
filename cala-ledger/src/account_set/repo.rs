@@ -910,6 +910,87 @@ impl AccountSetRepo {
     /// sorted ancestor lock batch per posting — here or in the
     /// fallback's CTE, never both — which is what keeps acquisition
     /// order canonical across posters.
+    /// Every set in `journal_id` reachable from each of `account_ids`
+    /// through membership, synchronous and eventually consistent alike,
+    /// as of now and without locks.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account_set.find_ancestors_in_op",
+        skip_all,
+        fields(accounts = account_ids.len())
+    )]
+    pub(super) async fn find_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            WITH RECURSIVE seed AS (
+                SELECT m.member_account_id AS account_id, m.account_set_id
+                FROM cala_account_set_member_accounts m
+                WHERE m.member_account_id = ANY($2)
+            ),
+            ancestors AS (
+                SELECT account_id, account_set_id FROM seed
+                UNION
+                SELECT a.account_id, e.account_set_id
+                FROM ancestors a
+                JOIN cala_account_set_member_account_sets e
+                  ON e.member_account_set_id = a.account_set_id
+            )
+            SELECT
+                a.account_set_id AS "account_set_id!: AccountSetId",
+                a.account_id AS "member_account_id!: AccountId"
+            FROM ancestors a
+            JOIN cala_account_sets s
+              ON s.id = a.account_set_id AND s.journal_id = $1
+            "#,
+            journal_id as JournalId,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+
+        let mut result: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
+        for row in rows {
+            result
+                .entry(row.member_account_id)
+                .or_default()
+                .push(row.account_set_id);
+        }
+        Ok(result)
+    }
+
+    /// The journal of each of `set_ids`; ids with no set are absent.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account_set.find_journal_ids_in_op",
+        skip_all,
+        fields(sets = set_ids.len())
+    )]
+    pub(super) async fn find_journal_ids_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, JournalId>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!: AccountSetId", journal_id AS "journal_id!: JournalId"
+            FROM cala_account_sets
+            WHERE id = ANY($1)
+            "#,
+            set_ids as &[AccountSetId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.id, row.journal_id))
+            .collect())
+    }
+
     pub(super) async fn lock_resolved_ancestors_in_op(
         &self,
         op: &mut impl es_entity::AtomicOperation,

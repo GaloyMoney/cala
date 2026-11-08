@@ -1,6 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use es_entity::errlanes::Rejection;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use cala_types::{
     calculation::{BackfillStatus, CalculationScope, CalculationValues, Window},
@@ -149,10 +149,13 @@ impl Calculations {
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
-        let ancestors = self
-            .repo
-            .fetch_ancestors_in_op(op, journal_id, &leaves)
-            .await?;
+        let ancestors: HashMap<AccountId, Vec<AccountId>> = self
+            .account_sets
+            .find_ancestors_in_op(op, journal_id, &leaves)
+            .await?
+            .into_iter()
+            .map(|(leaf, sets)| (leaf, sets.into_iter().map(AccountId::from).collect()))
+            .collect();
         let targets: Vec<AccountId> = leaves
             .iter()
             .copied()
@@ -174,7 +177,10 @@ impl Calculations {
             }
             RollupScope::Backfill { .. } => Default::default(),
         };
-        let account_values = self.repo.account_context_values_in_op(op, &targets).await?;
+        let account_values = self
+            .accounts
+            .find_context_values_in_op(op, &targets)
+            .await?;
 
         let mut deltas = DeltaAccumulator::<(CalculationId, Window)>::new();
         let mut modified_at: Option<DateTime<Utc>> = None;

@@ -1,13 +1,14 @@
 use crate::error::CalaFault;
-use es_entity::*;
+use es_entity::{errlanes::ResultExt, *};
 use sqlx::PgPool;
+use std::collections::HashMap;
 
 use crate::{
     outbox::OutboxPublisher,
     primitives::{AccountId, DebitOrCredit, Status},
 };
 
-use super::entity::*;
+use super::{entity::*, AccountKind};
 
 #[derive(EsRepo, Debug, Clone)]
 #[es_repo(
@@ -79,6 +80,73 @@ impl AccountRepo {
         .execute(op.as_executor())
         .await?;
         Ok(())
+    }
+
+    /// What each of `account_ids` is; ids with no row are absent.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account.find_kinds_in_op",
+        skip_all,
+        fields(accounts = account_ids.len())
+    )]
+    pub async fn find_kinds_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, AccountKind>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!: AccountId", is_account_set
+            FROM cala_accounts
+            WHERE id = ANY($1)
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| {
+                let kind = if row.is_account_set {
+                    AccountKind::AccountSet
+                } else {
+                    AccountKind::Account
+                };
+                (row.id, kind)
+            })
+            .collect())
+    }
+
+    /// The cached CEL `account` values of each of `account_ids`.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account.find_context_values_in_op",
+        skip_all,
+        fields(accounts = account_ids.len())
+    )]
+    pub async fn find_context_values_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, VelocityContextAccountValues>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!: AccountId", velocity_context_values
+            FROM cala_accounts
+            WHERE id = ANY($1)
+            "#,
+            account_ids as &[AccountId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        let mut result = HashMap::with_capacity(rows.len());
+        for row in rows {
+            let values: VelocityContextAccountValues =
+                serde_json::from_value(row.velocity_context_values)
+                    .classify::<crate::error::CouldNotDecodeStored>()?;
+            result.insert(row.id, values);
+        }
+        Ok(result)
     }
 
     async fn publish(

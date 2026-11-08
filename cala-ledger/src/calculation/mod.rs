@@ -18,6 +18,8 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use crate::{
+    account::{AccountKind, Accounts},
+    account_set::AccountSets,
     balance::Balances,
     calculation_rollup::{BackfillCatchUps, BackfillUnit, CALCULATION_ROLLUP_JOB},
     error::CalaFault,
@@ -38,6 +40,8 @@ pub struct Calculations {
     repo: CalculationRepo,
     attachments: AttachmentRepo,
     effective: CalculationEffectiveBalances,
+    accounts: Accounts,
+    account_sets: AccountSets,
     balances: Balances,
     outbox: ObixOutbox,
     clock: ClockHandle,
@@ -57,6 +61,8 @@ impl Calculations {
     pub(crate) fn new(
         pool: &PgPool,
         publisher: &OutboxPublisher,
+        accounts: &Accounts,
+        account_sets: &AccountSets,
         balances: &Balances,
         clock: &ClockHandle,
     ) -> Self {
@@ -64,6 +70,8 @@ impl Calculations {
             repo: CalculationRepo::new(pool, publisher),
             attachments: AttachmentRepo::new(pool),
             effective: CalculationEffectiveBalances::new(pool),
+            accounts: accounts.clone(),
+            account_sets: account_sets.clone(),
             balances: balances.clone(),
             outbox: publisher.inner().clone(),
             clock: clock.clone(),
@@ -521,25 +529,36 @@ impl Calculations {
             return Err(AttachCalculationRejection::GlobalCannotAttach(id).into());
         }
         let journal_id = values.journal_id;
+        let kinds = self.accounts.find_kinds_in_op(&mut *op, targets).await?;
         let mut accounts = Vec::new();
         let mut sets = HashSet::new();
-        for target in self.attachments.resolve_targets(op, targets).await? {
-            if !target.exists {
-                return Err(AttachCalculationRejection::TargetNotFound(target.account_id).into());
+        for &target in targets {
+            match kinds.get(&target) {
+                None => return Err(AttachCalculationRejection::TargetNotFound(target).into()),
+                Some(AccountKind::Account) => accounts.push(target),
+                Some(AccountKind::AccountSet) => {
+                    sets.insert(target);
+                }
             }
-            match target.set_journal_id {
-                Some(target_journal) if target_journal != journal_id => {
-                    return Err(AttachCalculationRejection::JournalMismatch {
-                        target: target.account_id,
-                        target_journal,
-                        calculation_journal: journal_id,
-                    }
-                    .into());
+        }
+        if !sets.is_empty() {
+            let set_ids: Vec<AccountSetId> = sets
+                .iter()
+                .map(|&id| AccountSetId::from(uuid::Uuid::from(id)))
+                .collect();
+            let journals = self
+                .account_sets
+                .find_journal_ids_in_op(&mut *op, &set_ids)
+                .await?;
+            if let Some((&set_id, &target_journal)) =
+                journals.iter().find(|(_, &journal)| journal != journal_id)
+            {
+                return Err(AttachCalculationRejection::JournalMismatch {
+                    target: set_id.into(),
+                    target_journal,
+                    calculation_journal: journal_id,
                 }
-                Some(_) => {
-                    sets.insert(target.account_id);
-                }
-                None => accounts.push(target.account_id),
+                .into());
             }
         }
         Ok(ValidatedAttach {

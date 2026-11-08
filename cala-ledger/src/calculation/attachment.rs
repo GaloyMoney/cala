@@ -50,14 +50,6 @@ pub(super) struct NewAttachment {
     pub backfill_complete: bool,
 }
 
-/// What an attach target resolves to: whether its account row exists and,
-/// when it is an account set, the set's journal.
-pub(super) struct AttachTarget {
-    pub account_id: AccountId,
-    pub exists: bool,
-    pub set_journal_id: Option<JournalId>,
-}
-
 #[derive(Debug, Clone)]
 pub(super) struct AttachmentRepo {
     pool: PgPool,
@@ -66,40 +58,6 @@ pub(super) struct AttachmentRepo {
 impl AttachmentRepo {
     pub fn new(pool: &PgPool) -> Self {
         Self { pool: pool.clone() }
-    }
-
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "calculation_attachment.resolve_targets",
-        skip_all,
-        fields(count = account_ids.len())
-    )]
-    pub async fn resolve_targets(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        account_ids: &[AccountId],
-    ) -> Result<Vec<AttachTarget>, CalaFault> {
-        let rows = sqlx::query!(
-            r#"
-            SELECT t.id AS "account_id!: AccountId",
-                   (a.id IS NOT NULL) AS "exists!",
-                   s.journal_id AS "set_journal_id?: JournalId"
-            FROM UNNEST($1::uuid[]) AS t(id)
-            LEFT JOIN cala_accounts a ON a.id = t.id
-            LEFT JOIN cala_account_sets s ON s.id = t.id
-            "#,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-        Ok(rows
-            .into_iter()
-            .map(|row| AttachTarget {
-                account_id: row.account_id,
-                exists: row.exists,
-                set_journal_id: row.set_journal_id,
-            })
-            .collect())
     }
 
     /// One multi-row `INSERT` for every target, sorted by account id so
