@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH updated AS (UPDATE cala_calculations SET backfill_complete = $2 WHERE id = $1 RETURNING id) INSERT INTO cala_calculation_events (id, recorded_at, sequence, event_type, event) SELECT updated.id, COALESCE($3, NOW()), ROW_NUMBER() OVER () + $4, unnested.event_type, unnested.event FROM updated CROSS JOIN UNNEST($5::TEXT[], $6::JSONB[]) AS unnested(event_type, event) RETURNING recorded_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "recorded_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Timestamptz",
+        "Int8",
+        "TextArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "a78c78309ea2423417e6de3d4b7e97eca620c0ab4dbd542d556c5de303d275b6"
+}

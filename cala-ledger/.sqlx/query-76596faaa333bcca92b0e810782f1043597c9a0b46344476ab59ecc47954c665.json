@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO cala_subscriptions (subscriber_type, key, wake_keys, instance_config, start_after, checkpoint, created_at)\n            VALUES ($1, $2, $3, $4, $5, $5, COALESCE($6::timestamptz, NOW()))\n            ON CONFLICT (subscriber_type, key) DO UPDATE SET dormant = FALSE",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "VarcharArray",
+        "Jsonb",
+        "Int8",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "76596faaa333bcca92b0e810782f1043597c9a0b46344476ab59ecc47954c665"
+}

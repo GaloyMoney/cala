@@ -1,9 +1,9 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use es_entity::errlanes::Rejection;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use cala_types::{
-    calculation::{CalculationScope, CalculationValues, Window},
+    calculation::{BackfillStatus, CalculationScope, CalculationValues, Window},
     entry::EntryValues,
     transaction::TransactionValues,
 };
@@ -13,7 +13,7 @@ use crate::{
     effective::delta::DeltaAccumulator, error::CalaFault, eval_context::EvalContext, primitives::*,
 };
 
-use super::Calculations;
+use super::{Calculation, Calculations};
 
 /// One committed transaction of a calculation-rollup batch, with its
 /// outbox sequence and its entries in `sequence` order.
@@ -21,6 +21,18 @@ pub(crate) struct CalculationRollupTxn<'a> {
     pub sequence: u64,
     pub transaction: &'a TransactionValues,
     pub entries: Vec<&'a EntryValues>,
+}
+
+/// Which units a rollup application covers.
+#[derive(Clone, Copy)]
+pub(crate) enum RollupScope<'a> {
+    /// Every `Complete` unit, `tx.sequence > activation_sequence`.
+    Tip,
+    /// Exactly this unit, every transaction in the batch.
+    Backfill {
+        calculation_id: CalculationId,
+        targets: Option<&'a [AccountId]>,
+    },
 }
 
 /// What one rollup application did, for the flush span.
@@ -78,6 +90,7 @@ impl Calculations {
         &self,
         op: &mut impl es_entity::AtomicOperation,
         txns: Vec<CalculationRollupTxn<'_>>,
+        scope: RollupScope<'_>,
     ) -> Result<CalculationRollupStats, CalaFault> {
         let mut stats = CalculationRollupStats::default();
         let mut groups: Vec<(JournalId, Vec<CalculationRollupTxn<'_>>)> = Vec::new();
@@ -89,7 +102,7 @@ impl Calculations {
             }
         }
         for (journal_id, group) in groups {
-            self.apply_rollup_group_in_op(op, journal_id, group, &mut stats)
+            self.apply_rollup_group_in_op(op, journal_id, group, scope, &mut stats)
                 .await?;
         }
         Ok(stats)
@@ -100,18 +113,35 @@ impl Calculations {
         op: &mut impl es_entity::AtomicOperation,
         journal_id: JournalId,
         group: Vec<CalculationRollupTxn<'_>>,
+        scope: RollupScope<'_>,
         stats: &mut CalculationRollupStats,
     ) -> Result<(), CalaFault> {
         let calculations: Vec<CalculationValues> = self
             .repo
-            .list_for_journal(&mut *op, journal_id)
+            .find_all_for_journal_ids_in_op::<Calculation>(
+                &mut *op,
+                &[journal_id],
+                es_entity::ListDirection::Ascending,
+            )
             .await?
+            .remove(&journal_id)
+            .unwrap_or_default()
             .into_iter()
             .map(|c| c.into_values())
+            .filter(|c| match scope {
+                RollupScope::Tip => c.backfill_status == BackfillStatus::Complete,
+                RollupScope::Backfill { calculation_id, .. } => c.id == calculation_id,
+            })
             .collect();
         if calculations.is_empty() {
             return Ok(());
         }
+        let backfill_targets: Option<HashSet<AccountId>> = match scope {
+            RollupScope::Backfill {
+                targets: Some(ids), ..
+            } => Some(ids.iter().copied().collect()),
+            _ => None,
+        };
 
         let leaves: Vec<AccountId> = group
             .iter()
@@ -119,10 +149,13 @@ impl Calculations {
             .collect::<HashSet<_>>()
             .into_iter()
             .collect();
-        let ancestors = self
-            .repo
-            .fetch_ancestors_in_op(op, journal_id, &leaves)
-            .await?;
+        let ancestors: HashMap<AccountId, Vec<AccountId>> = self
+            .account_sets
+            .find_ancestors_in_op(op, journal_id, &leaves)
+            .await?
+            .into_iter()
+            .map(|(leaf, sets)| (leaf, sets.into_iter().map(AccountId::from).collect()))
+            .collect();
         let targets: Vec<AccountId> = leaves
             .iter()
             .copied()
@@ -131,16 +164,23 @@ impl Calculations {
             .into_iter()
             .collect();
 
-        let attached_ids: Vec<CalculationId> = calculations
-            .iter()
-            .filter(|c| c.scope == CalculationScope::Attached)
-            .map(|c| c.id)
-            .collect();
-        let attachments = self
-            .attachments
-            .find_for_accounts(op, &attached_ids, &targets)
+        let attachments = match scope {
+            RollupScope::Tip => {
+                let attached_ids: Vec<CalculationId> = calculations
+                    .iter()
+                    .filter(|c| c.scope == CalculationScope::Attached)
+                    .map(|c| c.id)
+                    .collect();
+                self.attachments
+                    .find_for_accounts(op, &attached_ids, &targets)
+                    .await?
+            }
+            RollupScope::Backfill { .. } => Default::default(),
+        };
+        let account_values = self
+            .accounts
+            .find_context_values_in_op(op, &targets)
             .await?;
-        let account_values = self.repo.account_context_values_in_op(op, &targets).await?;
 
         let mut deltas = DeltaAccumulator::<(CalculationId, Window)>::new();
         let mut modified_at: Option<DateTime<Utc>> = None;
@@ -159,13 +199,21 @@ impl Calculations {
                     }
                     let mut ctx: Option<CelContext> = None;
                     for calculation in calculations.iter() {
-                        let covered = match calculation.scope {
-                            CalculationScope::Global => {
-                                tx.sequence > calculation.activation_sequence
-                            }
-                            CalculationScope::Attached => attachments
-                                .get(&(calculation.id, target))
-                                .is_some_and(|activation| tx.sequence > *activation),
+                        let covered = match scope {
+                            RollupScope::Tip => match calculation.scope {
+                                CalculationScope::Global => {
+                                    tx.sequence > calculation.activation_sequence
+                                }
+                                CalculationScope::Attached => attachments
+                                    .get(&(calculation.id, target))
+                                    .is_some_and(|coverage| {
+                                        coverage.backfill_complete
+                                            && tx.sequence > coverage.activation_sequence
+                                    }),
+                            },
+                            RollupScope::Backfill { .. } => backfill_targets
+                                .as_ref()
+                                .is_none_or(|ids| ids.contains(&target)),
                         };
                         if !covered {
                             continue;

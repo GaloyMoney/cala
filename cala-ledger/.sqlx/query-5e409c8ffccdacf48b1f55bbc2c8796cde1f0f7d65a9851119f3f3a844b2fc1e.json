@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH retired AS (\n                DELETE FROM cala_subscriptions\n                WHERE subscriber_type = $2 AND key = $3\n                RETURNING key, instance_config\n            ),\n            tombstone AS (\n                INSERT INTO cala_retired_subscriptions (subscriber_type, key, retired_at)\n                SELECT $2, key, COALESCE($4::timestamptz, NOW()) FROM retired\n                ON CONFLICT (subscriber_type, key) DO NOTHING\n            )\n            INSERT INTO cala_joinable_catch_ups (subscriber_type, key, instance_config, joined_at_sequence, ended_at)\n            SELECT $1, key, instance_config, $5::bigint, COALESCE($4::timestamptz, NOW()) FROM retired\n            ON CONFLICT (subscriber_type, key) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5e409c8ffccdacf48b1f55bbc2c8796cde1f0f7d65a9851119f3f3a844b2fc1e"
+}

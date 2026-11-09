@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use es_entity::errlanes::{lanes, Fault};
+use es_entity::errlanes::{lanes, Fail, Fault};
 use rust_decimal::Decimal;
-use sqlx::PgPool;
+use sqlx::{FromRow, PgPool, Row};
 use std::collections::HashMap;
 
 use cala_types::{
@@ -20,6 +20,9 @@ use crate::{
 };
 
 use super::CalculationSeriesCursor;
+use crate::calculation::error::{
+    CalculationBackfillInProgress, CalculationBalanceNotFound, CalculationBalanceRejection,
+};
 
 /// `(open, open all_time_version, close, close all_time_version)` per series.
 pub(super) type RangeEnds =
@@ -31,6 +34,51 @@ macro_rules! calculation_effective_columns {
     () => {
         concat!(effective_columns!(), ", c.calculation_id, c.dimensions")
     };
+}
+
+/// Joins the requested series `v` to their units and keeps the complete
+/// ones: a series whose Global calculation or attachment is still being
+/// backfilled is omitted.
+macro_rules! complete_units {
+    () => {
+        "JOIN cala_calculations k ON k.id = v.calculation_id
+         LEFT JOIN cala_calculation_attachments t
+         ON t.calculation_id = v.calculation_id AND t.account_id = v.account_id
+         WHERE k.backfill_complete AND COALESCE(t.backfill_complete, TRUE)"
+    };
+}
+
+/// One series read: the unit's status, and the series' row when the unit
+/// is complete and has one at or before the date.
+struct SeriesRead {
+    in_progress: bool,
+    row: Option<CalculationEffectiveRow>,
+}
+
+impl FromRow<'_, sqlx::postgres::PgRow> for SeriesRead {
+    fn from_row(row: &sqlx::postgres::PgRow) -> Result<Self, sqlx::Error> {
+        let in_progress = row.try_get("in_progress")?;
+        let present = row
+            .try_get::<Option<uuid::Uuid>, _>("calculation_id")?
+            .is_some();
+        Ok(Self {
+            in_progress,
+            row: present
+                .then(|| CalculationEffectiveRow::from_row(row))
+                .transpose()?,
+        })
+    }
+}
+
+pub(super) fn not_found(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::NotFound(CalculationBalanceNotFound(id.clone()))
+}
+
+pub(super) fn in_progress(id: &CalculationBalanceId) -> CalculationBalanceRejection {
+    CalculationBalanceRejection::BackfillInProgress(CalculationBackfillInProgress {
+        calculation_id: id.calculation_id,
+        account_id: id.account_id,
+    })
 }
 
 /// One stored row with the target's normal balance type: the cumulative
@@ -132,22 +180,34 @@ impl CalculationEffectiveBalanceRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         id: &CalculationBalanceId,
         date: NaiveDate,
-    ) -> Result<Option<AccountBalance>, CalaFault> {
-        let row = sqlx::query_as::<_, CalculationEffectiveRow>(concat!(
-            "SELECT ",
+    ) -> Result<AccountBalance, Fail<CalculationBalanceRejection, lanes!(Transient, Fatal)>> {
+        let read = sqlx::query_as::<_, SeriesRead>(concat!(
+            "WITH unit AS (
+              SELECT NOT (k.backfill_complete AND COALESCE(t.backfill_complete, TRUE)) AS in_progress
+              FROM cala_calculations k
+              LEFT JOIN cala_calculation_attachments t
+              ON t.calculation_id = k.id AND t.account_id = $3
+              WHERE k.id = $2
+            )
+            SELECT unit.in_progress, ",
             calculation_effective_columns!(),
             ", a.normal_balance_type
-            FROM cala_calculation_effective_balances c
-            JOIN cala_accounts a
-            ON c.account_id = a.id
-            WHERE c.journal_id = $1
-            AND c.calculation_id = $2
-            AND c.account_id = $3
-            AND c.currency = $4
-            AND c.dimensions = $5
-            AND c.effective <= $6
-            ORDER BY c.effective DESC
-            LIMIT 1"
+            FROM unit
+            LEFT JOIN LATERAL (
+              SELECT *
+              FROM cala_calculation_effective_balances
+              WHERE NOT unit.in_progress
+                AND journal_id = $1
+                AND calculation_id = $2
+                AND account_id = $3
+                AND currency = $4
+                AND dimensions = $5
+                AND effective <= $6
+              ORDER BY effective DESC
+              LIMIT 1
+            ) c ON TRUE
+            LEFT JOIN cala_accounts a
+            ON a.id = c.account_id"
         ))
         .bind(id.journal_id)
         .bind(id.calculation_id)
@@ -158,10 +218,39 @@ impl CalculationEffectiveBalanceRepo {
         .fetch_optional(op.into_executor())
         .await?;
 
-        Ok(row
-            .map(|row| row.into_series())
-            .transpose()?
-            .map(|(_, b)| b))
+        match read {
+            Some(SeriesRead {
+                in_progress: true, ..
+            }) => Err(in_progress(id).into()),
+            Some(SeriesRead { row: Some(row), .. }) => Ok(row.into_series()?.1),
+            _ => Err(not_found(id).into()),
+        }
+    }
+
+    /// Whether the unit of `(calculation_id, account_id)` — the Global
+    /// calculation, or the attachment — is still being backfilled.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "calculation_effective_balance.backfill_in_progress",
+        skip(self)
+    )]
+    pub async fn backfill_in_progress(
+        &self,
+        calculation_id: CalculationId,
+        account_id: AccountId,
+    ) -> Result<bool, CalaFault> {
+        let in_progress = sqlx::query_scalar::<_, bool>(
+            "SELECT NOT (k.backfill_complete AND COALESCE(t.backfill_complete, TRUE))
+             FROM cala_calculations k
+             LEFT JOIN cala_calculation_attachments t
+             ON t.calculation_id = k.id AND t.account_id = $2
+             WHERE k.id = $1",
+        )
+        .bind(calculation_id)
+        .bind(account_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(in_progress.unwrap_or(false))
     }
 
     #[es_entity::errlanes::instrument(
@@ -177,14 +266,17 @@ impl CalculationEffectiveBalanceRepo {
         let keys = KeyArrays::new(ids);
         let rows = sqlx::query_as::<_, CalculationEffectiveRow>(concat!(
             "WITH balance_ids AS (
-              SELECT journal_id, calculation_id, account_id, currency, dimensions,
-                     normal_balance_type
+              SELECT v.journal_id, v.calculation_id, v.account_id, v.currency, v.dimensions,
+                     a.normal_balance_type
               FROM (
                 SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::jsonb[])
                 AS v(journal_id, calculation_id, account_id, currency, dimensions)
               ) AS v
               JOIN cala_accounts a
-              ON account_id = a.id
+              ON v.account_id = a.id
+              ",
+            complete_units!(),
+            "
             )
             SELECT ",
             calculation_effective_columns!(),
@@ -235,14 +327,17 @@ impl CalculationEffectiveBalanceRepo {
         let keys = KeyArrays::new(ids);
         let rows = sqlx::query_as::<_, RangeEndRow>(concat!(
             "WITH balance_ids AS (
-              SELECT journal_id, calculation_id, account_id, currency, dimensions,
-                     normal_balance_type
+              SELECT v.journal_id, v.calculation_id, v.account_id, v.currency, v.dimensions,
+                     a.normal_balance_type
               FROM (
                 SELECT * FROM UNNEST($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::jsonb[])
                 AS v(journal_id, calculation_id, account_id, currency, dimensions)
               ) AS v
               JOIN cala_accounts a
-              ON account_id = a.id
+              ON v.account_id = a.id
+              ",
+            complete_units!(),
+            "
             ),
             first AS (
               SELECT true AS first, ",
@@ -336,6 +431,9 @@ impl CalculationEffectiveBalanceRepo {
               FROM UNNEST($1::uuid[], $2::uuid[], $3::uuid[], $4::text[], $5::jsonb[])
                 AS v(journal_id, calculation_id, account_id, currency, dimensions)
               JOIN cala_accounts a ON a.id = v.account_id
+              ",
+            complete_units!(),
+            "
             )
             SELECT d.cutoff, ",
             calculation_effective_columns!(),
@@ -703,7 +801,10 @@ mod tests {
     use super::CalculationEffectiveBalanceRepo;
     use crate::{
         account::NewAccount,
-        calculation::{error::CalculationBalanceNotFound, NewCalculation},
+        calculation::{
+            error::{CalculationBalanceNotFound, CalculationBalanceRejection},
+            History, NewCalculation,
+        },
         effective::delta::DeltaAccumulator,
         journal::NewJournal,
         CalaLedger, CalaLedgerConfig,
@@ -763,6 +864,7 @@ mod tests {
                     .code(format!("calc-{calculation_id}"))
                     .name("apply deltas")
                     .scope(CalculationScope::Global)
+                    .history(History::FromNow)
                     .build()?,
             )
             .await?;
@@ -939,7 +1041,9 @@ mod tests {
         assert_eq!(between.details.settled.cr_balance, d(0));
         assert!(matches!(
             reads.find_cumulative(&usd, day(4)).await,
-            Err(Fail::Rejected(CalculationBalanceNotFound(id))) if id == usd
+            Err(Fail::Rejected(CalculationBalanceRejection::NotFound(
+                CalculationBalanceNotFound(id)
+            ))) if id == usd
         ));
 
         let range = reads.find_in_range(&usd, day(6), Some(day(15))).await?;
@@ -951,7 +1055,7 @@ mod tests {
         assert_eq!(range.close.details.settled.cr_balance, d(20));
         assert!(matches!(
             reads.find_in_range(&usd, day(1), Some(day(4))).await,
-            Err(Fail::Rejected(CalculationBalanceNotFound(_)))
+            Err(Fail::Rejected(CalculationBalanceRejection::NotFound(_)))
         ));
 
         let dim_a = f.id(json!({"k": "a"}), "USD");

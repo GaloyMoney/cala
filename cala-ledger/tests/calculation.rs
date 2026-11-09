@@ -168,12 +168,14 @@ async fn create_and_find() -> anyhow::Result<()> {
     ));
 
     let unknown_journal = JournalId::new();
-    assert!(matches!(
-        cala.calculations()
-            .create(new_calculation(unknown_journal, CalculationScope::Attached))
-            .await,
-        Err(Fail::Rejected(CreateCalculationRejection::JournalNotFound(j))) if j == unknown_journal
-    ));
+    let Err(err) = cala
+        .calculations()
+        .create(new_calculation(unknown_journal, CalculationScope::Attached))
+        .await
+    else {
+        panic!("an unknown journal is not a valid calculation")
+    };
+    assert!(matches!(err, Fail::Fatal(_)), "{err:?}");
 
     let ensured_id = CalculationId::new();
     let ensured_code = random_code();
@@ -376,7 +378,16 @@ async fn activation_sequence_is_the_frontier() -> anyhow::Result<()> {
     let frontier_before = cala.ec_rollup_status().await?.frontier;
     let calculation = cala
         .calculations()
-        .create(new_calculation(journal_id, CalculationScope::Global))
+        .create(
+            NewCalculation::builder()
+                .id(CalculationId::new())
+                .journal_id(journal_id)
+                .code(random_code())
+                .name("Test calculation")
+                .scope(CalculationScope::Global)
+                .history(History::FromNow)
+                .build()?,
+        )
         .await?;
     let activation_sequence = calculation.values().activation_sequence;
     assert!(activation_sequence >= u64::from(frontier_before));

@@ -1,11 +1,11 @@
 {
   "db_name": "PostgreSQL",
-  "query": "WITH limits AS (\n              SELECT id, l.created_at AS entity_created_at\n              FROM cala_velocity_limits l\n              JOIN cala_velocity_control_limits ON id = velocity_limit_id\n              WHERE velocity_control_id = $1\n            )\n            SELECT l.id as entity_id, e.sequence, e.event, NULL as \"context: es_entity::ContextData\", e.recorded_at, NULL::jsonb as \"forgettable_payload?\"\n            FROM limits l\n            JOIN cala_velocity_limit_events e ON l.id = e.id\n            ORDER BY l.id, e.sequence",
+  "query": "WITH entities AS (SELECT journal_id, created_at, id FROM cala_calculations WHERE journal_id = ANY($1) ORDER BY journal_id, created_at DESC, id DESC) SELECT i.id AS \"entity_id!: Repo__Id\", e.sequence, e.event, CASE WHEN $2 THEN e.context ELSE NULL::jsonb END as \"context: es_entity::ContextData\", e.recorded_at, NULL::jsonb as \"forgettable_payload?\" FROM entities i JOIN cala_calculation_events e ON i.id = e.id ORDER BY i.journal_id, i.created_at desc, i.id desc, i.id, e.sequence",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "entity_id",
+        "name": "entity_id!: Repo__Id",
         "type_info": "Uuid"
       },
       {
@@ -21,7 +21,7 @@
       {
         "ordinal": 3,
         "name": "context: es_entity::ContextData",
-        "type_info": "Text"
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 4,
@@ -36,7 +36,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "UuidArray",
+        "Bool"
       ]
     },
     "nullable": [
@@ -48,5 +49,5 @@
       null
     ]
   },
-  "hash": "2f417a0ae517c2f9214ef098e3ab2f968b52d78ae964053a0b3ed640cea56e95"
+  "hash": "d6c8a44c96caf6fe3f591c8e23730ae1324eae77b57e2efedd863f49a0761c5c"
 }

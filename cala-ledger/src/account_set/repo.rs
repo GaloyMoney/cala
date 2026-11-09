@@ -935,6 +935,34 @@ impl AccountSetRepo {
         Ok(())
     }
 
+    /// The journal of each of `set_ids`; ids with no set are absent.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account_set.find_journal_ids_in_op",
+        skip_all,
+        fields(sets = set_ids.len())
+    )]
+    pub(super) async fn find_journal_ids_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, JournalId>, CalaFault> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT id AS "id!: AccountSetId", journal_id AS "journal_id!: JournalId"
+            FROM cala_account_sets
+            WHERE id = ANY($1)
+            "#,
+            set_ids as &[AccountSetId],
+        )
+        .fetch_all(op.as_executor())
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| (row.id, row.journal_id))
+            .collect())
+    }
+
     /// Meta + upward edges for specific sets, on the op executor (sees
     /// the op's own uncommitted set creations). The set-graph cache's
     /// op-local supplement for seed ids unknown to its shared snapshot.
@@ -978,8 +1006,27 @@ impl AccountSetRepo {
     /// cache's refresh read. Anchoring on the always-present epoch row
     /// guarantees >=1 row even with zero account sets.
     pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, CalaFault> {
-        let rows = sqlx::query!(
-            r#"
+        self.fetch_set_graph_with(&self.pool).await
+    }
+
+    /// The same single-snapshot read on the op executor, so it also sees
+    /// the op's own uncommitted sets and edges. The set-graph cache's
+    /// op-local fallback for lock-free resolution; never installed.
+    pub(super) async fn fetch_set_graph_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<SetGraphData, CalaFault> {
+        self.fetch_set_graph_with(&mut *op).await
+    }
+
+    async fn fetch_set_graph_with(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+    ) -> Result<SetGraphData, CalaFault> {
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
             SELECT
                 g.epoch AS "epoch!",
                 s.id AS "set_id?: AccountSetId",
@@ -992,9 +1039,8 @@ impl AccountSetRepo {
             LEFT JOIN cala_account_set_member_account_sets e
               ON e.member_account_set_id = s.id
             "#
-        )
-        .fetch_all(&self.pool)
-        .await?;
+            ))
+            .await?;
 
         let epoch = rows.first().map(|row| row.epoch).unwrap_or_default();
         let nodes = rows

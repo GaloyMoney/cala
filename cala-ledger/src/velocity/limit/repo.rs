@@ -85,25 +85,18 @@ impl VelocityLimitRepo {
         op: impl es_entity::IntoOneTimeExecutor<'_>,
         control: VelocityControlId,
     ) -> Result<Vec<VelocityLimit>, CalaFault> {
-        let rows = op
-            .into_executor()
-            .fetch_all(sqlx::query_as!(
-                GenericEvent,
-                r#"WITH limits AS (
-              SELECT id, l.created_at AS entity_created_at
-              FROM cala_velocity_limits l
-              JOIN cala_velocity_control_limits ON id = velocity_limit_id
-              WHERE velocity_control_id = $1
-            )
-            SELECT l.id as entity_id, e.sequence, e.event, NULL as "context: es_entity::ContextData", e.recorded_at, NULL::jsonb as "forgettable_payload?"
-            FROM limits l
-            JOIN cala_velocity_limit_events e ON l.id = e.id
-            ORDER BY l.id, e.sequence"#,
-                control as VelocityControlId,
-            ))
-            .await?;
-        let n = rows.len();
-        let ret = EntityEvents::load_n::<VelocityLimit>(rows, n)?.0;
-        Ok(ret)
+        let (limits, _) = es_entity::es_query!(
+            entity = VelocityLimit,
+            r#"
+            SELECT l.created_at, l.id
+            FROM cala_velocity_limits l
+            JOIN cala_velocity_control_limits c ON c.velocity_limit_id = l.id
+            WHERE c.velocity_control_id = $1
+            ORDER BY l.created_at, l.id"#,
+            control as VelocityControlId,
+        )
+        .fetch_n(op, usize::MAX)
+        .await?;
+        Ok(limits)
     }
 }

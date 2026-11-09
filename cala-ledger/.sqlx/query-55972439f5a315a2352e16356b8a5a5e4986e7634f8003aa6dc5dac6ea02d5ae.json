@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT joined_at_sequence\n            FROM cala_joinable_catch_ups\n            WHERE subscriber_type = $1 AND key = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "joined_at_sequence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "55972439f5a315a2352e16356b8a5a5e4986e7634f8003aa6dc5dac6ea02d5ae"
+}

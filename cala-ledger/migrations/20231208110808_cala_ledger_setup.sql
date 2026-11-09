@@ -261,6 +261,7 @@ CREATE TABLE cala_calculations (
   journal_id UUID NOT NULL REFERENCES cala_journals(id),
   code VARCHAR NOT NULL UNIQUE,
   name VARCHAR NOT NULL,
+  backfill_complete BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_cala_calculations_journal_id ON cala_calculations (journal_id);
@@ -279,6 +280,7 @@ CREATE TABLE cala_calculation_attachments (
   calculation_id UUID NOT NULL REFERENCES cala_calculations(id),
   account_id UUID NOT NULL REFERENCES cala_accounts(id),
   activation_sequence BIGINT NOT NULL,
+  backfill_complete BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE(calculation_id, account_id)
 );

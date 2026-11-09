@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cala_joinable_tips\n            SET checkpoint = GREATEST(COALESCE(checkpoint, $2), $2), updated_at = NOW()\n            WHERE subscriber_type = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "17d3a2b8c3c6278c52a51516f6d8f63df0f69dd7d86b8215f0d0cae06d644201"
+}

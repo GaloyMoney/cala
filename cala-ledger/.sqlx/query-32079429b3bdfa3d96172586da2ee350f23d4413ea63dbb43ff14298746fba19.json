@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT checkpoint\n            FROM cala_joinable_tips\n            WHERE subscriber_type = $1\n            FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "checkpoint",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "32079429b3bdfa3d96172586da2ee350f23d4413ea63dbb43ff14298746fba19"
+}

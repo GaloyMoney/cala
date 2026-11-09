@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE cala_calculation_attachments\n            SET backfill_complete = TRUE, activation_sequence = $3\n            WHERE calculation_id = $1 AND account_id = ANY($2)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9fba86c6bdb0d7bab962c0eaa57fbc5610c97969937550ca1d2a155d78c02068"
+}

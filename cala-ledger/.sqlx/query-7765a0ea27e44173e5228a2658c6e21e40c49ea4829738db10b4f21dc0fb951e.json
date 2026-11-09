@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE cala_subscriptions SET dormant = $3 WHERE subscriber_type = $1 AND key = ANY($2::varchar[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "VarcharArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7765a0ea27e44173e5228a2658c6e21e40c49ea4829738db10b4f21dc0fb951e"
+}

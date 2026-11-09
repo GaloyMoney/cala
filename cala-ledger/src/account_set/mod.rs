@@ -966,6 +966,40 @@ impl AccountSets {
             .resolve_from_probe_in_op(op, journal_id, probe_epoch, probe_seeds, entry_pairs)
             .await
     }
+
+    /// Every set in `journal_id` above each of `account_ids`, as of now and
+    /// without locks, via the epoch-validated set-graph cache: the
+    /// read-only sibling of the posting flow's locking resolution, for
+    /// rollups that fold committed entries.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.find_ancestors_in_op",
+        skip_all
+    )]
+    pub(crate) async fn find_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        self.set_graph_cache
+            .find_ancestors_in_op(op, journal_id, account_ids)
+            .await
+    }
+
+    /// The journal of each of `set_ids`; ids with no set are absent.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "cala_ledger.account_sets.find_journal_ids_in_op",
+        skip_all
+    )]
+    pub(crate) async fn find_journal_ids_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        set_ids: &[AccountSetId],
+    ) -> Result<HashMap<AccountSetId, JournalId>, CalaFault> {
+        self.repo.find_journal_ids_in_op(op, set_ids).await
+    }
 }
 
 impl From<&AccountSetEvent> for OutboxEventPayload {

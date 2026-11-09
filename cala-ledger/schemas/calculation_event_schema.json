@@ -17,9 +17,42 @@
         "type",
         "values"
       ]
+    },
+    {
+      "description": "Global only. Rewrites `activation_sequence` to the sequence the\ncatch-up joined the tip at.",
+      "type": "object",
+      "properties": {
+        "activation_sequence": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "type": {
+          "type": "string",
+          "const": "backfill_completed"
+        }
+      },
+      "required": [
+        "type",
+        "activation_sequence"
+      ]
     }
   ],
   "$defs": {
+    "BackfillStatus": {
+      "oneOf": [
+        {
+          "description": "History is being folded in by the unit's catch-up; the tip ignores\nthis unit.",
+          "type": "string",
+          "const": "in_progress"
+        },
+        {
+          "description": "Every entry at or below `activation_sequence` is in the series (or\nthe unit was created `FromNow`); the tip covers the unit past it.",
+          "type": "string",
+          "const": "complete"
+        }
+      ]
+    },
     "CalculationConfig": {
       "type": "object",
       "properties": {
@@ -59,6 +92,10 @@
           "type": "integer",
           "format": "uint64",
           "minimum": 0
+        },
+        "backfill_status": {
+          "description": "Only meaningful for `Global` scope; `Attached` calculations are always `Complete`\nhere and carry status per attachment.",
+          "$ref": "#/$defs/BackfillStatus"
         },
         "code": {
           "type": "string"
@@ -117,7 +154,8 @@
         "scope",
         "dimensions",
         "config",
-        "activation_sequence"
+        "activation_sequence",
+        "backfill_status"
       ]
     },
     "CelExpression": {
