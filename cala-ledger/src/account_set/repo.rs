@@ -910,6 +910,31 @@ impl AccountSetRepo {
     /// sorted ancestor lock batch per posting — here or in the
     /// fallback's CTE, never both — which is what keeps acquisition
     /// order canonical across posters.
+    pub(super) async fn lock_resolved_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
+    ) -> Result<(), CalaFault> {
+        if set_ids.is_empty() {
+            return Ok(());
+        }
+        sqlx::query!(
+            r#"
+            SELECT pg_advisory_xact_lock(
+                hashtext(concat($1::text, v.set_id::text, v.currency))
+            )
+            FROM UNNEST($2::uuid[], $3::text[]) AS v(set_id, currency)
+            "#,
+            journal_id as JournalId,
+            set_ids as &[AccountSetId],
+            currencies as &[&str],
+        )
+        .execute(op.as_executor())
+        .await?;
+        Ok(())
+    }
+
     /// Every set in `journal_id` reachable from each of `account_ids`
     /// through membership, synchronous and eventually consistent alike,
     /// as of now and without locks.
@@ -989,31 +1014,6 @@ impl AccountSetRepo {
             .into_iter()
             .map(|row| (row.id, row.journal_id))
             .collect())
-    }
-
-    pub(super) async fn lock_resolved_ancestors_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        (set_ids, currencies): &(Vec<AccountSetId>, Vec<&str>),
-    ) -> Result<(), CalaFault> {
-        if set_ids.is_empty() {
-            return Ok(());
-        }
-        sqlx::query!(
-            r#"
-            SELECT pg_advisory_xact_lock(
-                hashtext(concat($1::text, v.set_id::text, v.currency))
-            )
-            FROM UNNEST($2::uuid[], $3::text[]) AS v(set_id, currency)
-            "#,
-            journal_id as JournalId,
-            set_ids as &[AccountSetId],
-            currencies as &[&str],
-        )
-        .execute(op.as_executor())
-        .await?;
-        Ok(())
     }
 
     /// Meta + upward edges for specific sets, on the op executor (sees
