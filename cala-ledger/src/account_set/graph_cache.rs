@@ -64,6 +64,13 @@
 //!   upward edges (adding one bumps the epoch), so this stays a single
 //!   indexed read.
 //!
+//! Lock-free resolution (`find_ancestors_in_op`, for rollups folding
+//! committed entries) shares the probe and the in-memory expansion but
+//! takes no locks, so its rare path needs no fused walk: it reads the
+//! whole graph flat in-op (the refresh statement on the op executor) and
+//! expands against that, bounded by the edge table rather than graph
+//! depth. Like every op-local result, it is never installed.
+//!
 //! Locking: every posting takes exactly ONE Rust-or-SQL-sorted ancestor
 //! lock batch — the memory path computes the non-EC `(set, currency)`
 //! pairs from cached meta and takes them via
@@ -186,13 +193,22 @@ struct IndexedNodes {
     meta: HashMap<AccountSetId, SetMeta>,
 }
 
+/// In-memory ancestor expansion of probed seeds: every ancestor in the
+/// journal per account, plus the non-EC subset the posting path locks.
+struct Expansion {
+    mappings: HashMap<AccountId, Vec<AccountSetId>>,
+    non_ec: HashMap<AccountId, Vec<AccountSetId>>,
+}
+
 /// The per-process set-graph cache — an internal detail of the
 /// `account_set` module, constructed by `AccountSets::new` and shared
 /// across its clones. (The streaming EC rollup applier's per-batch
 /// resolution deliberately stays a plain walk in
 /// `BalanceRepo::fetch_ec_set_mappings`: `Balances` cannot depend on
 /// this module without a cycle, and one walk per outbox batch is
-/// amortized far below the poster's per-posting rate.)
+/// amortized far below the poster's per-posting rate. The calculation
+/// fold, which does depend on `AccountSets`, resolves through
+/// `find_ancestors_in_op`.)
 #[derive(Clone)]
 pub(super) struct SetGraphCache {
     inner: Arc<SetGraphCacheInner>,
@@ -315,28 +331,13 @@ impl SetGraphCache {
         // Seed sets are not epoch-guarded (attaching an account bumps
         // nothing), so a set created after the last refresh can appear
         // here — fetch it op-locally as an overlay.
-        let missing: Vec<AccountSetId> = {
-            let mut missing: Vec<_> = probe
-                .seeds
-                .iter()
-                .map(|seed| seed.account_set_id)
-                .filter(|set_id| !snapshot.meta.contains_key(set_id))
-                .collect();
-            missing.sort_unstable();
-            missing.dedup();
-            missing
-        };
-        let overlay = if missing.is_empty() {
-            None
-        } else {
-            let nodes = self
-                .inner
-                .repo
-                .fetch_set_graph_nodes_in_op(op, &missing)
-                .await?;
-            let IndexedNodes { parents, meta, .. } = Self::index_nodes(nodes);
-            Some(Overlay { parents, meta })
-        };
+        let overlay = self
+            .load_overlay(
+                op,
+                &snapshot,
+                probe.seeds.iter().map(|seed| seed.account_set_id),
+            )
+            .await?;
 
         match Self::expand(
             &snapshot,
@@ -461,28 +462,16 @@ impl SetGraphCache {
         // the probe) can be unknown to the snapshot when created after the
         // last refresh — including in this op. Fetch them op-locally as an
         // overlay; never installed.
-        let missing: Vec<AccountSetId> = {
-            let mut missing: Vec<_> = members
-                .iter()
-                .chain(probe.seeds.iter())
-                .map(|membership| membership.account_set_id)
-                .filter(|set_id| !snapshot.meta.contains_key(set_id))
-                .collect();
-            missing.sort_unstable();
-            missing.dedup();
-            missing
-        };
-        let overlay = if missing.is_empty() {
-            None
-        } else {
-            let nodes = self
-                .inner
-                .repo
-                .fetch_set_graph_nodes_in_op(op, &missing)
-                .await?;
-            let IndexedNodes { parents, meta, .. } = Self::index_nodes(nodes);
-            Some(Overlay { parents, meta })
-        };
+        let overlay = self
+            .load_overlay(
+                op,
+                &snapshot,
+                members
+                    .iter()
+                    .chain(probe.seeds.iter())
+                    .map(|membership| membership.account_set_id),
+            )
+            .await?;
 
         // One lookup carries all three states the walk distinguishes: `None`
         // for a set neither the snapshot nor the overlay knows (defer to SQL),
@@ -579,6 +568,139 @@ impl SetGraphCache {
         Ok(())
     }
 
+    /// Every set in `journal_id` above each of `account_ids`, as of now
+    /// and without locks — the rollup folds' resolution. Hot path: the
+    /// direct-membership probe, then in-memory expansion against the
+    /// epoch-matched snapshot (plus an overlay for seed sets created since
+    /// the last refresh). Rare path (cold or stale snapshot, or a set
+    /// unknown to snapshot + overlay): one flat op-local read of the
+    /// whole graph, expanded the same way. Same semantics as the posting
+    /// path's resolution minus the locks: ancestors are walked through
+    /// other journals and only sets in `journal_id` are returned.
+    #[es_entity::errlanes::instrument(
+        level = "debug",
+        name = "account_set.find_ancestors_in_op",
+        skip(self, op, account_ids),
+        fields(accounts = account_ids.len(), path = tracing::field::Empty)
+    )]
+    pub(super) async fn find_ancestors_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        account_ids: &[AccountId],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        let span = tracing::Span::current();
+        let probe = self
+            .inner
+            .repo
+            .probe_direct_memberships_in_op(op, account_ids)
+            .await?;
+        if probe.seeds.is_empty() {
+            span.record("path", "no_memberships");
+            return Ok(HashMap::new());
+        }
+
+        let snapshot = self.load();
+        if snapshot.epoch != probe.epoch {
+            span.record(
+                "path",
+                if snapshot.epoch == COLD_EPOCH {
+                    "fallback_cold"
+                } else {
+                    "fallback_epoch"
+                },
+            );
+            self.spawn_refresh();
+            return self.expand_op_local(op, journal_id, &probe.seeds).await;
+        }
+
+        let overlay = self
+            .load_overlay(
+                op,
+                &snapshot,
+                probe.seeds.iter().map(|seed| seed.account_set_id),
+            )
+            .await?;
+
+        match Self::expand_mappings(&snapshot, overlay.as_ref(), journal_id, &probe.seeds) {
+            Some(expansion) => {
+                span.record(
+                    "path",
+                    if overlay.is_some() {
+                        "supplement"
+                    } else {
+                        "memory"
+                    },
+                );
+                Ok(expansion.mappings)
+            }
+            None => {
+                span.record("path", "fallback_unknown");
+                self.expand_op_local(op, journal_id, &probe.seeds).await
+            }
+        }
+    }
+
+    /// Lock-free rare path: read the whole graph in one statement on the
+    /// op executor and expand the seeds against it. Every edge endpoint
+    /// in that read is also a node in it, so expansion cannot hit an
+    /// unknown set once seeds whose set is absent (removed between the
+    /// probe and this read) are dropped — exactly the rows the walk's
+    /// join to `cala_account_sets` would have dropped.
+    async fn expand_op_local(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        journal_id: JournalId,
+        seeds: &[AccountMembership],
+    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
+        let data = self.inner.repo.fetch_set_graph_in_op(op).await?;
+        let IndexedNodes {
+            parents,
+            children,
+            meta,
+        } = Self::index_nodes(data.nodes);
+        let local = GraphSnapshot {
+            epoch: data.epoch,
+            parents,
+            children,
+            meta,
+        };
+        let seeds: Vec<AccountMembership> = seeds
+            .iter()
+            .filter(|seed| local.meta.contains_key(&seed.account_set_id))
+            .copied()
+            .collect();
+        Ok(Self::expand_mappings(&local, None, journal_id, &seeds)
+            .map(|expansion| expansion.mappings)
+            .unwrap_or_default())
+    }
+
+    /// Op-local overlay for the given set ids unknown to `snapshot`
+    /// (created after the last refresh, possibly in this op). `None`
+    /// when every id is known. Never installed.
+    async fn load_overlay(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+        snapshot: &GraphSnapshot,
+        set_ids: impl Iterator<Item = AccountSetId>,
+    ) -> Result<Option<Overlay>, CalaFault> {
+        let mut missing: Vec<AccountSetId> = set_ids
+            .filter(|set_id| !snapshot.meta.contains_key(set_id))
+            .collect();
+        missing.sort_unstable();
+        missing.dedup();
+        if missing.is_empty() {
+            return Ok(None);
+        }
+        let nodes = self
+            .inner
+            .repo
+            .fetch_set_graph_nodes_in_op(op, &missing)
+            .await?;
+        let IndexedNodes { parents, meta, .. } = Self::index_nodes(nodes);
+        Ok(Some(Overlay { parents, meta }))
+    }
+
     fn load(&self) -> Arc<GraphSnapshot> {
         self.inner
             .snapshot
@@ -611,16 +733,12 @@ impl SetGraphCache {
         }
     }
 
-    /// In-memory BFS expansion of the probed seeds over snapshot +
-    /// overlay. Mirrors the walk SQL exactly: ancestors are walked
-    /// across ALL journals (a set in another journal is walked
-    /// *through*), and only sets whose `journal_id` matches are included
-    /// in the result. Also computes the fallback CTE's lock list — the
-    /// distinct non-EC `(ancestor, currency)` pairs with per-leaf
-    /// currency semantics (each leaf's currencies propagate to exactly
-    /// *its own* ancestors), returned deduped and Rust-sorted for
-    /// canonical acquisition. Returns `None` if any set id is unknown —
-    /// caller falls back to the walk.
+    /// The posting path's expansion: [`Self::expand_mappings`] plus the
+    /// fallback CTE's lock list — the distinct non-EC `(ancestor,
+    /// currency)` pairs with per-leaf currency semantics (each leaf's
+    /// currencies propagate to exactly *its own* ancestors), returned
+    /// deduped and Rust-sorted for canonical acquisition. Returns `None`
+    /// if any set id is unknown — caller falls back to the walk.
     #[allow(clippy::type_complexity)]
     fn expand<'c>(
         snapshot: &GraphSnapshot,
@@ -632,6 +750,37 @@ impl SetGraphCache {
         HashMap<AccountId, Vec<AccountSetId>>,
         (Vec<AccountSetId>, Vec<&'c str>),
     )> {
+        let Expansion { mappings, non_ec } =
+            Self::expand_mappings(snapshot, overlay, journal_id, seeds)?;
+
+        let mut lock_pairs: Vec<(AccountSetId, &str)> = entry_account_ids
+            .iter()
+            .zip(entry_currencies.iter())
+            .flat_map(|(account_id, currency)| {
+                non_ec
+                    .get(account_id)
+                    .into_iter()
+                    .flatten()
+                    .map(move |set_id| (*set_id, *currency))
+            })
+            .collect();
+        lock_pairs.sort_unstable();
+        lock_pairs.dedup();
+
+        Some((mappings, lock_pairs.into_iter().unzip()))
+    }
+
+    /// In-memory BFS expansion of the probed seeds over snapshot +
+    /// overlay. Mirrors the walk SQL exactly: ancestors are walked
+    /// across ALL journals (a set in another journal is walked
+    /// *through*), and only sets whose `journal_id` matches are included
+    /// in the result. Returns `None` if any set id is unknown.
+    fn expand_mappings(
+        snapshot: &GraphSnapshot,
+        overlay: Option<&Overlay>,
+        journal_id: JournalId,
+        seeds: &[AccountMembership],
+    ) -> Option<Expansion> {
         let meta_of = |set_id: &AccountSetId| -> Option<SetMeta> {
             snapshot
                 .meta
@@ -684,21 +833,7 @@ impl SetGraphCache {
             }
         }
 
-        let mut lock_pairs: Vec<(AccountSetId, &str)> = entry_account_ids
-            .iter()
-            .zip(entry_currencies.iter())
-            .flat_map(|(account_id, currency)| {
-                non_ec
-                    .get(account_id)
-                    .into_iter()
-                    .flatten()
-                    .map(move |set_id| (*set_id, *currency))
-            })
-            .collect();
-        lock_pairs.sort_unstable();
-        lock_pairs.dedup();
-
-        Some((mappings, lock_pairs.into_iter().unzip()))
+        Some(Expansion { mappings, non_ec })
     }
 
     fn spawn_refresh(&self) {
@@ -762,6 +897,131 @@ mod tests {
             account_set_id,
             member_account_set_id,
         }
+    }
+
+    fn meta(journal_id: JournalId, eventually_consistent: bool) -> SetMeta {
+        SetMeta {
+            journal_id,
+            eventually_consistent,
+        }
+    }
+
+    /// `leaf (journal, EC)` -> `mid (other journal)` -> `root (journal)`,
+    /// with `account` a direct member of `leaf`.
+    struct Chain {
+        journal: JournalId,
+        account: AccountId,
+        leaf: AccountSetId,
+        mid: AccountSetId,
+        root: AccountSetId,
+    }
+
+    impl Chain {
+        fn new() -> Self {
+            Self {
+                journal: JournalId::new(),
+                account: AccountId::new(),
+                leaf: AccountSetId::new(),
+                mid: AccountSetId::new(),
+                root: AccountSetId::new(),
+            }
+        }
+
+        fn seeds(&self) -> Vec<AccountMembership> {
+            vec![AccountMembership {
+                account_set_id: self.leaf,
+                account_id: self.account,
+            }]
+        }
+
+        fn snapshot(&self) -> GraphSnapshot {
+            GraphSnapshot {
+                epoch: 1,
+                parents: HashMap::from([(self.leaf, vec![self.mid]), (self.mid, vec![self.root])]),
+                children: HashMap::new(),
+                meta: HashMap::from([
+                    (self.leaf, meta(self.journal, true)),
+                    (self.mid, meta(JournalId::new(), false)),
+                    (self.root, meta(self.journal, false)),
+                ]),
+            }
+        }
+
+        /// The chain as the flat graph read returns it: one row per
+        /// upward edge, a parentless row for the root.
+        fn nodes(&self) -> Vec<SetGraphNode> {
+            let other = JournalId::new();
+            vec![
+                SetGraphNode {
+                    id: self.leaf,
+                    journal_id: self.journal,
+                    eventually_consistent: true,
+                    parent_id: Some(self.mid),
+                },
+                SetGraphNode {
+                    id: self.mid,
+                    journal_id: other,
+                    eventually_consistent: false,
+                    parent_id: Some(self.root),
+                },
+                SetGraphNode {
+                    id: self.root,
+                    journal_id: self.journal,
+                    eventually_consistent: false,
+                    parent_id: None,
+                },
+            ]
+        }
+
+        fn assert_expansion(&self, expansion: Expansion) {
+            assert_eq!(
+                expansion.mappings,
+                HashMap::from([(self.account, vec![self.leaf, self.root])])
+            );
+            assert_eq!(
+                expansion.non_ec,
+                HashMap::from([(self.account, vec![self.root])])
+            );
+        }
+    }
+
+    #[test]
+    fn expansion_walks_through_other_journals_and_keeps_only_the_journals_sets() {
+        let chain = Chain::new();
+        let expansion =
+            SetGraphCache::expand_mappings(&chain.snapshot(), None, chain.journal, &chain.seeds())
+                .expect("every set is known");
+        chain.assert_expansion(expansion);
+    }
+
+    #[test]
+    fn expansion_defers_when_a_set_is_unknown() {
+        let chain = Chain::new();
+        let mut snapshot = chain.snapshot();
+        snapshot.meta.remove(&chain.root);
+        assert!(
+            SetGraphCache::expand_mappings(&snapshot, None, chain.journal, &chain.seeds())
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn op_local_graph_expands_like_the_snapshot() {
+        let chain = Chain::new();
+        let IndexedNodes {
+            parents,
+            children,
+            meta,
+        } = SetGraphCache::index_nodes(chain.nodes());
+        let local = GraphSnapshot {
+            epoch: 7,
+            parents,
+            children,
+            meta,
+        };
+        let expansion = SetGraphCache::expand_mappings(&local, None, chain.journal, &chain.seeds())
+            .expect("the flat read carries every edge endpoint");
+        chain.assert_expansion(expansion);
     }
 
     #[test]

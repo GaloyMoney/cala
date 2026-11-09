@@ -968,8 +968,9 @@ impl AccountSets {
     }
 
     /// Every set in `journal_id` above each of `account_ids`, as of now and
-    /// without locks: the read-only sibling of the posting flow's locking
-    /// resolution, for rollups that fold committed entries.
+    /// without locks, via the epoch-validated set-graph cache: the
+    /// read-only sibling of the posting flow's locking resolution, for
+    /// rollups that fold committed entries.
     #[es_entity::errlanes::instrument(
         level = "debug",
         name = "cala_ledger.account_sets.find_ancestors_in_op",
@@ -981,7 +982,7 @@ impl AccountSets {
         journal_id: JournalId,
         account_ids: &[AccountId],
     ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
-        self.repo
+        self.set_graph_cache
             .find_ancestors_in_op(op, journal_id, account_ids)
             .await
     }

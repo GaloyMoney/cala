@@ -935,59 +935,6 @@ impl AccountSetRepo {
         Ok(())
     }
 
-    /// Every set in `journal_id` reachable from each of `account_ids`
-    /// through membership, synchronous and eventually consistent alike,
-    /// as of now and without locks.
-    #[es_entity::errlanes::instrument(
-        level = "debug",
-        name = "account_set.find_ancestors_in_op",
-        skip_all,
-        fields(accounts = account_ids.len())
-    )]
-    pub(super) async fn find_ancestors_in_op(
-        &self,
-        op: &mut impl es_entity::AtomicOperation,
-        journal_id: JournalId,
-        account_ids: &[AccountId],
-    ) -> Result<HashMap<AccountId, Vec<AccountSetId>>, CalaFault> {
-        let rows = sqlx::query!(
-            r#"
-            WITH RECURSIVE seed AS (
-                SELECT m.member_account_id AS account_id, m.account_set_id
-                FROM cala_account_set_member_accounts m
-                WHERE m.member_account_id = ANY($2)
-            ),
-            ancestors AS (
-                SELECT account_id, account_set_id FROM seed
-                UNION
-                SELECT a.account_id, e.account_set_id
-                FROM ancestors a
-                JOIN cala_account_set_member_account_sets e
-                  ON e.member_account_set_id = a.account_set_id
-            )
-            SELECT
-                a.account_set_id AS "account_set_id!: AccountSetId",
-                a.account_id AS "member_account_id!: AccountId"
-            FROM ancestors a
-            JOIN cala_account_sets s
-              ON s.id = a.account_set_id AND s.journal_id = $1
-            "#,
-            journal_id as JournalId,
-            account_ids as &[AccountId],
-        )
-        .fetch_all(op.as_executor())
-        .await?;
-
-        let mut result: HashMap<AccountId, Vec<AccountSetId>> = HashMap::new();
-        for row in rows {
-            result
-                .entry(row.member_account_id)
-                .or_default()
-                .push(row.account_set_id);
-        }
-        Ok(result)
-    }
-
     /// The journal of each of `set_ids`; ids with no set are absent.
     #[es_entity::errlanes::instrument(
         level = "debug",
@@ -1059,8 +1006,27 @@ impl AccountSetRepo {
     /// cache's refresh read. Anchoring on the always-present epoch row
     /// guarantees >=1 row even with zero account sets.
     pub(super) async fn fetch_set_graph(&self) -> Result<SetGraphData, CalaFault> {
-        let rows = sqlx::query!(
-            r#"
+        self.fetch_set_graph_with(&self.pool).await
+    }
+
+    /// The same single-snapshot read on the op executor, so it also sees
+    /// the op's own uncommitted sets and edges. The set-graph cache's
+    /// op-local fallback for lock-free resolution; never installed.
+    pub(super) async fn fetch_set_graph_in_op(
+        &self,
+        op: &mut impl es_entity::AtomicOperation,
+    ) -> Result<SetGraphData, CalaFault> {
+        self.fetch_set_graph_with(&mut *op).await
+    }
+
+    async fn fetch_set_graph_with(
+        &self,
+        op: impl es_entity::IntoOneTimeExecutor<'_>,
+    ) -> Result<SetGraphData, CalaFault> {
+        let rows = op
+            .into_executor()
+            .fetch_all(sqlx::query!(
+                r#"
             SELECT
                 g.epoch AS "epoch!",
                 s.id AS "set_id?: AccountSetId",
@@ -1073,9 +1039,8 @@ impl AccountSetRepo {
             LEFT JOIN cala_account_set_member_account_sets e
               ON e.member_account_set_id = s.id
             "#
-        )
-        .fetch_all(&self.pool)
-        .await?;
+            ))
+            .await?;
 
         let epoch = rows.first().map(|row| row.epoch).unwrap_or_default();
         let nodes = rows
