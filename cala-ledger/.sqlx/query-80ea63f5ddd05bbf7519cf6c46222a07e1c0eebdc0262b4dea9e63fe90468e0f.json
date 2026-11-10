@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH input AS (\n                SELECT * FROM UNNEST($1::uuid[], $3::text[]) AS t(id, unique_key)\n            ), pred AS (\n                SELECT i.id AS new_id, p.pred_id\n                FROM input i\n                JOIN LATERAL (\n                    SELECT j.id AS pred_id\n                    FROM jobs j\n                    WHERE j.job_type = $2 AND j.unique_key = i.unique_key\n                      AND j.id != i.id\n                    ORDER BY j.created_at DESC, j.id DESC\n                    LIMIT 1\n                ) p ON TRUE\n            ), seeded AS (\n                INSERT INTO job_execution_states (id, execution_state_json)\n                SELECT pred.new_id, s.execution_state_json\n                FROM pred\n                JOIN job_execution_states s ON s.id = pred.pred_id\n                WHERE $4::boolean\n                RETURNING id\n            )\n            DELETE FROM job_execution_states s\n            USING pred\n            WHERE s.id = pred.pred_id\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text",
+        "TextArray",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "80ea63f5ddd05bbf7519cf6c46222a07e1c0eebdc0262b4dea9e63fe90468e0f"
+}

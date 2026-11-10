@@ -6,27 +6,57 @@
       {
         "ordinal": 0,
         "name": "calculation_id: CalculationId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "calculation_id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "account_id: AccountId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "account_id"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "activation_sequence",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "activation_sequence"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "backfill_complete",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "backfill_complete"
+          }
+        }
       },
       {
         "ordinal": 4,
         "name": "created_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "created_at"
+          }
+        }
       }
     ],
     "parameters": {

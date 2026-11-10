@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH locked AS MATERIALIZED (\n                SELECT je.id FROM job_executions je\n                WHERE je.id = ANY($1)\n                ORDER BY je.queue_id, je.id\n                FOR SHARE\n            ), unknown AS (\n                SELECT DISTINCT t.job_id\n                FROM UNNEST($1::uuid[]) AS t(job_id)\n                WHERE NOT EXISTS (SELECT 1 FROM jobs j WHERE j.id = t.job_id)\n            ), attached AS (\n                INSERT INTO job_waiters (job_id, waiter_job_id, created_at)\n                SELECT DISTINCT t.job_id, t.waiter_job_id, COALESCE($3, NOW())\n                FROM UNNEST($1::uuid[], $2::uuid[]) AS t(job_id, waiter_job_id)\n                JOIN locked l ON l.id = t.job_id\n                WHERE NOT EXISTS (SELECT 1 FROM unknown)\n                ON CONFLICT (job_id, waiter_job_id) DO UPDATE SET job_id = EXCLUDED.job_id\n                RETURNING job_id\n            ), told AS (\n                INSERT INTO job_waiters (job_id, waiter_job_id, created_at)\n                SELECT DISTINCT t.job_id, t.waiter_job_id, COALESCE($3, NOW())\n                FROM UNNEST($1::uuid[], $2::uuid[]) AS t(job_id, waiter_job_id)\n                WHERE $4\n                  AND NOT EXISTS (SELECT 1 FROM unknown)\n                  AND t.job_id NOT IN (SELECT id FROM locked)\n                  AND EXISTS (SELECT 1 FROM job_executions w WHERE w.id = t.waiter_job_id)\n                ON CONFLICT (job_id, waiter_job_id) DO NOTHING\n                RETURNING waiter_job_id\n            )\n            SELECT 'attached' AS \"kind!\", job_id AS \"id!: JobId\" FROM attached\n            UNION ALL\n            SELECT 'told', waiter_job_id FROM told\n            UNION ALL\n            SELECT 'unknown', job_id FROM unknown\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "kind!",
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!: JobId",
+        "type_info": "Uuid",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "f94f4f0453cfdfe58c0f9ea3c31d3ebab223845405f45ff00977d8a616dc6bad"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT waiter_job_id AS \"waiter_job_id!: JobId\" FROM job_waiters WHERE job_id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "waiter_job_id!: JobId",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "job_waiters",
+            "name": "waiter_job_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "44869963ce5a06fac0df2e47fffb957f78e00eebcfacb2a7cd50084b27976264"
+}

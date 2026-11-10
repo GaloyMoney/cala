@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "recorded_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "cala_velocity_limit_events",
+            "name": "recorded_at"
+          }
+        }
       }
     ],
     "parameters": {
