@@ -48,9 +48,11 @@ async fn init_isolated_pool(max_connections: u32) -> anyhow::Result<sqlx::PgPool
             .sample_string(&mut rand::rng(), 12)
             .to_lowercase()
     );
-    sqlx::query(&format!(r#"CREATE DATABASE "{db_name}""#))
-        .execute(&admin_pool)
-        .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        r#"CREATE DATABASE "{db_name}""#
+    )))
+    .execute(&admin_pool)
+    .await?;
     let (base, _) = pg_con
         .rsplit_once('/')
         .expect("PG_CON has no database path");

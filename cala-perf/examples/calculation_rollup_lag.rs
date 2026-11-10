@@ -34,9 +34,11 @@ async fn fresh_pool() -> anyhow::Result<sqlx::PgPool> {
     let base = std::env::var("PG_CON")?;
     let db_name = format!("cala_calc_lag_{}", uuid::Uuid::now_v7().simple());
     let mut admin = sqlx::PgConnection::connect(&base).await?;
-    sqlx::query(&format!(r#"CREATE DATABASE "{db_name}""#))
-        .execute(&mut admin)
-        .await?;
+    sqlx::query(sqlx::AssertSqlSafe(format!(
+        r#"CREATE DATABASE "{db_name}""#
+    )))
+    .execute(&mut admin)
+    .await?;
     admin.close().await?;
     let (prefix, _) = base.rsplit_once('/').expect("PG_CON has a database path");
     Ok(sqlx::postgres::PgPoolOptions::new()
