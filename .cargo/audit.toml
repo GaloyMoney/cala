@@ -8,4 +8,9 @@ ignore = [
   # shipped, so the OOB-read advisory is not exploitable here. Remove this
   # ignore if rust_decimal/rkyv is ever enabled.
   "RUSTSEC-2026-0235",
+  # libsqlite3-sys appears in Cargo.lock only via sqlx-sqlite, which sqlx 0.9
+  # pulls into the lockfile but this workspace never builds (verified with
+  # `cargo tree -i libsqlite3-sys --target all`: nothing to print). Remove
+  # this ignore if a sqlite feature is ever enabled.
+  "RUSTSEC-2026-0459",
 ]
