@@ -589,6 +589,7 @@ async fn work_limit_rejects() -> anyhow::Result<()> {
     // would wait for every checked-out connection (sqlx 0.9), and the job
     // service's listener holds one for the fixture's lifetime.
     drop(pool.close());
+    assert!(pool.is_closed());
 
     let periods = months(date(2024, 1, 1), 12);
     let probes_per_id = periods.len() + 1;

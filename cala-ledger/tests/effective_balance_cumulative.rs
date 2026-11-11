@@ -587,6 +587,7 @@ async fn work_limit_rejects_before_statement() -> anyhow::Result<()> {
     // would wait for every checked-out connection (sqlx 0.9), and the job
     // service's listener holds one for the fixture's lifetime.
     drop(pool.close());
+    assert!(pool.is_closed());
 
     let requested = weekly_dates();
     let at_limit = MAX_EFFECTIVE_PERIODS_WORK / requested.len();
