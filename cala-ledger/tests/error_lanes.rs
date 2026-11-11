@@ -89,7 +89,11 @@ async fn a_closed_pool_is_a_fault_for_both_rejecting_and_fault_only_methods() ->
         &mut jobs,
     )
     .await?;
-    pool.close().await;
+    // `close()` marks the pool closed as soon as it is called. Awaiting it
+    // would wait for every checked-out connection (sqlx 0.9), and the job
+    // service's listener holds one for as long as `jobs` lives.
+    drop(pool.close());
+    assert!(pool.is_closed());
     assert!(matches!(
         cala.accounts().find(AccountId::new()).await,
         Err(Fail::Transient(_))

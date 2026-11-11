@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "backfill_complete",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "cala_calculation_attachments",
+            "name": "backfill_complete"
+          }
+        }
       }
     ],
     "parameters": {

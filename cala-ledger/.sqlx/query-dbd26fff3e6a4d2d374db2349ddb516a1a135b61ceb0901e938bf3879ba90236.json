@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                        SELECT\n                            job_type,\n                            COUNT(*)::INT4 AS \"count!: i32\",\n                            MAX(EXTRACT(EPOCH FROM (\n                                (CASE WHEN retry_clock = 'wall' THEN $3::timestamptz\n                                      ELSE $1::timestamptz END)\n                                - execute_at\n                            )))::FLOAT8 AS \"max_pending_duration_secs!: f64\"\n                        FROM job_executions\n                        WHERE state = 'pending'\n                        AND execute_at <= GREATEST($1::timestamptz, $3::timestamptz)\n                        AND CASE retry_clock\n                                WHEN 'app' THEN execute_at <= $1::timestamptz\n                                ELSE execute_at <= $3::timestamptz\n                            END\n                        AND job_type = ANY($2)\n                        GROUP BY job_type\n                        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "job_type",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "job_executions",
+            "name": "job_type"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "count!: i32",
+        "type_info": "Int4",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "max_pending_duration_secs!: f64",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "TextArray",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "dbd26fff3e6a4d2d374db2349ddb516a1a135b61ceb0901e938bf3879ba90236"
+}

@@ -6,22 +6,46 @@
       {
         "ordinal": 0,
         "name": "set_id!: AccountSetId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_account_sets",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "journal_id!: JournalId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_account_sets",
+            "name": "journal_id"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "eventually_consistent!",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "cala_accounts",
+            "name": "eventually_consistent"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "parent_id?: AccountSetId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_account_set_member_account_sets",
+            "name": "account_set_id"
+          }
+        }
       }
     ],
     "parameters": {
@@ -30,10 +54,10 @@
       ]
     },
     "nullable": [
-      false,
-      false,
-      false,
-      true
+      true,
+      true,
+      true,
+      false
     ]
   },
   "hash": "2950b60b117fe72c55e77d0eab625c272a039fa5c3a65cbf082765d8eb890c96"

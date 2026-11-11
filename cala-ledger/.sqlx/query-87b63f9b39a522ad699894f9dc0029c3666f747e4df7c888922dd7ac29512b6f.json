@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "values!",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "cala_current_balances",
+            "name": "latest_values"
+          }
+        }
       },
       {
         "ordinal": 1,
@@ -20,6 +26,12 @@
                 "credit"
               ]
             }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "cala_accounts",
+            "name": "normal_balance_type"
           }
         }
       }

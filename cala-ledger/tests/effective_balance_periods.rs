@@ -585,7 +585,11 @@ async fn one_statement_per_call() -> anyhow::Result<()> {
 async fn work_limit_rejects() -> anyhow::Result<()> {
     let pool = helpers::init_pool().await?;
     let f = Fixture::new(pool.clone()).await?;
-    pool.close().await;
+    // `close()` marks the pool closed as soon as it is called. Awaiting it
+    // would wait for every checked-out connection (sqlx 0.9), and the job
+    // service's listener holds one for the fixture's lifetime.
+    drop(pool.close());
+    assert!(pool.is_closed());
 
     let periods = months(date(2024, 1, 1), 12);
     let probes_per_id = periods.len() + 1;

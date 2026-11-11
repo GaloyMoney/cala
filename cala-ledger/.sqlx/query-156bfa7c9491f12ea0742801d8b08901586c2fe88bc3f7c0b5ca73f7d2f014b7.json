@@ -6,17 +6,25 @@
       {
         "ordinal": 0,
         "name": "account_id!: AccountId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
         "name": "currency!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "ordinal": 2,
         "name": "latest_values",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "cala_current_balances",
+            "name": "latest_values"
+          }
+        }
       },
       {
         "ordinal": 3,
@@ -30,6 +38,12 @@
                 "locked"
               ]
             }
+          }
+        },
+        "origin": {
+          "Table": {
+            "table": "cala_accounts",
+            "name": "status"
           }
         }
       }

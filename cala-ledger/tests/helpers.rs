@@ -30,7 +30,9 @@ pub async fn init_isolated_pool() -> anyhow::Result<sqlx::PgPool> {
 
     let mut admin = sqlx::PgConnection::connect(&base).await?;
     let create = format!(r#"CREATE DATABASE "{db_name}""#);
-    sqlx::query(&create).execute(&mut admin).await?;
+    sqlx::query(sqlx::AssertSqlSafe(create))
+        .execute(&mut admin)
+        .await?;
     admin.close().await?;
 
     let pool = sqlx::postgres::PgPoolOptions::new()

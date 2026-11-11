@@ -30,6 +30,17 @@
     (system: let
       overlays = [
         (import rust-overlay)
+        # nixpkgs' sqlx-cli 0.9.0 and samply 0.13.1 fail to link
+        # (`cannot find -lsqlite3`): sqlite is missing from their buildInputs.
+        # Drop this once nixpkgs fixes the packages.
+        (final: prev: {
+          sqlx-cli = prev.sqlx-cli.overrideAttrs (old: {
+            buildInputs = (old.buildInputs or []) ++ [prev.sqlite];
+          });
+          samply = prev.samply.overrideAttrs (old: {
+            buildInputs = (old.buildInputs or []) ++ [prev.sqlite];
+          });
+        })
       ];
       pkgs = import nixpkgs {
         inherit system overlays;

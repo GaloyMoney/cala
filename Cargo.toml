@@ -15,15 +15,15 @@ cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-type
 cala-ledger = { path = "cala-ledger", version = "0.34.4-dev" }
 
 cel = "0.14.5"
-es-entity = { version = "0.20.5", features = ["errlanes-tracing"] }
-job = { version = "0.19.3", features = ["es-entity"] }
-obix = { version = "0.18.0", default-features = false }
+es-entity = { version = "0.21.0", features = ["errlanes-tracing"] }
+job = { version = "0.19.5", features = ["es-entity"] }
+obix = { version = "0.18.2", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }
 chrono = { version = "0.4.44", features = ["clock", "serde"], default-features = false }
 bon = "3"
-sqlx = { version = "0.8.3", features = [ "runtime-tokio-rustls", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
+sqlx = { version = "0.9", features = [ "runtime-tokio", "tls-rustls","postgres", "rust_decimal", "uuid", "chrono", "json" ] }
 uuid = { version = "1.23", features = ["serde", "v7"] }
 regex = "1.11.2"
 tracing = "0.1.41"

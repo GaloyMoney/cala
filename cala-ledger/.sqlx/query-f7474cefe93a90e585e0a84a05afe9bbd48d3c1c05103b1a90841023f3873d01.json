@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "checkpoint",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_joinable_tips",
+            "name": "checkpoint"
+          }
+        }
       }
     ],
     "parameters": {

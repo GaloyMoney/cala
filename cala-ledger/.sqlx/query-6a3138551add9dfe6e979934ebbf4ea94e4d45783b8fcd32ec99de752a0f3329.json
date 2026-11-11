@@ -6,12 +6,24 @@
       {
         "ordinal": 0,
         "name": "subscriber_type",
-        "type_info": "Varchar"
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "cala_subscriptions",
+            "name": "subscriber_type"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "key",
-        "type_info": "Varchar"
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "cala_subscriptions",
+            "name": "key"
+          }
+        }
       }
     ],
     "parameters": {
