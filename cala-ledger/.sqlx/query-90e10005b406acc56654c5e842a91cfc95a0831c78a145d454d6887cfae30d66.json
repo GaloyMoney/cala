@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        WITH heads AS (\n            SELECT id, execute_at FROM job_executions\n            WHERE job_type = $1 AND state = 'pending' AND execute_at <= $2\n              AND (NOT $6 OR attempt_index = 1)\n            ORDER BY execute_at, id\n            LIMIT $3\n            FOR UPDATE SKIP LOCKED\n        ),\n        updated AS (\n            UPDATE job_executions je\n            SET state = 'running', poller_instance_id = $4, alive_at = $5, execute_at = NULL\n            FROM heads WHERE je.id = heads.id\n            RETURNING je.id, je.queue_id, je.attempt_index, heads.execute_at AS original_execute_at\n        )\n        SELECT u.id AS \"id!: JobId\", u.attempt_index AS \"attempt!\", u.queue_id AS \"queue_id?\",\n               s.execution_state_json AS \"data_json?\", u.original_execute_at AS \"execute_at!\",\n               $1 AS \"job_type!: JobType\"\n        FROM updated u\n        LEFT JOIN job_execution_states s ON s.id = u.id\n        ",
+  "query": "\n        WITH heads AS (\n            SELECT id, execute_at FROM job_executions\n            WHERE job_type = $1 AND state = 'pending'\n              AND execute_at <= GREATEST($2::timestamptz, $7::timestamptz)\n              AND CASE retry_clock\n                    WHEN 'app' THEN execute_at <= $2::timestamptz\n                    ELSE execute_at <= $7::timestamptz\n                  END\n              AND (NOT $6 OR attempt_index = 1)\n            ORDER BY execute_at, id\n            LIMIT $3\n            FOR UPDATE SKIP LOCKED\n        ),\n        updated AS (\n            UPDATE job_executions je\n            SET state = 'running', poller_instance_id = $4, alive_at = $5, execute_at = NULL\n            FROM heads WHERE je.id = heads.id\n            RETURNING je.id, je.queue_id, je.attempt_index, heads.execute_at AS original_execute_at\n        )\n        SELECT u.id AS \"id!: JobId\", u.attempt_index AS \"attempt!\", u.queue_id AS \"queue_id?\",\n               s.execution_state_json AS \"data_json?\", u.original_execute_at AS \"execute_at!\",\n               $1 AS \"job_type!: JobType\"\n        FROM updated u\n        LEFT JOIN job_execution_states s ON s.id = u.id\n        ",
   "describe": {
     "columns": [
       {
@@ -72,7 +72,8 @@
         "Int8",
         "Uuid",
         "Timestamptz",
-        "Bool"
+        "Bool",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -84,5 +85,5 @@
       null
     ]
   },
-  "hash": "f645a8e2564010bcd37166307e854d0bbf39899c09937951d7f405f72b9d2272"
+  "hash": "90e10005b406acc56654c5e842a91cfc95a0831c78a145d454d6887cfae30d66"
 }
