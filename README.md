@@ -26,24 +26,32 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cala-ledger = "0.20"
+cala-ledger = "0.34"
 ```
 
 Then initialize the ledger with a PostgreSQL connection pool:
 
 ```rust
-use cala_ledger::{CalaLedger, CalaLedgerConfig};
+use cala_ledger::{job, CalaLedger, CalaLedgerConfig};
 
 let pool = sqlx::postgres::PgPoolOptions::new()
     .max_connections(20)
     .connect("postgres://user:password@localhost:5432/pg")
     .await?;
 
+let mut jobs = job::Jobs::init(
+    job::JobSvcConfig::builder()
+        .pool(pool.clone())
+        .build()?,
+)
+.await?;
+
 let cala_config = CalaLedgerConfig::builder()
     .pool(pool)
     .exec_migrations(true)
     .build()?;
-let cala = CalaLedger::init(cala_config).await?;
+let cala = CalaLedger::init(cala_config, &mut jobs).await?;
+jobs.start_poll().await?;
 ```
 
 For a complete working example — including creating accounts, transaction templates, and posting transactions — see [examples/rust](./examples/rust) and run it with:
