@@ -1,3 +1,13 @@
+# [cala release v0.35.0](https://github.com/GaloyMoney/cala/releases/tag/0.35.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Adopt the SQLx 0.8.6 retry-clock stack (#936)
+- Align toolchain with lana-bank at 1.100.0 (#935)
+- Bump cached (#933)
+
 # [cala release v0.34.4](https://github.com/GaloyMoney/cala/releases/tag/0.34.4)
 
 
