@@ -6,35 +6,17 @@
       {
         "ordinal": 0,
         "name": "id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "id"
-          }
-        }
+        "type_info": "Uuid"
       },
       {
         "ordinal": 1,
         "name": "idempotency_key",
-        "type_info": "Varchar",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "idempotency_key"
-          }
-        }
+        "type_info": "Varchar"
       },
       {
         "ordinal": 2,
         "name": "payload",
-        "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "payload"
-          }
-        }
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 3,
@@ -51,46 +33,22 @@
               ]
             }
           }
-        },
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "status"
-          }
         }
       },
       {
         "ordinal": 4,
         "name": "error",
-        "type_info": "Varchar",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "error"
-          }
-        }
+        "type_info": "Varchar"
       },
       {
         "ordinal": 5,
         "name": "recorded_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "recorded_at"
-          }
-        }
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 6,
         "name": "processed_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "cala_inbox_events",
-            "name": "processed_at"
-          }
-        }
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {

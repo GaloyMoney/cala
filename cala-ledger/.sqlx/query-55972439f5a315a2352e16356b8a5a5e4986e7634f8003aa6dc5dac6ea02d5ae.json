@@ -6,13 +6,7 @@
       {
         "ordinal": 0,
         "name": "joined_at_sequence",
-        "type_info": "Int8",
-        "origin": {
-          "Table": {
-            "table": "cala_joinable_catch_ups",
-            "name": "joined_at_sequence"
-          }
-        }
+        "type_info": "Int8"
       }
     ],
     "parameters": {

@@ -6,42 +6,27 @@
       {
         "ordinal": 0,
         "name": "now!",
-        "type_info": "Timestamptz",
-        "origin": "Expression"
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 1,
         "name": "locked!",
-        "type_info": "Int8",
-        "origin": "Expression"
+        "type_info": "Int8"
       },
       {
         "ordinal": 2,
         "name": "code?",
-        "type_info": "Varchar",
-        "origin": {
-          "Table": {
-            "table": "cala_tx_templates",
-            "name": "code"
-          }
-        }
+        "type_info": "Varchar"
       },
       {
         "ordinal": 3,
         "name": "template_id?: TxTemplateId",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "cala_tx_templates",
-            "name": "id"
-          }
-        }
+        "type_info": "Uuid"
       },
       {
         "ordinal": 4,
         "name": "version?",
-        "type_info": "Int4",
-        "origin": "Expression"
+        "type_info": "Int4"
       }
     ],
     "parameters": {
