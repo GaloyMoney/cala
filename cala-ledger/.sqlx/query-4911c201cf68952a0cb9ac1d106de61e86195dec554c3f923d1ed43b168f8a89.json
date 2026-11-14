@@ -17,52 +17,27 @@
               ]
             }
           }
-        },
-        "origin": "Expression"
+        }
       },
       {
         "ordinal": 1,
         "name": "execute_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "job_executions",
-            "name": "execute_at"
-          }
-        }
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 2,
         "name": "attempt_index",
-        "type_info": "Int4",
-        "origin": {
-          "Table": {
-            "table": "job_executions",
-            "name": "attempt_index"
-          }
-        }
+        "type_info": "Int4"
       },
       {
         "ordinal": 3,
         "name": "alive_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "job_executions",
-            "name": "alive_at"
-          }
-        }
+        "type_info": "Timestamptz"
       },
       {
         "ordinal": 4,
         "name": "execution_state_json?",
-        "type_info": "Jsonb",
-        "origin": {
-          "Table": {
-            "table": "job_execution_states",
-            "name": "execution_state_json"
-          }
-        }
+        "type_info": "Jsonb"
       }
     ],
     "parameters": {
@@ -75,7 +50,7 @@
       true,
       false,
       false,
-      true
+      false
     ]
   },
   "hash": "4911c201cf68952a0cb9ac1d106de61e86195dec554c3f923d1ed43b168f8a89"

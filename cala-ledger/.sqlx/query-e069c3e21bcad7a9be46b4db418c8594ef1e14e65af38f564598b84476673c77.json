@@ -6,8 +6,7 @@
       {
         "ordinal": 0,
         "name": "retired!",
-        "type_info": "Bool",
-        "origin": "Expression"
+        "type_info": "Bool"
       }
     ],
     "parameters": {

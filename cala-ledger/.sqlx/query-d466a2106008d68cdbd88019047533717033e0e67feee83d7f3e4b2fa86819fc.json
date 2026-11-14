@@ -6,8 +6,7 @@
       {
         "ordinal": 0,
         "name": "account_id!",
-        "type_info": "Uuid",
-        "origin": "Expression"
+        "type_info": "Uuid"
       }
     ],
     "parameters": {

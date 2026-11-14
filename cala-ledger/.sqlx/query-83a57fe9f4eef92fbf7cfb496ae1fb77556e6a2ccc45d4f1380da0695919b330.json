@@ -6,13 +6,7 @@
       {
         "ordinal": 0,
         "name": "recorded_at",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "job_events",
-            "name": "recorded_at"
-          }
-        }
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {

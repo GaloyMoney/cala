@@ -6,8 +6,7 @@
       {
         "ordinal": 0,
         "name": "pg_advisory_xact_lock",
-        "type_info": "Void",
-        "origin": "Expression"
+        "type_info": "Void"
       }
     ],
     "parameters": {

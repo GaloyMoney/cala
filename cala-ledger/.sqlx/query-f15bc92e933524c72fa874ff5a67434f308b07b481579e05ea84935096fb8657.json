@@ -6,26 +6,22 @@
       {
         "ordinal": 0,
         "name": "member_id",
-        "type_info": "Uuid",
-        "origin": "Expression"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 1,
         "name": "member_account_id",
-        "type_info": "Uuid",
-        "origin": "Expression"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 2,
         "name": "member_account_set_id",
-        "type_info": "Uuid",
-        "origin": "Expression"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 3,
         "name": "external_id",
-        "type_info": "Varchar",
-        "origin": "Expression"
+        "type_info": "Varchar"
       }
     ],
     "parameters": {
