@@ -26,7 +26,7 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-cala-ledger = "0.34"
+cala-ledger = "0.35"
 ```
 
 Then initialize the ledger with a PostgreSQL connection pool:
