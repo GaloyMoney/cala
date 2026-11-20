@@ -2,14 +2,14 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'fix: run Rust audits without the legacy Checks API reporter'
-      sha: 5277f7cecf66f07065e4c3d41518b53909d3d5cb
+      commitTitle: 'Merge pull request #33 from GaloyMoney/feat--bump-shared-actions...'
+      sha: e70b475dc5f1bda2f33f22f9de59b35c534c419b
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'fix: run Rust audits without the legacy Checks API reporter'
-      sha: 5277f7cecf66f07065e4c3d41518b53909d3d5cb
+      commitTitle: 'Merge pull request #33 from GaloyMoney/feat--bump-shared-actions...'
+      sha: e70b475dc5f1bda2f33f22f9de59b35c534c419b
     path: .
   path: vendor
 kind: LockConfig
