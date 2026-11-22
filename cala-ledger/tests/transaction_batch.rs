@@ -118,7 +118,12 @@ async fn batch_of_postings_on_overlapping_accounts_chains_balances() -> anyhow::
 
     // Every posting's entries are readable and attached to their transaction.
     for tx in posted.iter() {
-        let entries = cala.entries().list_for_transaction_id(tx.id()).await?;
+        let mut entries = helpers::expect_single_page(
+            cala.entries()
+                .list_for_transaction_id(tx.id(), Default::default(), Default::default())
+                .await?,
+        );
+        entries.sort_by_key(|entry| entry.values().sequence);
         assert_eq!(entries.len(), 6);
         assert_eq!(entries[0].values().sequence, 1);
     }
@@ -789,7 +794,11 @@ async fn outbox_events_are_grouped_per_posting_not_by_type() -> anyhow::Result<(
     for tx in posted.iter() {
         let tx_id = tx.id().to_string();
         expected.push(("transaction_created".to_string(), tx_id.clone()));
-        let entries = cala.entries().list_for_transaction_id(tx.id()).await?;
+        let entries = helpers::expect_single_page(
+            cala.entries()
+                .list_for_transaction_id(tx.id(), Default::default(), Default::default())
+                .await?,
+        );
         for _ in 0..entries.len() {
             expected.push(("entry_created".to_string(), tx_id.clone()));
         }
