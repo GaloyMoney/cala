@@ -6,22 +6,46 @@
       {
         "ordinal": 0,
         "name": "id!",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "sequence!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "sequence"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "recorded_at!",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "recorded_at"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "commit_xid!",
-        "type_info": "Int8"
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "commit_xid"
+          }
+        }
       }
     ],
     "parameters": {

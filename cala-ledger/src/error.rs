@@ -94,7 +94,10 @@ mod sql_contract_tests {
             .await
             .unwrap();
         let statement = format!("DO $$ BEGIN RAISE EXCEPTION 'contract fixture' USING ERRCODE = '{code}', CONSTRAINT = '{name}'; END $$");
-        let error = sqlx::query(&statement).execute(&pool).await.unwrap_err();
+        let error = sqlx::query(sqlx::AssertSqlSafe(statement))
+            .execute(&pool)
+            .await
+            .unwrap_err();
         pool.close().await;
         error
     }

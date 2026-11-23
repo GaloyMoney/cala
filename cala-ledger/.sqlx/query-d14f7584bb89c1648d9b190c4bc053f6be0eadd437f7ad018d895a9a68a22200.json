@@ -6,32 +6,53 @@
       {
         "ordinal": 0,
         "name": "entity_id!: Repo__Id",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
         "name": "sequence",
-        "type_info": "Int4"
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "cala_velocity_limit_events",
+            "name": "sequence"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "event",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "cala_velocity_limit_events",
+            "name": "event"
+          }
+        }
       },
       {
         "ordinal": 3,
         "name": "context: es_entity::ContextData",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       },
       {
         "ordinal": 4,
         "name": "recorded_at",
-        "type_info": "Timestamptz"
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "cala_velocity_limit_events",
+            "name": "recorded_at"
+          }
+        }
       },
       {
         "ordinal": 5,
         "name": "forgettable_payload?",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       }
     ],
     "parameters": {

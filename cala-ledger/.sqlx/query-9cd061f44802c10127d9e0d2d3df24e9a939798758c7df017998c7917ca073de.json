@@ -6,7 +6,13 @@
       {
         "ordinal": 0,
         "name": "execution_state_json",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "job_execution_states",
+            "name": "execution_state_json"
+          }
+        }
       }
     ],
     "parameters": {
