@@ -6,37 +6,49 @@
       {
         "ordinal": 0,
         "name": "partition_window!: serde_json::Value",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": "Expression"
       },
       {
         "ordinal": 1,
         "name": "currency!",
-        "type_info": "Text"
+        "type_info": "Text",
+        "origin": "Expression"
       },
       {
         "ordinal": 2,
         "name": "journal_id!: JournalId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 3,
         "name": "account_id!: AccountId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 4,
         "name": "velocity_control_id!: VelocityControlId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 5,
         "name": "velocity_limit_id!: VelocityLimitId",
-        "type_info": "Uuid"
+        "type_info": "Uuid",
+        "origin": "Expression"
       },
       {
         "ordinal": 6,
         "name": "values?: serde_json::Value",
-        "type_info": "Jsonb"
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "cala_velocity_current_balances",
+            "name": "latest_values"
+          }
+        }
       }
     ],
     "parameters": {
@@ -50,13 +62,13 @@
       ]
     },
     "nullable": [
-      null,
-      null,
-      null,
-      null,
-      null,
-      null,
-      true
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
     ]
   },
   "hash": "8458d5b9744a59cb988909c02bfa005fd67cbfbee96495ef671ade40da19e580"

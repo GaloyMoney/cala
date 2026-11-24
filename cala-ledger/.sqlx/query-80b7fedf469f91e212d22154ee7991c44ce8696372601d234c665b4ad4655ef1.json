@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT sequence AS \"sequence!: i64\", commit_xid,\n                   (payload IS NOT NULL) AS \"has_payload!\"\n            FROM cala_persistent_outbox_events\n            WHERE sequence > $1 AND sequence <= $1 + $2\n            ORDER BY sequence",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sequence!: i64",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "sequence"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "commit_xid",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "cala_persistent_outbox_events",
+            "name": "commit_xid"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "has_payload!",
+        "type_info": "Bool",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "80b7fedf469f91e212d22154ee7991c44ce8696372601d234c665b4ad4655ef1"
+}

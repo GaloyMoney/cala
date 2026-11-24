@@ -563,11 +563,12 @@ async fn velocity_limit_and_control_ensure_create_then_find_the_stored_one() -> 
         ("cala_velocity_limit_events", limit_id.to_string()),
         ("cala_velocity_control_events", control_id.to_string()),
     ] {
-        let events: i64 =
-            sqlx::query_scalar(&format!("SELECT COUNT(*) FROM {table} WHERE id = $1::uuid"))
-                .bind(id)
-                .fetch_one(&pool)
-                .await?;
+        let events: i64 = sqlx::query_scalar(sqlx::AssertSqlSafe(format!(
+            "SELECT COUNT(*) FROM {table} WHERE id = $1::uuid"
+        )))
+        .bind(id)
+        .fetch_one(&pool)
+        .await?;
         assert_eq!(events, 1, "Found must not persist the new events");
     }
     Ok(())

@@ -217,10 +217,10 @@ async fn measure_post(
     // below run, so they are not counted against the post.
     let stats = std::mem::take(&mut *fetched.lock().unwrap());
     let rows_after = journal_rows(pool, journal_id).await?;
-    let written: i64 = sqlx::query(&format!(
+    let written: i64 = sqlx::query(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM {EFFECTIVE_TABLE} \
          WHERE journal_id = $1 AND xmin::text::bigint > $2"
-    ))
+    )))
     .bind(uuid::Uuid::from(journal_id))
     .bind(baseline_xid)
     .fetch_one(pool)
@@ -241,9 +241,9 @@ async fn measure_post(
 }
 
 async fn journal_rows(pool: &sqlx::PgPool, journal_id: JournalId) -> anyhow::Result<i64> {
-    Ok(sqlx::query(&format!(
+    Ok(sqlx::query(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM {EFFECTIVE_TABLE} WHERE journal_id = $1"
-    ))
+    )))
     .bind(uuid::Uuid::from(journal_id))
     .fetch_one(pool)
     .await?
@@ -297,13 +297,13 @@ async fn main() -> anyhow::Result<()> {
         )
         .await?;
     }
-    sqlx::query(&format!("ANALYZE {EFFECTIVE_TABLE}"))
+    sqlx::query(sqlx::AssertSqlSafe(format!("ANALYZE {EFFECTIVE_TABLE}")))
         .execute(cala.pool())
         .await?;
 
-    let table_rows: i64 = sqlx::query(&format!(
+    let table_rows: i64 = sqlx::query(sqlx::AssertSqlSafe(format!(
         "SELECT count(*) FROM {EFFECTIVE_TABLE} WHERE journal_id = $1"
-    ))
+    )))
     .bind(uuid::Uuid::from(journal.id()))
     .fetch_one(cala.pool())
     .await?

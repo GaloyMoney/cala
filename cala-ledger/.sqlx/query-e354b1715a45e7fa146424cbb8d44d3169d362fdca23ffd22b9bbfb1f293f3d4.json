@@ -6,17 +6,30 @@
       {
         "ordinal": 0,
         "name": "queue_id!",
-        "type_info": "Varchar"
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "job_executions",
+            "name": "queue_id"
+          }
+        }
       },
       {
         "ordinal": 1,
         "name": "job_type!",
-        "type_info": "Varchar"
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "job_executions",
+            "name": "job_type"
+          }
+        }
       },
       {
         "ordinal": 2,
         "name": "claimable!",
-        "type_info": "Bool"
+        "type_info": "Bool",
+        "origin": "Expression"
       }
     ],
     "parameters": {
