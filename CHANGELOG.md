@@ -1,3 +1,12 @@
+# [cala release v0.36.0](https://github.com/GaloyMoney/cala/releases/tag/0.36.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Move to sqlx 0.9.1, es-entity 0.23.0, job 0.20.2 and obix 0.20.0 (#938)
+- Bump uuid (#937)
+
 # [cala release v0.35.0](https://github.com/GaloyMoney/cala/releases/tag/0.35.0)
 
 
