@@ -73,6 +73,7 @@
         alejandra
         sqlx-cli
         cargo-nextest
+        cargo-fuzz
         cargo-audit
         cargo-watch
         cargo-deny

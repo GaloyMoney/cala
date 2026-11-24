@@ -21,9 +21,9 @@ core types that come from API input and the DB.
 
 ## Running
 
-Requires `cargo-fuzz` (`cargo install cargo-fuzz`). On macOS / stable Rust
-use `-s none` (the default AddressSanitizer build requires a nightly
-toolchain):
+The nix devshell provides `cargo-fuzz`; only outside it do you need
+`cargo install cargo-fuzz`. On macOS / stable Rust use `-s none` (the default
+AddressSanitizer build requires a nightly toolchain):
 
 ```sh
 # fuzz (Ctrl-C to stop). Easiest via the shared runner (handles all targets
