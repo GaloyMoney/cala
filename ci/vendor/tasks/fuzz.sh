@@ -38,9 +38,9 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT"
 
-if ! command -v cargo-fuzz >/dev/null 2>&1; then
-  echo "cargo-fuzz not found on PATH; installing..."
-  cargo install cargo-fuzz --locked
+if ! cargo fuzz --version >/dev/null 2>&1; then
+  echo "cargo-fuzz missing or not runnable; installing..."
+  cargo install cargo-fuzz --locked --force
 fi
 
 FUZZ_SECONDS="${FUZZ_SECONDS:-60}"
@@ -59,7 +59,15 @@ if [ -n "${CORPUS_TARBALL_IN:-}" ] && ls -d $CORPUS_TARBALL_IN >/dev/null 2>&1; 
   tar -xzf $CORPUS_TARBALL_IN -C fuzz/
 fi
 
-mapfile -t targets < <(cd fuzz && cargo fuzz list)
+if ! target_list="$(cd fuzz && cargo fuzz list)"; then
+  echo "ERROR: 'cargo fuzz list' failed; cannot discover fuzz targets" >&2
+  exit 1
+fi
+if [ -z "$target_list" ]; then
+  echo "ERROR: 'cargo fuzz list' found no targets under fuzz/" >&2
+  exit 1
+fi
+mapfile -t targets <<< "$target_list"
 echo "discovered ${#targets[@]} target(s): ${targets[*]}"
 
 #! Merge any committed seed corpus (fuzz/seeds/<target>/) into fuzz/corpus/.
