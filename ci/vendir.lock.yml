@@ -2,14 +2,16 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'fix: run Rust audits without the legacy Checks API reporter'
-      sha: 5277f7cecf66f07065e4c3d41518b53909d3d5cb
+      commitTitle: 'fix(fuzz): stop trusting a cached CARGO_HOME/bin for cargo-fuzz
+        (#35)...'
+      sha: 61032d4382639c2872d427fa2a395abdf3f132a0
     path: .
   path: ../.github/workflows/vendor
 - contents:
   - git:
-      commitTitle: 'fix: run Rust audits without the legacy Checks API reporter'
-      sha: 5277f7cecf66f07065e4c3d41518b53909d3d5cb
+      commitTitle: 'fix(fuzz): stop trusting a cached CARGO_HOME/bin for cargo-fuzz
+        (#35)...'
+      sha: 61032d4382639c2872d427fa2a395abdf3f132a0
     path: .
   path: vendor
 kind: LockConfig
