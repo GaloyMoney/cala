@@ -1,3 +1,11 @@
+# [cala release v0.37.0](https://github.com/GaloyMoney/cala/releases/tag/0.37.0)
+
+
+
+### Miscellaneous Tasks
+
+- [**breaking**] Bump es-entity, job and obix to the span-parent stack (#940)
+
 # [cala release v0.36.0](https://github.com/GaloyMoney/cala/releases/tag/0.36.0)
 
 
