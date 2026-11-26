@@ -1,0 +1,2 @@
+[migrate]
+table-name = "_sqlx_migrations_cala"

@@ -80,11 +80,9 @@ impl CalaLedger {
             }
         };
         if config.exec_migrations {
-            sqlx::migrate!()
-                .run(&pool)
+            crate::migrate::run(&pool)
                 .instrument(tracing::info_span!("cala_ledger.migrations"))
-                .await
-                .classify::<crate::error::Migrate>()?;
+                .await?;
         }
 
         let clock = config.clock;

@@ -13,6 +13,7 @@ include = [
   "build.rs",
   "migrations/**",
   "schemas/**",
+  "sqlx.toml",
   "src/**",
   "tests/**",
   "Cargo.toml",
