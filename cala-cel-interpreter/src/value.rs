@@ -193,6 +193,12 @@ impl CelValue {
                     type_name: o.runtime_type_name().to_owned(),
                 })
             }
+            Value::Struct(s) => {
+                return Err(CelConversionRejection::StructValue {
+                    expression: expression.to_owned(),
+                    type_name: s.name().to_owned(),
+                })
+            }
             Value::Null => CelValue::Null,
             Value::Function(_, _) => {
                 return Err(CelConversionRejection::FunctionValue {
@@ -573,6 +579,7 @@ impl TryFrom<CelResult<'_>> for serde_json::Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use cel::common::types::CelStruct;
     use es_entity::errlanes::Rejection;
 
     #[test]
@@ -583,6 +590,17 @@ mod tests {
         assert_eq!(error.to_string(), "Cannot convert function value in '[f]'");
         assert!(
             matches!(error, CelConversionRejection::FunctionValue { expression } if expression == "[f]")
+        );
+    }
+
+    #[test]
+    fn struct_value_is_rejected_with_its_type_name() {
+        let value = Value::Struct(Arc::new(CelStruct::new("cala.Foo".to_owned())));
+        let error = CelValue::from_cel_value(value, "cala.Foo{}").unwrap_err();
+        assert_eq!(<&str>::from(error.code()), "CEL_STRUCT_VALUE");
+        assert_eq!(
+            error.to_string(),
+            "Cannot convert struct cala.Foo in 'cala.Foo{}'"
         );
     }
 }

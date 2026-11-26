@@ -6,7 +6,7 @@ use es_entity::clock::{Clock, ClockHandle};
 use crate::{builtins, value::CelValue};
 
 pub struct CelContext {
-    inner: Context<'static>,
+    inner: Context<'static, 'static>,
     clock: ClockHandle,
     debug_vars: Vec<(String, CelValue)>,
 }
@@ -21,7 +21,7 @@ impl CelContext {
         self.debug_vars.push((name_string, value));
     }
 
-    pub(crate) fn inner(&self) -> &Context<'static> {
+    pub(crate) fn inner(&self) -> &Context<'static, 'static> {
         &self.inner
     }
 
@@ -45,14 +45,30 @@ impl CelContext {
         let mut inner = Context::default();
 
         let date_clock = clock.clone();
-        inner.add_function("date", move |args| builtins::date(date_clock.clone(), args));
-        inner.add_function("uuid", builtins::uuid);
-        inner.add_function("decimal", builtins::decimal);
-        inner.add_function("decimal.Add", builtins::decimal_add);
-        inner.add_function("decimal.Sub", builtins::decimal_sub);
-        inner.add_function("decimal.Mul", builtins::decimal_mul);
-        inner.add_function("decimal.Cmp", builtins::decimal_cmp);
-        inner.add_function("format", builtins::timestamp_format);
+        inner
+            .add_function("date", move |args| builtins::date(date_clock.clone(), args))
+            .expect("failed to register CEL function date");
+        inner
+            .add_function("uuid", builtins::uuid)
+            .expect("failed to register CEL function uuid");
+        inner
+            .add_function("decimal", builtins::decimal)
+            .expect("failed to register CEL function decimal");
+        inner
+            .add_function("decimal.Add", builtins::decimal_add)
+            .expect("failed to register CEL function decimal.Add");
+        inner
+            .add_function("decimal.Sub", builtins::decimal_sub)
+            .expect("failed to register CEL function decimal.Sub");
+        inner
+            .add_function("decimal.Mul", builtins::decimal_mul)
+            .expect("failed to register CEL function decimal.Mul");
+        inner
+            .add_function("decimal.Cmp", builtins::decimal_cmp)
+            .expect("failed to register CEL function decimal.Cmp");
+        inner
+            .add_function("format", builtins::timestamp_format)
+            .expect("failed to register CEL function format");
 
         Self {
             inner,

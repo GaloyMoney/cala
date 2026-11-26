@@ -403,7 +403,8 @@ mod contract_tests {
             | CelConversionRejection::Unexpected { .. }
             | CelConversionRejection::UnsupportedOpaque { .. }
             | CelConversionRejection::OpaqueDowncast { .. }
-            | CelConversionRejection::FunctionValue { .. } => {}
+            | CelConversionRejection::FunctionValue { .. }
+            | CelConversionRejection::StructValue { .. } => {}
         }
     }
 
