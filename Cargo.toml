@@ -14,7 +14,7 @@ cel-interpreter = { path = "cala-cel-interpreter", package = "cala-cel-interpret
 cala-types = { path = "cala-ledger-core-types", package = "cala-ledger-core-types", version = "0.37.1-dev" }
 cala-ledger = { path = "cala-ledger", version = "0.37.1-dev" }
 
-cel = "0.14.5"
+cel = "0.16.0"
 es-entity = { version = "0.24.0", features = ["errlanes-tracing"] }
 job = { version = "0.21.0", features = ["es-entity"] }
 obix = { version = "0.21.0", default-features = false }
