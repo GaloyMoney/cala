@@ -4,7 +4,7 @@ use es_entity::errlanes;
 
 /// Hard upper bound on the byte length of an accepted CEL expression.
 ///
-/// The `cel` crate (0.14.x) renders parse errors with a caret line whose
+/// The `cel` crate (0.16.x) renders parse errors with a caret line whose
 /// width is the error's **column** (`write!(f, "\n| {:.>width$}", "^", ...)`
 /// in `parser.rs`), and Rust format widths are `u16`. A parse error past
 /// column 65,535 therefore panics with "Formatting argument out of range"
@@ -34,7 +34,7 @@ impl CelConversionRejection {
         match source {
             source @ (cel::ExecutionError::UndeclaredReference(_)
             | cel::ExecutionError::NoSuchKey(_)) => Self::UnknownIdent { expression, source },
-            source @ cel::ExecutionError::NoSuchOverload => {
+            source @ cel::ExecutionError::NoSuchOverload(_) => {
                 Self::NoMatchingOverload { expression, source }
             }
             source @ cel::ExecutionError::InvalidArgumentCount { .. } => {
@@ -122,6 +122,12 @@ pub enum CelConversionRejection {
     #[rejection(code = "CEL_FUNCTION_VALUE")]
     #[error("Cannot convert function value in '{}'", expression)]
     FunctionValue { expression: String },
+    #[rejection(code = "CEL_STRUCT_VALUE")]
+    #[error("Cannot convert struct {type_name} in '{}'", expression)]
+    StructValue {
+        expression: String,
+        type_name: String,
+    },
     #[error("{0}")]
     #[rejection(delegate, from)]
     ExternalTypeCoercion(ExternalTypeCoercion),
