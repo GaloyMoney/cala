@@ -61,10 +61,7 @@ async fn init_isolated_pool(max_connections: u32) -> anyhow::Result<sqlx::PgPool
         .acquire_timeout(Duration::from_secs(60))
         .connect(&format!("{base}/{db_name}"))
         .await?;
-    // Unlike `helpers::init_pool` this must not append the job crate's
-    // migrations: they share a version id with cala's own `job_setup`
-    // migration, which double-applies on a freshly created database.
-    sqlx::migrate!().run(&pool).await?;
+    cala_ledger::migrate::run(&pool).await?;
     Ok(pool)
 }
 

@@ -16,14 +16,14 @@ cala-ledger = { path = "cala-ledger", version = "0.37.1-dev" }
 
 cel = "0.16.0"
 es-entity = { version = "0.24.0", features = ["errlanes-tracing"] }
-job = { version = "0.21.0", features = ["es-entity"] }
-obix = { version = "0.21.0", default-features = false }
+job = { git = "https://github.com/GaloyMoney/job", branch = "sqlx-09", features = ["es-entity"] }
+obix = { git = "https://github.com/GaloyMoney/obix", branch = "sqlx-09", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }
 chrono = { version = "0.4.44", features = ["clock", "serde"], default-features = false }
 bon = "3"
-sqlx = { version = "0.9.1", default-features = false, features = [ "runtime-tokio", "tls-rustls-ring", "migrate", "postgres", "rust_decimal", "uuid", "chrono", "json" ] }
+sqlx = { version = "0.9.1", default-features = false, features = [ "runtime-tokio", "tls-rustls-ring", "migrate", "postgres", "rust_decimal", "uuid", "chrono", "json", "sqlx-toml" ] }
 uuid = { version = "1.23", features = ["serde", "v7"] }
 regex = "1.11.2"
 tracing = "0.1.41"

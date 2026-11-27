@@ -24,3 +24,5 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 rust_decimal = { workspace = true }
 rusty-money = { workspace = true }
+
+[lints]

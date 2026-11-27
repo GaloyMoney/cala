@@ -47,7 +47,7 @@ build:
 	SQLX_OFFLINE=true cargo build --locked
 
 sqlx-prepare:
-	cd cala-ledger && cargo sqlx prepare -- --all-features
+	dev/bin/sqlx-prepare.sh
 	SQLX_OFFLINE=true cargo doc --no-deps
 
 event-schemas:

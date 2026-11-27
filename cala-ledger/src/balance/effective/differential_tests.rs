@@ -345,7 +345,7 @@ async fn pool() -> anyhow::Result<sqlx::PgPool> {
         .max_connections(4)
         .connect(&pg_con)
         .await?;
-    sqlx::migrate!().run(&pool).await?;
+    crate::migrate::run(&pool).await?;
     Ok(pool)
 }
 

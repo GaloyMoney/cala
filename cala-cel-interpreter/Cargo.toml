@@ -32,3 +32,5 @@ criterion = { version = "0.8", features = ["html_reports"] }
 [[bench]]
 name = "cel_eval"
 harness = false
+
+[lints]

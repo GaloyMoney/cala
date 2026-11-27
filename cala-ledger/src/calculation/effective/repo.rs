@@ -825,7 +825,7 @@ mod tests {
             .max_connections(4)
             .connect(&std::env::var("PG_CON")?)
             .await?;
-        sqlx::migrate!().run(&pool).await?;
+        crate::migrate::run(&pool).await?;
         let mut jobs =
             job::Jobs::init(job::JobSvcConfig::builder().pool(pool.clone()).build()?).await?;
         let cala = CalaLedger::init(

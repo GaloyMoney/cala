@@ -13,6 +13,7 @@ include = [
   "build.rs",
   "migrations/**",
   "schemas/**",
+  "sqlx.toml",
   "src/**",
   "tests/**",
   "Cargo.toml",
@@ -70,3 +71,5 @@ tracing-subscriber = { version = "0.3", default-features = false, features = [
 ] }
 
 [build-dependencies]
+
+[lints]

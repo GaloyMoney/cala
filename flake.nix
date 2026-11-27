@@ -83,6 +83,8 @@
         process-compose
         bc
         jq
+        # used by dev/bin/sqlx-prepare.sh
+        python3
       ];
 
       pgPort = 5432;
@@ -307,6 +309,7 @@
       perf-runner = pkgs.writeShellScriptBin "perf-runner" ''
         set -e
 
+        export SQLX_OFFLINE=true
         export PATH="${pkgs.lib.makeBinPath [
           pkgs.sqlx-cli
           pkgs.coreutils
@@ -415,6 +418,7 @@
       nextest-runner = pkgs.writeShellScriptBin "nextest-runner" ''
         set -e
 
+        export SQLX_OFFLINE=true
         export PATH="${pkgs.lib.makeBinPath [
           pkgs.sqlx-cli
           pkgs.cargo-nextest

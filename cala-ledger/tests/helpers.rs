@@ -20,8 +20,8 @@ pub async fn init_pool() -> anyhow::Result<sqlx::PgPool> {
 /// Create a fresh, isolated database. The streaming EC-balance rollup job
 /// is a **global** outbox consumer, so any test that runs it must not share
 /// a database with other tests — otherwise it would roll their transactions
-/// into its EC sets. cala's own migrations already provision the job +
-/// obix tables, so a plain `migrate!().run()` suffices.
+/// into its EC sets. `cala_ledger::migrate::run` provisions cala's schema
+/// and the job schema the rollup runs on.
 pub async fn init_isolated_pool() -> anyhow::Result<sqlx::PgPool> {
     use sqlx::Connection as _;
 
@@ -39,7 +39,7 @@ pub async fn init_isolated_pool() -> anyhow::Result<sqlx::PgPool> {
         .max_connections(10)
         .connect(&with_db_name(&base, &db_name))
         .await?;
-    sqlx::migrate!().run(&pool).await?;
+    cala_ledger::migrate::run(&pool).await?;
     Ok(pool)
 }
 
@@ -123,7 +123,7 @@ pub async fn init_pool_with(
 ) -> anyhow::Result<sqlx::PgPool> {
     let pg_con = std::env::var("PG_CON").unwrap();
     let pool = options.connect(&pg_con).await?;
-    sqlx::migrate!().run(&pool).await?;
+    cala_ledger::migrate::run(&pool).await?;
     Ok(pool)
 }
 

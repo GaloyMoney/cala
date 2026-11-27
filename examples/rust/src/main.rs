@@ -1,7 +1,7 @@
 use rand::RngExt;
 use rust_decimal::Decimal;
 
-use cala_ledger::{account::*, journal::*, migrate::IncludeMigrations, tx_template::*, *};
+use cala_ledger::{account::*, journal::*, tx_template::*, *};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -14,10 +14,8 @@ async fn main() -> anyhow::Result<()> {
         .max_connections(20)
         .connect(&pg_con)
         .await?;
-    sqlx::migrate!()
-        .include_cala_migrations()
-        .run(&pool)
-        .await?;
+    cala_ledger::migrate::run(&pool).await?;
+    sqlx::migrate!().run(&pool).await?;
     // The example never polls jobs; the EC rollup stays dormant.
     let mut jobs =
         job::Jobs::init(job::JobSvcConfig::builder().pool(pool.clone()).build()?).await?;
