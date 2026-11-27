@@ -1634,7 +1634,7 @@ dependencies = [
 [[package]]
 name = "obix"
 version = "0.21.1-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#ec33e5e361f83ea43d8eb69e02cdb700810938fe"
+source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#68d45278959d375e6c644f03427c0d612e3399f5"
 dependencies = [
  "async-trait",
  "bon",
@@ -1655,7 +1655,7 @@ dependencies = [
 [[package]]
 name = "obix-macros"
 version = "0.21.1-dev"
-source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#ec33e5e361f83ea43d8eb69e02cdb700810938fe"
+source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#68d45278959d375e6c644f03427c0d612e3399f5"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",

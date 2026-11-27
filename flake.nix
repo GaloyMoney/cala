@@ -83,6 +83,8 @@
         process-compose
         bc
         jq
+        # used by dev/bin/sqlx-prepare.sh
+        python3
       ];
 
       pgPort = 5432;

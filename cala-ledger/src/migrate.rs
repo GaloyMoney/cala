@@ -2,11 +2,16 @@ use es_entity::errlanes::ResultExt;
 use sqlx::PgPool;
 
 use crate::error::{CalaFault, Migrate};
+use crate::outbox::CalaMailboxTables;
 
 pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
 pub async fn run(pool: &PgPool) -> Result<(), CalaFault> {
     MIGRATOR.run(pool).await.classify::<Migrate>()?;
+    obix::migrate::migrator::<CalaMailboxTables>()
+        .run(pool)
+        .await
+        .classify::<Migrate>()?;
     job::MIGRATOR.run(pool).await.classify::<Migrate>()?;
     Ok(())
 }
