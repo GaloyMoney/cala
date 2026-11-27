@@ -16,8 +16,8 @@ cala-ledger = { path = "cala-ledger", version = "0.37.1-dev" }
 
 cel = "0.14.5"
 es-entity = { version = "0.24.0", features = ["errlanes-tracing"] }
-job = { version = "0.21.0", features = ["es-entity"] }
-obix = { version = "0.21.0", default-features = false }
+job = { git = "https://github.com/GaloyMoney/job", branch = "sqlx-09", features = ["es-entity"] }
+obix = { git = "https://github.com/GaloyMoney/obix", branch = "sqlx-09", default-features = false }
 
 anyhow = "1.0.99"
 cached = { version = "4.0", features = ["async"] }

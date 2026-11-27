@@ -307,6 +307,7 @@
       perf-runner = pkgs.writeShellScriptBin "perf-runner" ''
         set -e
 
+        export SQLX_OFFLINE=true
         export PATH="${pkgs.lib.makeBinPath [
           pkgs.sqlx-cli
           pkgs.coreutils
@@ -415,6 +416,7 @@
       nextest-runner = pkgs.writeShellScriptBin "nextest-runner" ''
         set -e
 
+        export SQLX_OFFLINE=true
         export PATH="${pkgs.lib.makeBinPath [
           pkgs.sqlx-cli
           pkgs.cargo-nextest

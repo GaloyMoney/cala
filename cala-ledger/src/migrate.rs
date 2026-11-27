@@ -7,6 +7,7 @@ pub static MIGRATOR: sqlx::migrate::Migrator = sqlx::migrate!();
 
 pub async fn run(pool: &PgPool) -> Result<(), CalaFault> {
     MIGRATOR.run(pool).await.classify::<Migrate>()?;
+    job::MIGRATOR.run(pool).await.classify::<Migrate>()?;
     Ok(())
 }
 

@@ -1472,9 +1472,8 @@ dependencies = [
 
 [[package]]
 name = "job"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17f4ba6ccf1b61d745df7aca451e8fd33881f5d69568a30857684470aebcc6b6"
+version = "0.21.1-dev"
+source = "git+https://github.com/GaloyMoney/job?branch=sqlx-09#b4824976f705c335f2971b32f6d53680424fe7fd"
 dependencies = [
  "async-trait",
  "bon",
@@ -1634,9 +1633,8 @@ dependencies = [
 
 [[package]]
 name = "obix"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71928d0c404008356e322c0559fc6a8dbc6a61f37728f3f1d4eb7ae31da98256"
+version = "0.21.1-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#ec33e5e361f83ea43d8eb69e02cdb700810938fe"
 dependencies = [
  "async-trait",
  "bon",
@@ -1656,9 +1654,8 @@ dependencies = [
 
 [[package]]
 name = "obix-macros"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "340828596d2ddd8cb197a65b8674ce2768c907c654627557fd4978ee815df829"
+version = "0.21.1-dev"
+source = "git+https://github.com/GaloyMoney/obix?branch=sqlx-09#ec33e5e361f83ea43d8eb69e02cdb700810938fe"
 dependencies = [
  "darling 0.24.1",
  "proc-macro2",
