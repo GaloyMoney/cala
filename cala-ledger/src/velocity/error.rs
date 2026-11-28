@@ -7,7 +7,9 @@ use rust_decimal::Decimal;
 
 #[derive(errlanes::Rejection, Debug)]
 #[rejection(code = "CALA_VELOCITY_LIMIT_EXCEEDED")]
-#[error("Velocity limit exceeded")]
+#[error(
+    "Velocity limit {limit_id} exceeded for account {account_id} - limit: {currency} {limit}, requested: {requested}, layer: {layer:?}, direction: {direction:?}"
+)]
 pub struct LimitExceededError {
     pub account_id: AccountId,
     pub currency: Currency,
@@ -87,5 +89,33 @@ impl From<sqlx::Error> for AttachLimit {
             }
             _ => Self::Sqlx(error),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limit_exceeded_error_includes_velocity_context() {
+        let limit_id = VelocityLimitId::new();
+        let account_id = AccountId::new();
+        let err = LimitExceededError {
+            account_id,
+            currency: "USD".parse().expect("USD currency"),
+            limit_id,
+            layer: Layer::Settled,
+            direction: DebitOrCredit::Debit,
+            limit: Decimal::ZERO,
+            requested: Decimal::new(155, 0),
+        };
+
+        let message = err.to_string();
+        assert!(message.contains(&limit_id.to_string()));
+        assert!(message.contains(&account_id.to_string()));
+        assert!(message.contains("USD"));
+        assert!(message.contains("155"));
+        assert!(message.contains("Settled"));
+        assert!(message.contains("Debit"));
     }
 }
